@@ -1141,14 +1141,6 @@ export class DatabaseService {
     return {};
   }
 
-    // Return defaults if no settings exist
-    return {
-      name: 'LuxDrive Premium Car Rental',
-      description: 'Location de voitures de luxe en Algérie',
-      logo: 'https://picsum.photos/seed/logo/200/200',
-    };
-  }
-
   static async updateWebsiteSettings(settings: WebsiteSettings): Promise<WebsiteSettings> {
     // First, delete all existing records to ensure only one record exists
     await supabase
