@@ -580,7 +580,21 @@ export class DatabaseService {
         .select('*');
 
       if (error) throw error;
-      return data || [];
+      return (data || []).map(alert => ({
+        id: alert.id || '',
+        carId: alert.car_id || '',
+        carInfo: alert.car_info || '',
+        type: alert.type || 'other',
+        title: alert.title || 'Alert',
+        message: alert.message || '',
+        severity: alert.severity || 'medium',
+        dueDate: alert.due_date,
+        isExpired: alert.is_expired || false,
+        daysUntilDue: alert.days_until_due,
+        currentMileage: alert.current_mileage,
+        nextServiceMileage: alert.next_service_mileage,
+        createdAt: alert.created_at || new Date().toISOString()
+      }));
     } catch (e) {
       console.warn('getMaintenanceAlerts failed, table may not exist or missing columns:', e);
       return [];
