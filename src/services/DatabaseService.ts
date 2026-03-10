@@ -577,13 +577,12 @@ export class DatabaseService {
     try {
       const { data, error } = await supabase
         .from('maintenance_alerts')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
 
       if (error) throw error;
       return data || [];
     } catch (e) {
-      console.warn('getMaintenanceAlerts failed, table may not exist:', e);
+      console.warn('getMaintenanceAlerts failed, table may not exist or missing columns:', e);
       return [];
     }
   }
