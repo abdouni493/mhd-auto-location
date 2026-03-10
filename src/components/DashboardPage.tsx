@@ -2,104 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { DashboardStats, MaintenanceAlert, Language, Car, ReservationDetails } from '../types';
 import { motion } from 'motion/react';
 import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, DollarSign, Wrench, Shield, FileCheck, Loader2 } from 'lucide-react';
+import { DatabaseService } from '../services/DatabaseService';
 
-// Mock data for dashboard
-const MOCK_STATS: DashboardStats = {
-  totalRevenue: 2500000,
-  monthlyRevenue: 450000,
-  totalReservations: 145,
-  activeReservations: 23,
-  totalClients: 89,
-  totalCars: 12,
-  availableCars: 8,
-  maintenanceAlerts: 5,
-  overduePayments: 125000,
-  recentReservations: [],
-  revenueByMonth: [
-    { month: 'Jan', revenue: 380000 },
-    { month: 'Feb', revenue: 420000 },
-    { month: 'Mar', revenue: 450000 },
-    { month: 'Apr', revenue: 390000 },
-    { month: 'May', revenue: 480000 },
-    { month: 'Jun', revenue: 520000 }
-  ],
-  carUtilization: [
-    { carId: '1', carInfo: 'Mercedes-Benz S-Class', utilization: 85 },
-    { carId: '2', carInfo: 'Range Rover Vogue', utilization: 72 },
-    { carId: '3', carInfo: 'BMW X5', utilization: 68 },
-    { carId: '4', carInfo: 'Audi Q7', utilization: 91 }
-  ]
-};
-
-const MOCK_MAINTENANCE_ALERTS: MaintenanceAlert[] = [
-  {
-    id: 'alert-1',
-    carId: '1',
-    carInfo: 'Mercedes-Benz S-Class - 12345-123-16',
-    type: 'vidange',
-    title: 'Vidange requise',
-    message: 'Le véhicule approche de la limite de kilométrage pour la prochaine vidange',
-    severity: 'medium',
-    dueDate: '2024-03-15',
-    isExpired: false,
-    daysUntilDue: 8,
-    currentMileage: 14800,
-    nextServiceMileage: 15000,
-    createdAt: '2024-03-07T10:00:00Z'
-  },
-  {
-    id: 'alert-2',
-    carId: '2',
-    carInfo: 'Range Rover Vogue - 67890-123-16',
-    type: 'assurance',
-    title: 'Assurance expirée',
-    message: 'L\'assurance de ce véhicule a expiré',
-    severity: 'critical',
-    dueDate: '2024-02-28',
-    isExpired: true,
-    daysUntilDue: -7,
-    createdAt: '2024-03-01T10:00:00Z'
-  },
-  {
-    id: 'alert-3',
-    carId: '3',
-    carInfo: 'BMW X5 - 11111-111-16',
-    type: 'controle_technique',
-    title: 'Contrôle technique bientôt',
-    message: 'Le contrôle technique doit être effectué dans les prochains jours',
-    severity: 'high',
-    dueDate: '2024-03-12',
-    isExpired: false,
-    daysUntilDue: 5,
-    createdAt: '2024-03-07T10:00:00Z'
-  },
-  {
-    id: 'alert-4',
-    carId: '1',
-    carInfo: 'Mercedes-Benz S-Class - 12345-123-16',
-    type: 'vidange',
-    title: 'Vidange dépassée',
-    message: 'Le kilométrage de vidange a été dépassé',
-    severity: 'critical',
-    isExpired: true,
-    currentMileage: 15200,
-    nextServiceMileage: 15000,
-    createdAt: '2024-03-05T10:00:00Z'
-  },
-  {
-    id: 'alert-5',
-    carId: '4',
-    carInfo: 'Audi Q7 - 22222-222-16',
-    type: 'assurance',
-    title: 'Assurance bientôt expirée',
-    message: 'L\'assurance expire dans 15 jours',
-    severity: 'low',
-    dueDate: '2024-03-22',
-    isExpired: false,
-    daysUntilDue: 15,
-    createdAt: '2024-03-07T10:00:00Z'
-  }
-];
+// Mock data for dashboard (removed - now using real data)
 
 interface DashboardPageProps {
   lang: Language;
@@ -262,19 +167,40 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadDashboardData = () => {
+    const loadDashboardData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Use constant mock data instead of fetching from database
-        setStats(MOCK_STATS);
-        setAlerts(MOCK_MAINTENANCE_ALERTS);
+        // Fetch real data from database
+        const dbStats = await DatabaseService.getDashboardStats();
+        const dbAlerts = await DatabaseService.getMaintenanceAlerts();
+
+        // Map database stats to component state
+        setStats({
+          totalRevenue: dbStats.totalRevenue,
+          totalExpenses: dbStats.totalExpenses,
+          netProfit: dbStats.netProfit,
+          totalClients: dbStats.totalClients,
+          totalCars: dbStats.totalCars,
+          activeReservations: dbStats.activeReservations,
+          maintenanceAlerts: dbStats.maintenanceAlerts,
+          // Default values for other fields not provided by database
+          monthlyRevenue: 0,
+          totalReservations: 0,
+          availableCars: 0,
+          overduePayments: 0,
+          recentReservations: [],
+          revenueByMonth: [],
+          carUtilization: []
+        });
+
+        setAlerts(dbAlerts);
 
         setLoading(false);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error loading dashboard data:', err);
-        setError('Failed to load dashboard data');
+        setError(err.message || 'Failed to load dashboard data');
         setLoading(false);
       }
     };
