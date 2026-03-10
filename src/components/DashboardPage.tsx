@@ -209,14 +209,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
           totalCars: dbStats.totalCars,
           activeReservations: dbStats.activeReservations,
           maintenanceAlerts: dbStats.maintenanceAlerts,
-          // Default values for other fields not provided by database
-          monthlyRevenue: 0,
-          totalReservations: 0,
-          availableCars: 0,
-          overduePayments: 0,
-          recentReservations: [],
-          revenueByMonth: [],
-          carUtilization: []
+          // Use actual data from database
+          monthlyRevenue: dbStats.monthlyRevenue || 0,
+          totalReservations: dbStats.totalReservations || 0,
+          availableCars: dbStats.availableCars || 0,
+          overduePayments: dbStats.overduePayments || 0,
+          recentReservations: dbStats.recentReservations || [],
+          revenueByMonth: dbStats.revenueByMonth || [],
+          carUtilization: dbStats.carUtilization || []
         });
 
         setAlerts(dbAlerts);

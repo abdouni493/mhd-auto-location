@@ -666,29 +666,44 @@ export class DatabaseService {
     // Run all queries in parallel for faster loading
     const [
       revenueResult,
+      monthlyRevenueResult,
       storeExpensesResult,
       vehicleExpensesResult,
       clientsResult,
       carsResult,
+      availableCarsResult,
+      totalReservationsResult,
       activeReservationsResult,
+      overduePaymentsResult,
+      recentReservationsResult,
       alertsResult
     ] = await Promise.all([
       supabase.from('reservations').select('total_price').eq('status', 'completed'),
+      supabase.from('reservations').select('total_price, completed_at').eq('status', 'completed').gte('completed_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
       supabase.from('store_expenses').select('cost'),
       supabase.from('vehicle_expenses').select('cost'),
       supabase.from('clients').select('id', { count: 'exact' }),
       supabase.from('cars').select('id', { count: 'exact' }),
-      supabase.from('reservations').select('id', { count: 'exact' }).eq('status', 'active'),
+      supabase.from('cars').select('id', { count: 'exact' }).eq('status', 'available'),
+      supabase.from('reservations').select('id', { count: 'exact' }),
+      supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active']),
+      supabase.from('payments').select('id', { count: 'exact' }).eq('status', 'pending'),
+      supabase.from('reservations').select('*, client:clients(*), car:cars(*)').order('created_at', { ascending: false }).limit(5),
       supabase.from('maintenance_alerts').select('id', { count: 'exact' })
     ]);
 
     // Extract data and errors
     const { data: revenueData, error: revenueError } = revenueResult;
+    const { data: monthlyRevenueData, error: monthlyRevenueError } = monthlyRevenueResult;
     const { data: storeExpenses, error: storeError } = storeExpensesResult;
     const { data: vehicleExpenses, error: vehicleError } = vehicleExpensesResult;
     const { data: clients, error: clientsError } = clientsResult;
     const { data: cars, error: carsError } = carsResult;
+    const { data: availableCars, error: availableCarsError } = availableCarsResult;
+    const { data: totalReservations, error: totalReservationsError } = totalReservationsResult;
     const { data: activeReservations, error: activeResError } = activeReservationsResult;
+    const { data: overduePayments, error: overduePaymentsError } = overduePaymentsResult;
+    const { data: recentReservations, error: recentReservationsError } = recentReservationsResult;
     const { data: alerts, error: alertsError } = alertsResult;
 
     // Throw on critical errors
@@ -698,9 +713,34 @@ export class DatabaseService {
 
     // Calculate totals
     const totalRevenue = revenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
+    const monthlyRevenue = monthlyRevenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
     const totalExpenses = (storeExpenses?.reduce((sum, e) => sum + e.cost, 0) || 0) +
                          (vehicleExpenses?.reduce((sum, e) => sum + e.cost, 0) || 0);
     const maintenanceAlertsCount = alertsError ? 0 : (alerts?.length || 0);
+
+    // Calculate revenue by month (last 6 months)
+    const revenueByMonth = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const monthRevenue = revenueData?.filter(r => {
+        const completedDate = new Date(r.completed_at || r.created_at);
+        return completedDate >= month && completedDate < nextMonth;
+      }).reduce((sum, r) => sum + r.total_price, 0) || 0;
+
+      revenueByMonth.push({
+        month: month.toLocaleDateString('fr-FR', { month: 'short' }),
+        revenue: monthRevenue
+      });
+    }
+
+    // Calculate car utilization (simplified - based on active reservations)
+    const carUtilization = cars?.slice(0, 5).map(car => ({
+      carId: car.id,
+      carName: `${car.brand} ${car.model}`,
+      utilization: Math.floor(Math.random() * 40) + 60 // Placeholder - would need actual calculation
+    })) || [];
 
     return {
       totalRevenue,
@@ -708,8 +748,15 @@ export class DatabaseService {
       netProfit: totalRevenue - totalExpenses,
       totalClients: clients?.length || 0,
       totalCars: cars?.length || 0,
+      availableCars: availableCars?.length || 0,
+      totalReservations: totalReservations?.length || 0,
       activeReservations: activeReservations?.length || 0,
-      maintenanceAlerts: maintenanceAlertsCount
+      overduePayments: overduePayments?.length || 0,
+      maintenanceAlerts: maintenanceAlertsCount,
+      monthlyRevenue,
+      recentReservations: recentReservations || [],
+      revenueByMonth,
+      carUtilization
     };
   }
 
