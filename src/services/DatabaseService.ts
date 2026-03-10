@@ -702,42 +702,47 @@ export class DatabaseService {
 
   // Website Management - Offers
   static async getOffers(): Promise<Offer[]> {
-    const { data, error } = await supabase
-      .from('offers')
-      .select(`
-        *,
-        car:cars(*)
-      `)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('offers')
+        .select(`
+          *,
+          car:cars(*)
+        `)
+        .order('created_at', { ascending: false });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    return (data || []).map(offer => ({
-      id: offer.id,
-      carId: offer.car_id,
-      car: {
-        id: offer.car.id || '',
-        brand: offer.car.brand,
-        model: offer.car.model,
-        registration: offer.car.plate_number,
-        year: offer.car.year,
-        color: offer.car.color || 'Premium',
-        vin: offer.car.vin || '',
-        energy: offer.car.energy || 'Essence',
-        transmission: offer.car.transmission || 'Automatique',
-        seats: offer.car.seats || 5,
-        doors: offer.car.doors || 4,
-        priceDay: Math.round(Number(offer.car.price_per_day)),
-        priceWeek: Math.round(Number(offer.car.price_week || offer.car.price_per_day * 2)),
-        priceMonth: Math.round(Number(offer.car.price_month || offer.car.price_per_day * 4)),
-        deposit: Math.round(Number(offer.car.deposit || offer.car.price_per_day * 2)),
-        images: offer.car.image_url ? [offer.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-        mileage: offer.car.mileage || 0,
-      },
-      price: Math.round(Number(offer.price)),
-      note: offer.note,
-      createdAt: offer.created_at,
-    }));
+      return (data || []).map(offer => ({
+        id: offer.id,
+        carId: offer.car_id,
+        car: {
+          id: offer.car.id || '',
+          brand: offer.car.brand,
+          model: offer.car.model,
+          registration: offer.car.plate_number,
+          year: offer.car.year,
+          color: offer.car.color || 'Premium',
+          vin: offer.car.vin || '',
+          energy: offer.car.energy || 'Essence',
+          transmission: offer.car.transmission || 'Automatique',
+          seats: offer.car.seats || 5,
+          doors: offer.car.doors || 4,
+          priceDay: Math.round(Number(offer.car.price_per_day)),
+          priceWeek: Math.round(Number(offer.car.price_week || offer.car.price_per_day * 2)),
+          priceMonth: Math.round(Number(offer.car.price_month || offer.car.price_per_day * 4)),
+          deposit: Math.round(Number(offer.car.deposit || offer.car.price_per_day * 2)),
+          images: offer.car.image_url ? [offer.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
+          mileage: offer.car.mileage || 0,
+        },
+        price: Math.round(Number(offer.price)),
+        note: offer.note,
+        createdAt: offer.created_at,
+      }));
+    } catch (e: any) {
+      console.warn('getOffers failed, returning empty array', e.message || e);
+      return [];
+    }
   }
 
   static async createOffer(offer: Omit<Offer, 'id' | 'createdAt' | 'car'>): Promise<Offer> {
@@ -840,44 +845,49 @@ export class DatabaseService {
 
   // Website Management - Special Offers
   static async getSpecialOffers(): Promise<SpecialOffer[]> {
-    const { data, error } = await supabase
-      .from('special_offers')
-      .select(`
-        *,
-        car:cars(*)
-      `)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('special_offers')
+        .select(`
+          *,
+          car:cars(*)
+        `)
+        .order('created_at', { ascending: false });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    return (data || []).map(offer => ({
-      id: offer.id,
-      carId: offer.car_id,
-      car: {
-        id: offer.car.id || '',
-        brand: offer.car.brand,
-        model: offer.car.model,
-        registration: offer.car.plate_number,
-        year: offer.car.year,
-        color: offer.car.color || 'Premium',
-        vin: offer.car.vin || '',
-        energy: offer.car.energy || 'Essence',
-        transmission: offer.car.transmission || 'Automatique',
-        seats: offer.car.seats || 5,
-        doors: offer.car.doors || 4,
-        priceDay: Math.round(Number(offer.car.price_per_day)),
-        priceWeek: Math.round(Number(offer.car.price_week || offer.car.price_per_day * 2)),
-        priceMonth: Math.round(Number(offer.car.price_month || offer.car.price_per_day * 4)),
-        deposit: Math.round(Number(offer.car.deposit || offer.car.price_per_day * 2)),
-        images: offer.car.image_url ? [offer.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-        mileage: offer.car.mileage || 0,
-      },
-      oldPrice: Math.round(Number(offer.old_price)),
-      newPrice: Math.round(Number(offer.new_price)),
-      note: offer.note,
-      isActive: offer.is_active,
-      createdAt: offer.created_at,
-    }));
+      return (data || []).map(offer => ({
+        id: offer.id,
+        carId: offer.car_id,
+        car: {
+          id: offer.car.id || '',
+          brand: offer.car.brand,
+          model: offer.car.model,
+          registration: offer.car.plate_number,
+          year: offer.car.year,
+          color: offer.car.color || 'Premium',
+          vin: offer.car.vin || '',
+          energy: offer.car.energy || 'Essence',
+          transmission: offer.car.transmission || 'Automatique',
+          seats: offer.car.seats || 5,
+          doors: offer.car.doors || 4,
+          priceDay: Math.round(Number(offer.car.price_per_day)),
+          priceWeek: Math.round(Number(offer.car.price_week || offer.car.price_per_day * 2)),
+          priceMonth: Math.round(Number(offer.car.price_month || offer.car.price_per_day * 4)),
+          deposit: Math.round(Number(offer.car.deposit || offer.car.price_per_day * 2)),
+          images: offer.car.image_url ? [offer.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
+          mileage: offer.car.mileage || 0,
+        },
+        oldPrice: Math.round(Number(offer.old_price)),
+        newPrice: Math.round(Number(offer.new_price)),
+        note: offer.note,
+        isActive: offer.is_active,
+        createdAt: offer.created_at,
+      }));
+    } catch (e: any) {
+      console.warn('getSpecialOffers failed, returning empty array', e.message || e);
+      return [];
+    }
   }
 
   static async createSpecialOffer(offer: Omit<SpecialOffer, 'id' | 'createdAt' | 'car'>): Promise<SpecialOffer> {
@@ -1041,27 +1051,31 @@ export class DatabaseService {
 
   // Website Management - Contacts
   static async getWebsiteContacts(): Promise<ContactInfo> {
-    const { data, error } = await supabase
-      .from('website_contacts')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(1);
+    try {
+      const { data, error } = await supabase
+        .from('website_contacts')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    if (data && data.length > 0) {
-      return {
-        facebook: data[0].facebook,
-        instagram: data[0].instagram,
-        tiktok: data[0].tiktok,
-        whatsapp: data[0].whatsapp,
-        phone: data[0].phone,
-        address: data[0].address,
-        email: data[0].email,
-      };
+      if (data && data.length > 0) {
+        return {
+          facebook: data[0].facebook,
+          instagram: data[0].instagram,
+          tiktok: data[0].tiktok,
+          whatsapp: data[0].whatsapp,
+          phone: data[0].phone,
+          address: data[0].address,
+          email: data[0].email,
+        };
+      }
+    } catch (e: any) {
+      console.warn('getWebsiteContacts failed, returning empty object', e.message || e);
     }
 
-    // Return empty object if no contacts exist
+    // Return empty object if error or no contacts exist
     return {};
   }
 
@@ -1103,21 +1117,29 @@ export class DatabaseService {
 
   // Website Management - Settings
   static async getWebsiteSettings(): Promise<WebsiteSettings> {
-    const { data, error } = await supabase
-      .from('website_settings')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(1);
+    try {
+      const { data, error } = await supabase
+        .from('website_settings')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    if (data && data.length > 0) {
-      return {
-        name: data[0].name,
-        description: data[0].description,
-        logo: data[0].logo,
-      };
+      if (data && data.length > 0) {
+        return {
+          name: data[0].name,
+          description: data[0].description,
+          logo: data[0].logo,
+        };
+      }
+    } catch (e: any) {
+      console.warn('getWebsiteSettings failed, returning empty object', e.message || e);
     }
+
+    // default empty
+    return {};
+  }
 
     // Return defaults if no settings exist
     return {
