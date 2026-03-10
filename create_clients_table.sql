@@ -1,0 +1,26 @@
+-- Create clients table if it doesn't exist
+CREATE TABLE IF NOT EXISTS clients (
+  id TEXT PRIMARY KEY,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  date_of_birth DATE,
+  place_of_birth TEXT,
+  id_card_number TEXT NOT NULL,
+  license_number TEXT NOT NULL,
+  license_expiration_date DATE,
+  license_delivery_date DATE,
+  license_delivery_place TEXT,
+  document_type TEXT CHECK (document_type IN ('id_card', 'passport', 'none')),
+  document_number TEXT,
+  document_delivery_date DATE,
+  document_expiration_date DATE,
+  document_delivery_address TEXT,
+  wilaya TEXT NOT NULL,
+  complete_address TEXT,
+  profile_photo TEXT,
+  scanned_documents TEXT[] DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  agency_id TEXT REFERENCES agencies(id)
+);
