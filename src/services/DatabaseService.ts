@@ -574,13 +574,18 @@ export class DatabaseService {
 
   // Maintenance Alerts
   static async getMaintenanceAlerts(): Promise<MaintenanceAlert[]> {
-    const { data, error } = await supabase
-      .from('maintenance_alerts')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('maintenance_alerts')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+      if (error) throw error;
+      return data || [];
+    } catch (e) {
+      console.warn('getMaintenanceAlerts failed, table may not exist:', e);
+      return [];
+    }
   }
 
   static async createMaintenanceAlert(alert: Omit<MaintenanceAlert, 'id' | 'created_at'>): Promise<MaintenanceAlert> {
@@ -687,7 +692,10 @@ export class DatabaseService {
       .from('maintenance_alerts')
       .select('id', { count: 'exact' });
 
-    if (clientsError || carsError || activeResError || alertsError) throw clientsError || carsError || activeResError || alertsError;
+    // Don't throw on alerts error, just set to 0
+    const maintenanceAlertsCount = alertsError ? 0 : (alerts?.length || 0);
+
+    if (clientsError || carsError || activeResError) throw clientsError || carsError || activeResError;
 
     return {
       totalRevenue,
@@ -696,7 +704,7 @@ export class DatabaseService {
       totalClients: clients?.length || 0,
       totalCars: cars?.length || 0,
       activeReservations: activeReservations?.length || 0,
-      maintenanceAlerts: alerts?.length || 0
+      maintenanceAlerts: maintenanceAlertsCount
     };
   }
 
