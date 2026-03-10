@@ -1,7 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+// default values from the shared Supabase project (used when env vars aren't supplied)
+const DEFAULT_SUPABASE_URL = 'https://tjyqmxiqeegcnvopibyb.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqeXFteGlxZWVnY252b3BpYnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1MjIsImV4cCI6MjA4ODQ3NDUyMn0.7-6qvX4F3oebYm-W1bBl6SsKQf-A79bc1PP7PhpQYcQ';
+
+const supabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  DEFAULT_SUPABASE_URL;
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  DEFAULT_SUPABASE_ANON_KEY;
 
 // Do not export from inside block scope. Create a top-level holder and
 // assign a real client or a mock implementation depending on env vars.
@@ -37,6 +48,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
     onAuthStateChange: (_callback: any) => ({ data: { subscription: { unsubscribe: () => {} } } }),
     signIn: async () => errorResult,
     signUp: async () => errorResult,
+    signInWithPassword: async () => errorResult,
     signOut: async () => ({ error: new Error(missingMsg) }),
     getSession: async () => ({ data: null, error: new Error(missingMsg) }),
     // provide a proxy for any other access to avoid undefined errors
