@@ -13,27 +13,37 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
   const errorResult = { data: null, error: new Error(missingMsg) }
 
-  const makeFrom = () => ({
-    select: async () => errorResult,
-    insert: async () => errorResult,
-    update: async () => errorResult,
-    delete: async () => errorResult,
-    upsert: async () => errorResult,
-    single: async () => errorResult,
-    limit: () => ({ select: async () => errorResult, single: async () => errorResult }),
-  })
-
-  const mockSupabase: any = {
-    from: (_table?: string) => makeFrom(),
-    auth: {
-      signIn: async () => ({ data: null, error: new Error(missingMsg) }),
-      signUp: async () => ({ data: null, error: new Error(missingMsg) }),
-      signOut: async () => ({ error: new Error(missingMsg) }),
-    },
-    storage: {
-      from: () => ({ upload: async () => ({ data: null, error: new Error(missingMsg) }) })
+  // Creates a chainable proxy object that returns itself for any property or
+  // call. When the object is awaited (via then), it resolves to errorResult.
+  const createErrorProxy = () => {
+    const handler: ProxyHandler<any> = {
+      get(_target, prop) {
+        if (prop === 'then') {
+          return (resolve: any) => resolve(errorResult)
+        }
+        return proxy
+      },
+      apply() {
+        return proxy
+      }
     }
+    const proxy: any = new Proxy(function () {}, handler)
+    return proxy
   }
+
+  const mockSupabase: any = createErrorProxy()
+  // auth stub: several methods return errorResult or dummy structures but won't crash
+  mockSupabase.auth = {
+    onAuthStateChange: (_callback: any) => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    signIn: async () => errorResult,
+    signUp: async () => errorResult,
+    signOut: async () => ({ error: new Error(missingMsg) }),
+    getSession: async () => ({ data: null, error: new Error(missingMsg) }),
+    // provide a proxy for any other access to avoid undefined errors
+    ...createErrorProxy(),
+  }
+  mockSupabase.from = () => createErrorProxy()
+  mockSupabase.storage = { from: () => createErrorProxy() }
 
   _supabase = mockSupabase
 } else {
@@ -41,6 +51,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = _supabase
+
+// indicate whether valid configuration was provided so UI can react accordingly
+export const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
 
 // Database types (you can generate these from your Supabase schema)
 export type Database = {

@@ -17,7 +17,7 @@ import { Website } from './components/Website';
 import { DashboardPage } from './components/DashboardPage';
 import ReportsPage from './components/ReportsPage';
 import { Language, User, UserRole, Car, Agency } from './types';
-import { supabase } from './supabase';
+import { supabase, supabaseConfigured } from './supabase';
 import { SIDEBAR_ITEMS } from './constants';
 import { DatabaseService } from './services/DatabaseService';
 
@@ -380,6 +380,13 @@ export default function App() {
 
   return (
     <div className={`flex min-h-screen bg-saas-bg ${lang === 'ar' ? 'font-arabic' : ''}`}>
+      {!supabaseConfigured && (
+        <div className="fixed inset-0 bg-yellow-100 text-yellow-900 flex items-center justify-center z-50 p-4 text-center">
+          <strong>Warning:</strong> Supabase variables are missing. Set
+          <code className="mx-1">VITE_SUPABASE_URL</code> and
+          <code className="mx-1">VITE_SUPABASE_ANON_KEY</code> in your environment.
+        </div>
+      )}
       <Sidebar 
         lang={lang} 
         isVisible={isSidebarVisible} 
