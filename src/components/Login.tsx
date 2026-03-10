@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Mail, Lock, Shield, User as UserIcon, Truck } from 'lucide-react';
+import { Mail, Lock } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Language, UserRole, User } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -329,32 +329,6 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
             <p className="text-xs text-saas-text-muted mt-1">(première connexion uniquement)</p>
           </div>
         )}
-
-        <div className="space-y-6">
-          <div className="grid grid-cols-3 gap-4">
-            <button 
-              onClick={() => onLogin({ name: 'Admin', email: '', role: 'admin', avatar: '' })}
-              className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-saas-bg border border-saas-border hover:bg-white hover:border-saas-primary-via/30 hover:shadow-xl transition-all group"
-            >
-              <Shield size={24} className="text-saas-primary-via group-hover:scale-110 transition-transform" />
-              <span className="text-[8px] font-bold uppercase tracking-widest text-saas-text-muted">{t.admin}</span>
-            </button>
-            <button 
-              onClick={() => onLogin({ name: 'Worker', email: '', role: 'worker', avatar: '' })}
-              className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-saas-bg border border-saas-border hover:bg-white hover:border-saas-primary-via/30 hover:shadow-xl transition-all group"
-            >
-              <UserIcon size={24} className="text-saas-primary-via group-hover:scale-110 transition-transform" />
-              <span className="text-[8px] font-bold uppercase tracking-widest text-saas-text-muted">{t.worker}</span>
-            </button>
-            <button 
-              onClick={() => onLogin({ name: 'Driver', email: '', role: 'driver', avatar: '' })}
-              className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-saas-bg border border-saas-border hover:bg-white hover:border-saas-primary-via/30 hover:shadow-xl transition-all group"
-            >
-              <Truck size={24} className="text-saas-primary-via group-hover:scale-110 transition-transform" />
-              <span className="text-[8px] font-bold uppercase tracking-widest text-saas-text-muted">{t.driver}</span>
-            </button>
-          </div>
-        </div>
       </motion.div>
     </div>
   );
