@@ -331,12 +331,6 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
         )}
 
         <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="h-[1px] flex-1 bg-saas-border" />
-            <span className="text-[10px] text-saas-text-muted font-bold uppercase tracking-[0.2em]">{t.quickAccess}</span>
-            <div className="h-[1px] flex-1 bg-saas-border" />
-          </div>
-
           <div className="grid grid-cols-3 gap-4">
             <button 
               onClick={() => onLogin({ name: 'Admin', email: '', role: 'admin', avatar: '' })}
