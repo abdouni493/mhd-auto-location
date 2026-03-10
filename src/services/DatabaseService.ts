@@ -663,52 +663,44 @@ export class DatabaseService {
 
   // Dashboard Statistics
   static async getDashboardStats() {
-    // Get total revenue from completed reservations
-    const { data: revenueData, error: revenueError } = await supabase
-      .from('reservations')
-      .select('total_price')
-      .eq('status', 'completed');
+    // Run all queries in parallel for faster loading
+    const [
+      revenueResult,
+      storeExpensesResult,
+      vehicleExpensesResult,
+      clientsResult,
+      carsResult,
+      activeReservationsResult,
+      alertsResult
+    ] = await Promise.all([
+      supabase.from('reservations').select('total_price').eq('status', 'completed'),
+      supabase.from('store_expenses').select('cost'),
+      supabase.from('vehicle_expenses').select('cost'),
+      supabase.from('clients').select('id', { count: 'exact' }),
+      supabase.from('cars').select('id', { count: 'exact' }),
+      supabase.from('reservations').select('id', { count: 'exact' }).eq('status', 'active'),
+      supabase.from('maintenance_alerts').select('id', { count: 'exact' })
+    ]);
 
-    if (revenueError) throw revenueError;
+    // Extract data and errors
+    const { data: revenueData, error: revenueError } = revenueResult;
+    const { data: storeExpenses, error: storeError } = storeExpensesResult;
+    const { data: vehicleExpenses, error: vehicleError } = vehicleExpensesResult;
+    const { data: clients, error: clientsError } = clientsResult;
+    const { data: cars, error: carsError } = carsResult;
+    const { data: activeReservations, error: activeResError } = activeReservationsResult;
+    const { data: alerts, error: alertsError } = alertsResult;
 
+    // Throw on critical errors
+    if (revenueError || storeError || vehicleError || clientsError || carsError || activeResError) {
+      throw revenueError || storeError || vehicleError || clientsError || carsError || activeResError;
+    }
+
+    // Calculate totals
     const totalRevenue = revenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
-
-    // Get total expenses
-    const { data: storeExpenses, error: storeError } = await supabase
-      .from('store_expenses')
-      .select('cost');
-
-    const { data: vehicleExpenses, error: vehicleError } = await supabase
-      .from('vehicle_expenses')
-      .select('cost');
-
-    if (storeError || vehicleError) throw storeError || vehicleError;
-
     const totalExpenses = (storeExpenses?.reduce((sum, e) => sum + e.cost, 0) || 0) +
                          (vehicleExpenses?.reduce((sum, e) => sum + e.cost, 0) || 0);
-
-    // Get other stats
-    const { data: clients, error: clientsError } = await supabase
-      .from('clients')
-      .select('id', { count: 'exact' });
-
-    const { data: cars, error: carsError } = await supabase
-      .from('cars')
-      .select('id', { count: 'exact' });
-
-    const { data: activeReservations, error: activeResError } = await supabase
-      .from('reservations')
-      .select('id', { count: 'exact' })
-      .eq('status', 'active');
-
-    const { data: alerts, error: alertsError } = await supabase
-      .from('maintenance_alerts')
-      .select('id', { count: 'exact' });
-
-    // Don't throw on alerts error, just set to 0
     const maintenanceAlertsCount = alertsError ? 0 : (alerts?.length || 0);
-
-    if (clientsError || carsError || activeResError) throw clientsError || carsError || activeResError;
 
     return {
       totalRevenue,

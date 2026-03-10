@@ -140,6 +140,28 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
               </div>
             </div>
           )}
+
+          {/* Additional Details */}
+          <div className={`mt-3 text-xs ${styles.text} space-y-1`}>
+            <div className="flex justify-between">
+              <span>{lang === 'fr' ? 'Type:' : 'النوع:'}</span>
+              <span className="font-medium capitalize">{alert.type}</span>
+            </div>
+            {alert.dueDate && (
+              <div className="flex justify-between">
+                <span>{lang === 'fr' ? 'Échéance:' : 'الموعد النهائي:'}</span>
+                <span className="font-medium">{new Date(alert.dueDate).toLocaleDateString()}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span>{lang === 'fr' ? 'Sévérité:' : 'الخطورة:'}</span>
+              <span className="font-medium capitalize">{alert.severity}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>{lang === 'fr' ? 'Créé:' : 'تم الإنشاء:'}</span>
+              <span className="font-medium">{new Date(alert.createdAt).toLocaleDateString()}</span>
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -172,9 +194,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
         setLoading(true);
         setError(null);
 
-        // Fetch real data from database
-        const dbStats = await DatabaseService.getDashboardStats();
-        const dbAlerts = await DatabaseService.getMaintenanceAlerts();
+        // Fetch real data from database in parallel
+        const [dbStats, dbAlerts] = await Promise.all([
+          DatabaseService.getDashboardStats(),
+          DatabaseService.getMaintenanceAlerts()
+        ]);
 
         // Map database stats to component state
         setStats({
