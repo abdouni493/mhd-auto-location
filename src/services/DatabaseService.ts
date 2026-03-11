@@ -112,7 +112,7 @@ export class DatabaseService {
       email: client.email,
       date_of_birth: client.dateOfBirth || null,
       place_of_birth: client.placeOfBirth,
-      id_card_number: client.idCardNumber,
+      id_card_number: client.idCardNumber || null,
       license_number: client.licenseNumber,
       license_expiration_date: client.licenseExpirationDate || null,
       license_delivery_date: client.licenseDeliveryDate || null,
