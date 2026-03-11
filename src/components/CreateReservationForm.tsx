@@ -2503,7 +2503,8 @@ export const Step6FinalPricing: React.FC<{
         additionalFees: prev.step6?.additionalFees ?? prev.additionalFees,
         advancePayment: prev.step6?.advancePayment ?? prev.advancePayment,
         remainingPayment: prev.step6?.remainingPayment ?? prev.remainingPayment,
-        paymentNotes: prev.step6?.paymentNotes ?? prev.notes
+        paymentNotes: prev.step6?.paymentNotes ?? prev.notes,
+        cautionEnabled
       }
     }));
   }, [totalPrice, tvaEnabled, tvaAmount, days]);
