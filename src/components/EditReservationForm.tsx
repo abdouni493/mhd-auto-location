@@ -74,7 +74,8 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       additionalFees: reservation.additionalFees,
       paymentNotes: reservation.notes,
       advancePayment: reservation.advancePayment,
-      remainingPayment: reservation.remainingPayment
+      remainingPayment: reservation.remainingPayment,
+      cautionEnabled: typeof reservation.cautionEnabled === 'boolean' ? reservation.cautionEnabled : true
     },
     additionalServices: reservation.additionalServices,
     deposit: reservation.deposit,
