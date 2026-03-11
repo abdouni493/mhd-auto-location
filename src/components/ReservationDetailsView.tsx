@@ -599,8 +599,12 @@ const PaymentsTab: React.FC<{ lang: Language; reservation: ReservationDetails; o
           <p className="text-2xl font-black text-orange-700">{reservation.remainingPayment.toLocaleString()} DA</p>
         </div>
         <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
-          <p className="text-sm text-blue-700">{lang === 'fr' ? 'Caution' : 'الضمان'}</p>
-          <p className="text-2xl font-black text-blue-700">{reservation.deposit.toLocaleString()} DA</p>
+          {reservation.cautionEnabled && (
+            <>
+              <p className="text-sm text-blue-700">{lang === 'fr' ? 'Caution' : 'الضمان'}</p>
+              <p className="text-2xl font-black text-blue-700">{reservation.deposit.toLocaleString()} DA</p>
+            </>
+          )}
         </div>
       </div>
     </div>
