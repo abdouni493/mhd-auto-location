@@ -66,10 +66,7 @@ export const ClientCard: React.FC<ClientCardProps> = ({
 
       {/* Document Details */}
       <div className="w-full space-y-2 text-[10px] mb-4 pb-4 border-b border-saas-border">
-        <div className="flex justify-between">
-          <span className="text-saas-text-muted">🪪 {lang === 'fr' ? 'Carte ID' : 'البطاقة'}:</span>
-          <span className="font-semibold text-saas-text-main">{client.idCardNumber}</span>
-        </div>
+       
         <div className="flex justify-between">
           <span className="text-saas-text-muted">🚗 {lang === 'fr' ? 'Permis' : 'الرخصة'}:</span>
           <span className="font-semibold text-saas-text-main">{client.licenseNumber}</span>

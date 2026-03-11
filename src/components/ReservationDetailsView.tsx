@@ -114,11 +114,13 @@ export const ReservationDetailsView: React.FC<ReservationDetailsViewProps> = ({ 
           <div className="flex items-center gap-4">
             <span className={`px-4 py-2 rounded-full text-sm font-bold ${
               reservation.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+              reservation.status === 'accepted' ? 'bg-teal-100 text-teal-800' :
               reservation.status === 'active' ? 'bg-blue-100 text-blue-800' :
               reservation.status === 'completed' ? 'bg-purple-100 text-purple-800' :
               'bg-yellow-100 text-yellow-800'
             }`}>
               {reservation.status === 'confirmed' ? '✅ Confirmé' :
+               reservation.status === 'accepted' ? '✅ Accepté' :
                reservation.status === 'active' ? '🔄 Actif' :
                reservation.status === 'completed' ? '🏁 Terminé' :
                '⏳ En attente'}
@@ -131,7 +133,7 @@ export const ReservationDetailsView: React.FC<ReservationDetailsViewProps> = ({ 
           </div>
 
           <div className="flex gap-2">
-            {reservation.status === 'confirmed' && (
+            {(reservation.status === 'confirmed' || reservation.status === 'accepted') && (
               <button
                 onClick={handleActivate}
                 className="btn-saas-success"
@@ -358,14 +360,14 @@ const InspectionsTab: React.FC<{ lang: Language; reservation: ReservationDetails
               <p className="text-lg font-bold text-orange-700">{reservation.departureInspection.date}</p>
               <p className="text-sm text-orange-600">{reservation.departureInspection.time}</p>
             </div>
-            {reservation.departureInspection.signature && (
-              <div className="bg-indigo-50 rounded-lg p-4">
-                <p className="font-bold text-indigo-900">✍️ {lang === 'fr' ? 'Signature' : 'التوقيع'}</p>
-                <div className="mt-2">
-                  <img src={reservation.departureInspection.signature} alt="Client Signature" className="w-full h-16 object-contain border border-indigo-300 rounded" />
-                </div>
+          {reservation.departureInspection.signature && (
+            <div className="bg-indigo-50 rounded-lg p-4">
+              <p className="font-bold text-indigo-900">✍️ {lang === 'fr' ? 'Signature' : 'التوقيع'}</p>
+              <div className="mt-2">
+                <img src={reservation.departureInspection.signature} alt="Client Signature" className="w-full h-16 object-contain border border-indigo-300 rounded" />
               </div>
-            )}
+            </div>
+          )}
           </div>
 
           {/* Inspection Items */}

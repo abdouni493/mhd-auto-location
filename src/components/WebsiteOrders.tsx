@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Language, WebsiteOrder, Car, Agency } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, AlertTriangle, Phone, Mail, User } from 'lucide-react';
+import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, AlertTriangle, Phone, Mail, User, Loader } from 'lucide-react';
+import { DatabaseService } from '../services/DatabaseService';
+import { ReservationsService } from '../services/ReservationsService';
 
 interface WebsiteOrdersProps {
   lang: Language;
@@ -14,185 +16,25 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
   const [selectedOrder, setSelectedOrder] = useState<WebsiteOrder | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
-  // Mock data for website orders - in real app, this would come from API
+  // Load website orders from database
   useEffect(() => {
-    const mockOrders: WebsiteOrder[] = [
-      {
-        id: 'web-001',
-        carId: '1',
-        car: {
-          id: '1',
-          brand: 'Toyota',
-          model: 'Prius',
-          registration: 'AB-123-CD',
-          year: 2021,
-          color: 'Blanc',
-          vin: 'VIN123456',
-          energy: 'Hybride',
-          transmission: 'Automatique',
-          seats: 5,
-          doors: 4,
-          priceDay: 5000,
-          priceWeek: 28000,
-          priceMonth: 90000,
-          deposit: 50000,
-          images: ['https://images.unsplash.com/photo-1560958089-b8a63dd8aa8b?w=500&h=400&fit=crop'],
-          mileage: 45000,
-        },
-        step1: {
-          carId: '1',
-          departureDate: '2026-03-15',
-          departureTime: '10:00',
-          departureAgency: '1',
-          returnDate: '2026-03-18',
-          returnTime: '10:00',
-          returnAgency: '1',
-          differentReturnAgency: false,
-        },
-        step2: {
-          firstName: 'Ahmed',
-          lastName: 'Boudjellal',
-          phone: '+213 5 1234 5678',
-          email: 'ahmed@email.com',
-          licenseNumber: 'DZA12345678',
-          wilaya: '16 - Alger',
-          completeAddress: '123 Rue Principal, Alger',
-          scannedDocuments: [
-            'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=300&fit=crop', // Driver's license
-            'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=400&h=300&fit=crop', // ID card
-          ],
-        },
-        step3: {
-          additionalServices: [
-            { id: '1', name: lang === 'fr' ? 'Siège Bébé' : 'مقعد طفل', price: 500, category: 'equipment', description: lang === 'fr' ? 'Siège auto pour enfant' : 'مقعد سيارة للطفل', selected: true },
-            { id: '2', name: lang === 'fr' ? 'GPS' : 'GPS', price: 300, category: 'equipment', description: lang === 'fr' ? 'Système de navigation' : 'نظام الملاحة', selected: true }
-          ],
-        },
-        totalDays: 3,
-        totalPrice: 15000,
-        servicesTotal: 800,
-        status: 'pending',
-        createdAt: '2026-03-10T14:30:00Z',
-        source: 'website',
-      },
-      {
-        id: 'web-002',
-        carId: '2',
-        car: {
-          id: '2',
-          brand: 'Renault',
-          model: 'Clio',
-          registration: 'EF-456-GH',
-          year: 2020,
-          color: 'Rouge',
-          vin: 'VIN654321',
-          energy: 'Essence',
-          transmission: 'Manuelle',
-          seats: 5,
-          doors: 4,
-          priceDay: 4000,
-          priceWeek: 22400,
-          priceMonth: 72000,
-          deposit: 40000,
-          images: ['https://images.unsplash.com/photo-1549399735-cef2e2c3f638?w=500&h=400&fit=crop'],
-          mileage: 32000,
-        },
-        step1: {
-          carId: '2',
-          departureDate: '2026-03-20',
-          departureTime: '14:00',
-          departureAgency: '1',
-          returnDate: '2026-03-22',
-          returnTime: '14:00',
-          returnAgency: '1',
-          differentReturnAgency: false,
-        },
-        step2: {
-          firstName: 'Fatima',
-          lastName: 'Zahra',
-          phone: '+213 5 8765 4321',
-          email: 'fatima@email.com',
-          licenseNumber: 'DZA87654321',
-          wilaya: '16 - Alger',
-          completeAddress: '456 Rue Secondaire, Alger',
-          scannedDocuments: [
-            'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=400&h=300&fit=crop', // ID card
-            'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=300&fit=crop', // Driver's license
-            'https://images.unsplash.com/photo-1567427018141-0584cfcbf1b8?w=400&h=300&fit=crop', // Passport
-          ],
-        },
-        step3: {
-          additionalServices: [],
-        },
-        totalDays: 2,
-        totalPrice: 8000,
-        servicesTotal: 0,
-        status: 'pending',
-        createdAt: '2026-03-11T09:15:00Z',
-        source: 'website',
-      },
-      {
-        id: 'web-003',
-        carId: '3',
-        car: {
-          id: '3',
-          brand: 'BMW',
-          model: 'X3',
-          registration: 'IJ-789-KL',
-          year: 2022,
-          color: 'Noir',
-          vin: 'VIN789012',
-          energy: 'Diesel',
-          transmission: 'Automatique',
-          seats: 5,
-          doors: 4,
-          priceDay: 8000,
-          priceWeek: 44800,
-          priceMonth: 144000,
-          deposit: 80000,
-          images: ['https://images.unsplash.com/photo-1555215695-3004980ad54e?w=500&h=400&fit=crop'],
-          mileage: 15000,
-        },
-        step1: {
-          carId: '3',
-          departureDate: '2026-03-25',
-          departureTime: '09:00',
-          departureAgency: '1',
-          returnDate: '2026-03-28',
-          returnTime: '18:00',
-          returnAgency: '1',
-          differentReturnAgency: false,
-        },
-        step2: {
-          firstName: 'Karim',
-          lastName: 'Mansouri',
-          phone: '+213 5 5555 6666',
-          email: 'karim@email.com',
-          licenseNumber: 'DZA55556666',
-          wilaya: '16 - Alger',
-          completeAddress: '789 Boulevard Central, Alger',
-          scannedDocuments: [
-            'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=300&fit=crop', // Driver's license
-          ],
-        },
-        step3: {
-          additionalServices: [
-            { id: '3', name: lang === 'fr' ? 'Assurance Supplémentaire' : 'تأمين إضافي', price: 1000, category: 'insurance', description: lang === 'fr' ? 'Couverture étendue' : 'تغطية موسعة', selected: true },
-            { id: '4', name: lang === 'fr' ? 'Conducteur Additionnel' : 'سائق إضافي', price: 800, category: 'service', description: lang === 'fr' ? 'Deuxième conducteur' : 'سائق ثاني', selected: true }
-          ],
-        },
-        totalDays: 3,
-        totalPrice: 24000,
-        servicesTotal: 1800,
-        status: 'confirmed',
-        createdAt: '2026-03-09T16:45:00Z',
-        source: 'website',
-      },
-    ];
+    loadWebsiteOrders();
+  }, []);
 
-    setOrders(mockOrders);
-  }, [lang]);
+  const loadWebsiteOrders = async () => {
+    try {
+      setIsLoading(true);
+      const data = await DatabaseService.getWebsiteOrders();
+      setOrders(data || []);
+    } catch (err) {
+      console.error('Error loading website orders:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch =
@@ -212,28 +54,83 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
     setShowOrderDetails(true);
   };
 
-  const handleConfirmOrder = (orderId: string) => {
-    setOrders(prev => prev.map(order =>
-      order.id === orderId ? { ...order, status: 'confirmed' as const } : order
-    ));
-    // In a real app, this would also add the order to the reservation system
-    console.log(`Order ${orderId} confirmed and added to reservations`);
+  const handleConfirmOrder = async (orderId: string) => {
+    try {
+      setIsProcessing(orderId);
+      
+      // Update the website order status in database to 'accepted' instead of confirmed
+      await DatabaseService.updateWebsiteOrderStatus(orderId, 'accepted');
+
+      // Update local state
+      setOrders(prev => prev.map(order =>
+        order.id === orderId ? { ...order, status: 'accepted' as const } : order
+      ));
+
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => prev ? { ...prev, status: 'accepted' } : null);
+      }
+
+      console.log(`Order ${orderId} accepted and will appear in Planner as accepted`);
+    } catch (err) {
+      console.error('Error accepting order:', err);
+      alert(lang === 'fr' ? 'Erreur lors de l\'acceptation de la commande' : 'خطأ في قبول الطلب');
+    } finally {
+      setIsProcessing(null);
+    }
   };
 
-  const handleCancelOrder = (orderId: string) => {
-    setOrders(prev => prev.map(order =>
-      order.id === orderId ? { ...order, status: 'cancelled' as const } : order
-    ));
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      setIsProcessing(orderId);
+      
+      // Update the website order status in database
+      await DatabaseService.updateWebsiteOrderStatus(orderId, 'cancelled');
+
+      // Update local state
+      setOrders(prev => prev.map(order =>
+        order.id === orderId ? { ...order, status: 'cancelled' as const } : order
+      ));
+
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);
+      }
+
+      console.log(`Order ${orderId} cancelled`);
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+      alert(lang === 'fr' ? 'Erreur lors de l\'annulation de la commande' : 'خطأ في إلغاء الطلب');
+    } finally {
+      setIsProcessing(null);
+    }
   };
 
   const handleDeleteOrder = (orderId: string) => {
     setShowDeleteConfirm(orderId);
   };
 
-  const confirmDeleteOrder = () => {
+  const confirmDeleteOrder = async () => {
     if (showDeleteConfirm) {
-      setOrders(prev => prev.filter(order => order.id !== showDeleteConfirm));
-      setShowDeleteConfirm(null);
+      try {
+        setIsProcessing(showDeleteConfirm);
+        
+        // Delete from database
+        await DatabaseService.deleteWebsiteOrder(showDeleteConfirm);
+
+        // Update local state
+        setOrders(prev => prev.filter(order => order.id !== showDeleteConfirm));
+        setShowDeleteConfirm(null);
+        
+        if (selectedOrder?.id === showDeleteConfirm) {
+          setSelectedOrder(null);
+          setShowOrderDetails(false);
+        }
+      } catch (err) {
+        console.error('Error deleting order:', err);
+        alert(lang === 'fr' ? 'Erreur lors de la suppression de la commande' : 'خطأ في حذف الطلب');
+        setShowDeleteConfirm(null);
+      } finally {
+        setIsProcessing(null);
+      }
     }
   };
 
@@ -272,6 +169,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
           >
             <option value="all">{lang === 'fr' ? 'Tous les statuts' : 'جميع الحالات'}</option>
             <option value="pending">{lang === 'fr' ? 'En attente' : 'في الانتظار'}</option>
+            <option value="accepted">{lang === 'fr' ? 'Accepté' : 'مقبول'}</option>
             <option value="confirmed">{lang === 'fr' ? 'Confirmé' : 'مؤكد'}</option>
             <option value="processing">{lang === 'fr' ? 'En traitement' : 'قيد المعالجة'}</option>
             <option value="completed">{lang === 'fr' ? 'Terminé' : 'مكتمل'}</option>
@@ -281,7 +179,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-2xl p-6 border border-yellow-200">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
@@ -294,40 +192,26 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+        <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-2xl p-6 border border-teal-200">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+            <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-teal-600" />
             </div>
             <div>
-              <p className="text-sm text-green-600 font-bold">{lang === 'fr' ? 'Confirmé' : 'مؤكد'}</p>
-              <p className="text-2xl font-black text-green-900">{orders.filter(o => o.status === 'confirmed').length}</p>
+              <p className="text-sm text-teal-600 font-bold">{lang === 'fr' ? 'Accepté' : 'مقبول'}</p>
+              <p className="text-2xl font-black text-teal-900">{orders.filter(o => o.status === 'accepted').length}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
+        <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl p-6 border border-red-200">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <FileText className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+              <XCircle className="w-6 h-6 text-red-600" />
             </div>
             <div>
-              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? 'Total' : 'الإجمالي'}</p>
-              <p className="text-2xl font-black text-blue-900">{orders.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm text-purple-600 font-bold">{lang === 'fr' ? 'Revenus' : 'الإيرادات'}</p>
-              <p className="text-2xl font-black text-purple-900">
-                {orders.filter(o => o.status === 'confirmed').reduce((sum, o) => sum + o.totalPrice + o.servicesTotal, 0).toLocaleString()} DA
-              </p>
+              <p className="text-sm text-red-600 font-bold">{lang === 'fr' ? 'Annulé' : 'ملغي'}</p>
+              <p className="text-2xl font-black text-red-900">{orders.filter(o => o.status === 'cancelled').length}</p>
             </div>
           </div>
         </div>
@@ -335,7 +219,29 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
 
       {/* Orders Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredOrders.map((order) => (
+        {isLoading ? (
+          // Loading state
+          <div className="col-span-full flex flex-col items-center justify-center py-12">
+            <Loader className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+            <p className="text-slate-600 font-bold">{lang === 'fr' ? 'Chargement des commandes...' : 'جاري تحميل الطلبات...'}</p>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          // Empty state
+          <div className="col-span-full flex flex-col items-center justify-center py-12">
+            <div className="text-6xl mb-4">📭</div>
+            <p className="text-slate-600 font-bold text-center">
+              {lang === 'fr' 
+                ? 'Aucune commande trouvée' 
+                : 'لم يتم العثور على أي طلبات'}
+            </p>
+            <p className="text-slate-500 text-sm mt-2">
+              {lang === 'fr'
+                ? 'Les commandes du site web apparaîtront ici'
+                : 'ستظهر طلبات الموقع الإلكتروني هنا'}
+            </p>
+          </div>
+        ) : (
+          filteredOrders.map((order) => (
           <motion.div
             key={order.id}
             initial={{ opacity: 0, y: 20 }}
@@ -345,29 +251,49 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
             {/* Car Image */}
             <div className="relative h-48 overflow-hidden rounded-t-2xl">
               <img
-                src={order.car.images[0]}
-                alt={`${order.car.brand} ${order.car.model}`}
+                src={order.car?.image_url || order.car?.images?.[0] || 'https://picsum.photos/seed/car/400/300'}
+                alt={`${order.car?.brand} ${order.car?.model}`}
                 className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
               />
-              {/* Status Badge */}
-              <div className="absolute top-4 left-4">
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+              {/* Client Avatar - Circular with Border */}
+              <div className="absolute top-4 right-4 w-16 h-16 rounded-full border-4 border-white overflow-hidden shadow-lg bg-slate-100 flex items-center justify-center">
+                {order.step2?.photo ? (
+                  <img
+                    src={order.step2.photo}
+                    alt={`${order.step2.firstName} ${order.step2.lastName}`}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : order.step2?.scannedDocuments && order.step2.scannedDocuments.length > 0 ? (
+                  <img
+                    src={order.step2.scannedDocuments[0]}
+                    alt={`${order.step2.firstName} ${order.step2.lastName}`}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="text-2xl">👤</span>
+                )}
+              </div>
+              {/* Status Badge and Website Badge Stack */}
+              <div className="absolute top-4 left-4 flex flex-col gap-1">
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                   order.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                  order.status === 'accepted' ? 'bg-teal-100 text-teal-800' :
                   order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                   order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
                   order.status === 'completed' ? 'bg-purple-100 text-purple-800' :
                   'bg-red-100 text-red-800'
                 }`}>
                   {order.status === 'confirmed' ? '✅ Confirmé' :
+                   order.status === 'accepted' ? '✅ Accepté' :
                    order.status === 'pending' ? '⏳ En attente' :
                    order.status === 'processing' ? '🔄 Traitement' :
                    order.status === 'completed' ? '🏁 Terminé' :
                    '❌ Annulé'}
                 </span>
-              </div>
-              {/* Website Badge */}
-              <div className="absolute top-4 right-4">
-                <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 w-fit">
                   🌐 Website
                 </span>
               </div>
@@ -381,21 +307,16 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
                   <h3 className="font-bold text-lg text-slate-900">
                     {order.step2.firstName} {order.step2.lastName}
                   </h3>
-                  <p className="text-sm text-slate-600 flex items-center gap-1">
-                    <Phone className="w-3 h-3" />
-                    {order.step2.phone}
-                  </p>
-                  <p className="text-sm text-slate-600 flex items-center gap-1">
-                    <Mail className="w-3 h-3" />
-                    {order.step2.email}
+                  <p className="text-sm text-slate-600">
+                    📱 {order.step2.phone}
                   </p>
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-900">
-                    🚗 {order.car.brand} {order.car.model}
+                    🚗 {order.car?.brand || 'N/A'} {order.car?.model || 'N/A'}
                   </h4>
                   <p className="text-sm text-slate-600">
-                    🏷️ {order.car.registration}
+                    🏷️ {order.car?.plate_number || 'N/A'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -406,67 +327,99 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
                   <Clock className="w-4 h-4" />
                   <span>{order.totalDays} {lang === 'fr' ? 'jours' : 'أيام'}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm font-bold text-green-600">
-                  <DollarSign className="w-4 h-4" />
-                  <span>{(order.totalPrice + order.servicesTotal).toLocaleString()} {lang === 'fr' ? 'DA' : 'د.ج'}</span>
-                </div>
-
-                {/* Services */}
-                {order.step3.additionalServices.length > 0 && (
-                  <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                    <p className="text-xs text-blue-600 font-bold mb-2">{lang === 'fr' ? 'Services supplémentaires:' : 'الخدمات الإضافية:'}</p>
-                    <div className="space-y-1">
-                      {order.step3.additionalServices.map((service) => (
-                        <div key={service.id} className="flex justify-between items-center text-xs">
-                          <span>{service.name}</span>
-                          <span className="font-bold text-blue-700">{service.price.toLocaleString()} DA</span>
-                        </div>
-                      ))}
+                
+                {/* Pricing Section */}
+                <div className="mt-3 p-4 bg-gradient-to-r from-white to-slate-50 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-slate-500">{lang === 'fr' ? 'Total Réservation' : 'الإجمالي'}</div>
+                      <div className="text-xl font-black text-slate-900">
+                        {(order.totalPrice + order.servicesTotal).toLocaleString()} {lang === 'fr' ? 'DA' : 'د.ج'}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-500">{lang === 'fr' ? 'Statut' : 'الحالة'}</div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        order.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        order.status === 'accepted' ? 'bg-teal-100 text-teal-800' :
+                        order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {order.status === 'confirmed' ? '✅ Confirmé' :
+                         order.status === 'accepted' ? '✅ Accepté' :
+                         order.status === 'pending' ? '⏳ En attente' :
+                         '❌ Annulé'}
+                      </span>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-2 mb-3">
+              {/* Actions - simplified car card style buttons */}
+              <div className="grid grid-cols-4 gap-2 mb-3">
                 <button
                   onClick={() => handleViewDetails(order)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-3 rounded-lg transition-colors"
+                  disabled={isProcessing === order.id}
+                  className="p-2.5 rounded-xl bg-saas-bg hover:bg-saas-secondary-start/10 text-saas-text-muted transition-all hover:scale-105 flex flex-col items-center gap-1 border border-saas-border hover:border-saas-secondary-start/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={lang === 'fr' ? 'Détails' : 'التفاصيل'}
                 >
-                  👁️ {lang === 'fr' ? 'Détails' : 'التفاصيل'}
+                  <span className="text-lg">👁️</span>
+                  <span className="text-[8px] uppercase font-bold">{lang === 'fr' ? 'Détails' : 'تفاصيل'}</span>
                 </button>
+
                 <button
                   onClick={() => handleConfirmOrder(order.id)}
-                  disabled={order.status !== 'pending'}
-                  className={`flex-1 flex items-center justify-center gap-2 font-bold py-2 px-3 rounded-lg transition-colors ${
-                    order.status === 'pending'
-                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-sm'
-                      : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  disabled={order.status !== 'pending' || isProcessing === order.id}
+                  className={`p-2.5 rounded-xl transition-all flex flex-col items-center gap-1 border ${
+                    order.status === 'pending' && isProcessing !== order.id
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-transparent'
+                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                   }`}
+                  title={lang === 'fr' ? 'Accepter' : 'قبول'}
                 >
-                  ✅ {lang === 'fr' ? 'Accepter' : 'قبول'}
+                  {isProcessing === order.id ? (
+                    <Loader className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span className="text-lg">✅</span>
+                      <span className="text-[8px] uppercase font-bold">{lang === 'fr' ? 'Accepter' : 'قبول'}</span>
+                    </>
+                  )}
                 </button>
+
                 <button
                   onClick={() => handleCancelOrder(order.id)}
-                  disabled={order.status === 'cancelled'}
-                  className={`flex-1 flex items-center justify-center gap-2 font-bold py-2 px-3 rounded-lg transition-colors ${
-                    order.status !== 'cancelled'
-                      ? 'bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-sm'
-                      : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  disabled={order.status === 'cancelled' || isProcessing === order.id}
+                  className={`p-2.5 rounded-xl transition-all flex flex-col items-center gap-1 border ${
+                    order.status !== 'cancelled' && isProcessing !== order.id
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-transparent'
+                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                   }`}
+                  title={lang === 'fr' ? 'Annuler' : 'إلغاء'}
                 >
-                  ❌ {lang === 'fr' ? 'Annuler' : 'إلغاء'}
+                  {isProcessing === order.id ? (
+                    <Loader className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span className="text-lg">❌</span>
+                      <span className="text-[8px] uppercase font-bold">{lang === 'fr' ? 'Annuler' : 'إلغاء'}</span>
+                    </>
+                  )}
                 </button>
+
                 <button
                   onClick={() => handleDeleteOrder(order.id)}
-                  className="flex items-center justify-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-3 rounded-lg transition-colors"
+                  disabled={isProcessing === order.id}
+                  className="p-2.5 rounded-xl bg-saas-danger-start/5 hover:bg-saas-danger-start hover:text-white text-saas-danger-start transition-all hover:scale-105 flex flex-col items-center gap-1 border border-saas-danger-start/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={lang === 'fr' ? 'Supprimer' : 'حذف'}
                 >
-                  🗑️
+                  <span className="text-lg">🗑️</span>
                 </button>
               </div>
             </div>
           </motion.div>
-        ))}
+        ))
+        )}
       </div>
 
       {/* Order Details Modal */}
@@ -621,35 +574,35 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
                       <div className="space-y-3">
                         <div className="flex justify-between">
                           <span className="font-bold">{lang === 'fr' ? 'Modèle:' : 'الموديل:'}</span>
-                          <span>{selectedOrder.car.brand} {selectedOrder.car.model}</span>
+                          <span>{selectedOrder.car?.brand || 'N/A'} {selectedOrder.car?.model || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-bold">{lang === 'fr' ? 'Immatriculation:' : 'رقم اللوحة:'}</span>
-                          <span>{selectedOrder.car.registration}</span>
+                          <span>{selectedOrder.car?.plate_number || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-bold">{lang === 'fr' ? 'Couleur:' : 'اللون:'}</span>
-                          <span>{selectedOrder.car.color}</span>
+                          <span>{selectedOrder.car?.color || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-bold">{lang === 'fr' ? 'Année:' : 'السنة:'}</span>
-                          <span>{selectedOrder.car.year}</span>
+                          <span>{selectedOrder.car?.year || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-bold">{lang === 'fr' ? 'Énergie:' : 'الطاقة:'}</span>
-                          <span>{selectedOrder.car.energy}</span>
+                          <span>{selectedOrder.car?.energy || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-bold">{lang === 'fr' ? 'Transmission:' : 'النقل:'}</span>
-                          <span>{selectedOrder.car.transmission}</span>
+                          <span>{selectedOrder.car?.transmission || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-bold">{lang === 'fr' ? 'Prix/jour:' : 'السعر/يوم:'}</span>
-                          <span>{selectedOrder.car.priceDay.toLocaleString()} DA</span>
+                          <span>{selectedOrder.car?.price_per_day ? parseInt(selectedOrder.car.price_per_day).toLocaleString() : 'N/A'} DA</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-bold">{lang === 'fr' ? 'Caution:' : 'الكفالة:'}</span>
-                          <span>{selectedOrder.car.deposit?.toLocaleString()} DA</span>
+                          <span>{selectedOrder.car?.deposit ? parseInt(selectedOrder.car.deposit).toLocaleString() : 'N/A'} DA</span>
                         </div>
                       </div>
                     </div>

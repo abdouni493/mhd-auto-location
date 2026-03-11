@@ -148,6 +148,7 @@ interface CreateReservationFormProps {
 }
 
 export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ lang, onBack, inspectionMode = false, initialData, defaultStatus = 'pending' }) => {
+    console.log('Reservation initialData:', initialData);
   const [currentStep, setCurrentStep] = useState(inspectionMode ? 3 : 1);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
@@ -170,6 +171,48 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
 
     loadAgencies();
   }, []);
+
+  // When in inspection mode with initialData, map additionalServices and other data to step5
+  useEffect(() => {
+    if (inspectionMode && initialData) {
+      const services = (initialData as any).additionalServices;
+      const updates: any = {};
+      // Auto-select services
+      if (services && services.length > 0 && !formData.step5?.additionalServices?.length) {
+        updates.step5 = {
+          additionalServices: services
+        };
+      }
+      // Auto-select locations
+      if (!formData.step1?.departureLocation && (initialData as any).departureLocation) {
+        updates.step1 = {
+          ...(formData.step1 || {}),
+          departureLocation: (initialData as any).departureLocation,
+          returnLocation: (initialData as any).returnLocation || (initialData as any).departureLocation,
+          departureDate: (initialData as any).departureDate || formData.step1?.departureDate,
+          returnDate: (initialData as any).returnDate || formData.step1?.returnDate
+        };
+      }
+      // Auto-select car
+      if (!formData.step2?.selectedCar && (initialData as any).car) {
+        updates.step2 = {
+          selectedCar: (initialData as any).car
+        };
+      }
+      // Auto-select client
+      if (!formData.step4?.selectedClient && (initialData as any).client) {
+        updates.step4 = {
+          selectedClient: (initialData as any).client
+        };
+      }
+      if (Object.keys(updates).length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          ...updates
+        }));
+      }
+    }
+  }, [inspectionMode, initialData]);
 
   const [formData, setFormData] = useState<Partial<ReservationDetails>>(initialData || {
     step1: {
@@ -215,17 +258,20 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
 
   const handleNext = () => {
     if (inspectionMode && currentStep === 3) {
-      // Skip to step 6 (tarification) when in inspection mode
-      setCurrentStep(6);
+      // In inspection mode: step 3 (inspection) -> step 5 (services)
+      setCurrentStep(5);
     } else if (currentStep < 6) {
       setCurrentStep(currentStep + 1);
     }
   };
 
   const handlePrevious = () => {
-    if (inspectionMode && currentStep === 6) {
-      // Go back to step 3 (inspection) when in inspection mode
+    if (inspectionMode && currentStep === 5) {
+      // Go back to step 3 (inspection) when in inspection mode from services
       setCurrentStep(3);
+    } else if (inspectionMode && currentStep === 6) {
+      // Go back to step 5 (services) from pricing in inspection mode
+      setCurrentStep(5);
     } else if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
@@ -233,19 +279,16 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
 
   const handleSubmit = async () => {
     try {
-      // Validate required data
-      if (!formData.step1 || !formData.step2?.selectedCar || !formData.step4?.selectedClient) {
-        alert(lang === 'fr' ? 'Veuillez compléter tous les champs requis' : 'يرجى ملء جميع الحقول المطلوبة');
-        return;
-      }
-
       // Find agency IDs
       const departureAgency = agencies.find(a => a.name === formData.step1?.departureLocation || a.address === formData.step1?.departureLocation);
       const returnAgency = agencies.find(a => a.name === formData.step1?.returnLocation || a.address === formData.step1?.returnLocation) || departureAgency;
 
-      if (!departureAgency || !returnAgency) {
-        alert(lang === 'fr' ? 'Agence introuvable' : 'الوكالة غير موجودة');
-        return;
+      // Skip agency validation if inspectionMode and accepted reservation
+      if (!(inspectionMode && initialData && initialData.status === 'accepted')) {
+        if (!departureAgency || !returnAgency) {
+          alert(lang === 'fr' ? 'Agence introuvable' : 'الوكالة غير موجودة');
+          return;
+        }
       }
 
       // Calculate total days
@@ -258,25 +301,47 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
       const remainingPayment = Math.max(0, totalPrice - advancePayment);
 
       // Create reservation using ReservationsService
+      // Skip client/car validation if inspectionMode and accepted reservation
+      if (!(inspectionMode && initialData && initialData.status === 'accepted')) {
+        if (!formData.step4?.selectedClient?.id || !formData.step2?.selectedCar?.id || !departureAgency?.id || !returnAgency?.id) {
+          alert(lang === 'fr' ? 'Veuillez sélectionner un client, un véhicule et des agences valides.' : 'يرجى اختيار عميل ومركبة ووكالات صحيحة.');
+          return;
+        }
+      }
+      let clientId = formData.step4?.selectedClient?.id || '';
+      let carId = formData.step2?.selectedCar?.id || '';
+      let departureAgencyId = departureAgency?.id || '';
+      let returnAgencyId = returnAgency?.id || '';
+      if (inspectionMode && initialData && initialData.status === 'accepted') {
+        clientId = (initialData as any)?.client?.id || '';
+        carId = (initialData as any)?.car?.id || '';
+        departureAgencyId = (initialData as any)?.departure_agency_id || (initialData as any)?.departureAgencyId || '';
+        returnAgencyId = (initialData as any)?.return_agency_id || (initialData as any)?.returnAgencyId || '';
+        // Block if any required UUID is missing
+        if (!clientId || !carId || !departureAgencyId || !returnAgencyId) {
+          alert(lang === 'fr' ? "Impossible de créer la réservation: données manquantes (client, véhicule ou agence)." : "لا يمكن إنشاء الحجز: بيانات مفقودة (عميل أو مركبة أو وكالة).");
+          return;
+        }
+      }
       const result = await ReservationsService.createReservation({
-        clientId: formData.step4.selectedClient.id,
-        carId: formData.step2.selectedCar.id,
-        departureDate: formData.step1.departureDate,
-        departureTime: formData.step1.departureTime,
-        departureAgencyId: departureAgency.id,
-        returnDate: formData.step1.returnDate,
-        returnTime: formData.step1.returnTime,
-        returnAgencyId: returnAgency.id,
-        pricePerDay: formData.step2.selectedCar.priceDay,
-        priceWeek: formData.step2.selectedCar.priceWeek,
-        priceMonth: formData.step2.selectedCar.priceMonth,
+        clientId,
+        carId,
+        departureDate: formData.step1?.departureDate || '',
+        departureTime: formData.step1?.departureTime || '',
+        departureAgencyId,
+        returnDate: formData.step1?.returnDate || '',
+        returnTime: formData.step1?.returnTime || '',
+        returnAgencyId,
+        pricePerDay: formData.step2?.selectedCar?.priceDay || 0,
+        priceWeek: formData.step2?.selectedCar?.priceWeek || 0,
+        priceMonth: formData.step2?.selectedCar?.priceMonth || 0,
         totalDays: totalDays,
         totalPrice: totalPrice,
-        deposit: formData.step2.selectedCar.deposit,
+        deposit: formData.step2?.selectedCar?.deposit || 0,
         advancePayment: advancePayment,
         remainingPayment: remainingPayment,
         status: 'confirmed', // always create as confirmed
-        notes: formData.step6?.notes,
+        notes: formData.step6?.notes || '',
       });
 
       // Save selected services
@@ -292,39 +357,78 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           // Determine agency_id: prefer explicit agency id from step1, else fallback to first agency
           const agencyId = formData.step1?.departureAgency || (agencies && agencies[0]?.id) || '';
 
-          const createdInspection = await DatabaseService.createVehicleInspection({
-            reservation_id: result.id,
-            type: 'departure',
-            mileage: inspection.mileage || 0,
-            fuel_level: inspection.fuelLevel || 'full',
-            agency_id: agencyId,
-            exterior_front_photo: inspection.exteriorPhotos?.[0] || null,
-            exterior_rear_photo: inspection.exteriorPhotos?.[1] || null,
-            interior_photo: inspection.interiorPhotos?.[0] || null,
-            other_photos: inspection.other_photos || inspection.otherPhotos || [],
-            client_signature: inspection.signature || inspection.client_signature || null,
-            notes: inspection.notes || null,
-            date: inspection.date || new Date().toISOString().split('T')[0],
-            time: inspection.time || new Date().toTimeString().split(' ')[0]
-          });
-
-          // Save checklist responses for ALL items (store true/false)
-          const responses = (inspection.inspectionItems || []).map((it: any) => ({
-            inspection_id: createdInspection.id,
-            checklist_item_id: it.id,
-            status: !!it.checked,
-            note: it.note || null
-          }));
-
-          if (responses.length > 0) {
-            await DatabaseService.upsertInspectionResponses(responses);
-          }
-
-          // Update car mileage
-          if (inspection.mileage && inspection.mileage > 0) {
-            await DatabaseService.updateCar(formData.step2.selectedCar.id, {
-              mileage: inspection.mileage
+          // Check if a departure inspection already exists for this reservation
+          const existingDeparture = formData.departureInspection;
+          if (existingDeparture && existingDeparture.id) {
+            // Update existing inspection
+            await DatabaseService.updateVehicleInspection(existingDeparture.id, {
+              mileage: inspection.mileage || 0,
+              fuel_level: inspection.fuelLevel || 'full',
+              agency_id: agencyId,
+              exterior_front_photo: inspection.exteriorPhotos?.[0] || null,
+              exterior_rear_photo: inspection.exteriorPhotos?.[1] || null,
+              interior_photo: inspection.interiorPhotos?.[0] || null,
+              other_photos: inspection.other_photos || inspection.otherPhotos || [],
+              client_signature: inspection.signature || inspection.client_signature || null,
+              notes: inspection.notes || null,
+              date: inspection.date || new Date().toISOString().split('T')[0],
+              time: inspection.time || new Date().toTimeString().split(' ')[0]
             });
+
+            // Save checklist responses for ALL items (store true/false)
+            const responses = (inspection.inspectionItems || []).map((it: any) => ({
+              inspection_id: existingDeparture.id,
+              checklist_item_id: it.id,
+              status: !!it.checked,
+              note: it.note || null
+            }));
+
+            if (responses.length > 0) {
+              await DatabaseService.upsertInspectionResponses(responses);
+            }
+
+            // Update car mileage
+            if (inspection.mileage && inspection.mileage > 0) {
+              await DatabaseService.updateCar(formData.step2.selectedCar.id, {
+                mileage: inspection.mileage
+              });
+            }
+          } else {
+            // Create new inspection if none exists
+            const createdInspection = await DatabaseService.createVehicleInspection({
+              reservation_id: result.id,
+              type: 'departure',
+              mileage: inspection.mileage || 0,
+              fuel_level: inspection.fuelLevel || 'full',
+              agency_id: agencyId,
+              exterior_front_photo: inspection.exteriorPhotos?.[0] || null,
+              exterior_rear_photo: inspection.exteriorPhotos?.[1] || null,
+              interior_photo: inspection.interiorPhotos?.[0] || null,
+              other_photos: inspection.other_photos || inspection.otherPhotos || [],
+              client_signature: inspection.signature || inspection.client_signature || null,
+              notes: inspection.notes || null,
+              date: inspection.date || new Date().toISOString().split('T')[0],
+              time: inspection.time || new Date().toTimeString().split(' ')[0]
+            });
+
+            // Save checklist responses for ALL items (store true/false)
+            const responses = (inspection.inspectionItems || []).map((it: any) => ({
+              inspection_id: createdInspection.id,
+              checklist_item_id: it.id,
+              status: !!it.checked,
+              note: it.note || null
+            }));
+
+            if (responses.length > 0) {
+              await DatabaseService.upsertInspectionResponses(responses);
+            }
+
+            // Update car mileage
+            if (inspection.mileage && inspection.mileage > 0) {
+              await DatabaseService.updateCar(formData.step2.selectedCar.id, {
+                mileage: inspection.mileage
+              });
+            }
           }
         } catch (err) {
           console.error('Error saving inspection:', err);
@@ -383,7 +487,7 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
       {/* Progress Bar */}
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
         <div className="flex items-center justify-between mb-4">
-          {steps.filter(step => !inspectionMode || [3, 6].includes(step.id)).map((step) => (
+          {steps.filter(step => !inspectionMode || [3, 5, 6].includes(step.id)).map((step) => (
             <div key={step.id} className="flex flex-col items-center flex-1">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg mb-2 transition-colors ${
                 step.id < currentStep ? 'bg-green-500 text-white' :
@@ -403,7 +507,7 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div
             className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${inspectionMode ? (currentStep === 3 ? 50 : 100) : (currentStep / 6) * 100}%` }}
+            style={{ width: `${inspectionMode ? (currentStep === 3 ? 33 : currentStep === 5 ? 66 : 100) : (currentStep / 6) * 100}%` }}
           />
         </div>
       </div>
@@ -419,12 +523,12 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           className="bg-white rounded-2xl shadow-lg border border-slate-200"
         >
           <div className="p-8">
-            {currentStep === 1 && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} />}
+            {currentStep === 1 && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} inspectionMode={inspectionMode} initialData={initialData} />}
             {currentStep === 2 && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
             {currentStep === 3 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
             {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
             {currentStep === 5 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 6 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} />}
+            {currentStep === 6 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} inspectionMode={inspectionMode} initialData={initialData} agencies={agencies} />}
           </div>
         </motion.div>
       </AnimatePresence>
@@ -472,7 +576,9 @@ export const Step1DatesLocations: React.FC<{
   setFormData: React.Dispatch<React.SetStateAction<Partial<ReservationDetails>>>;
   agencies: any[];
   isLoadingAgencies: boolean;
-}> = ({ lang, formData, setFormData, agencies, isLoadingAgencies }) => {
+  inspectionMode?: boolean;
+  initialData?: Partial<ReservationDetails>;
+}> = ({ lang, formData, setFormData, agencies, isLoadingAgencies, inspectionMode = false, initialData }) => {
   const [showReturnLocation, setShowReturnLocation] = useState(false);
 
   return (
@@ -522,22 +628,46 @@ export const Step1DatesLocations: React.FC<{
             <label className="block font-bold text-slate-900 mb-2">
               📍 {lang === 'fr' ? 'Lieu de Prise en Charge' : 'مكان الاستلام'}
             </label>
-            <select
-              value={formData.step1?.departureLocation || ''}
-              onChange={(e) => setFormData(prev => ({
-                ...prev,
-                step1: { ...prev.step1!, departureLocation: e.target.value }
-              }))}
-              disabled={isLoadingAgencies}
-              className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-100"
-            >
-              <option value="">{isLoadingAgencies ? (lang === 'fr' ? 'Chargement...' : 'جاري التحميل...') : (lang === 'fr' ? 'Sélectionner une agence...' : 'اختر وكالة...')}</option>
-              {agencies.map((agency) => (
-                <option key={agency.id} value={agency.name || agency.address}>
-                  {agency.name} {agency.address ? `- ${agency.address}` : ''}
-                </option>
-              ))}
-            </select>
+            {inspectionMode && initialData && initialData.status === 'accepted' ? (
+              <div className="w-full p-3 border border-slate-200 rounded-lg bg-slate-100 text-lg font-bold text-slate-900">
+                {(() => {
+                  if (!agencies || agencies.length === 0) {
+                    return 'Erreur: agences non chargées.';
+                  }
+                  let agencyId = initialData.departure_agency_id || initialData.departureAgencyId;
+                  // Only fallback if agencyId is truly missing
+                  if (!agencyId) {
+                    if (initialData.client && (initialData.client.agencyId || initialData.client.agency_id)) {
+                      agencyId = initialData.client.agencyId || initialData.client.agency_id;
+                    } else if (formData.step4?.selectedClient && (formData.step4.selectedClient.agencyId || formData.step4.selectedClient.agency_id)) {
+                      agencyId = formData.step4.selectedClient.agencyId || formData.step4.selectedClient.agency_id;
+                    }
+                  }
+                  if (agencyId) {
+                    const agency = agencies.find(a => a.id === agencyId);
+                    return agency ? `${agency.name}${agency.address ? ' - ' + agency.address : ''}` : `Erreur: agence non trouvée (ID: ${agencyId})`;
+                  }
+                  return 'Erreur: ID agence non spécifié.';
+                })()}
+              </div>
+            ) : (
+              <select
+                value={formData.step1?.departureLocation || ''}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  step1: { ...prev.step1!, departureLocation: e.target.value }
+                }))}
+                disabled={isLoadingAgencies}
+                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-100"
+              >
+                <option value="">{isLoadingAgencies ? (lang === 'fr' ? 'Chargement...' : 'جاري التحميل...') : (lang === 'fr' ? 'Sélectionner une agence...' : 'اختر وكالة...')}</option>
+                {agencies.map((agency) => (
+                  <option key={agency.id} value={agency.name || agency.address}>
+                    {agency.name} {agency.address ? `- ${agency.address}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -1237,17 +1367,35 @@ export const Step3DepartureInspection: React.FC<{
           <h4 className="text-lg font-black text-slate-900 mb-4">
             🚗 {lang === 'fr' ? 'Informations Véhicule' : 'معلومات المركبة'}
           </h4>
-          {formData.step2?.selectedCar && (
+          {(formData.step2?.selectedCar || formData.car) && (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <img
-                  src={formData.step2.selectedCar.images[0]}
-                  alt={`${formData.step2.selectedCar.brand} ${formData.step2.selectedCar.model}`}
+                  src={(formData.step2?.selectedCar || formData.car)?.images?.[0]}
+                  alt={`${(formData.step2?.selectedCar || formData.car)?.brand} ${(formData.step2?.selectedCar || formData.car)?.model}`}
                   className="w-16 h-12 rounded-lg object-cover"
                 />
                 <div>
-                  <p className="font-bold text-lg">{formData.step2.selectedCar.brand} {formData.step2.selectedCar.model}</p>
-                  <p className="text-slate-600">{formData.step2.selectedCar.registration}</p>
+                  <p className="font-bold text-lg">{(formData.step2?.selectedCar || formData.car)?.brand} {(formData.step2?.selectedCar || formData.car)?.model}</p>
+                  <p className="text-slate-600">{(formData.step2?.selectedCar || formData.car)?.registration}</p>
+                </div>
+              </div>
+              <div className="space-y-2 text-sm border-t border-slate-200 pt-3">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">📋 {lang === 'fr' ? 'Immatriculation' : 'لوحة الترخيص'}:</span>
+                  <span className="font-bold">{(formData.step2?.selectedCar || formData.car)?.registration}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">🎨 {lang === 'fr' ? 'Couleur' : 'اللون'}:</span>
+                  <span className="font-bold">{(formData.step2?.selectedCar || formData.car)?.color}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">📅 {lang === 'fr' ? 'Année' : 'السنة'}:</span>
+                  <span className="font-bold">{(formData.step2?.selectedCar || formData.car)?.year}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">⛽ {lang === 'fr' ? 'Énergie' : 'الوقود'}:</span>
+                  <span className="font-bold">{(formData.step2?.selectedCar || formData.car)?.energy}</span>
                 </div>
               </div>
             </div>
@@ -2278,7 +2426,10 @@ export const Step6FinalPricing: React.FC<{
   lang: Language;
   formData: Partial<ReservationDetails>;
   setFormData: React.Dispatch<React.SetStateAction<Partial<ReservationDetails>>>;
-}> = ({ lang, formData, setFormData }) => {
+  inspectionMode?: boolean;
+  initialData?: Partial<ReservationDetails>;
+  agencies: any[];
+}> = ({ lang, formData, setFormData, inspectionMode, initialData, agencies }) => {
   const [tvaEnabled, setTvaEnabled] = useState(false);
   const [tvaRate, setTvaRate] = useState(19); // Default TVA rate
   const [advancePayment, setAdvancePayment] = useState(0);
@@ -2300,6 +2451,9 @@ export const Step6FinalPricing: React.FC<{
   }, [formData.step6]);
 
   // Calculate pricing
+  // Get car data from either step2 (new flow) or car (existing reservation/inspection)
+  const selectedCar = formData.step2?.selectedCar || (formData as any).car;
+  
   const days = formData.step1?.departureDate && formData.step1?.returnDate
     ? Math.ceil((new Date(formData.step1.returnDate).getTime() - new Date(formData.step1.departureDate).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
@@ -2307,9 +2461,9 @@ export const Step6FinalPricing: React.FC<{
   const weeks = Math.floor(days / 7);
   const remainingDays = days % 7;
 
-  const basePrice = (formData.step2?.selectedCar?.priceDay || 0) * days;
-  const weeklyPrice = (formData.step2?.selectedCar?.priceWeek || formData.step2?.selectedCar?.priceDay * 7) * weeks;
-  const remainingPrice = (formData.step2?.selectedCar?.priceDay || 0) * remainingDays;
+  const basePrice = (selectedCar?.priceDay || 0) * days;
+  const weeklyPrice = (selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7) * weeks;
+  const remainingPrice = (selectedCar?.priceDay || 0) * remainingDays;
   const calculatedBasePrice = weeklyPrice + remainingPrice;
 
   const servicesTotal = formData.step5?.additionalServices?.reduce((sum, s) => sum + s.price, 0) || 0;
@@ -2317,7 +2471,7 @@ export const Step6FinalPricing: React.FC<{
   const tvaAmount = tvaEnabled ? (subtotal * tvaRate) / 100 : 0;
   const computedPrice = subtotal + tvaAmount;
   const totalPrice = isManualTotal && manualTotal !== '' ? Number(manualTotal) : computedPrice;
-  const deposit = formData.step2?.selectedCar?.deposit || 0;
+  const deposit = selectedCar?.deposit || 0;
 
   // Update formData with values (manual override takes precedence)
   React.useEffect(() => {
@@ -2464,11 +2618,43 @@ export const Step6FinalPricing: React.FC<{
           </div>
           <div className="bg-white rounded-lg p-4 border border-slate-200">
             <p className="text-sm font-bold text-slate-700 mb-1">📍 {lang === 'fr' ? 'Lieu de Départ' : 'مكان المغادرة'}</p>
-            <p className="text-lg font-bold text-slate-900">{formData.step1?.departureLocation}</p>
+            <p className="text-lg font-bold text-slate-900">{
+              (() => {
+                let agencyId = null;
+                if (inspectionMode && initialData && initialData.status === 'accepted') {
+                  agencyId = initialData.departure_agency_id;
+                } else if (formData.step1?.departureLocation) {
+                  // Try to match by agency name
+                  const agencyByName = (agencies || []).find(a => a.name === formData.step1.departureLocation);
+                  if (agencyByName) return `${agencyByName.name}${agencyByName.address ? ' - ' + agencyByName.address : ''}`;
+                  // fallback: treat as ID
+                  agencyId = formData.step1.departureLocation;
+                }
+                if (agencyId) {
+                  const agency = (agencies || []).find(a => a.id === agencyId);
+                  return agency ? `${agency.name}${agency.address ? ' - ' + agency.address : ''}` : 'Agence non trouvée';
+                }
+                return 'Non spécifié';
+              })()
+            }</p>
           </div>
           <div className="bg-white rounded-lg p-4 border border-slate-200">
             <p className="text-sm font-bold text-slate-700 mb-1">📍 {lang === 'fr' ? 'Lieu de Retour' : 'مكان العودة'}</p>
-            <p className="text-lg font-bold text-slate-900">{formData.step1?.returnLocation || formData.step1?.departureLocation || '-'}</p>
+            <p className="text-lg font-bold text-slate-900">{
+              inspectionMode && initialData && initialData.status === 'accepted'
+                ? (() => {
+                    if (initialData.return_agency_id) {
+                      const agency = (agencies || []).find(a => a.id === initialData.return_agency_id);
+                      return agency ? `${agency.name}${agency.address ? ' - ' + agency.address : ''}` : 'Agence non trouvée';
+                    }
+                    return 'Non spécifié';
+                  })()
+                : (formData.step1?.returnLocation && formData.step1?.returnLocation.trim() !== ''
+                    ? formData.step1?.returnLocation
+                    : ((formData.step1?.departureLocation && formData.step1?.departureLocation.trim() !== '')
+                        ? formData.step1?.departureLocation
+                        : 'Non spécifié'))
+            }</p>
           </div>
           {formData.step3?.selectedDriver && (
             <div className="bg-white rounded-lg p-4 border border-slate-200">
@@ -2492,13 +2678,13 @@ export const Step6FinalPricing: React.FC<{
             <div className="space-y-2">
               {weeks > 0 && (
                 <div className="flex justify-between items-center">
-                  <span>{weeks} {lang === 'fr' ? 'semaine(s)' : 'أسبوع'} × {(formData.step2?.selectedCar?.priceWeek || formData.step2?.selectedCar?.priceDay! * 7).toLocaleString()} DA</span>
+                  <span>{weeks} {lang === 'fr' ? 'semaine(s)' : 'أسبوع'} × {(selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7).toLocaleString()} DA</span>
                   <span className="font-bold">{weeklyPrice.toLocaleString()} DA</span>
                 </div>
               )}
               {remainingDays > 0 && (
                 <div className="flex justify-between items-center">
-                  <span>{remainingDays} {lang === 'fr' ? 'jour(s)' : 'يوم'} × {formData.step2?.selectedCar?.priceDay.toLocaleString()} DA</span>
+                  <span>{remainingDays} {lang === 'fr' ? 'jour(s)' : 'يوم'} × {(selectedCar?.priceDay || 0).toLocaleString()} DA</span>
                   <span className="font-bold">{remainingPrice.toLocaleString()} DA</span>
                 </div>
               )}

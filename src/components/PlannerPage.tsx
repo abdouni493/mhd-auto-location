@@ -377,6 +377,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
           >
             <option value="all">{lang === 'fr' ? 'Tous les statuts' : 'جميع الحالات'}</option>
             <option value="pending">{lang === 'fr' ? 'En attente' : 'في الانتظار'}</option>
+            <option value="accepted">{lang === 'fr' ? 'Accepté' : 'مقبول'}</option>
             <option value="confirmed">{lang === 'fr' ? 'Confirmé' : 'مؤكد'}</option>
             <option value="active">{lang === 'fr' ? 'Actif' : 'نشط'}</option>
             <option value="completed">{lang === 'fr' ? 'Terminé' : 'مكتمل'}</option>
@@ -474,11 +475,13 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
               <div className="absolute top-4 left-4">
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                   reservation.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                  reservation.status === 'accepted' ? 'bg-teal-100 text-teal-800' :
                   reservation.status === 'active' ? 'bg-blue-100 text-blue-800' :
                   reservation.status === 'completed' ? 'bg-purple-100 text-purple-800' :
                   'bg-yellow-100 text-yellow-800'
                 }`}>
                   {reservation.status === 'confirmed' ? '✅ Confirmé' :
+                   reservation.status === 'accepted' ? '✅ Accepté' :
                    reservation.status === 'active' ? '🔄 Actif' :
                    reservation.status === 'completed' ? '🏁 Terminé' :
                    '⏳ En attente'}
@@ -573,6 +576,21 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
                       setSelectedReservation(reservation);
                       setShowInspectionMode(true);
                       setCurrentView('create');
+                    }}
+                    className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                  >
+                    📋 {lang === 'fr' ? 'Inspection' : 'الفحص'}
+                  </button>
+                )}
+
+                {/* Accepted Status - Start Inspection (same as pending) */}
+                {reservation.status === 'accepted' && (
+                  <button
+                    onClick={() => {
+                      // Open inspection mode for accepted reservation in edit mode
+                      setSelectedReservation({ ...reservation });
+                      setShowInspectionMode(true);
+                      setCurrentView('edit');
                     }}
                     className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
                   >

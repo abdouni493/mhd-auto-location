@@ -109,6 +109,8 @@ export class ReservationsService {
     return (data || []).map(res => ({
       id: res.id,
       clientId: res.client_id,
+      departure_agency_id: res.departure_agency_id,
+      return_agency_id: res.return_agency_id,
       client: res.client ? {
         id: res.client.id,
         firstName: res.client.first_name || res.client.firstName,
@@ -586,6 +588,19 @@ export class ReservationsService {
     };
 
     const { id: inspectionId } = await this.createInspection(inspectionData);
+
+    // Save inspection responses (checklist items) for return inspection
+    if (data.inspectionItems && data.inspectionItems.length > 0) {
+      const responses = data.inspectionItems.map((item: any) => ({
+        inspection_id: inspectionId,
+        checklist_item_id: item.id,
+        status: !!item.checked,
+        note: item.note || null
+      }));
+      // Use upsert to avoid duplicates
+      const { DatabaseService } = await import('./DatabaseService');
+      await DatabaseService.upsertInspectionResponses(responses);
+    }
 
     // Update the car's mileage
     const { error: carError } = await supabase

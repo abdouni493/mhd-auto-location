@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, Download, FileText, TrendingUp, Users, Car as CarIcon, DollarSign, AlertTriangle, BarChart3, PieChart, Activity, Loader2 } from 'lucide-react';
+import { Calendar, Download, FileText, TrendingUp, Users, Car as CarIcon, DollarSign, AlertTriangle, BarChart3, PieChart, Activity, Loader2, MapPin, Clock, Zap, ShoppingCart } from 'lucide-react';
 import { Language, Car, Client, ReservationDetails, Worker, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder } from '../types';
 import { DatabaseService } from '../services/DatabaseService';
+import { getVehicleExpenses } from '../services/expenseService';
 
 interface ReportsPageProps {
   lang: Language;
@@ -19,6 +20,29 @@ interface ReportData {
   websiteOrders: WebsiteOrder[];
 }
 
+interface CarStats {
+  carId: string;
+  carName: string;
+  totalReservations: number;
+  totalRevenue: number;
+  totalKmDriven: number;
+  currentMileage: number;
+  maintenanceCost: number;
+  availability: number;
+  lastUseDate: string;
+  nextMaintenance: string;
+}
+
+interface ClientStats {
+  clientId: string;
+  clientName: string;
+  totalReservations: number;
+  totalSpent: number;
+  averageRental: number;
+  lastRental: string;
+  location: string;
+}
+
 const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -26,6 +50,8 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [carStats, setCarStats] = useState<CarStats[]>([]);
+  const [clientStats, setClientStats] = useState<ClientStats[]>([]);
 
   const generateReport = async () => {
     if (!startDate || !endDate) {
@@ -38,55 +64,214 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
     setError(null);
 
     try {
-      // Fetch all data from Supabase
-      const [clients, reservations, cars, workers, storeExpenses, vehicleExpenses, alerts, websiteOrders] = await Promise.all([
-        DatabaseService.getClients(),
-        DatabaseService.getReservations(),
-        DatabaseService.getCars(),
-        DatabaseService.getWorkers(),
-        DatabaseService.getStoreExpenses(),
-        DatabaseService.getVehicleExpenses(),
-        DatabaseService.getMaintenanceAlerts(),
-        DatabaseService.getWebsiteOrders()
-      ]);
+      // Fetch all data from Supabase with error handling
+      let clients: Client[] = [];
+      let reservations: ReservationDetails[] = [];
+      let cars: Car[] = [];
+      let workers: Worker[] = [];
+      let storeExpenses: StoreExpense[] = [];
+      let vehicleExpenses: VehicleExpense[] = [];
+      let alerts: MaintenanceAlert[] = [];
+      let websiteOrders: WebsiteOrder[] = [];
 
-      // Filter data by date range if needed
+      // Try to fetch clients
+      try {
+        clients = await DatabaseService.getClients();
+      } catch (err) {
+        console.warn('Failed to fetch clients:', err);
+        clients = [];
+      }
+
+      // Try to fetch reservations
+      try {
+        reservations = await DatabaseService.getReservations();
+      } catch (err) {
+        console.warn('Failed to fetch reservations:', err);
+        reservations = [];
+      }
+
+      // Try to fetch cars
+      try {
+        cars = await DatabaseService.getCars();
+      } catch (err) {
+        console.warn('Failed to fetch cars:', err);
+        cars = [];
+      }
+
+      // Try to fetch workers
+      try {
+        workers = await DatabaseService.getWorkers();
+      } catch (err) {
+        console.warn('Failed to fetch workers:', err);
+        workers = [];
+      }
+
+      // Try to fetch store expenses
+      try {
+        storeExpenses = await DatabaseService.getStoreExpenses();
+      } catch (err) {
+        console.warn('Failed to fetch store expenses:', err);
+        storeExpenses = [];
+      }
+
+      // Try to fetch vehicle expenses
+      try {
+        const result = await getVehicleExpenses();
+        vehicleExpenses = result.expenses || [];
+      } catch (err) {
+        console.warn('Failed to fetch vehicle expenses:', err);
+        vehicleExpenses = [];
+      }
+
+      // Try to fetch maintenance alerts
+      try {
+        alerts = await DatabaseService.getMaintenanceAlerts();
+      } catch (err) {
+        console.warn('Failed to fetch maintenance alerts:', err);
+        alerts = [];
+      }
+
+      // Try to fetch website orders
+      try {
+        websiteOrders = await DatabaseService.getWebsiteOrders();
+      } catch (err) {
+        console.warn('Failed to fetch website orders (table may not exist):', err);
+        websiteOrders = [];
+      }
+
+      // Filter data by date range
       const start = new Date(startDate);
       const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
 
       const filteredData: ReportData = {
         clients: clients.filter(client => {
-          const clientDate = new Date(client.createdAt);
-          return clientDate >= start && clientDate <= end;
+          try {
+            const clientDate = new Date(client.createdAt);
+            return clientDate >= start && clientDate <= end;
+          } catch {
+            return true;
+          }
         }),
         reservations: reservations.filter(reservation => {
-          const reservationDate = new Date(reservation.createdAt);
-          return reservationDate >= start && reservationDate <= end;
+          try {
+            const reservationDate = new Date(reservation.createdAt);
+            return reservationDate >= start && reservationDate <= end;
+          } catch {
+            return true;
+          }
         }),
         cars,
         workers: workers.filter(worker => {
-          const workerDate = new Date(worker.createdAt);
-          return workerDate >= start && workerDate <= end;
+          try {
+            const workerDate = new Date(worker.createdAt);
+            return workerDate >= start && workerDate <= end;
+          } catch {
+            return true;
+          }
         }),
         storeExpenses: storeExpenses.filter(expense => {
-          const expenseDate = new Date(expense.date);
-          return expenseDate >= start && expenseDate <= end;
+          try {
+            const expenseDate = new Date(expense.date);
+            return expenseDate >= start && expenseDate <= end;
+          } catch {
+            return true;
+          }
         }),
         vehicleExpenses: vehicleExpenses.filter(expense => {
-          const expenseDate = new Date(expense.date);
-          return expenseDate >= start && expenseDate <= end;
+          try {
+            const expenseDate = new Date(expense.date);
+            return expenseDate >= start && expenseDate <= end;
+          } catch {
+            return true;
+          }
         }),
         alerts: alerts.filter(alert => {
-          const alertDate = new Date(alert.createdAt);
-          return alertDate >= start && alertDate <= end;
+          try {
+            const alertDate = new Date(alert.createdAt);
+            return alertDate >= start && alertDate <= end;
+          } catch {
+            return true;
+          }
         }),
         websiteOrders: websiteOrders.filter(order => {
-          const orderDate = new Date(order.createdAt);
-          return orderDate >= start && orderDate <= end;
+          try {
+            const orderDate = new Date(order.createdAt);
+            return orderDate >= start && orderDate <= end;
+          } catch {
+            return true;
+          }
         })
       };
 
       setReportData(filteredData);
+
+      // Calculate car statistics
+      const carStatsData: CarStats[] = cars.map(car => {
+        const carReservations = filteredData.reservations.filter(r => r.carId === car.id);
+
+        const carExpenses = filteredData.vehicleExpenses.filter(e => e.carId === car.id);
+        const carMaintenance = carExpenses.reduce((sum, e) => sum + e.cost, 0);
+        
+        const totalRevenue = carReservations
+          .filter(r => r.status === 'completed')
+          .reduce((sum, r) => sum + r.totalPrice, 0);
+
+        const lastReservation = carReservations.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+
+        return {
+          carId: car.id,
+          carName: `${car.brand} ${car.model} (${car.registration})`,
+          totalReservations: carReservations.length,
+          totalRevenue,
+          totalKmDriven: carReservations.reduce((sum, r) => {
+            return sum + (r.kmAtReturn && r.kmAtDeparture ? r.kmAtReturn - r.kmAtDeparture : 0);
+          }, 0),
+          currentMileage: car.mileage,
+          maintenanceCost: carMaintenance,
+          availability: carReservations.filter(r => r.status === 'active').length === 0 ? 100 : 75,
+          lastUseDate: lastReservation ? lastReservation.createdAt.split('T')[0] : 'N/A',
+          nextMaintenance: carExpenses.length > 0 ? carExpenses[carExpenses.length - 1].date : 'N/A'
+        };
+      });
+
+      setCarStats(carStatsData);
+
+      // Calculate client statistics
+      const clientStatsMap = new Map<string, ClientStats>();
+      filteredData.reservations.forEach(reservation => {
+        const client = filteredData.clients.find(c => c.id === reservation.clientId);
+        if (client) {
+          const key = client.id;
+          if (!clientStatsMap.has(key)) {
+            clientStatsMap.set(key, {
+              clientId: client.id,
+              clientName: `${client.firstName} ${client.lastName}`,
+              totalReservations: 0,
+              totalSpent: 0,
+              averageRental: 0,
+              lastRental: '',
+              location: client.wilaya || ''
+            });
+          }
+
+          const stats = clientStatsMap.get(key)!;
+          stats.totalReservations++;
+          stats.totalSpent += reservation.totalPrice;
+          stats.lastRental = reservation.createdAt.split('T')[0];
+        }
+      });
+
+      // Calculate average rental
+      clientStatsMap.forEach(stats => {
+        if (stats.totalReservations > 0) {
+          stats.averageRental = Math.round(stats.totalSpent / stats.totalReservations);
+        }
+      });
+
+      setClientStats(Array.from(clientStatsMap.values()));
     } catch (err) {
       console.error('Error generating report:', err);
       setError('Failed to generate report');
@@ -99,31 +284,57 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
   const calculateStats = () => {
     if (!reportData) return null;
 
-    const totalRevenue = reportData.reservations
-      .filter(r => r.status === 'completed')
-      .reduce((sum, r) => sum + r.totalPrice, 0);
+    const completedReservations = reportData.reservations.filter(r => r.status === 'completed');
+    const activeReservations = reportData.reservations.filter(r => r.status === 'active');
+    const pendingReservations = reportData.reservations.filter(r => r.status === 'pending');
 
+    const totalRevenue = completedReservations.reduce((sum, r) => sum + r.totalPrice, 0);
     const totalExpenses = [
       ...reportData.storeExpenses,
       ...reportData.vehicleExpenses
     ].reduce((sum, e) => sum + e.cost, 0);
 
     const netProfit = totalRevenue - totalExpenses;
+    const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : '0';
 
-    const activeReservations = reportData.reservations.filter(r => r.status === 'active').length;
-    const completedReservations = reportData.reservations.filter(r => r.status === 'completed').length;
+    const totalKmDriven = reportData.reservations.reduce((sum, r) => {
+      return sum + (r.kmAtReturn && r.kmAtDeparture ? r.kmAtReturn - r.kmAtDeparture : 0);
+    }, 0);
+
+    const averageReservationPrice = completedReservations.length > 0 
+      ? Math.round(totalRevenue / completedReservations.length)
+      : 0;
 
     const websiteOrdersCount = reportData.websiteOrders.length;
-    const pendingWebsiteOrders = reportData.websiteOrders.filter(o => o.status === 'pending').length;
+    const websiteOrdersRevenue = reportData.websiteOrders
+      .filter(o => o.status === 'confirmed')
+      .reduce((sum, o) => sum + o.totalPrice, 0);
+
+    const storeExpensesTotal = reportData.storeExpenses.reduce((sum, e) => sum + e.cost, 0);
+    const vehicleExpensesTotal = reportData.vehicleExpenses.reduce((sum, e) => sum + e.cost, 0);
+
+    const criticalAlerts = reportData.alerts.filter(a => a.severity === 'critical').length;
+    const highAlerts = reportData.alerts.filter(a => a.severity === 'high').length;
 
     return {
       totalRevenue,
       totalExpenses,
       netProfit,
-      activeReservations,
-      completedReservations,
+      profitMargin,
+      completedReservations: completedReservations.length,
+      activeReservations: activeReservations.length,
+      pendingReservations: pendingReservations.length,
+      totalReservations: reportData.reservations.length,
+      totalKmDriven,
+      averageReservationPrice,
       websiteOrdersCount,
-      pendingWebsiteOrders
+      websiteOrdersRevenue,
+      storeExpensesTotal,
+      vehicleExpensesTotal,
+      criticalAlerts,
+      highAlerts,
+      totalClients: reportData.clients.length,
+      totalCars: reportData.cars.length
     };
   };
 
@@ -244,151 +455,216 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
           transition={{ delay: 0.2 }}
           className="space-y-8"
         >
-          {/* Statistics Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Enhanced Statistics Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-2xl text-white shadow-lg"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-100 text-sm font-medium">
-                    {lang === 'fr' ? 'Revenus Totaux' : 'إجمالي الإيرادات'}
-                  </p>
-                  <p className="text-2xl font-black">
-                    {stats.totalRevenue.toLocaleString()} DA
-                  </p>
-                </div>
-                <DollarSign className="w-8 h-8 text-green-200" />
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-green-100 text-xs font-semibold">
+                  {lang === 'fr' ? 'Revenus' : 'الإيرادات'}
+                </p>
+                <DollarSign className="w-5 h-5 text-green-200" />
               </div>
+              <p className="text-2xl font-black">
+                {(stats.totalRevenue / 1000).toFixed(1)}K DA
+              </p>
+              <p className="text-green-200 text-xs mt-1">
+                {stats.completedReservations} {lang === 'fr' ? 'complétées' : 'مكتملة'}
+              </p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-gradient-to-br from-red-500 to-red-600 p-6 rounded-2xl text-white shadow-lg"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-red-100 text-sm font-medium">
-                    {lang === 'fr' ? 'Dépenses Totales' : 'إجمالي المصاريف'}
-                  </p>
-                  <p className="text-2xl font-black">
-                    {stats.totalExpenses.toLocaleString()} DA
-                  </p>
-                </div>
-                <TrendingUp className="w-8 h-8 text-red-200" />
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-red-100 text-xs font-semibold">
+                  {lang === 'fr' ? 'Dépenses' : 'المصاريف'}
+                </p>
+                <TrendingUp className="w-5 h-5 text-red-200" />
               </div>
+              <p className="text-2xl font-black">
+                {(stats.totalExpenses / 1000).toFixed(1)}K DA
+              </p>
+              <p className="text-red-200 text-xs mt-1">
+                {lang === 'fr' ? 'Magasin' : 'متجر'}: {stats.storeExpensesTotal} DA
+              </p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.05 }}
-              className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-2xl text-white shadow-lg"
+              className={`bg-gradient-to-br p-6 rounded-2xl text-white shadow-lg ${
+                stats.netProfit > 0
+                  ? 'from-blue-500 to-blue-600'
+                  : 'from-orange-500 to-orange-600'
+              }`}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-100 text-sm font-medium">
-                    {lang === 'fr' ? 'Bénéfice Net' : 'صافي الربح'}
-                  </p>
-                  <p className="text-2xl font-black">
-                    {stats.netProfit.toLocaleString()} DA
-                  </p>
-                </div>
-                <BarChart3 className="w-8 h-8 text-blue-200" />
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-blue-100 text-xs font-semibold">
+                  {lang === 'fr' ? 'Profit Net' : 'صافي الربح'}
+                </p>
+                <BarChart3 className="w-5 h-5 text-blue-200" />
               </div>
+              <p className="text-2xl font-black">
+                {(stats.netProfit / 1000).toFixed(1)}K DA
+              </p>
+              <p className="text-blue-200 text-xs mt-1">
+                {stats.profitMargin}% {lang === 'fr' ? 'marge' : 'الهامش'}
+              </p>
             </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-2xl text-white shadow-lg"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-purple-100 text-sm font-medium">
-                    {lang === 'fr' ? 'Réservations' : 'الحجوزات'}
-                  </p>
-                  <p className="text-2xl font-black">
-                    {stats.completedReservations}
-                  </p>
-                  <p className="text-purple-200 text-xs">
-                    {stats.activeReservations} {lang === 'fr' ? 'actives' : 'نشطة'}
-                  </p>
-                </div>
-                <Calendar className="w-8 h-8 text-purple-200" />
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-purple-100 text-xs font-semibold">
+                  {lang === 'fr' ? 'Réservations' : 'الحجوزات'}
+                </p>
+                <Calendar className="w-5 h-5 text-purple-200" />
               </div>
+              <p className="text-2xl font-black">
+                {stats.totalReservations}
+              </p>
+              <p className="text-purple-200 text-xs mt-1">
+                {stats.activeReservations} {lang === 'fr' ? 'actives' : 'نشطة'}
+              </p>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="bg-gradient-to-br from-cyan-500 to-cyan-600 p-6 rounded-2xl text-white shadow-lg"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-cyan-100 text-xs font-semibold">
+                  {lang === 'fr' ? 'Kilométrage' : 'المسافة'}
+                </p>
+                <Zap className="w-5 h-5 text-cyan-200" />
+              </div>
+              <p className="text-2xl font-black">
+                {(stats.totalKmDriven / 1000).toFixed(0)}K km
+              </p>
+              <p className="text-cyan-200 text-xs mt-1">
+                {lang === 'fr' ? 'Total' : 'الإجمالي'}
+              </p>
             </motion.div>
           </div>
 
-          {/* Detailed Reports */}
+          {/* Car Reports */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-white border border-saas-border rounded-2xl p-6 shadow-sm"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <CarIcon className="w-6 h-6 text-saas-primary-via" />
+              <h3 className="text-xl font-black text-saas-text-main">
+                {lang === 'fr' ? 'Rapport Détaillé des Véhicules' : 'تقرير تفصيلي للمركبات'}
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-saas-bg border-b border-saas-border">
+                  <tr>
+                    <th className="text-left p-3 font-bold">{lang === 'fr' ? 'Véhicule' : 'المركبة'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Réservations' : 'الحجوزات'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Revenus' : 'الإيرادات'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Entretien' : 'الصيانة'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'KM' : 'كم'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Dernier Usage' : 'آخر استخدام'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Dispo.' : 'التوفر'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {carStats.map((car, idx) => (
+                    <motion.tr
+                      key={car.carId}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className={`border-b border-saas-border hover:bg-saas-bg transition-colors ${
+                        idx % 2 === 0 ? 'bg-white' : 'bg-saas-bg/50'
+                      }`}
+                    >
+                      <td className="p-3 font-semibold text-saas-text-main">{car.carName}</td>
+                      <td className="p-3 text-center text-saas-text-muted">{car.totalReservations}</td>
+                      <td className="p-3 text-center font-bold text-green-600">{car.totalRevenue.toLocaleString()} DA</td>
+                      <td className="p-3 text-center font-bold text-orange-600">{car.maintenanceCost.toLocaleString()} DA</td>
+                      <td className="p-3 text-center text-saas-text-muted">{car.totalKmDriven.toLocaleString()} km</td>
+                      <td className="p-3 text-center text-saas-text-muted text-xs">{car.lastUseDate}</td>
+                      <td className="p-3 text-center">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                          car.availability === 100
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {car.availability}%
+                        </span>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+
+          {/* Client Reports */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-white border border-saas-border rounded-2xl p-6 shadow-sm"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <Users className="w-6 h-6 text-saas-primary-via" />
+              <h3 className="text-xl font-black text-saas-text-main">
+                {lang === 'fr' ? 'Rapport Détaillé des Clients' : 'تقرير تفصيلي للعملاء'}
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-saas-bg border-b border-saas-border">
+                  <tr>
+                    <th className="text-left p-3 font-bold">{lang === 'fr' ? 'Client' : 'العميل'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Réservations' : 'الحجوزات'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Total Dépensé' : 'إجمالي المصروفات'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Moyenne' : 'المتوسط'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Localisation' : 'الموقع'}</th>
+                    <th className="text-center p-3 font-bold">{lang === 'fr' ? 'Dernier Rental' : 'آخر حجز'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientStats.map((client, idx) => (
+                    <motion.tr
+                      key={client.clientId}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className={`border-b border-saas-border hover:bg-saas-bg transition-colors ${
+                        idx % 2 === 0 ? 'bg-white' : 'bg-saas-bg/50'
+                      }`}
+                    >
+                      <td className="p-3 font-semibold text-saas-text-main">{client.clientName}</td>
+                      <td className="p-3 text-center text-saas-text-muted">{client.totalReservations}</td>
+                      <td className="p-3 text-center font-bold text-green-600">{client.totalSpent.toLocaleString()} DA</td>
+                      <td className="p-3 text-center text-blue-600 font-semibold">{client.averageRental.toLocaleString()} DA</td>
+                      <td className="p-3 text-center text-saas-text-muted text-xs flex items-center justify-center gap-1">
+                        <MapPin size={14} /> {client.location}
+                      </td>
+                      <td className="p-3 text-center text-saas-text-muted text-xs">{client.lastRental}</td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+
+          {/* Detailed Reports Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Clients Report */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white border border-saas-border rounded-2xl p-6 shadow-sm"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <Users className="w-6 h-6 text-saas-primary-via" />
-                <h3 className="text-lg font-bold text-saas-text-main">
-                  {lang === 'fr' ? 'Rapport Clients' : 'تقرير العملاء'}
-                </h3>
-              </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {reportData.clients.map((client, index) => (
-                  <div key={client.id} className="text-xs bg-saas-bg p-3 rounded-lg">
-                    <div className="font-semibold text-saas-text-main">
-                      {client.firstName} {client.lastName}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      📞 {client.phone} • 📧 {client.email}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      🆔 {client.idCardNumber} • 🚗 {client.licenseNumber}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      📍 {client.wilaya} • 📅 {new Date(client.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Cars Report */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white border border-saas-border rounded-2xl p-6 shadow-sm"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <CarIcon className="w-6 h-6 text-saas-primary-via" />
-                <h3 className="text-lg font-bold text-saas-text-main">
-                  {lang === 'fr' ? 'Rapport Véhicules' : 'تقرير المركبات'}
-                </h3>
-              </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {reportData.cars.map((car) => (
-                  <div key={car.id} className="text-xs bg-saas-bg p-3 rounded-lg">
-                    <div className="font-semibold text-saas-text-main">
-                      {car.brand} {car.model} ({car.year})
-                    </div>
-                    <div className="text-saas-text-muted">
-                      🚗 {car.registration} • 🎨 {car.color}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      ⛽ {car.energy} • ⚙️ {car.transmission}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      💺 {car.seats} places • 🚪 {car.doors} portes
-                    </div>
-                    <div className="text-saas-text-muted">
-                      💰 {car.priceDay.toLocaleString()} DA/jour • 📏 {car.mileage.toLocaleString()} km
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
+            {/* Summary Reports */}
             {/* Reservations Report */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
@@ -399,35 +675,38 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
               <div className="flex items-center gap-3 mb-4">
                 <Calendar className="w-6 h-6 text-saas-primary-via" />
                 <h3 className="text-lg font-bold text-saas-text-main">
-                  {lang === 'fr' ? 'Rapport Réservations' : 'تقرير الحجوزات'}
+                  {lang === 'fr' ? 'Réservations' : 'الحجوزات'}
                 </h3>
               </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {reportData.reservations.map((reservation) => (
-                  <div key={reservation.id} className="text-xs bg-saas-bg p-3 rounded-lg">
-                    <div className="font-semibold text-saas-text-main">
-                      Réservation #{reservation.id}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      📅 {reservation.startDate} → {reservation.endDate}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      💰 {reservation.totalCost.toLocaleString()} DA
-                    </div>
-                    <div className={`text-xs font-medium px-2 py-1 rounded-full inline-block ${
-                      reservation.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      reservation.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                      reservation.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {reservation.status}
-                    </div>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="bg-saas-bg p-3 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-saas-text-muted">{lang === 'fr' ? 'Complétées' : 'مكتملة'}</span>
+                    <span className="font-bold text-green-600">{stats.completedReservations}</span>
                   </div>
-                ))}
+                </div>
+                <div className="bg-saas-bg p-3 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-saas-text-muted">{lang === 'fr' ? 'Actives' : 'نشطة'}</span>
+                    <span className="font-bold text-blue-600">{stats.activeReservations}</span>
+                  </div>
+                </div>
+                <div className="bg-saas-bg p-3 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-saas-text-muted">{lang === 'fr' ? 'En attente' : 'قيد الانتظار'}</span>
+                    <span className="font-bold text-yellow-600">{stats.pendingReservations}</span>
+                  </div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-blue-800">{lang === 'fr' ? 'Prix Moyen' : 'السعر المتوسط'}</span>
+                    <span className="font-bold text-blue-700">{stats.averageReservationPrice.toLocaleString()} DA</span>
+                  </div>
+                </div>
               </div>
             </motion.div>
 
-            {/* Workers Report */}
+            {/* Website Orders Report */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -435,32 +714,36 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
               className="bg-white border border-saas-border rounded-2xl p-6 shadow-sm"
             >
               <div className="flex items-center gap-3 mb-4">
-                <Users className="w-6 h-6 text-saas-primary-via" />
+                <ShoppingCart className="w-6 h-6 text-saas-primary-via" />
                 <h3 className="text-lg font-bold text-saas-text-main">
-                  {lang === 'fr' ? 'Rapport Employés' : 'تقرير الموظفين'}
+                  {lang === 'fr' ? 'Commandes Website' : 'طلبات الموقع'}
                 </h3>
               </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {reportData.workers.map((worker) => (
-                  <div key={worker.id} className="text-xs bg-saas-bg p-3 rounded-lg">
-                    <div className="font-semibold text-saas-text-main">
-                      {worker.fullName}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      👤 {worker.type} • 📞 {worker.phone}
-                    </div>
-                    <div className="text-saas-text-muted">
-                      💰 {worker.baseSalary.toLocaleString()} DA
-                    </div>
-                    <div className="text-saas-text-muted">
-                      📧 {worker.email}
-                    </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {reportData.websiteOrders.length === 0 ? (
+                  <div className="text-saas-text-muted text-center py-4">
+                    {lang === 'fr' ? 'Aucune commande' : 'لا توجد طلبات'}
                   </div>
-                ))}
+                ) : (
+                  reportData.websiteOrders.map((order, idx) => (
+                    <div key={order.id} className="text-xs bg-saas-bg p-3 rounded-lg border border-blue-200">
+                      <div className="font-semibold text-saas-text-main flex justify-between">
+                        <span>🛒 {order.car.brand} {order.car.model}</span>
+                        <span className="text-blue-600">{order.totalPrice.toLocaleString()} DA</span>
+                      </div>
+                      <div className="text-saas-text-muted mt-1">
+                        👤 {order.step2.firstName} {order.step2.lastName}
+                      </div>
+                      <div className="text-saas-text-muted text-xs">
+                        📅 {order.createdAt.split('T')[0]} • {order.status}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </motion.div>
 
-            {/* Expenses Report */}
+            {/* Expenses & Alerts Report */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -470,40 +753,41 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
               <div className="flex items-center gap-3 mb-4">
                 <TrendingUp className="w-6 h-6 text-saas-primary-via" />
                 <h3 className="text-lg font-bold text-saas-text-main">
-                  {lang === 'fr' ? 'Rapport Dépenses' : 'تقرير المصاريف'}
+                  {lang === 'fr' ? 'Dépenses & Entretien' : 'المصاريف والصيانة'}
                 </h3>
               </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                <div className="text-sm font-semibold text-saas-text-main mb-3">
-                  {lang === 'fr' ? 'Dépenses Magasin' : 'مصاريف المتجر'}
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-red-800">{lang === 'fr' ? 'Dépenses Magasin' : 'مصاريف المتجر'}</span>
+                    <span className="font-bold text-red-600">{stats.storeExpensesTotal.toLocaleString()} DA</span>
+                  </div>
+                </div>
+                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-orange-800">{lang === 'fr' ? 'Dépenses Véhicules' : 'مصاريف المركبات'}</span>
+                    <span className="font-bold text-orange-600">{stats.vehicleExpensesTotal.toLocaleString()} DA</span>
+                  </div>
+                </div>
+                <div className="text-xs text-saas-text-muted mt-3 font-semibold mb-2">
+                  {lang === 'fr' ? 'Détail des Dépenses' : 'تفاصيل المصاريف'}
                 </div>
                 {reportData.storeExpenses.map((expense) => (
-                  <div key={expense.id} className="text-xs bg-red-50 p-2 rounded">
-                    <div className="font-medium text-red-800">
-                      {expense.icon} {expense.name}
-                    </div>
-                    <div className="text-red-600">
-                      💰 {expense.cost.toLocaleString()} DA • 📅 {expense.date}
-                    </div>
+                  <div key={expense.id} className="text-xs bg-saas-bg p-2 rounded flex justify-between">
+                    <span>{expense.icon} {expense.name}</span>
+                    <span className="text-red-600 font-semibold">{expense.cost.toLocaleString()} DA</span>
                   </div>
                 ))}
-                <div className="text-sm font-semibold text-saas-text-main mt-4 mb-3">
-                  {lang === 'fr' ? 'Dépenses Véhicules' : 'مصاريف المركبات'}
-                </div>
                 {reportData.vehicleExpenses.map((expense) => (
-                  <div key={expense.id} className="text-xs bg-orange-50 p-2 rounded">
-                    <div className="font-medium text-orange-800">
-                      🛢️ {expense.type}
-                    </div>
-                    <div className="text-orange-600">
-                      💰 {expense.cost.toLocaleString()} DA • 📅 {expense.date}
-                    </div>
+                  <div key={expense.id} className="text-xs bg-saas-bg p-2 rounded flex justify-between">
+                    <span>🛢️ {expense.type}</span>
+                    <span className="text-orange-600 font-semibold">{expense.cost.toLocaleString()} DA</span>
                   </div>
                 ))}
               </div>
             </motion.div>
 
-            {/* Alerts & Website Orders Report */}
+            {/* Alerts Report */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -513,45 +797,45 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
               <div className="flex items-center gap-3 mb-4">
                 <AlertTriangle className="w-6 h-6 text-saas-primary-via" />
                 <h3 className="text-lg font-bold text-saas-text-main">
-                  {lang === 'fr' ? 'Alertes & Commandes Web' : 'التنبيهات والطلبات عبر الإنترنت'}
+                  {lang === 'fr' ? 'État des Alertes' : 'حالة التنبيهات'}
                 </h3>
               </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                <div className="text-sm font-semibold text-saas-text-main mb-3">
-                  {lang === 'fr' ? 'Alertes Véhicules' : 'تنبيهات المركبات'}
-                </div>
-                {reportData.alerts.map((alert) => (
-                  <div key={alert.id} className="text-xs bg-yellow-50 p-2 rounded">
-                    <div className="font-medium text-yellow-800">
-                      ⚠️ {alert.title}
-                    </div>
-                    <div className="text-yellow-600">
-                      🚗 {alert.carInfo.split(' - ')[0]}
-                    </div>
-                    <div className="text-yellow-600">
-                      📅 {alert.dueDate} ({alert.daysUntilDue} {lang === 'fr' ? 'jours' : 'أيام'})
-                    </div>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {reportData.alerts.length === 0 ? (
+                  <div className="text-saas-text-muted text-center py-4">
+                    {lang === 'fr' ? 'Aucune alerte' : 'لا توجد تنبيهات'}
                   </div>
-                ))}
-                <div className="text-sm font-semibold text-saas-text-main mt-4 mb-3">
-                  {lang === 'fr' ? 'Commandes Website' : 'طلبات الموقع'}
-                </div>
-                {reportData.websiteOrders.map((order) => (
-                  <div key={order.id} className="text-xs bg-blue-50 p-2 rounded">
-                    <div className="font-medium text-blue-800">
-                      🛒 Commande #{order.id}
+                ) : (
+                  <>
+                    <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-red-800">🔴 {lang === 'fr' ? 'Critique' : 'حرج'}</span>
+                        <span className="font-bold text-red-600">{stats.criticalAlerts}</span>
+                      </div>
                     </div>
-                    <div className="text-blue-600">
-                      🚗 {order.car.brand} {order.car.model}
+                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-orange-800">🟠 {lang === 'fr' ? 'Élevé' : 'مرتفع'}</span>
+                        <span className="font-bold text-orange-600">{stats.highAlerts}</span>
+                      </div>
                     </div>
-                    <div className="text-blue-600">
-                      👤 {order.step2.firstName} {order.step2.lastName}
+                    <div className="text-xs text-saas-text-muted mt-3 font-semibold mb-2">
+                      {lang === 'fr' ? 'Détail des Alertes' : 'تفاصيل التنبيهات'}
                     </div>
-                    <div className="text-blue-600">
-                      💰 {order.totalPrice.toLocaleString()} DA • 📅 {order.createdAt.split('T')[0]}
-                    </div>
-                  </div>
-                ))}
+                    {reportData.alerts.map((alert) => (
+                      <div key={alert.id} className={`text-xs p-2 rounded flex justify-between ${
+                        alert.severity === 'critical' ? 'bg-red-50' : 'bg-orange-50'
+                      }`}>
+                        <span>{alert.title}</span>
+                        <span className={`text-xs font-semibold ${
+                          alert.severity === 'critical' ? 'text-red-600' : 'text-orange-600'
+                        }`}>
+                          {alert.daysUntilDue} {lang === 'fr' ? 'j' : 'د'}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </motion.div>
           </div>

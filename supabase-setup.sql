@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS website_orders (
   total_days INTEGER NOT NULL,
   total_price INTEGER NOT NULL,
   services_total INTEGER DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'processing', 'completed', 'cancelled')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'confirmed', 'processing', 'completed', 'cancelled')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   source TEXT DEFAULT 'website'
 );
@@ -194,7 +194,7 @@ CREATE TABLE IF NOT EXISTS reservations (
   discount_type TEXT DEFAULT 'percentage' CHECK (discount_type IN ('percentage', 'fixed')),
   advance_payment INTEGER DEFAULT 0,
   remaining_payment INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'active', 'completed', 'cancelled')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'confirmed', 'active', 'completed', 'cancelled')),
   departure_inspection JSONB,
   return_inspection JSONB,
   excess_mileage INTEGER,

@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Language, Car, Agency, Reservation, ReservationStep1, ReservationStep2, AdditionalService } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, ChevronLeft, Upload, FileText } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Upload, FileText, Loader2 } from 'lucide-react';
 import { ThankYouPage } from './ThankYouPage';
+
+// services for saving data
+import { uploadClientProfilePhoto, uploadClientDocument } from '../../services/uploadClientImage';
+import { DatabaseService } from '../../services/DatabaseService';
+import { ReservationsService } from '../../services/ReservationsService';
 
 // Algerian Wilayas
 const ALGERIAN_WILAYAS = [
@@ -50,10 +55,11 @@ interface OrdersPageProps {
   lang: Language;
   cars: Car[];
   agencies: Agency[];
+  isLoadingAgencies?: boolean;
   selectedCar?: Car | null;
 }
 
-export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, selectedCar: initialCar }) => {
+export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, isLoadingAgencies = false, selectedCar: initialCar }) => {
   const [currentStep, setCurrentStep] = useState<'search' | 'step1' | 'step2' | 'step3' | 'step4' | 'success'>(
     initialCar ? 'step1' : 'search'
   );
@@ -61,6 +67,9 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
+  const [services, setServices] = useState<any[]>([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [servicesError, setServicesError] = useState<string | null>(null);
 
   // Step 1 State
   const [step1, setStep1] = useState<ReservationStep1>({
@@ -76,6 +85,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
 
   // Step 2 State
   const [step2, setStep2] = useState<ReservationStep2>({
+    photo: '',
     firstName: '',
     lastName: '',
     phone: '',
@@ -106,6 +116,12 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
     advancePercentage: 20,
     notes: '',
   });
+
+  // upload / submission status
+  const [uploadingProfile, setUploadingProfile] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Search logic
   const filteredCars = searchQuery.trim()
@@ -150,42 +166,52 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
     });
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setStep2(prev => ({
-          ...prev,
-          photo: event.target?.result as string,
-        }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    setUploadError(null);
+    setUploadingProfile(true);
+    try {
+      const result = await uploadClientProfilePhoto(file);
+      if (result.success && result.url) {
+        setStep2(prev => ({ ...prev, photo: result.url }));
+      } else {
+        setUploadError(result.error || 'Upload failed');
+      }
+    } catch (err) {
+      console.error('Profile upload error:', err);
+      setUploadError('Upload error');
+    } finally {
+      setUploadingProfile(false);
     }
   };
 
-  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList) return;
 
+    setUploadError(null);
     const files = Array.from(fileList) as File[];
-    const newDocuments: string[] = [];
 
-    files.forEach((file: File) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          newDocuments.push(event.target.result as string);
-          if (newDocuments.length === files.length) {
-            setStep2(prev => ({
-              ...prev,
-              scannedDocuments: [...(prev.scannedDocuments || []), ...newDocuments],
-            }));
-          }
+    for (const file of files) {
+      setUploadingDocument(true);
+      try {
+        const result = await uploadClientDocument(file);
+        if (result.success && result.url) {
+          setStep2(prev => ({
+            ...prev,
+            scannedDocuments: [...(prev.scannedDocuments || []), result.url],
+          }));
+        } else {
+          setUploadError(result.error || 'Upload failed');
         }
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (err) {
+        console.error('Document upload error:', err);
+        setUploadError('Upload error');
+      } finally {
+        setUploadingDocument(false);
+      }
+    }
   };
 
   const removeDocument = (index: number) => {
@@ -207,7 +233,25 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
   const days = calculateDays();
   const totalPrice = selectedCar ? (selectedCar.priceDay * days) : 0;
 
-  // Validation
+  // Load services from database
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        setLoadingServices(true);
+        const dbServices = await DatabaseService.getServices();
+        setServices(dbServices);
+        setServicesError(null);
+      } catch (err) {
+        console.error('Error loading services:', err);
+        setServices([]);
+        setServicesError('Failed to load services');
+      } finally {
+        setLoadingServices(false);
+      }
+    };
+    loadServices();
+  }, []);
+
   const isStep1Valid =
     step1.carId &&
     step1.departureDate &&
@@ -224,6 +268,82 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
     step2.email &&
     step2.licenseNumber &&
     step2.wilaya;
+
+  // when user confirms final step, create client and reservation records
+  const handleConfirmReservation = async () => {
+    if (!selectedCar) {
+      return;
+    }
+    setIsSubmitting(true);
+    setUploadError(null);
+    try {
+      // build client payload from step2 state
+      const clientPayload: any = {
+        firstName: step2.firstName,
+        lastName: step2.lastName,
+        phone: step2.phone,
+        email: step2.email,
+        dateOfBirth: step2.dateOfBirth,
+        placeOfBirth: step2.placeOfBirth,
+        idCardNumber: step2.additionalDocType === 'id_card' ? (step2.additionalDocNumber || '') : '',
+        licenseNumber: step2.licenseNumber,
+        licenseExpirationDate: step2.licenseExpiration,
+        licenseDeliveryDate: step2.licenseDelivery,
+        licenseDeliveryPlace: step2.licenseDeliveryPlace,
+        documentType: step2.additionalDocType,
+        documentNumber: step2.additionalDocNumber,
+        documentDeliveryDate: step2.additionalDocDelivery,
+        documentExpirationDate: step2.additionalDocExpiration,
+        documentDeliveryAddress: step2.additionalDocDeliveryAddress,
+        wilaya: step2.wilaya,
+        completeAddress: step2.completeAddress,
+        profilePhoto: step2.photo,
+        scannedDocuments: step2.scannedDocuments,
+      };
+
+      const createdClient = await DatabaseService.createClient(clientPayload);
+
+      // compute pricing values for reservation
+      const totalServices = step3.additionalServices.reduce((sum, s) => sum + s.price, 0);
+      const total = totalPrice + totalServices;
+      // Do not calculate advance payment - client has not paid anything yet
+      // Payment must be added manually via "Ajouter Paiement" in reservation details
+      const advance = 0;
+      const remaining = Math.max(0, total - advance);
+
+      const reservationRes = await ReservationsService.createReservation({
+        clientId: createdClient.id,
+        carId: selectedCar.id,
+        departureDate: step1.departureDate,
+        departureTime: step1.departureTime,
+        departureAgencyId: step1.departureAgency,
+        returnDate: step1.returnDate,
+        returnTime: step1.returnTime,
+        returnAgencyId: step1.differentReturnAgency ? step1.returnAgency : step1.departureAgency,
+        pricePerDay: selectedCar.priceDay,
+        priceWeek: selectedCar.priceWeek,
+        priceMonth: selectedCar.priceMonth,
+        totalDays: days,
+        totalPrice: total,
+        deposit: selectedCar.deposit,
+        advancePayment: advance,
+        remainingPayment: remaining,
+        notes: step4.notes,
+        status: 'pending',
+      });
+
+      if (step3.additionalServices.length > 0) {
+        await ReservationsService.updateReservationServices(reservationRes.id, step3.additionalServices);
+      }
+
+      setShowThankYou(true);
+    } catch (err: any) {
+      console.error('Error creating reservation:', err);
+      alert(lang === 'fr' ? `Erreur: ${err.message}` : `خطأ: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <>
@@ -246,6 +366,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
               differentReturnAgency: false,
             });
             setStep2({
+              photo: '',
               firstName: '',
               lastName: '',
               phone: '',
@@ -462,9 +583,14 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
                           name="departureAgency"
                           value={step1.departureAgency}
                           onChange={handleStep1Change}
-                          className="w-full px-4 py-3 border-2 border-slate-300 focus:border-blue-600 focus:outline-none rounded-xl transition-colors"
+                          disabled={isLoadingAgencies}
+                          className="w-full px-4 py-3 border-2 border-slate-300 focus:border-blue-600 focus:outline-none rounded-xl transition-colors disabled:bg-slate-100"
                         >
-                          <option value="">{{fr: 'Choisir une agence...', ar: 'اختر وكالة...'}[lang]}</option>
+                          <option value="">
+                            {isLoadingAgencies
+                              ? (lang === 'fr' ? 'Chargement...' : 'جاري التحميل...')
+                              : (lang === 'fr' ? 'Sélectionner une agence...' : 'اختر وكالة...')}
+                          </option>
                           {agencies.map(agency => (
                             <option key={agency.id} value={agency.id}>
                               {agency.name} - {agency.city}
@@ -525,9 +651,14 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
                             name="returnAgency"
                             value={step1.returnAgency}
                             onChange={handleStep1Change}
-                            className="w-full px-4 py-3 border-2 border-slate-300 focus:border-blue-600 focus:outline-none rounded-xl transition-colors"
+                            disabled={isLoadingAgencies}
+                            className="w-full px-4 py-3 border-2 border-slate-300 focus:border-blue-600 focus:outline-none rounded-xl transition-colors disabled:bg-slate-100"
                           >
-                            <option value="">{{fr: 'Choisir une agence...', ar: 'اختر وكالة...'}[lang]}</option>
+                            <option value="">
+                              {isLoadingAgencies
+                                ? (lang === 'fr' ? 'Chargement...' : 'جاري التحميل...')
+                                : (lang === 'fr' ? 'Sélectionner une agence...' : 'اختر وكالة...')}
+                            </option>
                             {agencies.map(agency => (
                               <option key={agency.id} value={agency.id}>
                                 {agency.name} - {agency.city}
@@ -590,12 +721,16 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
                           accept="image/*"
                           onChange={handlePhotoUpload}
                           className="hidden"
+                          disabled={uploadingProfile}
                         />
-                        <span className="cursor-pointer bg-saas-primary-via hover:bg-saas-primary-end text-white font-bold py-2 px-6 rounded-lg transition-colors inline-block">
-                          {{fr: 'Charger une photo', ar: 'تحميل صورة'}[lang]}
+                        <span className={`cursor-pointer bg-saas-primary-via hover:bg-saas-primary-end text-white font-bold py-2 px-6 rounded-lg transition-colors inline-block ${uploadingProfile ? 'opacity-50' : ''}`}>
+                          {uploadingProfile
+                            ? (lang === 'fr' ? 'Téléchargement...' : 'جاري...')
+                            : (lang === 'fr' ? 'Charger une photo' : 'تحميل صورة')}
                         </span>
                       </label>
                     </div>
+                    {uploadError && <p className="text-red-600 text-sm">{uploadError}</p>}
                   </div>
 
                   {/* Personal Information */}
@@ -815,12 +950,23 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
                           accept="image/*,.pdf"
                           onChange={handleDocumentUpload}
                           className="hidden"
+                          disabled={uploadingDocument}
                         />
-                        <span className="cursor-pointer bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-6 rounded-xl transition-colors inline-flex items-center gap-2">
-                          <Upload size={20} />
-                          {{fr: 'Télécharger des Documents', ar: 'تحميل الوثائق'}[lang]}
+                        <span className={`cursor-pointer bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3 px-6 rounded-xl transition-colors inline-flex items-center gap-2 ${uploadingDocument ? 'opacity-50' : ''}`}>
+                          {uploadingDocument ? (
+                            <>
+                              <Loader2 size={18} className="animate-spin" />
+                              {lang === 'fr' ? 'Téléchargement...' : 'جاري التحميل...'}
+                            </>
+                          ) : (
+                            <>
+                              <Upload size={20} />
+                              {{fr: 'Télécharger des Documents', ar: 'تحميل الوثائق'}[lang]}
+                            </>
+                          )}
                         </span>
                       </label>
+                      {uploadError && <p className="text-red-600 text-sm">{uploadError}</p>}
 
                       {/* Display uploaded documents */}
                       {step2.scannedDocuments && step2.scannedDocuments.length > 0 && (
@@ -938,48 +1084,57 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
 
                   {/* Available Services */}
                   <div className="bg-white rounded-3xl shadow-xl p-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {[
-                        { id: '1', name: lang === 'fr' ? 'Siège Bébé' : 'مقعد طفل', price: 500, emoji: '👶', description: lang === 'fr' ? 'Siège auto pour enfant' : 'مقعد سيارة للطفل' },
-                        { id: '2', name: lang === 'fr' ? 'GPS' : 'GPS', price: 300, emoji: '📍', description: lang === 'fr' ? 'Système de navigation' : 'نظام الملاحة' },
-                        { id: '3', name: lang === 'fr' ? 'Assurance Supplémentaire' : 'تأمين إضافي', price: 1000, emoji: '🛡️', description: lang === 'fr' ? 'Couverture étendue' : 'تغطية موسعة' },
-                        { id: '4', name: lang === 'fr' ? 'Conducteur Additionnel' : 'سائق إضافي', price: 800, emoji: '👨‍✈️', description: lang === 'fr' ? 'Deuxième conducteur' : 'سائق ثاني' }
-                      ].map((service) => {
-                        const isSelected = step3.additionalServices.some(s => s.id === service.id);
+                    {loadingServices ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-saas-primary-via"></div>
+                      </div>
+                    ) : servicesError ? (
+                      <div className="text-center py-12">
+                        <p className="text-red-600 font-bold">{servicesError}</p>
+                      </div>
+                    ) : services.length === 0 ? (
+                      <div className="text-center py-12">
+                        <p className="text-slate-600 font-bold">{{fr: 'Aucun service disponible', ar: 'لا توجد خدمات'}[lang]}</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {services.map((service) => {
+                          const isSelected = step3.additionalServices.some(s => s.id === service.id);
 
-                        return (
-                          <div
-                            key={service.id}
-                            onClick={() => handleStep3Change({
-                              id: service.id,
-                              name: service.name,
-                              price: service.price,
-                              description: service.description,
-                              category: 'service',
-                              selected: false
-                            })}
-                            className={`border-2 rounded-2xl p-6 cursor-pointer transition-all ${
-                              isSelected
-                                ? 'border-saas-success-start bg-green-50'
-                                : 'border-slate-200 hover:border-slate-300'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <h4 className="font-bold text-lg text-slate-900">{service.emoji} {service.name}</h4>
-                                <p className="text-slate-600 text-sm mb-2">{service.description}</p>
-                                <p className="font-black text-saas-success-start">{service.price.toLocaleString()} {{fr: 'DA', ar: 'د.ج'}[lang]}</p>
-                              </div>
-                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                                isSelected ? 'border-saas-success-start bg-saas-success-start' : 'border-slate-300'
-                              }`}>
-                                {isSelected && <span className="text-white text-sm">✓</span>}
+                          return (
+                            <div
+                              key={service.id}
+                              onClick={() => handleStep3Change({
+                                id: service.id,
+                                name: service.name || service.service_name,
+                                price: service.price,
+                                description: service.description,
+                                category: service.category || 'service',
+                                selected: false
+                              })}
+                              className={`border-2 rounded-2xl p-6 cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'border-saas-success-start bg-green-50'
+                                  : 'border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <h4 className="font-bold text-lg text-slate-900">{service.name || service.service_name}</h4>
+                                  <p className="text-slate-600 text-sm mb-2">{service.description}</p>
+                                  <p className="font-black text-saas-success-start">{service.price.toLocaleString()} {{fr: 'DA', ar: 'د.ج'}[lang]}</p>
+                                </div>
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                                  isSelected ? 'border-saas-success-start bg-saas-success-start' : 'border-slate-300'
+                                }`}>
+                                  {isSelected && <span className="text-white text-sm">✓</span>}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* Services Summary */}
@@ -991,7 +1146,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
                       <div className="space-y-2">
                         {step3.additionalServices.map((service) => (
                           <div key={service.id} className="flex justify-between items-center">
-                            <span className="font-bold">&nbsp;</span>
+                            <span className="font-bold">{service.name}</span>
                             <span className="font-bold text-saas-primary-via">{service.price.toLocaleString()} {{fr: 'DA', ar: 'د.ج'}[lang]}</span>
                           </div>
                         ))}
@@ -1132,10 +1287,18 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, se
                       <ChevronLeft size={20} /> {{fr: 'Retour', ar: 'السابق'}[lang]}
                     </button>
                     <button
-                      onClick={() => setShowThankYou(true)}
-                      className="flex-1 bg-gradient-to-r from-saas-success-start to-saas-success-end hover:from-saas-success-start hover:to-saas-success-end text-white font-black py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl"
+                      onClick={handleConfirmReservation}
+                      disabled={isSubmitting || uploadingProfile || uploadingDocument}
+                      className={`flex-1 bg-gradient-to-r from-saas-success-start to-saas-success-end hover:from-saas-success-start hover:to-saas-success-end text-white font-black py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl ${(isSubmitting || uploadingProfile || uploadingDocument) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      ✅ {{fr: 'Confirmer la Commande', ar: 'تأكيد الطلب'}[lang]}
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="animate-spin w-5 h-5 mr-2" />
+                          {lang === 'fr' ? 'En cours...' : 'جاري...'}
+                        </>
+                      ) : (
+                        <>✅ {{fr: 'Confirmer la Commande', ar: 'تأكيد الطلب'}[lang]}</>
+                      )}
                     </button>
                   </div>
                 </motion.div>

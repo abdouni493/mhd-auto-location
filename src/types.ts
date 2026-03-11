@@ -350,7 +350,7 @@ export interface ReservationDetails {
   discountType: 'percentage' | 'fixed';
   advancePayment: number;
   remainingPayment: number;
-  status: 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'confirmed' | 'active' | 'completed' | 'cancelled';
   departureInspection?: VehicleInspection;
   returnInspection?: VehicleInspection;
   payments: Payment[];
@@ -428,7 +428,7 @@ export interface WebsiteOrder {
   totalDays: number;
   totalPrice: number;
   servicesTotal: number;
-  status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
   createdAt: string;
   source: 'website';
 }

@@ -624,24 +624,132 @@ export class DatabaseService {
 
   // Website Orders
   static async getWebsiteOrders(): Promise<WebsiteOrder[]> {
-    const { data, error } = await supabase
-      .from('website_orders')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      // Query pending reservations from reservations table (website orders)
+      const { data, error } = await supabase
+        .from('reservations')
+        .select(`
+          id,
+          client_id,
+          car_id,
+          departure_date,
+          departure_time,
+          departure_agency_id,
+          return_date,
+          return_time,
+          return_agency_id,
+          total_days,
+          total_price,
+          additional_fees,
+          status,
+          created_at,
+          client:clients(*),
+          car:cars(*)
+        `)
+        // load both new pending orders and those we've already accepted so they stay visible here
+        .in('status', ['pending', 'accepted'])
+        .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+      if (error) {
+        console.warn('Error fetching website orders:', error);
+        return [];
+      }
+
+      // Transform reservations to WebsiteOrder format
+      if (!data) return [];
+
+      return data.map((reservation: any) => {
+        const totalPrice = parseInt(reservation.total_price) || 0;
+        const additionalFees = parseInt(reservation.additional_fees) || 0;
+        
+        return {
+          id: reservation.id,
+          carId: reservation.car_id,
+          car: reservation.car || {},
+          step1: {
+            carId: reservation.car_id,
+            departureDate: reservation.departure_date,
+            departureTime: reservation.departure_time,
+            departureAgency: reservation.departure_agency_id,
+            returnDate: reservation.return_date,
+            returnTime: reservation.return_time,
+            returnAgency: reservation.return_agency_id,
+            differentReturnAgency: reservation.departure_agency_id !== reservation.return_agency_id,
+          },
+          step2: {
+            firstName: reservation.client?.first_name || '',
+            lastName: reservation.client?.last_name || '',
+            phone: reservation.client?.phone || '',
+            email: reservation.client?.email || '',
+            licenseNumber: reservation.client?.license_number || '',
+            wilaya: reservation.client?.wilaya || '',
+            completeAddress: reservation.client?.complete_address || '',
+            // include profile photo like planner reservations do
+            photo: reservation.client?.profile_photo || '',
+            scannedDocuments: reservation.client?.documents_urls || [],
+          },
+          step3: {
+            additionalServices: [],
+          },
+          totalDays: reservation.total_days || 0,
+          totalPrice: totalPrice,
+          servicesTotal: additionalFees,
+          status: 'pending',
+          createdAt: reservation.created_at,
+          source: 'website',
+        } as WebsiteOrder;
+      });
+    } catch (err) {
+      console.warn('Exception fetching website orders:', err);
+      return [];
+    }
   }
 
   static async createWebsiteOrder(order: Omit<WebsiteOrder, 'id' | 'created_at'>): Promise<WebsiteOrder> {
+    // Website orders are actually reservations with pending status
+    const reservationData = {
+      client_id: (order as any).clientId,
+      car_id: order.carId,
+      departure_date: order.step1.departureDate,
+      departure_time: order.step1.departureTime,
+      departure_agency_id: order.step1.departureAgency,
+      return_date: order.step1.returnDate,
+      return_time: order.step1.returnTime,
+      return_agency_id: order.step1.returnAgency,
+      total_days: order.totalDays,
+      total_price: order.totalPrice,
+      additional_fees: order.servicesTotal,
+      status: 'pending',
+    };
+
     const { data, error } = await supabase
-      .from('website_orders')
-      .insert([order])
+      .from('reservations')
+      .insert([reservationData])
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    return order;
+  }
+
+  static async updateWebsiteOrderStatus(orderId: string, status: 'pending' | 'accepted' | 'confirmed' | 'processing' | 'completed' | 'cancelled'): Promise<void> {
+    // Update reservation status (website orders are reservations)
+    const { error } = await supabase
+      .from('reservations')
+      .update({ status })
+      .eq('id', orderId);
+
+    if (error) throw error;
+  }
+
+  static async deleteWebsiteOrder(orderId: string): Promise<void> {
+    // Delete from reservations table (website orders are reservations)
+    const { error } = await supabase
+      .from('reservations')
+      .delete()
+      .eq('id', orderId);
+
+    if (error) throw error;
   }
 
   // Reservations

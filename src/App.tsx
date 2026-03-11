@@ -32,6 +32,8 @@ export default function App() {
   const [specialOffers, setSpecialOffers] = useState<any[]>([]);
   const [contactInfo, setContactInfo] = useState<any>(null);
   const [websiteSettings, setWebsiteSettings] = useState<any>(null);
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [isLoadingAgenciesForWebsite, setIsLoadingAgenciesForWebsite] = useState(true);
   const isWebsiteMode = location.pathname === '/website';
 
   useEffect(() => {
@@ -88,6 +90,25 @@ export default function App() {
 
     loadWebsiteData();
   }, []); // Load once on mount
+
+  // fetch agencies for public website mode (used by OrdersPage)
+  useEffect(() => {
+    if (!isWebsiteMode) return;
+
+    const loadAgencies = async () => {
+      try {
+        const dbAgencies = await DatabaseService.getAgencies();
+        setAgencies(dbAgencies.length > 0 ? dbAgencies : mockAgencies);
+      } catch (err) {
+        console.error('Failed to load agencies for website:', err);
+        setAgencies(mockAgencies);
+      } finally {
+        setIsLoadingAgenciesForWebsite(false);
+      }
+    };
+
+    loadAgencies();
+  }, [isWebsiteMode]);
 
   // Define mock data immediately (used as fallback)
   const mockCars: Car[] = [
@@ -300,7 +321,8 @@ export default function App() {
         lang={lang} 
         onLangChange={setLang}
         cars={cars.length > 0 ? cars : mockCars}
-        agencies={mockAgencies}
+        agencies={agencies.length > 0 ? agencies : mockAgencies}
+        isLoadingAgencies={isLoadingAgenciesForWebsite}
         offers={offers}
         specialOffers={specialOffers}
         contactInfo={contactInfo}

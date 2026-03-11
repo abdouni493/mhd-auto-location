@@ -17,7 +17,9 @@ interface EditReservationFormProps {
 }
 
 export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, reservation, onBack, onUpdate, agencies, isLoadingAgencies }) => {
-  const [currentStep, setCurrentStep] = useState(1);
+  // If status is accepted and inspection mode, start at step 3
+  const isInspectionMode = reservation.status === 'accepted';
+  const [currentStep, setCurrentStep] = useState(isInspectionMode ? 3 : 1);
   // agencies and isLoadingAgencies are passed in as props now
   const [formData, setFormData] = useState<Partial<ReservationDetails>>({
     id: reservation.id,
@@ -111,14 +113,20 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
     }));
   }, [agencies, reservation.step1.departureAgency, reservation.step1.returnAgency]);
 
-  const steps = [
-    { id: 1, title: lang === 'fr' ? 'Dates & Lieux' : 'التواريخ والأماكن', icon: '📅' },
-    { id: 2, title: lang === 'fr' ? 'Sélection Véhicule' : 'اختيار المركبة', icon: '🚗' },
-    { id: 3, title: lang === 'fr' ? 'Inspection Départ' : 'فحص المغادرة', icon: '🔍' },
-    { id: 4, title: lang === 'fr' ? 'Client' : 'العميل', icon: '👤' },
-    { id: 5, title: lang === 'fr' ? 'Services Supplémentaires' : 'الخدمات الإضافية', icon: '🛠️' },
-    { id: 6, title: lang === 'fr' ? 'Tarification Finale' : 'التسعير النهائي', icon: '💰' }
-  ];
+  const steps = isInspectionMode
+    ? [
+        { id: 3, title: lang === 'fr' ? 'Inspection Départ' : 'فحص المغادرة', icon: '🔍' },
+        { id: 5, title: lang === 'fr' ? 'Services Supplémentaires' : 'الخدمات الإضافية', icon: '🛠️' },
+        { id: 6, title: lang === 'fr' ? 'Tarification Finale' : 'التسعير النهائي', icon: '💰' }
+      ]
+    : [
+        { id: 1, title: lang === 'fr' ? 'Dates & Lieux' : 'التواريخ والأماكن', icon: '📅' },
+        { id: 2, title: lang === 'fr' ? 'Sélection Véhicule' : 'اختيار المركبة', icon: '🚗' },
+        { id: 3, title: lang === 'fr' ? 'Inspection Départ' : 'فحص المغادرة', icon: '🔍' },
+        { id: 4, title: lang === 'fr' ? 'Client' : 'العميل', icon: '👤' },
+        { id: 5, title: lang === 'fr' ? 'Services Supplémentaires' : 'الخدمات الإضافية', icon: '🛠️' },
+        { id: 6, title: lang === 'fr' ? 'Tarification Finale' : 'التسعير النهائي', icon: '💰' }
+      ];
 
   useEffect(() => {
     // Check if form data has changed from original reservation
@@ -127,14 +135,20 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
   }, [formData, reservation]);
 
   const handleNext = () => {
-    if (currentStep < 6) {
-      setCurrentStep(currentStep + 1);
+    if (isInspectionMode) {
+      if (currentStep === 3) setCurrentStep(5);
+      else if (currentStep === 5) setCurrentStep(6);
+    } else {
+      if (currentStep < 6) setCurrentStep(currentStep + 1);
     }
-  };844
+  };
 
-  const handlePrevious = () => {;
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+  const handlePrevious = () => {
+    if (isInspectionMode) {
+      if (currentStep === 5) setCurrentStep(3);
+      else if (currentStep === 6) setCurrentStep(5);
+    } else {
+      if (currentStep > 1) setCurrentStep(currentStep - 1);
     }
   };
 
@@ -174,6 +188,8 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
         tvaAmount: formData.step6?.tvaAmount,
         additionalFees: formData.step6?.additionalFees || formData.additionalFees,
         totalPrice: newTotalPrice, // Ensure this is never null
+        // If in inspection mode (accepted), set status to confirmed
+        ...(isInspectionMode ? { status: 'confirmed' } : {})
       };
 
       // Update the reservation
@@ -347,17 +363,17 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       {/* Progress Bar */}
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
         <div className="flex items-center justify-between mb-4">
-          {steps.map((step) => (
+          {steps.map((step, idx) => (
             <div key={step.id} className="flex flex-col items-center flex-1">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg mb-2 transition-colors ${
-                step.id < currentStep ? 'bg-green-500 text-white' :
-                step.id === currentStep ? 'bg-blue-500 text-white' :
+                idx < steps.findIndex(s => s.id === currentStep) ? 'bg-green-500 text-white' :
+                idx === steps.findIndex(s => s.id === currentStep) ? 'bg-blue-500 text-white' :
                 'bg-slate-200 text-slate-500'
               }`}>
-                {step.id < currentStep ? <CheckCircle className="w-6 h-6" /> : step.icon}
+                {idx < steps.findIndex(s => s.id === currentStep) ? <CheckCircle className="w-6 h-6" /> : step.icon}
               </div>
               <p className={`text-xs font-bold text-center ${
-                step.id <= currentStep ? 'text-slate-900' : 'text-slate-500'
+                idx <= steps.findIndex(s => s.id === currentStep) ? 'text-slate-900' : 'text-slate-500'
               }`}>
                 {step.title}
               </p>
@@ -367,7 +383,7 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div
             className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${(currentStep / 6) * 100}%` }}
+            style={{ width: `${isInspectionMode ? ((steps.findIndex(s => s.id === currentStep) + 1) / steps.length) * 100 : (currentStep / 6) * 100}%` }}
           />
         </div>
       </div>
@@ -383,12 +399,12 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
           className="bg-white rounded-2xl shadow-lg border border-slate-200"
         >
           <div className="p-8">
-            {currentStep === 1 && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} />}
-            {currentStep === 2 && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 3 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 5 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 6 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} />}
+            {(!isInspectionMode && currentStep === 1) && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} />}
+            {(!isInspectionMode && currentStep === 2) && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
+            {(isInspectionMode ? currentStep === 3 : currentStep === 3) && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
+            {(!isInspectionMode && currentStep === 4) && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
+            {(isInspectionMode ? currentStep === 5 : currentStep === 5) && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
+            {(isInspectionMode ? currentStep === 6 : currentStep === 6) && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} />}
           </div>
         </motion.div>
       </AnimatePresence>
@@ -742,7 +758,7 @@ const EditStep3DepartureInspection: React.FC<{
       setFuelLevel(inspection.fuelLevel || 'full');
       setSelectedInspectionLocation(inspection.location || '');
       setNotes(inspection.notes || '');
-      setSignature(inspection.signature || '');
+      setSignature(inspection.signature || inspection.client_signature || '');
       // Collect all photo types into a single photos array with type tags
       const combined: any[] = [];
       if (inspection.interiorPhotos && inspection.interiorPhotos.length) {
@@ -810,6 +826,7 @@ const EditStep3DepartureInspection: React.FC<{
       inspectionItems: formData.step3?.departureInspection?.inspectionItems || [],
       notes,
       signature,
+      client_signature: signature, // always sync to DB field
       createdAt: formData.step3?.departureInspection?.createdAt || new Date().toISOString()
     };
 

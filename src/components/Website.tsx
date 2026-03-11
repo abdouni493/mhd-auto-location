@@ -13,6 +13,7 @@ interface WebsiteProps {
   onLangChange?: (lang: Language) => void;
   cars: Car[];
   agencies: Agency[];
+  isLoadingAgencies?: boolean;
   offers: any[];
   specialOffers: any[];
   contactInfo: any;
@@ -24,6 +25,7 @@ export const Website: React.FC<WebsiteProps> = ({
   onLangChange,
   cars,
   agencies,
+  isLoadingAgencies = false,
   offers,
   specialOffers,
   contactInfo,
@@ -155,7 +157,13 @@ export const Website: React.FC<WebsiteProps> = ({
           <SpecialOffersListing lang={lang} cars={cars} specialOffers={specialOffers} onOrder={handleReserveClick} />
         )}
         {currentPage === 'orders' && (
-          <OrdersPage lang={lang} cars={cars} agencies={agencies} selectedCar={selectedCar} />
+          <OrdersPage
+            lang={lang}
+            cars={cars}
+            agencies={agencies}
+            isLoadingAgencies={isLoadingAgencies}
+            selectedCar={selectedCar}
+          />
         )}
         {currentPage === 'contacts' && (
           <ContactsWebsite lang={lang} contactInfo={contactInfo} websiteSettings={websiteSettings} />
