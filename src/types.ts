@@ -274,7 +274,7 @@ export interface Client {
   email?: string;
   dateOfBirth?: string;
   placeOfBirth?: string;
-  idCardNumber: string;
+  idCardNumber?: string;
   licenseNumber: string;
   licenseExpiration?: string;
   licenseDelivery?: string;
