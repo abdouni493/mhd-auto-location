@@ -66,10 +66,17 @@ export const ClientCard: React.FC<ClientCardProps> = ({
 
       {/* Document Details */}
       <div className="w-full space-y-2 text-[10px] mb-4 pb-4 border-b border-saas-border">
-       
         <div className="flex justify-between">
           <span className="text-saas-text-muted">🚗 {lang === 'fr' ? 'Permis' : 'الرخصة'}:</span>
           <span className="font-semibold text-saas-text-main">{client.licenseNumber}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-saas-text-muted">📅 {lang === 'fr' ? 'Délivrance Permis' : 'استخراج الرخصة'}:</span>
+          <span className="font-semibold text-saas-text-main">{client.licenseDeliveryDate}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-saas-text-muted">⏱️ {lang === 'fr' ? 'Expiration Permis' : 'انتهاء الرخصة'}:</span>
+          <span className="font-semibold text-saas-text-main">{client.licenseExpirationDate}</span>
         </div>
         {client.wilaya && (
           <div className="flex justify-between">

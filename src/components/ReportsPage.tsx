@@ -5,6 +5,91 @@ import { Language, Car, Client, ReservationDetails, Worker, StoreExpense, Vehicl
 import { DatabaseService } from '../services/DatabaseService';
 import { getVehicleExpenses } from '../services/expenseService';
 
+// Helper to aggregate actions for audit log
+function aggregateAuditLog(reportData: ReportData | null): Array<{ date: string, type: string, description: string }> {
+  if (!reportData) return [];
+  const actions: Array<{ date: string, type: string, description: string }> = [];
+
+  // Reservations
+  reportData.reservations.forEach(r => {
+    actions.push({
+      date: r.createdAt,
+      type: 'Reservation',
+      description: `Réservation ${r.status} pour ${r.car?.brand || ''} ${r.car?.model || ''} (${r.car?.registration || ''}) par ${r.client?.firstName || ''} ${r.client?.lastName || ''}`
+    });
+    if (r.updatedAt && r.updatedAt !== r.createdAt) {
+      actions.push({
+        date: r.updatedAt,
+        type: 'Modification',
+        description: `Modification de la réservation (${r.id})`
+      });
+    }
+    if (r.status === 'cancelled') {
+      actions.push({
+        date: r.updatedAt || r.createdAt,
+        type: 'Annulation',
+        description: `Annulation de la réservation (${r.id})`
+      });
+    }
+  });
+
+  // Website Orders
+  reportData.websiteOrders.forEach(o => {
+    actions.push({
+      date: o.createdAt,
+      type: 'Commande Website',
+      description: `Commande pour ${o.car.brand} ${o.car.model} (${o.car.registration}) par ${o.step2.firstName} ${o.step2.lastName} - ${o.status}`
+    });
+  });
+
+  // Clients
+  reportData.clients.forEach(c => {
+    actions.push({
+      date: c.createdAt,
+      type: 'Nouveau Client',
+      description: `Création du client ${c.firstName} ${c.lastName}`
+    });
+  });
+
+  // Expenses
+  reportData.storeExpenses.forEach(e => {
+    actions.push({
+      date: e.date,
+      type: 'Dépense Magasin',
+      description: `Dépense magasin: ${e.name} (${e.icon}) - ${e.cost} DA`
+    });
+  });
+  reportData.vehicleExpenses.forEach(e => {
+    actions.push({
+      date: e.date,
+      type: 'Dépense Véhicule',
+      description: `Dépense véhicule: ${e.type} - ${e.cost} DA`
+    });
+  });
+
+  // Alerts
+  reportData.alerts.forEach(a => {
+    actions.push({
+      date: a.createdAt,
+      type: 'Alerte',
+      description: `Alerte ${a.severity}: ${a.title}`
+    });
+  });
+
+  // Workers
+  reportData.workers.forEach(w => {
+    actions.push({
+      date: w.createdAt,
+      type: 'Nouveau Employé',
+      description: `Ajout de l'employé ${w.firstName} ${w.lastName}`
+    });
+  });
+
+  // Sort by date descending
+  actions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return actions;
+}
+
 interface ReportsPageProps {
   lang: Language;
 }
@@ -459,6 +544,40 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
           transition={{ delay: 0.2 }}
           className="space-y-8"
         >
+          {/* Audit Log Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="bg-white border border-saas-border rounded-2xl p-6 shadow-sm"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <FileText className="w-6 h-6 text-saas-primary-via" />
+              <h3 className="text-xl font-black text-saas-text-main">
+                {lang === 'fr' ? 'Journal d’Audit Complet' : 'سجل التدقيق الكامل'}
+              </h3>
+            </div>
+            <div className="overflow-x-auto max-h-96 custom-scrollbar">
+              <table className="w-full text-xs">
+                <thead className="bg-saas-bg border-b border-saas-border">
+                  <tr>
+                    <th className="text-left p-2 font-bold">{lang === 'fr' ? 'Date' : 'التاريخ'}</th>
+                    <th className="text-left p-2 font-bold">{lang === 'fr' ? 'Type' : 'النوع'}</th>
+                    <th className="text-left p-2 font-bold">{lang === 'fr' ? 'Description' : 'الوصف'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aggregateAuditLog(reportData).map((action, idx) => (
+                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-saas-bg/50'}>
+                      <td className="p-2 text-saas-text-muted">{new Date(action.date).toLocaleString('fr-FR')}</td>
+                      <td className="p-2 font-bold text-saas-primary-via">{action.type}</td>
+                      <td className="p-2 text-saas-text-main">{action.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
           {/* Enhanced Statistics Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <motion.div

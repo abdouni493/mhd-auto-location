@@ -351,21 +351,21 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="label-saas">⏱️ {lang === 'fr' ? 'Expiration Permis' : 'انتهاء الرخصة'}</label>
-                <input
-                  type="date"
-                  name="licenseExpirationDate"
-                  value={formData.licenseExpirationDate}
-                  onChange={handleChange}
-                  className="input-saas"
-                />
-              </div>
-              <div className="space-y-2">
                 <label className="label-saas">📅 {{fr: 'Délivrance Permis', ar: 'استخراج الرخصة'}[lang]}</label>
                 <input
                   type="date"
                   name="licenseDeliveryDate"
                   value={formData.licenseDeliveryDate}
+                  onChange={handleChange}
+                  className="input-saas"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="label-saas">⏱️ {lang === 'fr' ? 'Expiration Permis' : 'انتهاء الرخصة'}</label>
+                <input
+                  type="date"
+                  name="licenseExpirationDate"
+                  value={formData.licenseExpirationDate}
                   onChange={handleChange}
                   className="input-saas"
                 />
