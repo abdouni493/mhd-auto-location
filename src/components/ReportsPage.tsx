@@ -209,18 +209,14 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
       // Calculate car statistics
       const carStatsData: CarStats[] = cars.map(car => {
         const carReservations = filteredData.reservations.filter(r => r.carId === car.id);
-
         const carExpenses = filteredData.vehicleExpenses.filter(e => e.carId === car.id);
         const carMaintenance = carExpenses.reduce((sum, e) => sum + e.cost, 0);
-        
         const totalRevenue = carReservations
           .filter(r => r.status === 'completed')
           .reduce((sum, r) => sum + r.totalPrice, 0);
-
         const lastReservation = carReservations.sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )[0];
-
         return {
           carId: car.id,
           carName: `${car.brand} ${car.model} (${car.registration})`,
@@ -233,11 +229,19 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ lang }) => {
           maintenanceCost: carMaintenance,
           availability: carReservations.filter(r => r.status === 'active').length === 0 ? 100 : 75,
           lastUseDate: lastReservation ? lastReservation.createdAt.split('T')[0] : 'N/A',
-          nextMaintenance: carExpenses.length > 0 ? carExpenses[carExpenses.length - 1].date : 'N/A'
+          nextMaintenance: carExpenses.length > 0 ? carExpenses[carExpenses.length - 1].date : 'N/A',
+          hasExpenses: carExpenses.length > 0
         };
       });
 
       setCarStats(carStatsData);
+
+      // Filter alerts: only show alerts for cars with at least one expense
+      filteredData.alerts = filteredData.alerts.filter(alert => {
+        if (!alert.carId) return false;
+        const carStat = carStatsData.find(c => c.carId === alert.carId);
+        return carStat && carStat.hasExpenses;
+      });
 
       // Calculate client statistics
       const clientStatsMap = new Map<string, ClientStats>();
