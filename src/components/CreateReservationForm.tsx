@@ -2489,7 +2489,7 @@ export const Step6FinalPricing: React.FC<{
   const tvaAmount = tvaEnabled ? (subtotal * tvaRate) / 100 : 0;
   const computedPrice = subtotal + tvaAmount;
   const deposit = selectedCar?.deposit || 0;
-  const totalPrice = isManualTotal && manualTotal !== '' ? Number(manualTotal) : (cautionEnabled ? computedPrice + deposit : computedPrice);
+  const totalPrice = isManualTotal && manualTotal !== '' ? Number(manualTotal) : computedPrice;
 
   // Update formData with values (manual override takes precedence)
   React.useEffect(() => {
@@ -2821,10 +2821,8 @@ export const Step6FinalPricing: React.FC<{
             )}
           </div>
 
-          {/* Deposit with toggle */}
-          <div className="flex justify-between items-center py-2 text-blue-700 border-t border-slate-300">
-            <span className="font-bold">{lang === 'fr' ? 'Caution (remboursable)' : 'الضمان (قابل للاسترداد)'}</span>
-            <span className="font-bold">{deposit.toLocaleString()} DA</span>
+          {/* Deposit with toggle, only display if activated */}
+          <div className="flex items-center py-2 border-t border-slate-300">
             <label className="flex items-center gap-2 ml-4">
               <input
                 type="checkbox"
@@ -2832,8 +2830,11 @@ export const Step6FinalPricing: React.FC<{
                 onChange={(e) => setCautionEnabled(e.target.checked)}
                 className="w-4 h-4 text-blue-600 border-blue-300 rounded focus:ring-blue-500"
               />
-              <span className="font-bold text-blue-700">{lang === 'fr' ? 'Activer' : 'تفعيل'}</span>
+              <span className="font-bold text-blue-700">{lang === 'fr' ? 'Activer Caution' : 'تفعيل الضمان'}</span>
             </label>
+            {cautionEnabled && (
+              <span className="font-bold text-blue-700 ml-4">{lang === 'fr' ? 'Caution (remboursable)' : 'الضمان (قابل للاسترداد)'}: {deposit.toLocaleString()} DA</span>
+            )}
           </div>
         </div>
       </div>
