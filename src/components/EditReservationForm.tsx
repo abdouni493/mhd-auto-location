@@ -188,6 +188,7 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
         tvaAmount: formData.step6?.tvaAmount,
         additionalFees: formData.step6?.additionalFees || formData.additionalFees,
         totalPrice: newTotalPrice, // Ensure this is never null
+        cautionEnabled: formData.step6?.cautionEnabled,
         // If in inspection mode (accepted), set status to confirmed
         ...(isInspectionMode ? { status: 'confirmed' } : {})
       };
