@@ -20,6 +20,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
     email: '',
     dateOfBirth: '',
     placeOfBirth: '',
+    idCardNumber: '',
     licenseNumber: '',
     licenseExpirationDate: '',
     licenseDeliveryDate: '',
@@ -50,6 +51,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
         email: '',
         dateOfBirth: '',
         placeOfBirth: '',
+        idCardNumber: '',
         licenseNumber: '',
         licenseExpirationDate: '',
         licenseDeliveryDate: '',
@@ -150,6 +152,9 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
     }
     if (!formData.phone?.trim()) {
       errors.push(lang === 'fr' ? 'Téléphone est requis' : 'الهاتف مطلوب');
+    }
+    if (!formData.idCardNumber?.trim()) {
+      errors.push(lang === 'fr' ? 'N° Carte d\'Identité est requis' : 'رقم بطاقة الهوية مطلوب');
     }
     if (!formData.licenseNumber?.trim()) {
       errors.push(lang === 'fr' ? 'N° Permis est requis' : 'رقم الرخصة مطلوب');
@@ -337,7 +342,18 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
             <h3 className="text-xs font-black text-saas-primary-via uppercase tracking-[0.2em]">
               🆔 {lang === 'fr' ? 'Documents Officiels' : 'الوثائق الرسمية'}
             </h3>
-            
+            <div className="space-y-2">
+              <label className="label-saas">🆔 {lang === 'fr' ? 'N° Carte d\'Identité *' : 'رقم بطاقة الهوية *'}</label>
+              <input
+                type="text"
+                name="idCardNumber"
+                value={formData.idCardNumber}
+                onChange={handleChange}
+                placeholder={lang === 'fr' ? '1234567890' : 'رقم البطاقة'}
+                className="input-saas"
+                required
+              />
+            </div>
             <div className="space-y-2">
               <label className="label-saas">🚗 {lang === 'fr' ? 'N° Permis *' : 'رقم الرخصة *'}</label>
               <input
@@ -350,7 +366,6 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
                 required
               />
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <label className="label-saas">⏱️ {lang === 'fr' ? 'Expiration Permis' : 'انتهاء الرخصة'}</label>
@@ -373,7 +388,6 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
                 />
               </div>
             </div>
-
             <div className="space-y-2">
               <label className="label-saas">📍 {{fr: 'Lieu Délivrance Permis', ar: 'مكان استخراج الرخصة'}[lang]}</label>
               <input
@@ -385,7 +399,6 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
                 className="input-saas"
               />
             </div>
-
           </div>
 
           {/* Additional Documents */}
