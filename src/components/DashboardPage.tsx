@@ -20,54 +20,105 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
     switch (severity) {
       case 'low':
         return {
-          bg: 'bg-gradient-to-br from-green-50 to-emerald-100',
-          border: 'border-green-200',
-          text: 'text-green-800',
-          icon: '🟢'
+          bg: 'bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/20',
+          border: 'border-green-200 dark:border-green-800',
+          text: 'text-green-800 dark:text-green-200',
+          accent: 'bg-green-500',
+          icon: '🟢',
+          glow: 'shadow-green-500/20'
         };
       case 'medium':
         return {
-          bg: 'bg-gradient-to-br from-yellow-50 to-orange-100',
-          border: 'border-yellow-200',
-          text: 'text-yellow-800',
-          icon: '🟡'
+          bg: 'bg-gradient-to-br from-yellow-50 to-orange-100 dark:from-yellow-900/20 dark:to-orange-900/20',
+          border: 'border-yellow-200 dark:border-yellow-800',
+          text: 'text-yellow-800 dark:text-yellow-200',
+          accent: 'bg-yellow-500',
+          icon: '🟡',
+          glow: 'shadow-yellow-500/20'
         };
       case 'high':
         return {
-          bg: 'bg-gradient-to-br from-orange-50 to-red-100',
-          border: 'border-orange-200',
-          text: 'text-orange-800',
-          icon: '🟠'
+          bg: 'bg-gradient-to-br from-orange-50 to-red-100 dark:from-orange-900/20 dark:to-red-900/20',
+          border: 'border-orange-200 dark:border-orange-800',
+          text: 'text-orange-800 dark:text-orange-200',
+          accent: 'bg-orange-500',
+          icon: '🟠',
+          glow: 'shadow-orange-500/20'
         };
       case 'critical':
         return {
-          bg: 'bg-gradient-to-br from-red-50 to-rose-100',
-          border: 'border-red-200',
-          text: 'text-red-800',
-          icon: '🔴'
+          bg: 'bg-gradient-to-br from-red-50 to-rose-100 dark:from-red-900/20 dark:to-rose-900/20',
+          border: 'border-red-200 dark:border-red-800',
+          text: 'text-red-800 dark:text-red-200',
+          accent: 'bg-red-500',
+          icon: '🔴',
+          glow: 'shadow-red-500/20'
         };
       default:
         return {
-          bg: 'bg-gradient-to-br from-gray-50 to-slate-100',
-          border: 'border-gray-200',
-          text: 'text-gray-800',
-          icon: '⚪'
+          bg: 'bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900/20 dark:to-slate-900/20',
+          border: 'border-gray-200 dark:border-gray-800',
+          text: 'text-gray-800 dark:text-gray-200',
+          accent: 'bg-gray-500',
+          icon: '⚪',
+          glow: 'shadow-gray-500/20'
         };
     }
   };
 
   const styles = getSeverityStyles(alert.severity);
 
+  const getAlertIcon = (type: string) => {
+    switch (type) {
+      case 'vidange': return '🛢️';
+      case 'assurance': return '🛡️';
+      case 'controle': return '🔍';
+      default: return '⚠️';
+    }
+  };
+
+  const getProgressPercentage = () => {
+    if (alert.type === 'vidange' && alert.currentMileage && alert.nextServiceMileage) {
+      return Math.min((alert.currentMileage / alert.nextServiceMileage) * 100, 100);
+    }
+    if (alert.dueDate) {
+      const totalDays = alert.type === 'assurance' ? 365 : 180; // Approximate annual cycles
+      const daysUntilDue = alert.daysUntilDue || 0;
+      const daysSinceCreation = Math.max(0, totalDays - daysUntilDue);
+      return Math.min((daysSinceCreation / totalDays) * 100, 100);
+    }
+    return 0;
+  };
+
+  const progressPercentage = getProgressPercentage();
+
   return (
     <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      whileHover={{ scale: 1.02, x: 5 }}
-      className={`relative overflow-hidden p-4 rounded-2xl border-2 ${styles.bg} ${styles.border} shadow-lg hover:shadow-xl transition-all duration-300`}
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      whileHover={{
+        scale: 1.03,
+        boxShadow: `0 20px 40px -12px ${styles.glow}`,
+        y: -2
+      }}
+      transition={{
+        type: "spring",
+        stiffness: 300,
+        damping: 20
+      }}
+      className={`relative overflow-hidden p-6 rounded-2xl border-2 ${styles.bg} ${styles.border} shadow-xl hover:shadow-2xl transition-all duration-500 backdrop-blur-sm`}
     >
-      <div className="absolute top-0 right-0 w-12 h-12 bg-white/20 rounded-full -translate-y-6 translate-x-6"></div>
+      {/* Animated background pattern */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-current rounded-full -translate-y-16 translate-x-16"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-current rounded-full translate-y-12 -translate-x-12"></div>
+      </div>
 
-      <div className="relative flex items-start gap-3">
+      {/* Severity indicator stripe */}
+      <div className={`absolute top-0 left-0 right-0 h-1 ${styles.accent}`}></div>
+
+      <div className="relative flex items-start gap-4">
+        {/* Animated Icon */}
         <motion.div
           animate={{
             rotate: alert.severity === 'critical' ? [0, 10, -10, 0] : [0, 5, -5, 0],
@@ -77,91 +128,149 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
             duration: alert.severity === 'critical' ? 1.5 : 2,
             repeat: Infinity
           }}
-          className="text-2xl flex-shrink-0"
+          className="text-3xl flex-shrink-0 p-2 bg-white/20 rounded-xl backdrop-blur-sm"
         >
-          {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : alert.type === 'controle_technique' ? '🔍' : '⚠️'}
+          {getAlertIcon(alert.type)}
         </motion.div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className={`font-bold uppercase tracking-tighter text-sm ${styles.text}`}>
-              {alert.title}
-            </h4>
-            <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="text-lg"
-            >
-              {styles.icon}
-            </motion.div>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h4 className={`font-bold text-lg uppercase tracking-tight ${styles.text}`}>
+                {alert.title}
+              </h4>
+              <motion.div
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="text-lg"
+              >
+                {styles.icon}
+              </motion.div>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+              alert.isExpired
+                ? 'bg-red-500 text-white'
+                : alert.severity === 'critical'
+                ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                : alert.severity === 'high'
+                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200'
+                : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
+            }`}>
+              {alert.isExpired
+                ? (lang === 'fr' ? 'EXPIRÉ' : 'منتهي الصلاحية')
+                : alert.daysUntilDue !== undefined
+                ? (lang === 'fr' ? `${alert.daysUntilDue} JOURS` : `${alert.daysUntilDue} أيام`)
+                : (lang === 'fr' ? 'À VENIR' : 'قادم')
+              }
+            </div>
           </div>
 
-          <p className={`${styles.text} text-sm mb-3 leading-relaxed`}>{alert.message}</p>
+          {/* Main Message */}
+          <p className={`${styles.text} text-sm mb-4 leading-relaxed font-medium`}>
+            {alert.message}
+          </p>
 
-          <div className="flex items-center justify-between text-xs">
-            <span className={`font-medium ${styles.text} truncate`}>
-              {alert.carInfo}
-            </span>
-            {alert.daysUntilDue !== undefined && (
-              <span className={`font-bold px-2 py-1 rounded-full text-xs ${
-                alert.isExpired
-                  ? 'bg-red-500 text-white'
-                  : alert.severity === 'critical'
-                  ? 'bg-red-100 text-red-800'
-                  : alert.severity === 'high'
-                  ? 'bg-orange-100 text-orange-800'
-                  : 'bg-green-100 text-green-800'
-              }`}>
-                {alert.isExpired
-                  ? (lang === 'fr' ? 'Expiré' : 'منتهي الصلاحية')
-                  : (lang === 'fr' ? `${alert.daysUntilDue} jours` : `${alert.daysUntilDue} أيام`)
-                }
+          {/* Car Information */}
+          <div className={`mb-4 p-3 rounded-xl bg-white/30 backdrop-blur-sm border border-white/20`}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🚗</span>
+              <span className={`font-semibold text-sm ${styles.text}`}>
+                {alert.carInfo}
               </span>
+            </div>
+
+            {/* Mileage Progress for Vidange */}
+            {alert.type === 'vidange' && alert.currentMileage && alert.nextServiceMileage && (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className={styles.text}>
+                    {lang === 'fr' ? 'Kilométrage actuel:' : 'الكيلومترات الحالية:'}
+                  </span>
+                  <span className={`font-bold ${styles.text}`}>
+                    {alert.currentMileage.toLocaleString()} km
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className={styles.text}>
+                    {lang === 'fr' ? 'Prochaine vidange:' : 'الفيد الثاني:'}
+                  </span>
+                  <span className={`font-bold ${styles.text}`}>
+                    {alert.nextServiceMileage.toLocaleString()} km
+                  </span>
+                </div>
+                <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressPercentage}%` }}
+                    transition={{ duration: 1, delay: 0.5 }}
+                    className={`h-full rounded-full ${styles.accent}`}
+                  />
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className={styles.text}>
+                    {lang === 'fr' ? 'Progression:' : 'التقدم:'}
+                  </span>
+                  <span className={`font-bold ${styles.text}`}>
+                    {progressPercentage.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Date Progress for Assurance/Controle */}
+            {(alert.type === 'assurance' || alert.type === 'controle') && alert.dueDate && (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className={styles.text}>
+                    {lang === 'fr' ? 'Échéance:' : 'الموعد النهائي:'}
+                  </span>
+                  <span className={`font-bold ${styles.text}`}>
+                    {new Date(alert.dueDate).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-SA')}
+                  </span>
+                </div>
+                <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressPercentage}%` }}
+                    transition={{ duration: 1, delay: 0.5 }}
+                    className={`h-full rounded-full ${styles.accent}`}
+                  />
+                </div>
+              </div>
             )}
           </div>
 
-          {alert.currentMileage && alert.nextServiceMileage && (
-            <div className={`mt-3 text-xs ${styles.text} bg-white/50 p-2 rounded-lg`}>
-              <div className="flex justify-between items-center">
-                <span>{lang === 'fr' ? 'Kilométrage:' : 'الكيلومترات:'}</span>
-                <span className="font-bold">
-                  {alert.currentMileage.toLocaleString()} / {alert.nextServiceMileage.toLocaleString()} km
-                </span>
-              </div>
-              <div className="w-full bg-white/50 rounded-full h-1 mt-1 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    alert.isExpired ? 'bg-red-500' : 'bg-green-500'
-                  }`}
-                  style={{
-                    width: `${Math.min((alert.currentMileage / alert.nextServiceMileage) * 100, 100)}%`
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
           {/* Additional Details */}
-          <div className={`mt-3 text-xs ${styles.text} space-y-1`}>
+          <div className={`grid grid-cols-2 gap-2 text-xs ${styles.text}`}>
             <div className="flex justify-between">
               <span>{lang === 'fr' ? 'Type:' : 'النوع:'}</span>
               <span className="font-medium capitalize">{alert.type}</span>
             </div>
-            {alert.dueDate && (
-              <div className="flex justify-between">
-                <span>{lang === 'fr' ? 'Échéance:' : 'الموعد النهائي:'}</span>
-                <span className="font-medium">{new Date(alert.dueDate).toLocaleDateString()}</span>
-              </div>
-            )}
             <div className="flex justify-between">
               <span>{lang === 'fr' ? 'Sévérité:' : 'الخطورة:'}</span>
               <span className="font-medium capitalize">{alert.severity}</span>
             </div>
-            <div className="flex justify-between">
-              <span>{lang === 'fr' ? 'Créé:' : 'تم الإنشاء:'}</span>
-              <span className="font-medium">{new Date(alert.createdAt).toLocaleDateString()}</span>
+            <div className="flex justify-between col-span-2">
+              <span>{lang === 'fr' ? 'Créé le:' : 'تم الإنشاء:'}</span>
+              <span className="font-medium">
+                {new Date(alert.createdAt).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-SA')}
+              </span>
             </div>
           </div>
+
+          {/* Action Button */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`mt-4 w-full py-2 px-4 rounded-xl font-semibold text-sm transition-all duration-200 ${
+              alert.isExpired
+                ? 'bg-red-500 hover:bg-red-600 text-white'
+                : 'bg-white/20 hover:bg-white/30 text-current backdrop-blur-sm border border-white/30'
+            }`}
+          >
+            {lang === 'fr' ? 'Voir les détails' : 'عرض التفاصيل'}
+          </motion.button>
         </div>
       </div>
     </motion.div>
@@ -531,15 +640,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
           >
             <div className="text-center">
               <div className="text-3xl font-black text-white">
-                {stats.totalRevenue.toLocaleString()}
-              </div>
-              <div className="text-xs text-blue-200 uppercase tracking-widest">
-                {lang === 'fr' ? 'Revenus Totaux' : 'إجمالي الإيرادات'}
-              </div>
-            </div>
-            <div className="w-px bg-white/30"></div>
-            <div className="text-center">
-              <div className="text-3xl font-black text-white">
                 {stats.totalClients}
               </div>
               <div className="text-xs text-blue-200 uppercase tracking-widest">
@@ -551,42 +651,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
       </motion.div>
 
       {/* Enhanced Key Metrics with Better Gradients */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 30, rotateY: -15 }}
-          animate={{ opacity: 1, y: 0, rotateY: 0 }}
-          transition={{ delay: 0.3, type: "spring", stiffness: 100 }}
-          whileHover={{ scale: 1.05, rotateY: 5 }}
-          className="relative overflow-hidden bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600 p-6 rounded-3xl text-white shadow-2xl hover:shadow-emerald-500/25"
-        >
-          <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-10 translate-x-10"></div>
-          <div className="relative flex items-center justify-between">
-            <div>
-              <p className="text-white/90 text-xs font-bold uppercase tracking-[0.2em] mb-2">
-                {lang === 'fr' ? 'Revenus Mensuels' : 'الإيرادات الشهرية'}
-              </p>
-              <p className="text-3xl font-black mb-3">
-                {stats.monthlyRevenue.toLocaleString()} <span className="text-lg">DZD</span>
-              </p>
-              <div className="flex items-center gap-2">
-                <motion.div
-                  animate={{ y: [0, -3, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                >
-                  📈
-                </motion.div>
-                <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-full">+12.5%</span>
-              </div>
-            </div>
-            <motion.div
-              animate={{ scale: [1, 1.1, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="text-6xl opacity-90"
-            >
-              💰
-            </motion.div>
-          </div>
-        </motion.div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
         <motion.div
           initial={{ opacity: 0, y: 30, rotateY: -15 }}

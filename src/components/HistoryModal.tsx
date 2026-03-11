@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Car, Rental, Language, VehicleExpense } from '../types';
-import { X, TrendingUp, TrendingDown, Wallet, Loader2, Trash } from 'lucide-react';
-import { getVehicleExpenses, deleteVehicleExpense } from '../services/expenseService';
-import { ConfirmModal } from './ConfirmModal';
+import { Car, Rental, Language } from '../types';
+import { X, TrendingUp, Loader2 } from 'lucide-react';
 
 interface HistoryModalProps {
   isOpen: boolean;
@@ -14,75 +12,20 @@ interface HistoryModalProps {
 }
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, car, rentals, lang }) => {
-  const [expenses, setExpenses] = useState<VehicleExpense[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
 
   useEffect(() => {
-    if (isOpen && car?.id) {
-      const loadExpenses = async () => {
-        try {
-          setIsLoading(true);
-          const result = await getVehicleExpenses();
-          if (result.success && result.expenses) {
-            // Filter expenses for the selected car
-            const carExpenses = result.expenses.filter(e => e.carId === car.id);
-            setExpenses(carExpenses);
-          }
-        } catch (err) {
-          console.error('Error loading expenses:', err);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      loadExpenses();
+    if (isOpen) {
+      setIsLoading(true);
+      // Simulate loading rentals data
+      setTimeout(() => setIsLoading(false), 500);
     }
-  }, [isOpen, car?.id]);
-
-  const handleDeleteExpense = (id: string) => {
-    setDeleteConfirm({ isOpen: true, id });
-  };
-
-  const confirmDeleteExpense = async () => {
-    if (deleteConfirm.id) {
-      try {
-        const res = await deleteVehicleExpense(deleteConfirm.id);
-        if (res.success) {
-          setExpenses(prev => prev.filter(e => e.id !== deleteConfirm.id));
-        }
-      } catch (err) {
-        console.error('Error deleting expense:', err);
-      }
-    }
-    setDeleteConfirm({ isOpen: false, id: null });
-  };
+  }, [isOpen]);
 
 
   if (!isOpen) return null;
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.cost, 0);
   const totalGains = rentals.reduce((sum, r) => sum + r.totalCost, 0);
-  const totalBenefits = totalGains - totalExpenses;
-
-  // Helper function to get expiration status
-  const getExpirationStatus = (expirationDate: string | undefined) => {
-    if (!expirationDate) return null;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const expDate = new Date(expirationDate);
-    expDate.setHours(0, 0, 0, 0);
-    
-    const daysLeft = Math.floor((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
-    return {
-      daysLeft,
-      isExpired: daysLeft < 0,
-      isWarning: daysLeft >= 0 && daysLeft <= 30,
-      isOk: daysLeft > 30,
-    };
-  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -97,7 +40,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, car
               📜 Historique: {car.brand} {car.model}
             </h2>
             <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mt-1">
-              {lang === 'fr' ? 'Suivi des revenus et dépenses' : 'متابعة الإيرادات والمصاريف'}
+              {lang === 'fr' ? 'Historique des locations et gains' : 'تاريخ الإيجارات والأرباح'}
             </p>
           </div>
           <button onClick={onClose} className="p-2.5 hover:bg-white/20 rounded-xl transition-colors">
@@ -114,17 +57,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, car
 
           {!isLoading && (
             <>
-          {/* Summary Cards */}
+          {/* Summary Cards - Focus on Gains */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-3xl border border-saas-border flex items-center gap-5 shadow-sm group hover:border-saas-danger-start/30 transition-all">
-              <div className="w-14 h-14 rounded-2xl bg-saas-danger-start/10 flex items-center justify-center text-saas-danger-start">
-                <TrendingDown size={28} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">Total Dépenses</p>
-                <p className="text-xl font-black text-saas-danger-start">{totalExpenses.toLocaleString()} DZD</p>
-              </div>
-            </div>
             <div className="bg-white p-6 rounded-3xl border border-saas-border flex items-center gap-5 shadow-sm group hover:border-saas-success-start/30 transition-all">
               <div className="w-14 h-14 rounded-2xl bg-saas-success-start/10 flex items-center justify-center text-saas-success-start">
                 <TrendingUp size={28} />
@@ -136,125 +70,141 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, car
             </div>
             <div className="bg-white p-6 rounded-3xl border border-saas-border flex items-center gap-5 shadow-sm group hover:border-saas-primary-via/30 transition-all">
               <div className="w-14 h-14 rounded-2xl bg-saas-primary-via/10 flex items-center justify-center text-saas-primary-via">
-                <Wallet size={28} />
+                <span className="text-2xl">🚗</span>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">Bénéfices Nets</p>
-                <p className="text-xl font-black text-saas-text-main">{totalBenefits.toLocaleString()} DZD</p>
+                <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">Locations Totales</p>
+                <p className="text-xl font-black text-saas-text-main">{rentals.length}</p>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-3xl border border-saas-border flex items-center gap-5 shadow-sm group hover:border-saas-primary-start/30 transition-all">
+              <div className="w-14 h-14 rounded-2xl bg-saas-primary-start/10 flex items-center justify-center text-saas-primary-start">
+                <span className="text-2xl">💰</span>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">Gain Moyen</p>
+                <p className="text-xl font-black text-saas-text-main">
+                  {rentals.length > 0 ? Math.round(totalGains / rentals.length).toLocaleString() : 0} DZD
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            {/* Rentals History */}
-            <div className="space-y-6">
-              <h3 className="text-xs font-black text-saas-primary-via flex items-center gap-3 uppercase tracking-[0.2em]">
-                <span className="p-2 bg-saas-primary-via/10 rounded-lg">🤝</span>
-                Locations
-              </h3>
-              <div className="space-y-4">
-                {rentals.length === 0 ? (
-                  <div className="p-8 text-center border-2 border-dashed border-saas-border rounded-3xl text-saas-text-muted italic text-sm">
-                    Aucune location enregistrée.
-                  </div>
-                ) : (
-                  rentals.map((r) => (
-                    <div key={r.id} className="p-6 rounded-3xl border border-saas-border bg-white shadow-sm flex items-center justify-between group hover:border-saas-primary-via/30 transition-all hover:shadow-md">
-                      <div>
-                        <p className="text-sm font-black text-saas-text-main uppercase tracking-tighter">{r.clientName}</p>
-                        <p className="text-[10px] text-saas-text-muted font-bold uppercase tracking-widest mt-1.5 flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-saas-success-start" />
-                          {r.startDate} au {r.endDate}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-base font-black text-saas-success-start">+{r.totalCost.toLocaleString()} DZD</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+          {/* Detailed Locations History */}
+          <div className="space-y-6">
+            <h3 className="text-xs font-black text-saas-primary-via flex items-center gap-3 uppercase tracking-[0.2em]">
+              <span className="p-2 bg-saas-primary-via/10 rounded-lg">📍</span>
+              Historique des Locations
+            </h3>
+            <div className="space-y-4">
+              {rentals.length === 0 ? (
+                <div className="p-12 text-center border-2 border-dashed border-saas-border rounded-3xl text-saas-text-muted italic text-sm bg-white">
+                  <span className="text-4xl mb-4 block">🚗</span>
+                  Aucune location enregistrée pour ce véhicule.
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {rentals.map((r, index) => {
+                    const startDate = new Date(r.startDate);
+                    const endDate = new Date(r.endDate);
+                    const daysRented = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const dailyRate = Math.round(r.totalCost / daysRented);
 
-            {/* Expenses History */}
+                    return (
+                      <motion.div
+                        key={r.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="p-6 rounded-3xl border border-saas-border bg-white shadow-sm hover:border-saas-primary-via/30 transition-all hover:shadow-md group"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-saas-primary-via/10 flex items-center justify-center text-saas-primary-via font-bold text-lg">
+                              #{index + 1}
+                            </div>
+                            <div>
+                              <p className="text-lg font-black text-saas-text-main uppercase tracking-tighter">
+                                {r.clientName}
+                              </p>
+                              <p className="text-[10px] text-saas-text-muted font-bold uppercase tracking-widest mt-1">
+                                {startDate.toLocaleDateString('fr-FR')} - {endDate.toLocaleDateString('fr-FR')}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-black text-saas-success-start">
+                              +{r.totalCost.toLocaleString()} DZD
+                            </p>
+                            <p className="text-[10px] text-saas-text-muted font-bold uppercase tracking-widest">
+                              {daysRented} jours • {dailyRate.toLocaleString()} DZD/jour
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-saas-border/50">
+                          <div className="text-center">
+                            <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">Statut</p>
+                            <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wide mt-1 ${
+                              r.status === 'completed'
+                                ? 'bg-green-100 text-green-800'
+                                : r.status === 'active'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {r.status === 'completed' ? 'Terminée' :
+                               r.status === 'active' ? 'Active' :
+                               r.status === 'cancelled' ? 'Annulée' : r.status}
+                            </span>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">Durée</p>
+                            <p className="text-sm font-black text-saas-text-main mt-1">{daysRented} jours</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">Gain</p>
+                            <p className="text-sm font-black text-saas-success-start mt-1">+{r.totalCost.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Monthly Gains Summary */}
+          {rentals.length > 0 && (
             <div className="space-y-6">
               <h3 className="text-xs font-black text-saas-secondary-via flex items-center gap-3 uppercase tracking-[0.2em]">
-                <span className="p-2 bg-saas-secondary-via/10 rounded-lg">📉</span>
-                Dépenses
+                <span className="p-2 bg-saas-secondary-via/10 rounded-lg">📊</span>
+                Gains par Mois
               </h3>
-              <div className="space-y-4">
-                {expenses.length === 0 ? (
-                  <div className="p-8 text-center border-2 border-dashed border-saas-border rounded-3xl text-saas-text-muted italic text-sm">
-                    Aucune dépense enregistrée.
-                  </div>
-                ) : (
-                  expenses.map((e) => {
-                    const expirationStatus = getExpirationStatus(e.expirationDate);
-                    return (
-                      <div 
-                        key={e.id} 
-                        className={`p-6 rounded-3xl border shadow-sm flex items-center justify-between group hover:shadow-md transition-all ${
-                          expirationStatus?.isExpired 
-                            ? 'bg-red-50 border-red-300 hover:border-red-400'
-                            : expirationStatus?.isWarning
-                            ? 'bg-amber-50 border-amber-300 hover:border-amber-400'
-                            : 'bg-white border-saas-border hover:border-saas-secondary-via/30'
-                        }`}
-                      >
-                        <div className="flex items-center gap-5">
-                          <div className="w-12 h-12 rounded-2xl bg-saas-bg flex items-center justify-center text-2xl grayscale group-hover:grayscale-0 transition-all border border-saas-border">
-                            {e.type === 'vidange' ? '🛢️' : e.type === 'assurance' ? '🛡️' : e.type === 'controle' ? '🛠️' : '❓'}
+              <div className="bg-white p-6 rounded-3xl border border-saas-border">
+                {(() => {
+                  const monthlyGains = rentals.reduce((acc, r) => {
+                    const month = new Date(r.startDate).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long' });
+                    acc[month] = (acc[month] || 0) + r.totalCost;
+                    return acc;
+                  }, {} as Record<string, number>);
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {Object.entries(monthlyGains)
+                        .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
+                        .map(([month, gain]) => (
+                          <div key={month} className="p-4 rounded-2xl bg-gradient-to-br from-saas-success-start/10 to-saas-success-start/5 border border-saas-success-start/20">
+                            <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">{month}</p>
+                            <p className="text-lg font-black text-saas-success-start mt-1">{gain.toLocaleString()} DZD</p>
                           </div>
-                          <div>
-                            <p className="text-sm font-black text-saas-text-main uppercase tracking-tighter capitalize">
-                              {e.expenseName || e.type}
-                            </p>
-                            <p className="text-[10px] text-saas-text-muted font-bold uppercase tracking-widest mt-1.5 flex items-center gap-2">
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                expirationStatus?.isExpired ? 'bg-red-500' : 'bg-saas-danger-start'
-                              }`} />
-                              {e.date}
-                            </p>
-                            {e.expirationDate && (
-                              <p className={`text-[9px] font-bold uppercase tracking-wider mt-1 ${
-                                expirationStatus?.isExpired 
-                                  ? 'text-red-700' 
-                                  : expirationStatus?.isWarning 
-                                  ? 'text-amber-700'
-                                  : 'text-green-700'
-                              }`}>
-                                ⏰ {lang === 'fr' ? 'Expiration' : 'الانتهاء'}: {e.expirationDate}
-                                {expirationStatus && (
-                                  <span className="ml-2">
-                                    {expirationStatus.isExpired 
-                                      ? `❌ ${lang === 'fr' ? 'Expiré' : 'منتهي'}` 
-                                      : expirationStatus.isWarning 
-                                      ? `⚠️ ${expirationStatus.daysLeft} ${lang === 'fr' ? 'jours' : 'أيام'}`
-                                      : `✅ ${lang === 'fr' ? 'Actif' : 'نشط'}`
-                                    }
-                                  </span>
-                                )}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right flex flex-col items-end gap-2">
-                          <button
-                            onClick={() => handleDeleteExpense(e.id)}
-                            className="p-1 text-red-500 hover:text-red-600 rounded-full transition-colors"
-                            title={lang === 'fr' ? 'Supprimer dépense' : 'حذف المصاريف'}
-                          >
-                            <Trash size={18} />
-                          </button>
-                          <p className="text-base font-black text-saas-danger-start">-{e.cost.toLocaleString()} DZD</p>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+                        ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
-          </div>
+          )}
             </>
           )}
         </div>
@@ -264,16 +214,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, car
             {lang === 'fr' ? 'Fermer' : 'إغلاق'}
           </button>
         </div>
-
-        {/* confirm deletion modal */}
-        <ConfirmModal
-          isOpen={deleteConfirm.isOpen}
-          onClose={() => setDeleteConfirm({ isOpen: false, id: null })}
-          onConfirm={confirmDeleteExpense}
-          title={{ fr: 'Supprimer dépense', ar: 'حذف المصاريف' }}
-          message={{ fr: 'Voulez-vous vraiment supprimer cette dépense ?', ar: 'هل تريد حقًا حذف هذه المصاريف؟' }}
-          lang={lang}
-        />
       </motion.div>
     </div>
   );

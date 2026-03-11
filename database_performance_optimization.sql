@@ -298,14 +298,32 @@ SELECT
   CASE
     WHEN v.type = 'assurance' THEN 'Assurance Véhicule'
     WHEN v.type = 'controle' THEN 'Contrôle Technique'
+    WHEN v.type = 'vidange' THEN 'Vidange Huile'
     ELSE 'Maintenance'
   END as title,
   CASE
     WHEN v.type = 'assurance' THEN CONCAT('Assurance expire le ', TO_CHAR(v.expiration_date, 'DD/MM/YYYY'))
     WHEN v.type = 'controle' THEN CONCAT('Contrôle technique expire le ', TO_CHAR(v.expiration_date, 'DD/MM/YYYY'))
+    WHEN v.type = 'vidange' THEN
+      CASE
+        WHEN v.next_vidange_km IS NOT NULL AND c.mileage IS NOT NULL THEN
+          CASE
+            WHEN c.mileage >= v.next_vidange_km THEN 'Vidange requise immédiatement'
+            WHEN c.mileage >= v.next_vidange_km - 1000 THEN CONCAT('Vidange bientôt requise (', (v.next_vidange_km - c.mileage), ' km restants)')
+            ELSE CONCAT('Prochaine vidange à ', v.next_vidange_km, ' km')
+          END
+        ELSE 'Vidange requise'
+      END
     ELSE 'Maintenance requise'
   END as message,
   CASE
+    WHEN v.type = 'vidange' AND v.next_vidange_km IS NOT NULL AND c.mileage IS NOT NULL THEN
+      CASE
+        WHEN c.mileage >= v.next_vidange_km THEN 'critical'
+        WHEN c.mileage >= v.next_vidange_km - 1000 THEN 'high'
+        WHEN c.mileage >= v.next_vidange_km - 2000 THEN 'medium'
+        ELSE 'low'
+      END
     WHEN v.type IN ('assurance', 'controle') AND v.expiration_date IS NOT NULL THEN
       CASE
         WHEN v.expiration_date < CURRENT_DATE THEN 'critical'
@@ -317,21 +335,28 @@ SELECT
   END as severity,
   v.expiration_date as due_date,
   CASE
-    WHEN v.expiration_date < CURRENT_DATE THEN true
+    WHEN v.type IN ('assurance', 'controle') AND v.expiration_date < CURRENT_DATE THEN true
+    WHEN v.type = 'vidange' AND v.next_vidange_km IS NOT NULL AND c.mileage IS NOT NULL AND c.mileage >= v.next_vidange_km THEN true
     ELSE false
   END as is_expired,
   CASE
     WHEN v.type IN ('assurance', 'controle') AND v.expiration_date IS NOT NULL THEN
       (v.expiration_date - CURRENT_DATE)::integer
+    WHEN v.type = 'vidange' AND v.next_vidange_km IS NOT NULL AND c.mileage IS NOT NULL THEN
+      v.next_vidange_km - c.mileage
     ELSE NULL
   END as days_until_due,
-  v.current_mileage,
+  c.mileage as current_mileage,
   v.next_vidange_km as next_service_mileage,
   v.created_at
 FROM vehicle_expenses v
 LEFT JOIN cars c ON v.car_id = c.id
-WHERE v.type IN ('assurance', 'controle')
-  AND (v.expiration_date IS NULL OR v.expiration_date >= CURRENT_DATE - INTERVAL '90 days');
+WHERE v.type IN ('assurance', 'controle', 'vidange')
+  AND (
+    (v.type IN ('assurance', 'controle') AND v.expiration_date IS NULL OR v.expiration_date >= CURRENT_DATE - INTERVAL '90 days')
+    OR
+    (v.type = 'vidange' AND v.next_vidange_km IS NULL OR c.mileage IS NULL OR c.mileage <= v.next_vidange_km + 2000)
+  );
 
 -- Drop and recreate admin_count view with SECURITY INVOKER
 DROP VIEW IF EXISTS public.admin_count CASCADE;
