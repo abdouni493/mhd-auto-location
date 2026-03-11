@@ -5,17 +5,17 @@ import { CarModal } from './CarModal';
 import { CarDetailsModal } from './CarDetailsModal';
 import { ExpenseModal } from './ExpenseModal';
 import { HistoryModal } from './HistoryModal';
+import { CarReportModal } from './CarReportModal';
 import { ConfirmModal } from './ConfirmModal';
 import { Plus, Search, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { getCars, addCar, updateCar, deleteCar, AddCarData } from '../services/carService';
-import { addVehicleExpense } from '../services/expenseService';
+import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
 import { ReservationsService } from '../services/ReservationsService';
 
 interface CarsPageProps {
   lang: Language;
 }
-
 
 export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
   const [cars, setCars] = useState<Car[]>([]);
@@ -39,6 +39,9 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
   const [carToDelete, setCarToDelete] = useState<string | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportExpenses, setReportExpenses] = useState<Expense[]>([]);
+  const [reportReservations, setReportReservations] = useState<ReservationDetails[]>([]);
 
   useEffect(() => {
     const loadCars = async () => {
@@ -225,6 +228,21 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
     setIsExpenseModalOpen(true);
   };
 
+  const handleReports = async (car: Car) => {
+    setSelectedCar(car);
+    // Fetch all expenses for this car
+    const expensesResult = await getVehicleExpenses();
+    let carExpenses = [];
+    if (expensesResult.success && expensesResult.expenses) {
+      carExpenses = expensesResult.expenses.filter(e => e.carId === car.id);
+    }
+    setReportExpenses(carExpenses);
+    // Filter reservations for this car
+    const carReservations = reservations.filter(r => r.carId === car.id);
+    setReportReservations(carReservations);
+    setIsReportModalOpen(true);
+  };
+
   const handleSaveExpense = async (
     expenseData: Partial<Expense> & {
       currentMileage?: number;
@@ -326,7 +344,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
                 onViewDetails={handleViewDetails}
                 onHistory={handleHistory}
                 onExpenses={handleExpenses}
-                onReports={() => {}}
+                onReports={handleReports}
               />
             ))}
           </div>
@@ -385,6 +403,14 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
             onClose={() => setIsHistoryModalOpen(false)}
             car={selectedCar}
             reservations={reservations}
+            lang={lang}
+          />
+          <CarReportModal
+            isOpen={isReportModalOpen}
+            onClose={() => setIsReportModalOpen(false)}
+            car={selectedCar}
+            reservations={reportReservations}
+            expenses={reportExpenses}
             lang={lang}
           />
         </>

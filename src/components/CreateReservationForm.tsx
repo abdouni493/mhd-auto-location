@@ -2436,6 +2436,7 @@ export const Step6FinalPricing: React.FC<{
   const [paymentNotes, setPaymentNotes] = useState('');
   const [isManualTotal, setIsManualTotal] = useState(false);
   const [manualTotal, setManualTotal] = useState<number | ''>('');
+  const [cautionEnabled, setCautionEnabled] = useState(true);
 
   // TVA rates options
   const tvaRates = [0, 9, 19, 21];
@@ -2458,20 +2459,37 @@ export const Step6FinalPricing: React.FC<{
     ? Math.ceil((new Date(formData.step1.returnDate).getTime() - new Date(formData.step1.departureDate).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
-  const weeks = Math.floor(days / 7);
-  const remainingDays = days % 7;
-
-  const basePrice = (selectedCar?.priceDay || 0) * days;
-  const weeklyPrice = (selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7) * weeks;
-  const remainingPrice = (selectedCar?.priceDay || 0) * remainingDays;
-  const calculatedBasePrice = weeklyPrice + remainingPrice;
+  let calculatedBasePrice = 0;
+  let weeklyPrice = 0;
+  let monthlyPrice = 0;
+  let remainingPrice = 0;
+  // Always define weeks and remainingDays for UI
+  let weeks = 0;
+  let remainingDays = 0;
+  if (days === 7) {
+    calculatedBasePrice = selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7;
+    weeklyPrice = calculatedBasePrice;
+    weeks = 1;
+    remainingDays = 0;
+  } else if (days === 30) {
+    calculatedBasePrice = selectedCar?.priceMonth || (selectedCar?.priceDay || 0) * 30;
+    monthlyPrice = calculatedBasePrice;
+    weeks = 0;
+    remainingDays = 0;
+  } else {
+    weeks = Math.floor(days / 7);
+    remainingDays = days % 7;
+    weeklyPrice = (selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7) * weeks;
+    remainingPrice = (selectedCar?.priceDay || 0) * remainingDays;
+    calculatedBasePrice = weeklyPrice + remainingPrice;
+  }
 
   const servicesTotal = formData.step5?.additionalServices?.reduce((sum, s) => sum + s.price, 0) || 0;
   const subtotal = calculatedBasePrice + servicesTotal;
   const tvaAmount = tvaEnabled ? (subtotal * tvaRate) / 100 : 0;
   const computedPrice = subtotal + tvaAmount;
-  const totalPrice = isManualTotal && manualTotal !== '' ? Number(manualTotal) : computedPrice;
   const deposit = selectedCar?.deposit || 0;
+  const totalPrice = isManualTotal && manualTotal !== '' ? Number(manualTotal) : (cautionEnabled ? computedPrice + deposit : computedPrice);
 
   // Update formData with values (manual override takes precedence)
   React.useEffect(() => {
@@ -2665,35 +2683,47 @@ export const Step6FinalPricing: React.FC<{
         </div>
       </div>
 
-      {/* Pricing Breakdown */}
-      <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
-        <h4 className="text-lg font-black text-slate-900 mb-6">
-          💰 {lang === 'fr' ? 'Décomposition du Prix' : 'تفصيل السعر'}
-        </h4>
+          {/* Pricing Breakdown */}
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
+            <h4 className="text-lg font-black text-slate-900 mb-6">
+              💰 {lang === 'fr' ? 'Décomposition du Prix' : 'تفصيل السعر'}
+            </h4>
 
-        <div className="space-y-4">
-          {/* Base Price Breakdown */}
-          <div className="bg-slate-50 rounded-lg p-4">
-            <h5 className="font-bold text-slate-900 mb-3">{lang === 'fr' ? 'Prix de Base du Véhicule' : 'سعر المركبة الأساسي'}</h5>
-            <div className="space-y-2">
-              {weeks > 0 && (
-                <div className="flex justify-between items-center">
-                  <span>{weeks} {lang === 'fr' ? 'semaine(s)' : 'أسبوع'} × {(selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7).toLocaleString()} DA</span>
-                  <span className="font-bold">{weeklyPrice.toLocaleString()} DA</span>
+            <div className="space-y-4">
+              {/* Base Price Breakdown */}
+              <div className="bg-slate-50 rounded-lg p-4">
+                <h5 className="font-bold text-slate-900 mb-3">{lang === 'fr' ? 'Prix de Base du Véhicule' : 'سعر المركبة الأساسي'}</h5>
+                <div className="space-y-2">
+                  {days === 7 && (
+                    <div className="flex justify-between items-center">
+                      <span>1 {lang === 'fr' ? 'semaine' : 'أسبوع'} × {(selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7).toLocaleString()} DA</span>
+                      <span className="font-bold">{weeklyPrice.toLocaleString()} DA</span>
+                    </div>
+                  )}
+                  {days === 30 && (
+                    <div className="flex justify-between items-center">
+                      <span>1 {lang === 'fr' ? 'mois' : 'شهر'} × {(selectedCar?.priceMonth || (selectedCar?.priceDay || 0) * 30).toLocaleString()} DA</span>
+                      <span className="font-bold">{monthlyPrice.toLocaleString()} DA</span>
+                    </div>
+                  )}
+                  {days !== 7 && days !== 30 && weeklyPrice > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span>{Math.floor(days / 7)} {lang === 'fr' ? 'semaine(s)' : 'أسبوع'} × {(selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7).toLocaleString()} DA</span>
+                      <span className="font-bold">{weeklyPrice.toLocaleString()} DA</span>
+                    </div>
+                  )}
+                  {days !== 7 && days !== 30 && remainingPrice > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span>{days % 7} {lang === 'fr' ? 'jour(s)' : 'يوم'} × {(selectedCar?.priceDay || 0).toLocaleString()} DA</span>
+                      <span className="font-bold">{remainingPrice.toLocaleString()} DA</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center border-t border-slate-300 pt-2 text-lg font-bold">
+                    <span>{lang === 'fr' ? 'Sous-total Véhicule' : 'المجموع الفرعي للمركبة'}</span>
+                    <span>{calculatedBasePrice.toLocaleString()} DA</span>
+                  </div>
                 </div>
-              )}
-              {remainingDays > 0 && (
-                <div className="flex justify-between items-center">
-                  <span>{remainingDays} {lang === 'fr' ? 'jour(s)' : 'يوم'} × {(selectedCar?.priceDay || 0).toLocaleString()} DA</span>
-                  <span className="font-bold">{remainingPrice.toLocaleString()} DA</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center border-t border-slate-300 pt-2 text-lg font-bold">
-                <span>{lang === 'fr' ? 'Sous-total Véhicule' : 'المجموع الفرعي للمركبة'}</span>
-                <span>{calculatedBasePrice.toLocaleString()} DA</span>
               </div>
-            </div>
-          </div>
 
           {/* Services */}
           {formData.step5?.additionalServices && formData.step5.additionalServices.length > 0 && (
@@ -2791,10 +2821,19 @@ export const Step6FinalPricing: React.FC<{
             )}
           </div>
 
-          {/* Deposit */}
+          {/* Deposit with toggle */}
           <div className="flex justify-between items-center py-2 text-blue-700 border-t border-slate-300">
             <span className="font-bold">{lang === 'fr' ? 'Caution (remboursable)' : 'الضمان (قابل للاسترداد)'}</span>
             <span className="font-bold">{deposit.toLocaleString()} DA</span>
+            <label className="flex items-center gap-2 ml-4">
+              <input
+                type="checkbox"
+                checked={cautionEnabled}
+                onChange={(e) => setCautionEnabled(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-blue-300 rounded focus:ring-blue-500"
+              />
+              <span className="font-bold text-blue-700">{lang === 'fr' ? 'Activer' : 'تفعيل'}</span>
+            </label>
           </div>
         </div>
       </div>
