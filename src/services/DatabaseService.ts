@@ -612,6 +612,16 @@ export class DatabaseService {
     return data;
   }
 
+  static async deleteMaintenanceAlert(carId: string, type: string): Promise<void> {
+    const { error } = await supabase
+      .from('maintenance_alerts')
+      .delete()
+      .eq('car_id', carId)
+      .eq('type', type);
+
+    if (error) throw error;
+  }
+
   // Website Orders
   static async getWebsiteOrders(): Promise<WebsiteOrder[]> {
     const { data, error } = await supabase
@@ -1197,8 +1207,12 @@ export class DatabaseService {
       console.warn('getWebsiteSettings failed, returning empty object', e.message || e);
     }
 
-    // default empty
-    return {};
+    // default empty - ensure required fields present
+    return {
+      name: '',
+      description: '',
+      logo: ''
+    };
   }
 
   static async updateWebsiteSettings(settings: WebsiteSettings): Promise<WebsiteSettings> {

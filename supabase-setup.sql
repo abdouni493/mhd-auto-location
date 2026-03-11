@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS maintenance_alerts (
   id TEXT PRIMARY KEY,
   car_id TEXT NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
   car_info TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('vidange', 'assurance', 'controle_technique')),
+  type TEXT NOT NULL CHECK (type IN ('vidange', 'assurance', 'controle')),
   title TEXT NOT NULL,
   message TEXT NOT NULL,
   severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Car, Rental, Language, Expense } from '../types';
+import { Car, Rental, Language, Expense, ReservationDetails } from '../types';
 import { CarCard } from './CarCard';
 import { CarModal } from './CarModal';
 import { CarDetailsModal } from './CarDetailsModal';
@@ -10,20 +10,16 @@ import { Plus, Search, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { getCars, addCar, updateCar, deleteCar, AddCarData } from '../services/carService';
 import { addVehicleExpense } from '../services/expenseService';
+import { ReservationsService } from '../services/ReservationsService';
 
 interface CarsPageProps {
   lang: Language;
 }
 
 
-const INITIAL_RENTALS: Rental[] = [
-  { id: 'r1', carId: '1', clientId: 'c1', clientName: 'Karim Benali', startDate: '2024-02-01', endDate: '2024-02-05', totalCost: 100000, status: 'completed' },
-  { id: 'r2', carId: '1', clientId: 'c2', clientName: 'Sofia Mansouri', startDate: '2024-02-10', endDate: '2024-02-12', totalCost: 50000, status: 'active' },
-];
-
 export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
   const [cars, setCars] = useState<Car[]>([]);
-  const [rentals, setRentals] = useState<Rental[]>(INITIAL_RENTALS);
+  const [reservations, setReservations] = useState<ReservationDetails[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -81,6 +77,21 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
     };
 
     loadCars();
+  }, []);
+
+  useEffect(() => {
+    const loadReservations = async () => {
+      try {
+        console.log('Loading reservations...');
+        const reservationsData = await ReservationsService.getReservations();
+        console.log('Raw reservations from database:', reservationsData);
+        setReservations(reservationsData);
+      } catch (err) {
+        console.error('Error loading reservations:', err);
+      }
+    };
+
+    loadReservations();
   }, []);
 
   const filteredCars = cars.filter(car => 
@@ -373,7 +384,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
             isOpen={isHistoryModalOpen}
             onClose={() => setIsHistoryModalOpen(false)}
             car={selectedCar}
-            rentals={rentals.filter(r => r.carId === selectedCar.id)}
+            reservations={reservations}
             lang={lang}
           />
         </>

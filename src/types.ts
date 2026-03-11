@@ -389,7 +389,7 @@ export interface MaintenanceAlert {
   id: string;
   carId: string;
   carInfo: string;
-  type: 'vidange' | 'assurance' | 'controle_technique';
+  type: 'vidange' | 'assurance' | 'controle';
   title: string;
   message: string;
   severity: 'low' | 'medium' | 'high' | 'critical';

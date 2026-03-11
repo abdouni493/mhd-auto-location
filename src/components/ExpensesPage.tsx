@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { StoreExpense, VehicleExpense, Language, Car } from '../types';
+import { StoreExpense, VehicleExpense, Language, Car, MaintenanceAlert } from '../types';
 import { StoreExpenseCard } from './StoreExpenseCard';
 import { StoreExpenseModal } from './StoreExpenseModal';
 import { VehicleExpenseCard } from './VehicleExpenseCard';
 import { VehicleExpenseModal } from './VehicleExpenseModal';
 import { ConfirmModal } from './ConfirmModal';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getStoreExpenses, addStoreExpense, updateStoreExpense, deleteStoreExpense, getVehicleExpenses, addVehicleExpense, updateVehicleExpense, deleteVehicleExpense } from '../services/expenseService';
+import { DatabaseService } from '../services/DatabaseService';
+import { getVidangeAlert, getAssuranceAlert, getControleAlert } from '../utils/vidangeAlerts';
 
 interface ExpensesPageProps {
   lang: Language;
@@ -24,6 +26,52 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
   const [editingExpense, setEditingExpense] = useState<StoreExpense | VehicleExpense | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
   const [searchQuery, setSearchQuery] = useState('');
+
+  // build alert payload from computed alert object
+  const buildMaintenanceAlert = (
+    car: Car,
+    type: 'vidange' | 'assurance' | 'controle',
+    alertObj: any
+  ): Omit<MaintenanceAlert, 'id' | 'created_at'> => {
+    const severity: 'low' | 'medium' | 'high' | 'critical' =
+      alertObj.status === 'overdue'
+        ? 'critical'
+        : alertObj.status === 'warning'
+        ? 'high'
+        : 'medium';
+
+    return {
+      carId: car.id,
+      carInfo: `${car.brand} ${car.model} - ${car.registration}`,
+      type,
+      title:
+        type === 'vidange'
+          ? alertObj.status === 'overdue'
+            ? 'Vidange en retard'
+            : 'Vidange planifiée'
+          : type === 'assurance'
+          ? alertObj.status === 'overdue'
+            ? 'Assurance expirée'
+            : 'Assurance à jour'
+          : alertObj.status === 'overdue'
+          ? 'Contrôle technique expirée'
+          : 'Contrôle technique à jour',
+      message: alertObj.message,
+      severity,
+      dueDate:
+        (type === 'assurance' || type === 'controle') && alertObj.expirationDate
+          ? alertObj.expirationDate.toISOString().split('T')[0]
+          : undefined,
+      isExpired: alertObj.status === 'overdue',
+      daysUntilDue:
+        alertObj.status === 'overdue'
+          ? -alertObj.daysRemaining
+          : alertObj.daysRemaining,
+      currentMileage: alertObj.currentMileage,
+      nextServiceMileage: alertObj.nextVidangeKm,
+      createdAt: new Date().toISOString(),
+    };
+  };
 
   // Load expenses from database on mount
   useEffect(() => {
@@ -136,7 +184,32 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
         // Update existing vehicle expense
         const result = await updateVehicleExpense(editingExpense.id, data);
         if (result.success && result.expense) {
-          setVehicleExpenses(vehicleExpenses.map(e => e.id === editingExpense.id ? result.expense : e));
+          const updatedExpenses = vehicleExpenses.map(e => e.id === editingExpense.id ? result.expense! : e);
+          setVehicleExpenses(updatedExpenses);
+
+          // also sync alerts similar to new expense case
+            if (data.type === 'vidange' || data.type === 'assurance' || data.type === 'controle') {
+            const car = cars.find(c => c.id === result.expense!.carId);
+            if (car) {
+              try {
+                let alertObj: any = null;
+                if (data.type === 'vidange') {
+                  alertObj = getVidangeAlert(car, updatedExpenses);
+                } else if (data.type === 'assurance') {
+                  alertObj = getAssuranceAlert(car, updatedExpenses);
+                } else if (data.type === 'controle') {
+                  alertObj = getControleAlert(car, updatedExpenses);
+                }
+                await DatabaseService.deleteMaintenanceAlert(car.id, data.type || '');
+                if (alertObj) {
+                  const maintenanceAlert = buildMaintenanceAlert(car, data.type as 'vidange' | 'assurance' | 'controle', alertObj);
+                  await DatabaseService.createMaintenanceAlert(maintenanceAlert);
+                }
+              } catch (alertError) {
+                console.warn('Error syncing maintenance alert:', alertError);
+              }
+            }
+          }
         }
       } else {
         // Add new vehicle expense
@@ -153,7 +226,41 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
         };
         const result = await addVehicleExpense(newExpenseData);
         if (result.success && result.expense) {
-          setVehicleExpenses([...vehicleExpenses, result.expense]);
+          // append expense first
+          const newExpenses = [...vehicleExpenses, result.expense];
+          setVehicleExpenses(newExpenses);
+
+          // If the type should generate an alert, sync alerts to follow latest expense
+          if (data.type === 'vidange' || data.type === 'assurance' || data.type === 'controle') {
+            const car = cars.find(c => c.id === result.expense!.carId);
+            if (car) {
+              try {
+                // compute alert based on updated expenses
+                let alertObj: any = null;
+                if (data.type === 'vidange') {
+                  alertObj = getVidangeAlert(car, newExpenses);
+                } else if (data.type === 'assurance') {
+                  alertObj = getAssuranceAlert(car, newExpenses);
+                } else if (data.type === 'controle') {
+                  alertObj = getControleAlert(car, newExpenses);
+                }
+
+                // first delete previous alerts for this car/type
+                await DatabaseService.deleteMaintenanceAlert(car.id, data.type || '');
+
+                if (alertObj) {
+                  // use helper to build payload
+                  const maintenanceAlert = buildMaintenanceAlert(car, data.type as 'vidange' | 'assurance' | 'controle', alertObj);
+                  await DatabaseService.createMaintenanceAlert(maintenanceAlert);
+                  console.log(`Synced ${data.type} alert for car ${car.id}`);
+                } else {
+                  console.log(`No ${data.type} alert required for car ${car.id}`);
+                }
+              } catch (alertError) {
+                console.warn('Error syncing maintenance alert:', alertError);
+              }
+            }
+          }
         }
       }
       setIsModalOpen(false);
@@ -335,7 +442,59 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
 
         {/* Vehicle Expenses */}
         {expenseType === 'vehicle' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+          <>
+            {/* Vidange Alerts */}
+            <div className="mb-8 space-y-4">
+              {cars.map((car) => {
+                const vidangeAlert = getVidangeAlert(car, vehicleExpenses);
+                if (!vidangeAlert || vidangeAlert.status === 'ok') return null;
+
+                return (
+                  <motion.div
+                    key={car.id}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-5 rounded-2xl border-2 flex items-center gap-4 ${
+                      vidangeAlert.status === 'overdue'
+                        ? 'bg-red-50 border-red-300'
+                        : vidangeAlert.status === 'warning'
+                        ? 'bg-amber-50 border-amber-300'
+                        : 'bg-green-50 border-green-300'
+                    }`}
+                  >
+                    <AlertCircle className={`flex-shrink-0 ${
+                      vidangeAlert.status === 'overdue'
+                        ? 'text-red-600'
+                        : vidangeAlert.status === 'warning'
+                        ? 'text-amber-600'
+                        : 'text-green-600'
+                    }`} size={24} />
+                    <div className="flex-1">
+                      <p className={`font-black text-sm uppercase tracking-tight ${
+                        vidangeAlert.status === 'overdue'
+                          ? 'text-red-700'
+                          : vidangeAlert.status === 'warning'
+                          ? 'text-amber-700'
+                          : 'text-green-700'
+                      }`}>
+                        {car.brand} {car.model} ({car.registration}): {vidangeAlert.message}
+                      </p>
+                      <p className={`text-xs mt-1 ${
+                        vidangeAlert.status === 'overdue'
+                          ? 'text-red-600'
+                          : vidangeAlert.status === 'warning'
+                          ? 'text-amber-600'
+                          : 'text-green-600'
+                      }`}>
+                        Kilométrage actuel: {vidangeAlert.currentMileage.toLocaleString()} KM | Prochaine vidange à: {vidangeAlert.nextVidangeKm.toLocaleString()} KM
+                      </p>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             <AnimatePresence>
               {filteredVehicleExpenses.length > 0 ? (
                 filteredVehicleExpenses.map((expense, index) => {
@@ -369,7 +528,8 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+            </div>
+          </>
         )}
 
         {/* Empty State */}

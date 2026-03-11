@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { DashboardStats, MaintenanceAlert, Language, Car, ReservationDetails } from '../types';
+import { DashboardStats, MaintenanceAlert, Language, Car, ReservationDetails, VehicleExpense } from '../types';
 import { motion } from 'motion/react';
-import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, DollarSign, Wrench, Shield, FileCheck, Loader2 } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, DollarSign, Wrench, Shield, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
+import { getCars } from '../services/carService';
+import { getVehicleExpenses } from '../services/expenseService';
+import { getVidangeAlert, getAssuranceAlert, getControleAlert } from '../utils/vidangeAlerts';
 
 // Mock data for dashboard (removed - now using real data)
 
@@ -293,6 +296,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
     carUtilization: []
   });
   const [alerts, setAlerts] = useState<MaintenanceAlert[]>([]);
+  const [cars, setCars] = useState<Car[]>([]);
+  const [vehicleExpenses, setVehicleExpenses] = useState<VehicleExpense[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -304,10 +309,39 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
         setError(null);
 
         // Fetch real data from database in parallel
-        const [dbStats, dbAlerts] = await Promise.all([
+        const [dbStats, dbAlerts, carsResult, expensesResult] = await Promise.all([
           DatabaseService.getDashboardStats(),
-          DatabaseService.getMaintenanceAlerts()
+          DatabaseService.getMaintenanceAlerts(),
+          getCars(),
+          getVehicleExpenses()
         ]);
+
+        // Set cars and expenses for vidange alerts
+        if (carsResult.success && carsResult.cars) {
+          setCars(carsResult.cars.map(dbCar => ({
+            id: dbCar.id || '',
+            brand: dbCar.brand,
+            model: dbCar.model,
+            registration: dbCar.plate_number,
+            year: dbCar.year,
+            color: dbCar.color || 'Premium',
+            vin: dbCar.vin || '',
+            energy: dbCar.energy || 'Essence',
+            transmission: dbCar.transmission || 'Automatique',
+            seats: dbCar.seats || 5,
+            doors: dbCar.doors || 4,
+            priceDay: Math.round(Number(dbCar.price_per_day)),
+            priceWeek: Math.round(Number(dbCar.price_week || dbCar.price_per_day * 2)),
+            priceMonth: Math.round(Number(dbCar.price_month || dbCar.price_per_day * 4)),
+            deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
+            images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
+            mileage: dbCar.mileage || 0,
+          })));
+        }
+
+        if (expensesResult.success && expensesResult.expenses) {
+          setVehicleExpenses(expensesResult.expenses);
+        }
 
         // Map database stats to component state
         setStats({
@@ -381,202 +415,240 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
 
   return (
     <div className="space-y-8">
-{/* Modern Alerts Section */}
-      {alerts.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className="relative"
-        >
-          {/* Header with Glass Effect */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="relative"
-              >
-                <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg">
-                  <span className="text-2xl">🚨</span>
+      {/* Vidange Alerts Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="relative"
+      >
+        {(() => {
+          const vidangeAlerts = cars
+            .map(car => ({
+              car,
+              alert: getVidangeAlert(car, vehicleExpenses)
+            }))
+            .filter(item => item.alert !== null && item.alert.status !== 'ok');
+
+          if (vidangeAlerts.length === 0) return null;
+
+          const overdueAlerts = vidangeAlerts.filter(item => item.alert?.status === 'overdue');
+          const warningAlerts = vidangeAlerts.filter(item => item.alert?.status === 'warning');
+
+          return (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="relative"
+                  >
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                      overdueAlerts.length > 0
+                        ? 'bg-gradient-to-br from-red-500 to-red-600'
+                        : 'bg-gradient-to-br from-amber-500 to-amber-600'
+                    }`}>
+                      <span className="text-2xl">🛢️</span>
+                    </div>
+                    {(overdueAlerts.length > 0 || warningAlerts.length > 0) && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
+                    )}
+                  </motion.div>
+                  <div>
+                    <h2 className="text-2xl font-black text-saas-text-main uppercase tracking-tighter">
+                      {lang === 'fr' ? 'Alertes Vidange' : 'تنبيهات الصيانة'}
+                    </h2>
+                    <p className="text-saas-text-muted font-medium">
+                      {overdueAlerts.length} {lang === 'fr' ? 'en retard' : 'متأخرة'}, {warningAlerts.length} {lang === 'fr' ? 'avertissements' : 'تحذيرات'}
+                    </p>
+                  </div>
                 </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
-              </motion.div>
-              <div>
-                <h2 className="text-2xl font-black text-saas-text-main uppercase tracking-tighter">
-                  {lang === 'fr' ? 'Alertes Importantes' : 'تنبيهات مهمة'}
-                </h2>
-                <p className="text-saas-text-muted font-medium">
-                  {alerts.length} {lang === 'fr' ? 'alertes nécessitent votre attention' : 'تنبيه يتطلب انتباهك'}
-                </p>
               </div>
-            </div>
 
-            {/* Priority Indicators */}
-            <div className="flex gap-3">
-              {criticalAlerts.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.4, duration: 0.3 }}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-sm font-bold shadow-lg border border-red-400/20"
-                >
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                  <span>{criticalAlerts.length} {lang === 'fr' ? 'Critiques' : 'حرجة'}</span>
-                </motion.div>
-              )}
-              {highAlerts.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.5, duration: 0.3 }}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl text-sm font-bold shadow-lg border border-orange-400/20"
-                >
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>{highAlerts.length} {lang === 'fr' ? 'Élevées' : 'مرتفعة'}</span>
-                </motion.div>
-              )}
-            </div>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {vidangeAlerts.map((item, index) => {
+                  const { car, alert } = item;
+                  if (!alert) return null;
 
-          {/* Modern Grid Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {alerts.slice(0, 6).map((alert, index) => (
-              <motion.div
-                key={alert.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  delay: index * 0.1,
-                  duration: 0.5,
-                  ease: "easeOut"
-                }}
-                whileHover={{
-                  y: -4,
-                  transition: { duration: 0.2 }
-                }}
-                className={`relative group overflow-hidden rounded-2xl border-2 shadow-lg backdrop-blur-sm transition-all duration-300 ${
-                  alert.severity === 'critical'
-                    ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-200 hover:border-red-300 hover:shadow-red-200/50'
-                    : alert.severity === 'high'
-                    ? 'bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 hover:border-orange-300 hover:shadow-orange-200/50'
-                    : alert.severity === 'medium'
-                    ? 'bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200 hover:border-yellow-300 hover:shadow-yellow-200/50'
-                    : 'bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:border-green-300 hover:shadow-green-200/50'
-                }`}
-              >
-                {/* Severity Indicator */}
-                <div className={`absolute top-0 left-0 w-full h-1 ${
-                  alert.severity === 'critical' ? 'bg-gradient-to-r from-red-500 to-red-600' :
-                  alert.severity === 'high' ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
-                  alert.severity === 'medium' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
-                  'bg-gradient-to-r from-green-500 to-green-600'
-                }`}></div>
-
-                <div className="p-5">
-                  {/* Header */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                        alert.severity === 'critical' ? 'bg-red-100 text-red-600' :
-                        alert.severity === 'high' ? 'bg-orange-100 text-orange-600' :
-                        alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-600' :
-                        'bg-green-100 text-green-600'
-                      }`}>
-                        <span className="text-xl">
-                          {alert.type === 'vidange' ? '🛢️' :
-                           alert.type === 'assurance' ? '🛡️' :
-                           alert.type === 'controle_technique' ? '🔍' : '⚠️'}
-                        </span>
+                  return (
+                    <motion.div
+                      key={car.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 ${
+                        alert.status === 'overdue'
+                          ? 'bg-red-50 border-red-300'
+                          : alert.status === 'warning'
+                          ? 'bg-amber-50 border-amber-300'
+                          : 'bg-green-50 border-green-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className={`font-black text-sm uppercase tracking-tight ${
+                            alert.status === 'overdue'
+                              ? 'text-red-700'
+                              : alert.status === 'warning'
+                              ? 'text-amber-700'
+                              : 'text-green-700'
+                          }`}>
+                            {car.brand} {car.model}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">{car.registration}</p>
+                        </div>
+                        <AlertCircle className={`flex-shrink-0 ${
+                          alert.status === 'overdue'
+                            ? 'text-red-600'
+                            : alert.status === 'warning'
+                            ? 'text-amber-600'
+                            : 'text-green-600'
+                        }`} size={20} />
                       </div>
-                      <div>
-                        <h3 className="font-bold text-sm text-gray-900 uppercase tracking-wide">
-                          {alert.title}
-                        </h3>
-                        <p className="text-xs text-gray-600 font-medium">
-                          {alert.carInfo.split(' - ')[0]}
+                      <p className={`text-xs font-bold ${
+                        alert.status === 'overdue'
+                          ? 'text-red-600'
+                          : alert.status === 'warning'
+                          ? 'text-amber-600'
+                          : 'text-green-600'
+                      }`}>
+                        {alert.message}
+                      </p>
+                      <p className="text-xs text-gray-600 border-t pt-2">
+                        Kilométrage: {alert.currentMileage.toLocaleString()} / {alert.nextVidangeKm.toLocaleString()} KM
+                      </p>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
+      </motion.div>
+
+      {/* Assurance Alerts Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="relative"
+      >
+        {(() => {
+          const assuranceAlerts = cars
+            .map(car => ({
+              car,
+              alert: getAssuranceAlert(car, vehicleExpenses)
+            }))
+            .filter(item => item.alert !== null && item.alert.status !== 'ok');
+
+          if (assuranceAlerts.length === 0) return null;
+
+          const expiredAlerts = assuranceAlerts.filter(item => item.alert?.status === 'overdue');
+          const warningAlerts = assuranceAlerts.filter(item => item.alert?.status === 'warning');
+          const okAlerts = assuranceAlerts.filter(item => item.alert?.status === 'ok');
+
+          return (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="relative"
+                  >
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                      expiredAlerts.length > 0
+                        ? 'bg-gradient-to-br from-red-500 to-red-600'
+                        : 'bg-gradient-to-br from-blue-500 to-blue-600'
+                    }`}>
+                      <span className="text-2xl">🛡️</span>
+                    </div>
+                    {(expiredAlerts.length > 0 || warningAlerts.length > 0) && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
+                    )}
+                  </motion.div>
+                  <div>
+                    <h2 className="text-2xl font-black text-saas-text-main uppercase tracking-tighter">
+                      {lang === 'fr' ? 'Alertes Assurance' : 'تنبيهات التأمين'}
+                    </h2>
+                    <p className="text-saas-text-muted font-medium">
+                      {expiredAlerts.length} {lang === 'fr' ? 'expirées' : 'منتهية الصلاحية'}, {warningAlerts.length} {lang === 'fr' ? 'avertissements' : 'تحذيرات'}, {okAlerts.length} {lang === 'fr' ? 'valides' : 'صحيحة'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {assuranceAlerts.map((item, index) => {
+                  const { car, alert } = item;
+                  if (!alert) return null;
+
+                  return (
+                    <motion.div
+                      key={car.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 ${
+                        alert.status === 'overdue'
+                          ? 'bg-red-50 border-red-300'
+                          : alert.status === 'warning'
+                          ? 'bg-amber-50 border-amber-300'
+                          : 'bg-green-50 border-green-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className={`font-black text-sm uppercase tracking-tight ${
+                            alert.status === 'overdue'
+                              ? 'text-red-700'
+                              : alert.status === 'warning'
+                              ? 'text-amber-700'
+                              : 'text-green-700'
+                          }`}>
+                            {car.brand} {car.model}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">{car.registration}</p>
+                        </div>
+                        <Shield className={`flex-shrink-0 ${
+                          alert.status === 'overdue'
+                            ? 'text-red-600'
+                            : alert.status === 'warning'
+                            ? 'text-amber-600'
+                            : 'text-green-600'
+                        }`} size={20} />
+                      </div>
+                      <p className={`text-xs font-bold ${
+                        alert.status === 'overdue'
+                          ? 'text-red-600'
+                          : alert.status === 'warning'
+                          ? 'text-amber-600'
+                          : 'text-green-600'
+                      }`}>
+                        {alert.message}
+                      </p>
+                      <div className="text-xs text-gray-600 border-t pt-2 space-y-1">
+                        <p>
+                          {lang === 'fr' ? 'Expiration:' : 'الانتهاء:'} {alert.dueDate ? new Date(alert.dueDate).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-SA') : 'N/A'}
+                        </p>
+                        <p>
+                          {(alert.daysUntilDue ?? 0) >= 0
+                            ? `${lang === 'fr' ? 'Jours restants:' : 'الأيام المتبقية:'} ${alert.daysUntilDue}`
+                            : `${lang === 'fr' ? 'Jours expirés:' : 'الأيام المنتهية:'} ${Math.abs(alert.daysUntilDue ?? 0)}`
+                          }
                         </p>
                       </div>
-                    </div>
-
-                    {/* Priority Badge */}
-                    <div className={`px-2 py-1 rounded-lg text-xs font-bold uppercase ${
-                      alert.severity === 'critical' ? 'bg-red-100 text-red-700' :
-                      alert.severity === 'high' ? 'bg-orange-100 text-orange-700' :
-                      alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {alert.severity === 'critical' ? '🚨' :
-                       alert.severity === 'high' ? '⚡' :
-                       alert.severity === 'medium' ? '⚠️' : 'ℹ️'}
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="space-y-3">
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      {alert.message}
-                    </p>
-
-                    {/* Time Indicator */}
-                    <div className="flex items-center justify-between">
-                      <div className={`flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-semibold ${
-                        alert.daysUntilDue > 0
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}>
-                        <span>⏰</span>
-                        {alert.daysUntilDue > 0
-                          ? `${alert.daysUntilDue} ${lang === 'fr' ? 'jours' : 'أيام'}`
-                          : lang === 'fr' ? 'Expiré' : 'منتهي الصلاحية'
-                        }
-                      </div>
-
-                      {/* Action Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-colors ${
-                          alert.severity === 'critical'
-                            ? 'bg-red-500 hover:bg-red-600 text-white'
-                            : alert.severity === 'high'
-                            ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                            : 'bg-gray-500 hover:bg-gray-600 text-white'
-                        }`}
-                      >
-                        {lang === 'fr' ? 'Voir' : 'عرض'}
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hover Effect Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* View All Button */}
-          {alerts.length > 6 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.8 }}
-              className="text-center mt-6"
-            >
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 bg-gradient-to-r from-saas-primary-start to-saas-primary-end text-white rounded-xl font-bold uppercase text-sm shadow-lg hover:shadow-xl transition-shadow"
-              >
-                {lang === 'fr' ? 'Voir Toutes les Alertes' : 'عرض جميع التنبيهات'}
-                <span className="ml-2">→</span>
-              </motion.button>
-            </motion.div>
-          )}
-        </motion.div>
-      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
+      </motion.div>
 
       {/* Enhanced Header with Better Design */}
       <motion.div

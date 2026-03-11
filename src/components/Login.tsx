@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Mail, Lock } from 'lucide-react';
+import { Mail, Lock, UserIcon } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Language, UserRole, User } from '../types';
 import { TRANSLATIONS } from '../constants';
