@@ -1346,9 +1346,9 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
 
   let bodyContent = '';
   
-  // Logo and Agency Name - use actual settings for engagement, payment, invoice, facture, quote, devis types, always display logo
-  if (type === 'engagement' || type === 'payment' || type === 'receipt' || type === 'invoice' || type === 'facture' || type === 'quote' || type === 'devis') {
-    // For engagement, payment, invoice and facture documents, use actual logo and agency name from settings
+  // Logo and Agency Name - use actual settings for engagement, payment, invoice, facture, quote, devis, contract types, always display logo
+  if (type === 'engagement' || type === 'payment' || type === 'receipt' || type === 'invoice' || type === 'facture' || type === 'quote' || type === 'devis' || type === 'contract') {
+    // For engagement, payment, invoice, facture, contract and devis documents, use actual logo and agency name from settings
     if (elements.logo) {
       if (agencySettings?.logo) {
         bodyContent += `<div class="draggable logo" style="position: absolute; left: ${elements.logo.x || 50}px; top: ${elements.logo.y || 50}px; width: ${elements.logo.width || 100}px; height: ${elements.logo.height || 100}px;">
