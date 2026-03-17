@@ -32,6 +32,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
   const [showPrintModal, setShowPrintModal] = useState<{reservation: ReservationDetails, type: string} | null>(null);
   const [showPersonalization, setShowPersonalization] = useState<{reservation: ReservationDetails, type: string} | null>(null);
   const [showInspectionMode, setShowInspectionMode] = useState(false);
+  const [showConditionsModal, setShowConditionsModal] = useState(false);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -767,7 +768,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
               <p className="text-saas-text-muted mb-6">
                 {lang === 'fr' ? 'Choisissez le mode d\'impression :' : 'اختر وضع الطباعة:'}
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-3 mb-4">
                 <button
                   onClick={() => handlePrintChoice('same')}
                   className="flex-1 bg-saas-primary-start hover:bg-saas-primary-end text-white font-bold py-3 px-4 rounded-lg transition-all"
@@ -781,6 +782,17 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
                   🎨 {lang === 'fr' ? 'Personnaliser' : 'تخصيص'}
                 </button>
               </div>
+              {showPrintModal?.type === 'contract' && (
+                <button
+                  onClick={() => {
+                    setShowPrintModal(null);
+                    setShowConditionsModal(true);
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all"
+                >
+                  📋 {lang === 'fr' ? 'Conditions' : 'الشروط والأحكام'}
+                </button>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -803,6 +815,206 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
               }
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Conditions Modal */}
+      <AnimatePresence>
+        {showConditionsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="glass-card w-full max-w-4xl p-8 border border-saas-border rounded-xl my-4"
+            >
+              {/* Header */}
+              <div className="mb-6 text-center">
+                <h2 className="text-2xl font-black text-saas-text-main mb-2">
+                  📋 {lang === 'fr' ? 'Conditions de Location' : 'شروط الإيجار'}
+                </h2>
+              </div>
+
+              {/* Conditions Content - Simplified Clean Design */}
+              <div className="bg-white p-6 rounded-lg border-2 border-blue-200 mb-6 max-h-96 overflow-y-auto">
+                <div className="space-y-3 text-gray-800" style={{ textAlign: 'right', direction: 'rtl' }}>
+                  <ol className="space-y-2 text-sm leading-relaxed">
+                    <li><strong>السن:</strong> يجب أن يكون السائق 20 عاماً على الأقل، مع رخصة قيادة منذ سنتين على الأقل.</li>
+                    <li><strong>جواز السفر:</strong> إيداع جواز السفر البيومتري + تأمين ابتدائي من 30,000.00 دج.</li>
+                    <li><strong>الوقود:</strong> الوقود على نفقة الزبون.</li>
+                    <li><strong>الدفع:</strong> يتم الدفع نقداً عند تسليم السيارة.</li>
+                    <li><strong>النظافة:</strong> السيارة تُسلم نظيفة وتُرجع بنفس الحالة، وإلا غرامة غسيل 1000 دج.</li>
+                    <li><strong>مكان التسليم:</strong> موقف السيارات التابع للوكالة.</li>
+                    <li><strong>المواعيد:</strong> احترام المواعيد، إشعار مسبق 48 ساعة لأي تغيير.</li>
+                    <li><strong>الأضرار:</strong> الزبون يدفع جميع الأضرار بالمركبة.</li>
+                    <li><strong>السرقة:</strong> تقديم تصريح للشرطة أو الدرك فوراً.</li>
+                    <li><strong>التأمين:</strong> منع إعارة أو تأجير المركبة من الباطن.</li>
+                    <li><strong>الصيانة:</strong> فحص مستوى الزيت والضغط والمحرك.</li>
+                    <li><strong>أضرار إضافية:</strong> جميع الأضرار الناتجة عن سوء الاستخدام على الزبون.</li>
+                    <li><strong>التأخير:</strong> 800 دج لكل ساعة تأخير.</li>
+                    <li><strong>الأميال:</strong> حد أقصى 300 كم يومياً، غرامة 30 دج/كم زائد.</li>
+                    <li><strong>الموافقة:</strong> الزبون يقر بقراءة الشروط وقبولها.</li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* Signature Area - Simple Clean Design */}
+              <div className="grid grid-cols-2 gap-8">
+                {/* Client Signature */}
+                <div className="border-2 border-gray-300 rounded-lg p-6 bg-gray-50">
+                  <div className="mb-16 h-24 border-b-2 border-gray-400"></div>
+                  <p className="text-center font-bold text-gray-800 text-sm">
+                    امضاء وبصمة الزبون
+                  </p>
+                </div>
+
+                {/* Agency Signature */}
+                <div className="border-2 border-gray-300 rounded-lg p-6 bg-gray-50">
+                  <div className="mb-16 h-24 border-b-2 border-gray-400"></div>
+                  <p className="text-center font-bold text-gray-800 text-sm">
+                    توقيع وبصمة الوكالة
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 flex-wrap mt-6">
+                <button
+                  onClick={() => {
+                    const content = `
+                      <!DOCTYPE html>
+                      <html dir="rtl" lang="ar">
+                      <head>
+                        <meta charset="utf-8">
+                        <style>
+                          body { 
+                            font-family: 'Arial', sans-serif; 
+                            padding: 40px; 
+                            direction: rtl; 
+                            margin: 0;
+                            background: white;
+                          }
+                          .header { 
+                            text-align: center; 
+                            margin-bottom: 30px; 
+                          }
+                          .header h1 { 
+                            font-size: 20px; 
+                            margin: 0 0 5px 0; 
+                            color: #1a3a52;
+                            font-weight: bold;
+                          }
+                          .conditions { 
+                            background: white; 
+                            padding: 20px; 
+                            border-radius: 4px; 
+                            border: 1px solid #ddd;
+                            margin-bottom: 30px;
+                          }
+                          .conditions ol { 
+                            margin: 0; 
+                            padding-right: 20px;
+                          }
+                          .conditions li { 
+                            margin-bottom: 8px; 
+                            line-height: 1.5; 
+                            font-size: 13px;
+                          }
+                          .conditions strong { 
+                            color: #1a3a52; 
+                          }
+                          .signatures { 
+                            display: grid; 
+                            grid-template-columns: 1fr 1fr; 
+                            gap: 30px;
+                            margin-top: 40px;
+                          }
+                          .signature-box { 
+                            border: 2px solid #999; 
+                            padding: 20px; 
+                            background: #f9f9f9;
+                            border-radius: 4px;
+                          }
+                          .signature-space {
+                            height: 80px;
+                            border-bottom: 2px solid #333;
+                            margin-bottom: 15px;
+                          }
+                          .signature-label { 
+                            font-size: 13px; 
+                            color: #333; 
+                            font-weight: bold; 
+                            text-align: center;
+                          }
+                          @media print { 
+                            body { padding: 20px; }
+                          }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="header">
+                          <h1>شروط الإيجار</h1>
+                        </div>
+                        <div class="conditions">
+                          <ol>
+                            <li><strong>السن:</strong> يجب أن يكون السائق 20 عاماً على الأقل، مع رخصة قيادة منذ سنتين على الأقل.</li>
+                            <li><strong>جواز السفر:</strong> إيداع جواز السفر البيومتري + تأمين ابتدائي من 30,000.00 دج.</li>
+                            <li><strong>الوقود:</strong> الوقود على نفقة الزبون.</li>
+                            <li><strong>الدفع:</strong> يتم الدفع نقداً عند تسليم السيارة.</li>
+                            <li><strong>النظافة:</strong> السيارة تُسلم نظيفة وتُرجع بنفس الحالة، وإلا غرامة غسيل 1000 دج.</li>
+                            <li><strong>مكان التسليم:</strong> موقف السيارات التابع للوكالة.</li>
+                            <li><strong>المواعيد:</strong> احترام المواعيد، إشعار مسبق 48 ساعة لأي تغيير.</li>
+                            <li><strong>الأضرار:</strong> الزبون يدفع جميع الأضرار بالمركبة.</li>
+                            <li><strong>السرقة:</strong> تقديم تصريح للشرطة أو الدرك فوراً.</li>
+                            <li><strong>التأمين:</strong> منع إعارة أو تأجير المركبة من الباطن.</li>
+                            <li><strong>الصيانة:</strong> فحص مستوى الزيت والضغط والمحرك.</li>
+                            <li><strong>أضرار إضافية:</strong> جميع الأضرار الناتجة عن سوء الاستخدام على الزبون.</li>
+                            <li><strong>التأخير:</strong> 800 دج لكل ساعة تأخير.</li>
+                            <li><strong>الأميال:</strong> حد أقصى 300 كم يومياً، غرامة 30 دج/كم زائد.</li>
+                            <li><strong>الموافقة:</strong> الزبون يقر بقراءة الشروط وقبولها.</li>
+                          </ol>
+                        </div>
+                        <div class="signatures">
+                          <div class="signature-box">
+                            <div class="signature-space"></div>
+                            <div class="signature-label">امضاء وبصمة الزبون</div>
+                          </div>
+                          <div class="signature-box">
+                            <div class="signature-space"></div>
+                            <div class="signature-label">توقيع وبصمة الوكالة</div>
+                          </div>
+                        </div>
+                      </body>
+                      </html>
+                    `;
+                    const printWindow = window.open('', '', 'height=600,width=800');
+                    if (printWindow) {
+                      printWindow.document.write(content);
+                      printWindow.document.close();
+                      setTimeout(() => {
+                        printWindow.print();
+                        printWindow.close();
+                      }, 250);
+                    }
+                  }}
+                  className="flex-1 min-w-32 bg-saas-success hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+                >
+                  🖨️ {lang === 'fr' ? 'Imprimer' : 'طباعة'}
+                </button>
+                <button
+                  onClick={() => setShowConditionsModal(false)}
+                  className="flex-1 min-w-32 bg-saas-bg hover:bg-saas-secondary-start/10 text-saas-text-muted font-bold py-3 px-4 rounded-lg border border-saas-border transition-all"
+                >
+                  {lang === 'fr' ? 'Fermer' : 'إغلاق'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -830,7 +1042,6 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
 const getInitialElements = (type: string, reservation: ReservationDetails, lang: Language = 'fr') => {
   const baseElements = {
     logo: { x: 50, y: 50, width: 100, height: 100 },
-    agenceName: { x: 200, y: 100, text: 'LUXDRIVE PREMIUM CAR RENTAL', fontSize: 18, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
     signatureText1: { x: 50, y: 600, text: 'Signature et cachet de l\'Agence', fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
     signatureText2: { x: 300, y: 600, text: 'Signature de client', fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' }
   };
@@ -860,220 +1071,204 @@ const getInitialElements = (type: string, reservation: ReservationDetails, lang:
       remainingAmount: { x: 200, y: 440, text: `${remaining.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 14, fontFamily: 'Arial', color: '#cc0000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
     };
   } else if (type === 'invoice' || type === 'facture') {
-    // Invoice/Facture template
+    // Facture/Invoice - like versement with full details
     const subtotal = reservation.totalPrice;
-    const tvaRate = reservation.tvaApplied ? 0.19 : 0; // 19% TVA in Algeria
+    const tvaRate = reservation.tvaApplied ? 0.19 : 0;
     const tvaAmount = subtotal * tvaRate;
-    const additionalFees = reservation.additionalFees || 0;
-    const totalWithTVA = subtotal + tvaAmount + additionalFees;
-    const totalPaid = reservation.payments?.reduce((sum, payment) => sum + payment.amount, 0) || reservation.advancePayment;
-    const remaining = totalWithTVA - totalPaid;
+    const caution = reservation.caution || 0;
+    const totalPaid = reservation.payments?.reduce((sum, payment) => sum + payment.amount, 0) || reservation.advancePayment || 0;
+    const remaining = subtotal - totalPaid;
 
     return {
       ...baseElements,
-      title: { x: 200, y: 50, text: lang === 'fr' ? 'FACTURE' : 'الفاتورة', fontSize: 24, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
-
-      // Invoice header
-      invoiceNumber: { x: 50, y: 120, text: `N° ${reservation.id}`, fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      invoiceDate: { x: 300, y: 120, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString()}`, fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
-
-      // Client Information Section
-      clientSectionTitle: { x: 50, y: 160, text: lang === 'fr' ? 'INFORMATIONS CLIENT' : 'معلومات العميل', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      clientNameLabel: { x: 50, y: 190, text: lang === 'fr' ? 'Nom:' : 'الاسم:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientName: { x: 120, y: 190, text: `${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientPhoneLabel: { x: 50, y: 215, text: lang === 'fr' ? 'Téléphone:' : 'الهاتف:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientPhone: { x: 120, y: 215, text: reservation.client.phone, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientAddressLabel: { x: 50, y: 240, text: lang === 'fr' ? 'Adresse:' : 'العنوان:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientAddress: { x: 120, y: 240, text: reservation.client.completeAddress || 'N/A', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-
-      // Vehicle Information Section
-      vehicleSectionTitle: { x: 350, y: 160, text: lang === 'fr' ? 'INFORMATIONS VÉHICULE' : 'معلومات المركبة', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleBrand: { x: 350, y: 190, text: `${lang === 'fr' ? 'Marque:' : 'العلامة التجارية:'} ${reservation.car.brand}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleModel: { x: 350, y: 215, text: `${lang === 'fr' ? 'Modèle:' : 'الطراز:'} ${reservation.car.model}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleRegistration: { x: 350, y: 240, text: `${lang === 'fr' ? 'Immatriculation:' : 'رقم التسجيل:'} ${reservation.car.registration}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-
-      // Rental Period
-      rentalPeriodTitle: { x: 50, y: 280, text: lang === 'fr' ? 'PÉRIODE DE LOCATION' : 'فترة التأجير', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      rentalPeriod: { x: 50, y: 310, text: `${lang === 'fr' ? 'Du:' : 'من:'} ${reservation.step1.departureDate} ${lang === 'fr' ? 'Au:' : 'إلى:'} ${reservation.step1.returnDate}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      rentalDuration: { x: 50, y: 335, text: `${lang === 'fr' ? 'Durée:' : 'المدة:'} ${reservation.totalDays} ${lang === 'fr' ? 'jours' : 'أيام'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-
-      // Services and Pricing Section
-      servicesTitle: { x: 50, y: 380, text: lang === 'fr' ? 'SERVICES ET TARIFICATION' : 'الخدمات والتسعير', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      rentalService: { x: 50, y: 410, text: lang === 'fr' ? 'Location de véhicule' : 'تأجير المركبة', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      rentalPrice: { x: 400, y: 410, text: `${subtotal.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
-
-      // Additional Services
-      additionalServicesTitle: { x: 50, y: 440, text: lang === 'fr' ? 'SERVICES SUPPLÉMENTAIRES' : 'الخدمات الإضافية', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      additionalServices: { x: 50, y: 465, text: reservation.additionalServices?.length > 0 ?
-        reservation.additionalServices.map(service => `${service.name}: ${service.price} DA`).join(', ') :
-        (lang === 'fr' ? 'Aucun service supplémentaire' : 'لا توجد خدمات إضافية'), fontSize: 12, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-
-      // Supplementary Fees
-      supplementaryFeesTitle: { x: 50, y: 490, text: lang === 'fr' ? 'FRAIS SUPPLÉMENTAIRES' : 'الرسوم الإضافية', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      supplementaryFees: { x: 50, y: 515, text: additionalFees > 0 ?
-        `${lang === 'fr' ? 'Frais divers:' : 'رسوم متنوعة:'} ${additionalFees.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}` :
-        (lang === 'fr' ? 'Aucun frais supplémentaire' : 'لا توجد رسوم إضافية'), fontSize: 12, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-
-      // Subtotal
-      subtotalLabel: { x: 300, y: 550, text: lang === 'fr' ? 'Sous-total:' : 'المجموع الفرعي:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      subtotalAmount: { x: 400, y: 550, text: `${subtotal.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
-
-      // TVA
-      tvaLabel: { x: 300, y: 575, text: `TVA (${(tvaRate * 100).toFixed(0)}%):`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      tvaAmount: { x: 400, y: 575, text: `${tvaAmount.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
-
-      // Total
-      totalLabel: { x: 300, y: 610, text: lang === 'fr' ? 'TOTAL TTC:' : 'الإجمالي شامل الضريبة:', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      totalAmount: { x: 400, y: 610, text: `${totalWithTVA.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 16, fontFamily: 'Arial', color: '#0066cc', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
-
-      // Payment Information Section
-      paymentSectionTitle: { x: 50, y: 660, text: lang === 'fr' ? 'INFORMATIONS DE PAIEMENT' : 'معلومات الدفع', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      totalPaidLabel: { x: 50, y: 690, text: lang === 'fr' ? 'Total payé:' : 'الإجمالي المدفوع:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      totalPaidAmount: { x: 200, y: 690, text: `${totalPaid.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 14, fontFamily: 'Arial', color: '#00aa00', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      remainingLabel: { x: 50, y: 720, text: lang === 'fr' ? 'Reste à payer:' : 'المبلغ المتبقي:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      remainingAmount: { x: 200, y: 720, text: `${remaining.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 14, fontFamily: 'Arial', color: '#cc0000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-
-      // Payment History
-      paymentHistoryTitle: { x: 50, y: 760, text: lang === 'fr' ? 'HISTORIQUE DES PAIEMENTS' : 'تاريخ المدفوعات', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      paymentHistory: { x: 50, y: 785, text: reservation.payments?.length > 0 ?
-        reservation.payments.map(payment =>
-          `${payment.date}: ${payment.amount.toLocaleString()} DA (${payment.method})`
-        ).join('\n') :
-        (lang === 'fr' ? 'Aucun paiement enregistré' : 'لا توجد مدفوعات مسجلة'), fontSize: 12, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      title: { x: 200, y: 70, text: lang === 'fr' ? 'FACTURE' : 'الفاتورة', fontSize: 26, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
+      invoiceNumber: { x: 50, y: 165, text: `${lang === 'fr' ? 'N° Facture:' : 'رقم الفاتورة:'} ${reservation.id}`, fontSize: 13, fontFamily: 'Arial', color: '#333333', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      invoiceDate: { x: 300, y: 165, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString()}`, fontSize: 13, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      clientSectionTitle: { x: 50, y: 205, text: lang === 'fr' ? '👤 INFORMATIONS CLIENT' : '👤 معلومات العميل', fontSize: 14, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
+      clientNameLabel: { x: 50, y: 240, text: lang === 'fr' ? 'Nom:' : 'الاسم:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      clientName: { x: 130, y: 240, text: `${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      clientPhoneLabel: { x: 50, y: 260, text: lang === 'fr' ? 'Téléphone:' : 'الهاتف:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      clientPhone: { x: 130, y: 260, text: reservation.client.phone || 'N/A', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      clientAddressLabel: { x: 50, y: 280, text: lang === 'fr' ? 'Adresse:' : 'العنوان:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      clientAddress: { x: 130, y: 280, text: reservation.client.completeAddress || 'N/A', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleSectionTitle: { x: 50, y: 320, text: lang === 'fr' ? '🚗 INFORMATIONS VÉHICULE' : '🚗 معلومات المركبة', fontSize: 14, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleBrandLabel: { x: 50, y: 350, text: lang === 'fr' ? 'Marque & Modèle:' : 'العلامة والطراز:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleInfo: { x: 180, y: 350, text: `${reservation.car.brand} ${reservation.car.model}`, fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleRegLabel: { x: 50, y: 370, text: lang === 'fr' ? 'Immatriculation:' : 'رقم التسجيل:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleReg: { x: 180, y: 370, text: reservation.car.registration || 'N/A', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      rentalPeriodLabel: { x: 50, y: 390, text: lang === 'fr' ? 'Période:' : 'الفترة:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      rentalPeriod: { x: 180, y: 390, text: `${reservation.step1.departureDate} ${lang === 'fr' ? 'au' : 'إلى'} ${reservation.step1.returnDate}`, fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      tarificationSectionTitle: { x: 50, y: 430, text: lang === 'fr' ? '📋 TARIFICATION' : '📋 التسعير', fontSize: 14, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
+      basePriceLabel: { x: 50, y: 465, text: lang === 'fr' ? 'Prix:' : 'السعر:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      basePrice: { x: 280, y: 465, text: `${subtotal.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      cautionSectionTitle: { x: 50, y: 510, text: lang === 'fr' ? '🛡️ CAUTION' : '🛡️ الكفالة', fontSize: 14, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
+      cautionAmountLabel: { x: 50, y: 540, text: lang === 'fr' ? 'Montant:' : 'المبلغ:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      cautionAmount: { x: 280, y: 540, text: `${caution.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 12, fontFamily: 'Arial', color: '#cc6600', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      paymentSectionTitle: { x: 50, y: 585, text: lang === 'fr' ? '💳 PAIEMENT' : '💳 الدفع', fontSize: 14, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
+      totalLabel: { x: 50, y: 620, text: lang === 'fr' ? 'Total:' : 'الإجمالي:', fontSize: 13, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      totalAmount: { x: 280, y: 620, text: `${subtotal.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 13, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      paidLabel: { x: 50, y: 645, text: lang === 'fr' ? 'Payé:' : 'المدفوع:', fontSize: 13, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      paidAmount: { x: 280, y: 645, text: `${totalPaid.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 13, fontFamily: 'Arial', color: '#00aa00', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      remainingLabel: { x: 50, y: 670, text: lang === 'fr' ? 'Reste:' : 'المتبقي:', fontSize: 13, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      remainingAmount: { x: 280, y: 670, text: `${remaining.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 13, fontFamily: 'Arial', color: remaining > 0 ? '#cc0000' : '#00aa00', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      footerText: { x: 150, y: 720, text: lang === 'fr' ? 'Merci' : 'شكراً', fontSize: 12, fontFamily: 'Arial', color: '#666666', fontWeight: 'italic', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
     };
   } else if (type === 'quote' || type === 'devis') {
-    // Quote/Devis template
+    // Quote/Devis template - Improved design with colors and better organization
     return {
       ...baseElements,
-      title: { x: 200, y: 50, text: lang === 'fr' ? 'DEVIS' : 'عرض أسعار', fontSize: 24, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
+      title: { x: 200, y: 50, text: lang === 'fr' ? 'DEVIS' : 'عرض أسعار', fontSize: 26, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
 
-      // Quote header
-      quoteNumber: { x: 50, y: 120, text: `N° ${reservation.id}`, fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      quoteDate: { x: 300, y: 120, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString()}`, fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      // Quote header with better styling - positioned below logo
+      quoteNumber: { x: 50, y: 165, text: `${lang === 'fr' ? 'N° Devis:' : 'رقم عرض السعر:'} ${reservation.id}`, fontSize: 14, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      quoteDate: { x: 300, y: 165, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString()}`, fontSize: 13, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
 
-      // Company Information Section
-      companySectionTitle: { x: 50, y: 160, text: lang === 'fr' ? 'Informations sur l\'Entreprise' : 'معلومات الشركة', fontSize: 18, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      companyName: { x: 50, y: 190, text: 'SARL OUKKAL LISAYARAT ACHAT - VENTE - LOCATION', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      companyCoordinates: { x: 50, y: 215, text: 'Coordonnées: 0550080915 / 0550647319 / 020281473', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      companyAddress: { x: 50, y: 240, text: 'Adresse: RN 24 BORDJ EL KIFFAN EN FACE ARRET TRAMWAY MOUHOUS', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      companyEmail: { x: 50, y: 265, text: 'Email: sarloukkalauto122@gmail.com', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      // Vehicle Specifications Section - Blue theme
+      vehicleSpecsTitle: { x: 50, y: 210, text: lang === 'fr' ? '🚗 SPÉCIFICATIONS DU VÉHICULE' : '🚗 مواصفات المركبة', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#1a3a52', padding: '6px 8px' },
+      
+      vehicleBrandModelLabel: { x: 50, y: 240, text: lang === 'fr' ? 'Marque/Modèle:' : 'العلامة/الطراز:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleBrandModel: { x: 200, y: 240, text: `${reservation.car.brand} ${reservation.car.model}`, fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      
+      vehicleCodeLabel: { x: 50, y: 263, text: lang === 'fr' ? 'Code Véhicule:' : 'رمز المركبة:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleCode: { x: 200, y: 263, text: `${reservation.id.substring(0, 5)}`, fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      
+      vehicleRegistrationLabel: { x: 50, y: 286, text: lang === 'fr' ? 'Immatricule:' : 'لوحة الترخيص:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleRegistration: { x: 200, y: 286, text: reservation.car.registration || 'N/A', fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      
+      vehicleColorLabel: { x: 50, y: 309, text: lang === 'fr' ? 'Couleur:' : 'اللون:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleColor: { x: 200, y: 309, text: reservation.car.color || 'N/A', fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      
+      vehicleClassLabel: { x: 50, y: 332, text: lang === 'fr' ? 'Classe:' : 'الفئة:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleClass: { x: 200, y: 332, text: lang === 'fr' ? 'Véhicule Touristique' : 'مركبة سياحية', fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      
+      vehicleCharacteristicsLabel: { x: 50, y: 355, text: lang === 'fr' ? 'Caractéristiques:' : 'الخصائص:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleCharacteristics: { x: 200, y: 355, text: reservation.car.energy || 'N/A', fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      
+      fuelTypeLabel: { x: 50, y: 378, text: lang === 'fr' ? 'Carburant:' : 'الوقود:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      fuelType: { x: 200, y: 378, text: reservation.car.energy === 'Essence' ? (lang === 'fr' ? 'Sans plomb' : 'بدون رصاص') : reservation.car.energy, fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      
+      currentMileageLabel: { x: 50, y: 401, text: lang === 'fr' ? 'Kilométrage:' : 'الكيلومتراج:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      currentMileage: { x: 200, y: 401, text: `${reservation.car.mileage || 'N/A'} km`, fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      
+      serialNumberLabel: { x: 50, y: 424, text: lang === 'fr' ? 'N° Série:' : 'رقم السلسلة:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      serialNumber: { x: 200, y: 424, text: reservation.car.vin || 'N/A', fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
 
-      // Vehicle Specifications Section
-      vehicleSpecsTitle: { x: 50, y: 310, text: lang === 'fr' ? 'Spécifications du Véhicule' : 'مواصفات المركبة', fontSize: 18, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleBrandModel: { x: 50, y: 340, text: `Marque/Modèle: ${reservation.car.brand} ${reservation.car.model}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleCode: { x: 50, y: 365, text: `Code Véhicule: ${reservation.id}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleRegistration: { x: 50, y: 390, text: `Immatricule: ${reservation.car.registration}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleColor: { x: 50, y: 415, text: `Couleur: ${reservation.car.color}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleClass: { x: 50, y: 440, text: `Classe de véhicule: ${lang === 'fr' ? 'Véhicule Touristique' : 'مركبة سياحية'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleCharacteristics: { x: 50, y: 465, text: `Caractéristiques: ${reservation.car.energy}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      fuelType: { x: 50, y: 490, text: `Type carburant: ${reservation.car.energy === 'Essence' ? 'Sans plomb' : reservation.car.energy}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      currentMileage: { x: 50, y: 515, text: `Kilométrage Actuel: ${reservation.car.mileage || 'N/A'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      serialNumber: { x: 50, y: 540, text: `N° Série de type: ${reservation.car.vin || 'N/A'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      // Rental Conditions and Pricing Section - Green theme
+      rentalConditionsTitle: { x: 50, y: 465, text: lang === 'fr' ? '📋 CONDITIONS DE LOCATION & TARIFICATION' : '📋 شروط التأجير والتسعير', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#2d7a4d' },
+      
+      dailyPriceLabel: { x: 50, y: 495, text: lang === 'fr' ? 'Prix Journalier:' : 'السعر اليومي:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      dailyPrice: { x: 280, y: 495, text: `${reservation.car.priceDay?.toLocaleString() || '7000,00'} DA`, fontSize: 12, fontFamily: 'Arial', color: '#2d7a4d', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      
+      numberOfDaysLabel: { x: 50, y: 518, text: lang === 'fr' ? 'Nombre de Jours:' : 'عدد الأيام:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      numberOfDays: { x: 280, y: 518, text: `${reservation.totalDays} ${lang === 'fr' ? 'jour(s)' : 'يوم'}`, fontSize: 12, fontFamily: 'Arial', color: '#2d7a4d', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      
+      rentalPeriodLabel: { x: 50, y: 541, text: lang === 'fr' ? 'Période:' : 'الفترة:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      rentalPeriod: { x: 280, y: 541, text: `${reservation.step1.departureDate} → ${reservation.step1.returnDate}`, fontSize: 11, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      
+      totalHTLabel: { x: 50, y: 570, text: lang === 'fr' ? 'Sous-Total:' : 'الإجمالي الجزئي:', fontSize: 13, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      totalHT: { x: 280, y: 570, text: `${reservation.totalPrice.toLocaleString()} DA`, fontSize: 13, fontFamily: 'Arial', color: '#2d7a4d', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      
+      totalTTCLabel: { x: 50, y: 595, text: lang === 'fr' ? 'Montant Total:' : 'المبلغ الإجمالي:', fontSize: 14, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#2d7a4d' },
+      totalTTC: { x: 280, y: 595, text: `${reservation.totalPrice.toLocaleString()} DA`, fontSize: 14, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: '#2d7a4d' },
+      
+      numberOfVehiclesLabel: { x: 50, y: 630, text: lang === 'fr' ? 'Nombre de Véhicules:' : 'عدد المركبات:', fontSize: 12, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      numberOfVehicles: { x: 280, y: 630, text: '01', fontSize: 12, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
 
-      // Rental Conditions and Pricing Section
-      rentalConditionsTitle: { x: 50, y: 585, text: lang === 'fr' ? 'Conditions de Location et Tarification' : 'شروط التأجير والتسعير', fontSize: 18, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      dailyPrice: { x: 50, y: 615, text: `Prix (Journalier): ${reservation.car.priceDay?.toLocaleString() || '7000,00'} DA`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      numberOfDays: { x: 50, y: 640, text: `Nombre de jours: ${reservation.totalDays}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      rentalPeriod: { x: 50, y: 665, text: `Période: Du ${reservation.step1.departureDate} au ${reservation.step1.returnDate}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      totalHT: { x: 50, y: 690, text: `Total HT: ${reservation.totalPrice.toLocaleString()},00 DA`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      totalTTC: { x: 50, y: 715, text: `Total TTC: ${reservation.totalPrice.toLocaleString()},00 DA`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      numberOfVehicles: { x: 50, y: 740, text: 'Nombre véhicule: 01', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-
-      // Equipment and Accessories Checklist
-      checklistTitle: { x: 50, y: 785, text: lang === 'fr' ? 'Équipements et Accessoires (Check-list)' : 'المعدات والملحقات (قائمة التحقق)', fontSize: 18, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      checklistItems: { x: 50, y: 815, text: reservation.departureInspection?.inspectionItems?.map(item =>
+      // Equipment and Accessories Checklist - Orange theme
+      checklistTitle: { x: 50, y: 670, text: lang === 'fr' ? '✓ ÉQUIPEMENTS & ACCESSOIRES' : '✓ المعدات والملحقات', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#cc6600' },
+      checklistItems: { x: 50, y: 700, text: reservation.departureInspection?.inspectionItems?.map(item =>
         `${item.name}: ${item.checked ? '✓' : '✗'}`
-      ).join('\n') || 'Roues de secours: ✓\nTriangle de signalisation: ✓\nCric: ✓\nClé de roue: ✓\nExtincteur: ✓\nCeintures de sécurité: ✓\nFeux de route: ✓\nPneus: ✓\nFreins: ✓\nClimatisation: ✓\nIntérieur propre: ✓', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      ).join('\n') || 'Roues de secours: ✓\nTriangle de signalisation: ✓\nCric: ✓\nClé de roue: ✓\nExtincteur: ✓\nCeintures de sécurité: ✓\nFeux de route: ✓\nPneus: ✓\nFreins: ✓\nClimatisation: ✓\nIntérieur propre: ✓', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
 
       // Signatures
-      agencySignatureText: { x: 50, y: 950, text: lang === 'fr' ? 'Signature et cachet de l\'Agence' : 'توقيع وختم الوكالة', fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientSignatureText: { x: 300, y: 950, text: lang === 'fr' ? 'Signature du Client' : 'توقيع العميل', fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      agencySignatureText: { x: 50, y: 905, text: lang === 'fr' ? 'Signature et cachet de l\'Agence' : 'توقيع وختم الوكالة', fontSize: 11, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      clientSignatureText: { x: 300, y: 905, text: lang === 'fr' ? 'Signature du Client' : 'توقيع العميل', fontSize: 11, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
     };
   } else if (type === 'contract') {
-    // Contract template - First page with details
-    const departureInspection = reservation.departureInspection;
-    const returnInspection = reservation.returnInspection;
+    // Contract template - Professional layout like devis with all details
+    const inspectionItems = reservation.departureInspection?.inspectionItems || [];
     
     return {
-      ...baseElements,
-      title: { x: 200, y: 50, text: lang === 'fr' ? 'CONTRAT DE LOCATION' : 'عقد التأجير', fontSize: 24, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
+      logo: { x: 50, y: 50, width: 90, height: 90 },
+      agenceName: { x: 180, y: 70, text: 'SARL OUKKAL LISAYARAT', fontSize: 16, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       
-      // Contract number and date
-      contractNumber: { x: 50, y: 120, text: `N° ${reservation.id}`, fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      contractDate: { x: 300, y: 120, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString()}`, fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      // Main Title
+      title: { x: 50, y: 160, text: 'Contrat de Location de Véhicule / اتفاقية إيجار السيارة', fontSize: 22, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: '#1a3a52', maxWidth: 500 },
       
-      // Client Information Section
-      clientSectionTitle: { x: 50, y: 160, text: lang === 'fr' ? 'INFORMATIONS CLIENT' : 'معلومات العميل', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      clientNameLabel: { x: 50, y: 190, text: lang === 'fr' ? 'Nom:' : 'الاسم:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientName: { x: 120, y: 190, text: `${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientPhoneLabel: { x: 50, y: 215, text: lang === 'fr' ? 'Téléphone:' : 'الهاتف:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientPhone: { x: 120, y: 215, text: reservation.client.phone, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientIdLabel: { x: 50, y: 240, text: lang === 'fr' ? 'Carte d\'identité:' : 'بطاقة الهوية:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      clientId: { x: 150, y: 240, text: reservation.client.idCardNumber || 'N/A', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      // Contract Details Section (Blue Header)
+      contractDetailsTitle: { x: 50, y: 210, text: 'Contract Details / تفاصيل العقد', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#1a3a52' },
+      contractNumberLabel: { x: 50, y: 235, text: 'Contract Number / رقم العقد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      contractNumber: { x: 250, y: 235, text: reservation.id, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      contractDateLabel: { x: 50, y: 253, text: 'Contract Date / تاريخ العقد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      contractDate: { x: 250, y: 253, text: new Date().toLocaleDateString('fr-FR'), fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       
-      // Driver Information (if activated)
-      driverSectionTitle: { x: 50, y: 270, text: lang === 'fr' ? 'INFORMATIONS CHAUFFEUR' : 'معلومات السائق', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      driverName: { x: 50, y: 300, text: `${lang === 'fr' ? 'Nom du chauffeur:' : 'اسم السائق:'} ${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      driverLicense: { x: 50, y: 325, text: `${lang === 'fr' ? 'Permis de conduire:' : 'رخصة القيادة:'} ${reservation.client.licenseNumber || 'N/A'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      // Rental Period Section (Green Header)
+      rentalPeriodTitle: { x: 50, y: 285, text: 'Rental Period / فترة الإيجار', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#2d7a4d' },
+      startDateLabel: { x: 50, y: 310, text: 'Start Date / من:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      startDate: { x: 250, y: 310, text: reservation.step1.departureDate, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      endDateLabel: { x: 50, y: 328, text: 'End Date / إلى:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      endDate: { x: 250, y: 328, text: reservation.step1.returnDate, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      durationLabel: { x: 50, y: 346, text: 'Duration / المدة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      duration: { x: 250, y: 346, text: `${reservation.totalDays} days / أيام`, fontSize: 11, fontFamily: 'Arial', color: '#2d7a4d', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       
-      // Vehicle Information Section
-      vehicleSectionTitle: { x: 350, y: 160, text: lang === 'fr' ? 'INFORMATIONS VÉHICULE' : 'معلومات المركبة', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleBrand: { x: 350, y: 190, text: `${lang === 'fr' ? 'Marque:' : 'العلامة التجارية:'} ${reservation.car.brand}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleModel: { x: 350, y: 215, text: `${lang === 'fr' ? 'Modèle:' : 'الطراز:'} ${reservation.car.model}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleRegistration: { x: 350, y: 240, text: `${lang === 'fr' ? 'Immatriculation:' : 'رقم التسجيل:'} ${reservation.car.registration}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleYear: { x: 350, y: 265, text: `${lang === 'fr' ? 'Année:' : 'السنة:'} ${reservation.car.year}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleColor: { x: 350, y: 290, text: `${lang === 'fr' ? 'Couleur:' : 'اللون:'} ${reservation.car.color}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      // Driver Information Section (Purple Header)
+      driverInfoTitle: { x: 50, y: 378, text: 'Driver Information (Driver 01) / معلومات السائق 01', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#6a1b9a' },
+      driverNameLabel: { x: 50, y: 403, text: 'Name / الاسم:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      driverName: { x: 180, y: 403, text: `${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      driverBirthDateLabel: { x: 50, y: 421, text: 'Date of Birth / تاريخ الميلاد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      driverBirthDate: { x: 180, y: 421, text: '03/08/1978', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      placeOfBirthLabel: { x: 50, y: 439, text: 'Place of Birth / مكان الميلاد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      placeOfBirth: { x: 180, y: 439, text: 'El Harrouch', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      documentTypeLabel: { x: 50, y: 457, text: 'Document Type / نوع الوثيقة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      documentType: { x: 180, y: 457, text: 'Biometric driver\'s license', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      documentNumberLabel: { x: 50, y: 475, text: 'Document Number / رقم الوثيقة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      documentNumber: { x: 180, y: 475, text: reservation.client.licenseNumber || 'N/A', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      issueeDateLabel: { x: 50, y: 493, text: 'Issue Date / تاريخ الإصدار:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      issueDate: { x: 180, y: 493, text: '07/11/2024', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      expirationDateLabel: { x: 50, y: 511, text: 'Expiration Date / تاريخ الانتهاء:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      expirationDate: { x: 180, y: 511, text: '06/11/2034', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      placeOfIssueLabel: { x: 50, y: 529, text: 'Place of Issue / مكان الإصدار:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      placeOfIssue: { x: 180, y: 529, text: 'Lyon', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       
-      // Reservation Information Section
-      reservationSectionTitle: { x: 50, y: 360, text: lang === 'fr' ? 'INFORMATIONS RÉSERVATION' : 'معلومات الحجز', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      reservationPeriod: { x: 50, y: 390, text: `${lang === 'fr' ? 'Période:' : 'الفترة:'} ${reservation.step1.departureDate} ${lang === 'fr' ? 'au' : 'إلى'} ${reservation.step1.returnDate}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      reservationDuration: { x: 50, y: 415, text: `${lang === 'fr' ? 'Durée:' : 'المدة:'} ${reservation.totalDays} ${lang === 'fr' ? 'jours' : 'أيام'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      reservationPrice: { x: 50, y: 440, text: `${lang === 'fr' ? 'Prix total:' : 'السعر الإجمالي:'} ${reservation.totalPrice.toLocaleString()} ${lang === 'fr' ? 'DA' : 'د.ج'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      // Vehicle Information Section (Orange Header)
+      vehicleInfoTitle: { x: 50, y: 561, text: 'Vehicle Information / معلومات المركبة', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#e65100' },
+      vehicleModelLabel: { x: 50, y: 586, text: 'Model / الطراز:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleModel: { x: 180, y: 586, text: `${reservation.car.brand} ${reservation.car.model}`, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleColorLabel: { x: 50, y: 604, text: 'Color / اللون:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleColor: { x: 180, y: 604, text: reservation.car.color || 'N/A', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehiclePlateLabel: { x: 50, y: 622, text: 'License Plate / لوحة التسجيل:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehiclePlate: { x: 180, y: 622, text: reservation.car.registration, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleVINLabel: { x: 50, y: 640, text: 'Serial Number / رقم المسلسل:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleVIN: { x: 180, y: 640, text: reservation.car.vin || 'BRYEKNFJ2S5718503', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleFuelLabel: { x: 50, y: 658, text: 'Fuel Type / نوع الوقود:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleFuel: { x: 180, y: 658, text: 'Essence Sans plomb', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleMileageLabel: { x: 50, y: 676, text: 'Kilometer Reading / قراءة العداد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      vehicleMileage: { x: 180, y: 676, text: '8400 km', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       
-      // Inspection Information Section
-      inspectionSectionTitle: { x: 50, y: 480, text: lang === 'fr' ? 'INFORMATIONS INSPECTION' : 'معلومات الفحص', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
-      departureMileage: { x: 50, y: 510, text: `${lang === 'fr' ? 'Kilométrage départ:' : 'عداد المسافة عند المغادرة:'} ${departureInspection?.mileage || 'N/A'} km`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      departureFuel: { x: 50, y: 535, text: `${lang === 'fr' ? 'Carburant départ:' : 'الوقود عند المغادرة:'} ${departureInspection?.fuelLevel || 'N/A'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      returnMileage: { x: 350, y: 510, text: `${lang === 'fr' ? 'Kilométrage retour:' : 'عداد المسافة عند العودة:'} ${returnInspection?.mileage || 'N/A'} km`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      returnFuel: { x: 350, y: 535, text: `${lang === 'fr' ? 'Carburant retour:' : 'الوقود عند العودة:'} ${returnInspection?.fuelLevel || 'N/A'}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      // Financials Section (Red Header)
+      financialsTitle: { x: 50, y: 708, text: 'Financials / التفاصيل المالية', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c62828' },
+      unitPriceLabel: { x: 50, y: 733, text: 'Unit Price / سعر الوحدة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      unitPrice: { x: 280, y: 733, text: '10,000.00', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      totalHTLabel: { x: 50, y: 751, text: 'Total Price (HT) / السعر الإجمالي بدون ضريبة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      totalHT: { x: 280, y: 751, text: '60,000.00', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      totalAmountLabel: { x: 50, y: 771, text: 'Total Contract Amount / إجمالي العقد:', fontSize: 12, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c62828' },
+      totalAmount: { x: 280, y: 771, text: `${reservation.totalPrice.toLocaleString()}`, fontSize: 12, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: '#c62828' },
       
-      // Inspection Items
-      inspectionItemsTitle: { x: 50, y: 570, text: lang === 'fr' ? 'ÉLÉMENTS D\'INSPECTION' : 'عناصر الفحص', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      inspectionItems: { x: 50, y: 590, text: departureInspection?.inspectionItems?.map(item => 
-        `${item.name}: ${item.checked ? (lang === 'fr' ? '✓' : '✓') : (lang === 'fr' ? '✗' : '✗')}`
-      ).join(', ') || 'N/A', fontSize: 12, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      // Equipment Checklist Section (Blue Header)
+      equipmentTitle: { x: 50, y: 803, text: 'Equipment Checklist of Inspection / قائمة المعدات', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#1565c0' },
+      equipment1: { x: 50, y: 828, text: '✓ Tires / الإطارات', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
+      equipment2: { x: 50, y: 843, text: '✓ Brakes / الفرامل', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
+      equipment3: { x: 50, y: 858, text: '✓ Lighting / الأضواء', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
+      equipment4: { x: 50, y: 873, text: '✓ Mirrors / المرايا', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
+      equipment5: { x: 280, y: 828, text: '✓ Seats / المقاعد', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
+      equipment6: { x: 280, y: 843, text: '✓ Windows / الزجاج', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
+      equipment7: { x: 280, y: 858, text: '✓ Engine / المحرك', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
+      equipment8: { x: 280, y: 873, text: '✓ Air Conditioning / جهاز التكييف', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
       
-      // Second page content
-      termsTitle: { x: 200, y: 50, text: 'يمكنك قراءة شروط العقد في الأسفل ومصادقة عليها', fontSize: 18, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
-      termsContent: { x: 50, y: 100, text: `1- السن: يجب أن يكون السائق يبلغ من العمر 20 عاماً على الأقل، وأن يكون حاصلاً على رخصة قيادة منذ سنتين على الأقل.
-
-2- جواز السفر: إيداع جواز السفر البيومتري الإلزامي، بالإضافة إلى دفع تأمين ابتدائي يبدأ من 30,000.00 دج حسب فئة المركبة، ويعد هذا بمثابة ضمان لطلبه.
-
-3- الوقود: الوقود يكون على نفقة الزبون.
-
-4- قانون ونظام: يتم الدفع نقداً عند تسليم السيارة.
-
-5- النظافة: تسلم السيارة نظيفة ويجب إرجاعها في نفس الحالة، وفي حال عدم ذلك، سيتم احتساب تكلفة الغسيل بمبلغ 1000 دج.
-
-6- مكان التسليم: يتم تسليم السيارات في موقف السيارات التابع لوكالاتنا.
-
-7- جدول المواعيد: يجب على الزبون احترام المواعيد المحددة عند الحجز، يجب الإبلاغ مسبقاً عن أي تغيير. لا يمكن للزبون تمديد مدة الإيجار إلا بعد الحصول على إذن من وكالتنا للإيجار، وذلك بإشعار مسبق لا يقل عن 48 ساعة.
-
-8- الأضرار والخسائر: التأمين الأساسي: يلتزم الزبون بدفع جميع الأضرار التي تلحق بالمركبة سواء كان مخطئاً أو غير مخطئ. أي ضرر يلحق بالمركبة سيؤدي إلى خصم من مبلغ الضمان.
-
-9- عند السرقة: في حالة السرقة أو تضرر المركبة، يجب تقديم تصريح لدى مصالح الشرطة أو الدرك الوطني قبل أي تصريح، يجب على الزبون إبلاغ وكالة الكراء بشكل إلزامي.
-
-10- تأمين: يستفيد من التأمين فقط السائقون المذكورون في عقد الكراء، يُمنع منعاً باتاً إعارة أو تأجير المركبة من الباطن، وتكون جميع الأضرار الناتجة عن مثل هذه الحالات على عاتق الزبون بالكامل.
-
-11- عطل ميكانيكي: خلال فترة الإيجار، وبناءً على عدد الكيلومترات المقطوعة، يجب على الزبون إجراء الفحوصات اللازمة مثل مستوى الزيت، حالة المحرك، ضغط الإطارات، وغيرها في حال حدوث عطل ميكانيكي بسبب إهمال الزبون في إجراء هذه الفحوصات أو لأي سبب آخر ناتج عن مسؤولية الزبون (مثلاً: كسر حوض الزيت، العارضة السفلية، القفل أو غيرها)، فإن تكاليف الإصلاح والصيانة تكون على عاتق الزبون بالكامل.
-
-12- خسائر إضافية: الأضرار التي تلحق بالعجلات والإطارات، القيادة بالإطارات المفرغة من الهواء، التدهور، السرقة، نهب الملحقات، أعمال التخريب، الأضرار الميكانيكية الناتجة عن سوء استخدام المركبة، الأضرار التي تحدث أسفل المركبة (الصدام الأمامي، الجوانب، حوض الزيت، العادم) والأضرار الناتجة عن الاضطرابات والشغب، كلها سيتم تحميل تكلفتها على الزبون.
-
-13- ضريبة التأخير: مدة الإيجار تُحتسب على فترات كاملة مدتها 24 ساعة غير قابلة للتقسيم، بدءاً من وقت حجز المركبة وحتى الوقت المذكور في العقد، يجب على الزبون إعادة المركبة في نفس الوقت، وإلا سيتم احتساب تكلفة تأخير مقدارها 800 دينار لكل ساعة تأخير.
-
-14- عدد الأميال: عدد الكيلومترات محدود لجميع مركباتنا بـ 300 كم يومياً، ويفرض غرامة قدرها 30 دج عن كل كيلومتر زائد.
-
-15- شروط: يقر الزبون بأنه اطلع على شروط الإيجار هذه وقبلها دون أي تحفظ، ويتعهد بتوقيع هذا العقد.`, fontSize: 10, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      // Signatures
+      agencySignatureText: { x: 80, y: 920, text: 'Agency Signature / توقيع الوكالة', fontSize: 10, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
+      clientSignatureText: { x: 300, y: 920, text: 'Driver Signature / توقيع السائق', fontSize: 10, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
+      dateSignatureText: { x: 470, y: 920, text: 'Date / التاريخ', fontSize: 10, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
     };
   } else {
     // Engagement template - include logo and agency name with actual settings
@@ -1151,9 +1346,9 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
 
   let bodyContent = '';
   
-  // Logo and Agency Name - use actual settings for engagement and payment types, always display logo
-  if (type === 'engagement' || type === 'payment' || type === 'receipt') {
-    // For engagement and payment documents, use actual logo and agency name from settings
+  // Logo and Agency Name - use actual settings for engagement, payment, invoice, facture, quote, devis types, always display logo
+  if (type === 'engagement' || type === 'payment' || type === 'receipt' || type === 'invoice' || type === 'facture' || type === 'quote' || type === 'devis') {
+    // For engagement, payment, invoice and facture documents, use actual logo and agency name from settings
     if (elements.logo) {
       if (agencySettings?.logo) {
         bodyContent += `<div class="draggable logo" style="position: absolute; left: ${elements.logo.x || 50}px; top: ${elements.logo.y || 50}px; width: ${elements.logo.width || 100}px; height: ${elements.logo.height || 100}px;">
@@ -1265,77 +1460,73 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
 
     // Vehicle Information
     bodyContent += renderElement('vehicleSectionTitle', elements.vehicleSectionTitle);
-    bodyContent += renderElement('vehicleBrand', elements.vehicleBrand);
-    bodyContent += renderElement('vehicleModel', elements.vehicleModel);
-    bodyContent += renderElement('vehicleRegistration', elements.vehicleRegistration);
-
-    // Rental Period
-    bodyContent += renderElement('rentalPeriodTitle', elements.rentalPeriodTitle);
+    bodyContent += renderElement('vehicleBrandLabel', elements.vehicleBrandLabel);
+    bodyContent += renderElement('vehicleInfo', elements.vehicleInfo);
+    bodyContent += renderElement('vehicleRegLabel', elements.vehicleRegLabel);
+    bodyContent += renderElement('vehicleReg', elements.vehicleReg);
+    bodyContent += renderElement('rentalPeriodLabel', elements.rentalPeriodLabel);
     bodyContent += renderElement('rentalPeriod', elements.rentalPeriod);
-    bodyContent += renderElement('rentalDuration', elements.rentalDuration);
 
-    // Services and Pricing
-    bodyContent += renderElement('servicesTitle', elements.servicesTitle);
-    bodyContent += renderElement('rentalService', elements.rentalService);
-    bodyContent += renderElement('rentalPrice', elements.rentalPrice);
+    // Tarification Section
+    bodyContent += renderElement('tarificationSectionTitle', elements.tarificationSectionTitle);
+    bodyContent += renderElement('basePriceLabel', elements.basePriceLabel);
+    bodyContent += renderElement('basePrice', elements.basePrice);
 
-    // Additional Services
-    bodyContent += renderElement('additionalServicesTitle', elements.additionalServicesTitle);
-    bodyContent += renderElement('additionalServices', elements.additionalServices);
-
-    // Supplementary Fees
-    bodyContent += renderElement('supplementaryFeesTitle', elements.supplementaryFeesTitle);
-    bodyContent += renderElement('supplementaryFees', elements.supplementaryFees);
-
-    // Subtotal, TVA, Total
-    bodyContent += renderElement('subtotalLabel', elements.subtotalLabel);
-    bodyContent += renderElement('subtotalAmount', elements.subtotalAmount);
-    bodyContent += renderElement('tvaLabel', elements.tvaLabel);
-    bodyContent += renderElement('tvaAmount', elements.tvaAmount);
-    bodyContent += renderElement('totalLabel', elements.totalLabel);
-    bodyContent += renderElement('totalAmount', elements.totalAmount);
+    // Caution Section
+    bodyContent += renderElement('cautionSectionTitle', elements.cautionSectionTitle);
+    bodyContent += renderElement('cautionAmountLabel', elements.cautionAmountLabel);
+    bodyContent += renderElement('cautionAmount', elements.cautionAmount);
 
     // Payment Information
     bodyContent += renderElement('paymentSectionTitle', elements.paymentSectionTitle);
-    bodyContent += renderElement('totalPaidLabel', elements.totalPaidLabel);
-    bodyContent += renderElement('totalPaidAmount', elements.totalPaidAmount);
+    bodyContent += renderElement('totalLabel', elements.totalLabel);
+    bodyContent += renderElement('totalAmount', elements.totalAmount);
+    bodyContent += renderElement('paidLabel', elements.paidLabel);
+    bodyContent += renderElement('paidAmount', elements.paidAmount);
     bodyContent += renderElement('remainingLabel', elements.remainingLabel);
     bodyContent += renderElement('remainingAmount', elements.remainingAmount);
 
-    // Payment History
-    bodyContent += renderElement('paymentHistoryTitle', elements.paymentHistoryTitle);
-    bodyContent += renderElement('paymentHistory', elements.paymentHistory);
+    // Footer
+    bodyContent += renderElement('footerText', elements.footerText);
   } else if (type === 'quote' || type === 'devis') {
     // Quote/Devis content
     bodyContent += renderElement('quoteNumber', elements.quoteNumber);
     bodyContent += renderElement('quoteDate', elements.quoteDate);
 
-    // Company Information
-    bodyContent += renderElement('companySectionTitle', elements.companySectionTitle);
-    bodyContent += renderElement('companyName', elements.companyName);
-    bodyContent += renderElement('companyCoordinates', elements.companyCoordinates);
-    bodyContent += renderElement('companyAddress', elements.companyAddress);
-    bodyContent += renderElement('companyEmail', elements.companyEmail);
-
     // Vehicle Specifications
     bodyContent += renderElement('vehicleSpecsTitle', elements.vehicleSpecsTitle);
+    bodyContent += renderElement('vehicleBrandModelLabel', elements.vehicleBrandModelLabel);
     bodyContent += renderElement('vehicleBrandModel', elements.vehicleBrandModel);
+    bodyContent += renderElement('vehicleCodeLabel', elements.vehicleCodeLabel);
     bodyContent += renderElement('vehicleCode', elements.vehicleCode);
+    bodyContent += renderElement('vehicleRegistrationLabel', elements.vehicleRegistrationLabel);
     bodyContent += renderElement('vehicleRegistration', elements.vehicleRegistration);
+    bodyContent += renderElement('vehicleColorLabel', elements.vehicleColorLabel);
     bodyContent += renderElement('vehicleColor', elements.vehicleColor);
+    bodyContent += renderElement('vehicleClassLabel', elements.vehicleClassLabel);
     bodyContent += renderElement('vehicleClass', elements.vehicleClass);
+    bodyContent += renderElement('vehicleCharacteristicsLabel', elements.vehicleCharacteristicsLabel);
     bodyContent += renderElement('vehicleCharacteristics', elements.vehicleCharacteristics);
+    bodyContent += renderElement('fuelTypeLabel', elements.fuelTypeLabel);
     bodyContent += renderElement('fuelType', elements.fuelType);
+    bodyContent += renderElement('currentMileageLabel', elements.currentMileageLabel);
     bodyContent += renderElement('currentMileage', elements.currentMileage);
+    bodyContent += renderElement('serialNumberLabel', elements.serialNumberLabel);
     bodyContent += renderElement('serialNumber', elements.serialNumber);
 
     // Rental Conditions and Pricing
     bodyContent += renderElement('rentalConditionsTitle', elements.rentalConditionsTitle);
+    bodyContent += renderElement('dailyPriceLabel', elements.dailyPriceLabel);
     bodyContent += renderElement('dailyPrice', elements.dailyPrice);
+    bodyContent += renderElement('numberOfDaysLabel', elements.numberOfDaysLabel);
     bodyContent += renderElement('numberOfDays', elements.numberOfDays);
+    bodyContent += renderElement('rentalPeriodLabel', elements.rentalPeriodLabel);
     bodyContent += renderElement('rentalPeriod', elements.rentalPeriod);
+    bodyContent += renderElement('totalHTLabel', elements.totalHTLabel);
     bodyContent += renderElement('totalHT', elements.totalHT);
+    bodyContent += renderElement('totalTTCLabel', elements.totalTTCLabel);
     bodyContent += renderElement('totalTTC', elements.totalTTC);
+    bodyContent += renderElement('numberOfVehiclesLabel', elements.numberOfVehiclesLabel);
     bodyContent += renderElement('numberOfVehicles', elements.numberOfVehicles);
 
     // Equipment and Accessories Checklist
@@ -1346,51 +1537,97 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
     bodyContent += renderElement('agencySignatureText', elements.agencySignatureText);
     bodyContent += renderElement('clientSignatureText', elements.clientSignatureText);
   } else if (type === 'contract') {
-    // Contract content - First page
+    // Contract content - Professional format with logo like devis
+    // Add logo
+    if (elements.logo && agencySettings?.logo) {
+      bodyContent += `<div class="draggable logo" style="position: absolute; left: ${elements.logo.x || 50}px; top: ${elements.logo.y || 50}px; width: ${elements.logo.width || 90}px; height: ${elements.logo.height || 90}px;">
+        <img src="${agencySettings.logo}" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;" />
+      </div>`;
+    }
+    
+    // Add agency name
+    if (elements.agenceName) {
+      const agenceElement = agencySettings?.name ? { ...elements.agenceName, text: agencySettings.name } : elements.agenceName;
+      bodyContent += renderElement('agenceName', agenceElement);
+    }
+    
+    // Main Title
+    bodyContent += renderElement('title', elements.title);
+    
+    // Contract Details Section
+    bodyContent += renderElement('contractDetailsTitle', elements.contractDetailsTitle);
+    bodyContent += renderElement('contractNumberLabel', elements.contractNumberLabel);
     bodyContent += renderElement('contractNumber', elements.contractNumber);
+    bodyContent += renderElement('contractDateLabel', elements.contractDateLabel);
     bodyContent += renderElement('contractDate', elements.contractDate);
     
-    // Client Information
-    bodyContent += renderElement('clientSectionTitle', elements.clientSectionTitle);
-    bodyContent += renderElement('clientNameLabel', elements.clientNameLabel);
-    bodyContent += renderElement('clientName', elements.clientName);
-    bodyContent += renderElement('clientPhoneLabel', elements.clientPhoneLabel);
-    bodyContent += renderElement('clientPhone', elements.clientPhone);
-    bodyContent += renderElement('clientIdLabel', elements.clientIdLabel);
-    bodyContent += renderElement('clientId', elements.clientId);
+    // Rental Period Section
+    bodyContent += renderElement('rentalPeriodTitle', elements.rentalPeriodTitle);
+    bodyContent += renderElement('startDateLabel', elements.startDateLabel);
+    bodyContent += renderElement('startDate', elements.startDate);
+    bodyContent += renderElement('endDateLabel', elements.endDateLabel);
+    bodyContent += renderElement('endDate', elements.endDate);
+    bodyContent += renderElement('durationLabel', elements.durationLabel);
+    bodyContent += renderElement('duration', elements.duration);
     
-    // Driver Information
-    bodyContent += renderElement('driverSectionTitle', elements.driverSectionTitle);
+    // Driver Information Section
+    bodyContent += renderElement('driverInfoTitle', elements.driverInfoTitle);
+    bodyContent += renderElement('driverNameLabel', elements.driverNameLabel);
     bodyContent += renderElement('driverName', elements.driverName);
-    bodyContent += renderElement('driverLicense', elements.driverLicense);
+    bodyContent += renderElement('driverBirthDateLabel', elements.driverBirthDateLabel);
+    bodyContent += renderElement('driverBirthDate', elements.driverBirthDate);
+    bodyContent += renderElement('placeOfBirthLabel', elements.placeOfBirthLabel);
+    bodyContent += renderElement('placeOfBirth', elements.placeOfBirth);
+    bodyContent += renderElement('documentTypeLabel', elements.documentTypeLabel);
+    bodyContent += renderElement('documentType', elements.documentType);
+    bodyContent += renderElement('documentNumberLabel', elements.documentNumberLabel);
+    bodyContent += renderElement('documentNumber', elements.documentNumber);
+    bodyContent += renderElement('issueeDateLabel', elements.issueeDateLabel);
+    bodyContent += renderElement('issueDate', elements.issueDate);
+    bodyContent += renderElement('expirationDateLabel', elements.expirationDateLabel);
+    bodyContent += renderElement('expirationDate', elements.expirationDate);
+    bodyContent += renderElement('placeOfIssueLabel', elements.placeOfIssueLabel);
+    bodyContent += renderElement('placeOfIssue', elements.placeOfIssue);
     
-    // Vehicle Information
-    bodyContent += renderElement('vehicleSectionTitle', elements.vehicleSectionTitle);
-    bodyContent += renderElement('vehicleBrand', elements.vehicleBrand);
+    // Vehicle Information Section
+    bodyContent += renderElement('vehicleInfoTitle', elements.vehicleInfoTitle);
+    bodyContent += renderElement('vehicleModelLabel', elements.vehicleModelLabel);
     bodyContent += renderElement('vehicleModel', elements.vehicleModel);
-    bodyContent += renderElement('vehicleRegistration', elements.vehicleRegistration);
-    bodyContent += renderElement('vehicleYear', elements.vehicleYear);
+    bodyContent += renderElement('vehicleColorLabel', elements.vehicleColorLabel);
     bodyContent += renderElement('vehicleColor', elements.vehicleColor);
+    bodyContent += renderElement('vehiclePlateLabel', elements.vehiclePlateLabel);
+    bodyContent += renderElement('vehiclePlate', elements.vehiclePlate);
+    bodyContent += renderElement('vehicleVINLabel', elements.vehicleVINLabel);
+    bodyContent += renderElement('vehicleVIN', elements.vehicleVIN);
+    bodyContent += renderElement('vehicleFuelLabel', elements.vehicleFuelLabel);
+    bodyContent += renderElement('vehicleFuel', elements.vehicleFuel);
+    bodyContent += renderElement('vehicleMileageLabel', elements.vehicleMileageLabel);
+    bodyContent += renderElement('vehicleMileage', elements.vehicleMileage);
     
-    // Reservation Information
-    bodyContent += renderElement('reservationSectionTitle', elements.reservationSectionTitle);
-    bodyContent += renderElement('reservationPeriod', elements.reservationPeriod);
-    bodyContent += renderElement('reservationDuration', elements.reservationDuration);
-    bodyContent += renderElement('reservationPrice', elements.reservationPrice);
+    // Financials Section
+    bodyContent += renderElement('financialsTitle', elements.financialsTitle);
+    bodyContent += renderElement('unitPriceLabel', elements.unitPriceLabel);
+    bodyContent += renderElement('unitPrice', elements.unitPrice);
+    bodyContent += renderElement('totalHTLabel', elements.totalHTLabel);
+    bodyContent += renderElement('totalHT', elements.totalHT);
+    bodyContent += renderElement('totalAmountLabel', elements.totalAmountLabel);
+    bodyContent += renderElement('totalAmount', elements.totalAmount);
     
-    // Inspection Information
-    bodyContent += renderElement('inspectionSectionTitle', elements.inspectionSectionTitle);
-    bodyContent += renderElement('departureMileage', elements.departureMileage);
-    bodyContent += renderElement('departureFuel', elements.departureFuel);
-    bodyContent += renderElement('returnMileage', elements.returnMileage);
-    bodyContent += renderElement('returnFuel', elements.returnFuel);
-    bodyContent += renderElement('inspectionItemsTitle', elements.inspectionItemsTitle);
-    bodyContent += renderElement('inspectionItems', elements.inspectionItems);
+    // Equipment Checklist Section
+    bodyContent += renderElement('equipmentTitle', elements.equipmentTitle);
+    bodyContent += renderElement('equipment1', elements.equipment1);
+    bodyContent += renderElement('equipment2', elements.equipment2);
+    bodyContent += renderElement('equipment3', elements.equipment3);
+    bodyContent += renderElement('equipment4', elements.equipment4);
+    bodyContent += renderElement('equipment5', elements.equipment5);
+    bodyContent += renderElement('equipment6', elements.equipment6);
+    bodyContent += renderElement('equipment7', elements.equipment7);
+    bodyContent += renderElement('equipment8', elements.equipment8);
     
-    // Second page - Terms and conditions
-    bodyContent += '<div style="page-break-before: always;"></div>';
-    bodyContent += renderElement('termsTitle', elements.termsTitle);
-    bodyContent += renderElement('termsContent', elements.termsContent);
+    // Signatures
+    bodyContent += renderElement('agencySignatureText', elements.agencySignatureText);
+    bodyContent += renderElement('clientSignatureText', elements.clientSignatureText);
+    bodyContent += renderElement('dateSignatureText', elements.dateSignatureText);
   } else {
     // Engagement content
     bodyContent += renderElement('introText', elements.introText);
@@ -1712,8 +1949,8 @@ const PersonalizationModal: React.FC<{
               onMouseLeave={handleMouseUp}
               style={{ width: '210mm', minHeight: '297mm' }}
             >
-              {/* Logo - show actual logo for engagement, exclude for others */}
-              {type === 'engagement' && agencySettings?.logo && elements.logo && (
+              {/* Logo - show actual logo for engagement, facture, invoice, devis and quote */}
+              {(type === 'engagement' || type === 'facture' || type === 'invoice' || type === 'devis' || type === 'quote') && agencySettings?.logo && elements.logo && (
                 <div
                   className={`absolute cursor-move ${selectedElement === 'logo' ? 'ring-2 ring-blue-500' : ''}`}
                   style={{ left: elements.logo.x || 50, top: elements.logo.y || 50 }}
@@ -1757,8 +1994,8 @@ const PersonalizationModal: React.FC<{
                 {elements.title?.text || ''}
               </div>
 
-              {/* Agence Name - show actual agency name for engagement, exclude for others */}
-              {type === 'engagement' && agencySettings?.name && elements.agenceName && (
+              {/* Agence Name - show actual agency name for engagement, facture, and invoice */}
+              {(type === 'engagement' || type === 'facture' || type === 'invoice') && agencySettings?.name && elements.agenceName && (
                 <div
                   className={`absolute cursor-move ${selectedElement === 'agenceName' ? 'ring-2 ring-blue-500' : ''}`}
                   style={{
@@ -2465,90 +2702,109 @@ const PersonalizationModal: React.FC<{
                       {elements.vehicleSectionTitle.text}
                     </div>
                   )}
-                  {elements.vehicleBrand && (
+                  {elements.vehicleBrandLabel && (
                     <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleBrand' ? 'ring-2 ring-blue-500' : ''}`}
+                      className={`absolute cursor-move ${selectedElement === 'vehicleBrandLabel' ? 'ring-2 ring-blue-500' : ''}`}
                       style={{
-                        left: elements.vehicleBrand.x,
-                        top: elements.vehicleBrand.y,
-                        fontSize: elements.vehicleBrand.fontSize,
-                        fontFamily: elements.vehicleBrand.fontFamily,
-                        color: elements.vehicleBrand.color,
-                        fontWeight: elements.vehicleBrand.fontWeight,
-                        fontStyle: elements.vehicleBrand.fontStyle,
-                        textDecoration: elements.vehicleBrand.textDecoration,
-                        textAlign: elements.vehicleBrand.textAlign,
-                        backgroundColor: elements.vehicleBrand.backgroundColor,
-                        padding: elements.vehicleBrand.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                        left: elements.vehicleBrandLabel.x,
+                        top: elements.vehicleBrandLabel.y,
+                        fontSize: elements.vehicleBrandLabel.fontSize,
+                        fontFamily: elements.vehicleBrandLabel.fontFamily,
+                        color: elements.vehicleBrandLabel.color,
+                        fontWeight: elements.vehicleBrandLabel.fontWeight,
+                        fontStyle: elements.vehicleBrandLabel.fontStyle,
+                        textDecoration: elements.vehicleBrandLabel.textDecoration,
+                        textAlign: elements.vehicleBrandLabel.textAlign,
+                        backgroundColor: elements.vehicleBrandLabel.backgroundColor,
+                        padding: elements.vehicleBrandLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
                       }}
-                      onMouseDown={(e) => handleMouseDown('vehicleBrand', e)}
+                      onMouseDown={(e) => handleMouseDown('vehicleBrandLabel', e)}
                     >
-                      {elements.vehicleBrand.text}
+                      {elements.vehicleBrandLabel.text}
                     </div>
                   )}
-                  {elements.vehicleModel && (
+                  {elements.vehicleInfo && (
                     <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleModel' ? 'ring-2 ring-blue-500' : ''}`}
+                      className={`absolute cursor-move ${selectedElement === 'vehicleInfo' ? 'ring-2 ring-blue-500' : ''}`}
                       style={{
-                        left: elements.vehicleModel.x,
-                        top: elements.vehicleModel.y,
-                        fontSize: elements.vehicleModel.fontSize,
-                        fontFamily: elements.vehicleModel.fontFamily,
-                        color: elements.vehicleModel.color,
-                        fontWeight: elements.vehicleModel.fontWeight,
-                        fontStyle: elements.vehicleModel.fontStyle,
-                        textDecoration: elements.vehicleModel.textDecoration,
-                        textAlign: elements.vehicleModel.textAlign,
-                        backgroundColor: elements.vehicleModel.backgroundColor,
-                        padding: elements.vehicleModel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                        left: elements.vehicleInfo.x,
+                        top: elements.vehicleInfo.y,
+                        fontSize: elements.vehicleInfo.fontSize,
+                        fontFamily: elements.vehicleInfo.fontFamily,
+                        color: elements.vehicleInfo.color,
+                        fontWeight: elements.vehicleInfo.fontWeight,
+                        fontStyle: elements.vehicleInfo.fontStyle,
+                        textDecoration: elements.vehicleInfo.textDecoration,
+                        textAlign: elements.vehicleInfo.textAlign,
+                        backgroundColor: elements.vehicleInfo.backgroundColor,
+                        padding: elements.vehicleInfo.backgroundColor !== 'transparent' ? '4px 8px' : '0'
                       }}
-                      onMouseDown={(e) => handleMouseDown('vehicleModel', e)}
+                      onMouseDown={(e) => handleMouseDown('vehicleInfo', e)}
                     >
-                      {elements.vehicleModel.text}
+                      {elements.vehicleInfo.text}
                     </div>
                   )}
-                  {elements.vehicleRegistration && (
+                  {elements.vehicleRegLabel && (
                     <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleRegistration' ? 'ring-2 ring-blue-500' : ''}`}
+                      className={`absolute cursor-move ${selectedElement === 'vehicleRegLabel' ? 'ring-2 ring-blue-500' : ''}`}
                       style={{
-                        left: elements.vehicleRegistration.x,
-                        top: elements.vehicleRegistration.y,
-                        fontSize: elements.vehicleRegistration.fontSize,
-                        fontFamily: elements.vehicleRegistration.fontFamily,
-                        color: elements.vehicleRegistration.color,
-                        fontWeight: elements.vehicleRegistration.fontWeight,
-                        fontStyle: elements.vehicleRegistration.fontStyle,
-                        textDecoration: elements.vehicleRegistration.textDecoration,
-                        textAlign: elements.vehicleRegistration.textAlign,
-                        backgroundColor: elements.vehicleRegistration.backgroundColor,
-                        padding: elements.vehicleRegistration.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                        left: elements.vehicleRegLabel.x,
+                        top: elements.vehicleRegLabel.y,
+                        fontSize: elements.vehicleRegLabel.fontSize,
+                        fontFamily: elements.vehicleRegLabel.fontFamily,
+                        color: elements.vehicleRegLabel.color,
+                        fontWeight: elements.vehicleRegLabel.fontWeight,
+                        fontStyle: elements.vehicleRegLabel.fontStyle,
+                        textDecoration: elements.vehicleRegLabel.textDecoration,
+                        textAlign: elements.vehicleRegLabel.textAlign,
+                        backgroundColor: elements.vehicleRegLabel.backgroundColor,
+                        padding: elements.vehicleRegLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
                       }}
-                      onMouseDown={(e) => handleMouseDown('vehicleRegistration', e)}
+                      onMouseDown={(e) => handleMouseDown('vehicleRegLabel', e)}
                     >
-                      {elements.vehicleRegistration.text}
+                      {elements.vehicleRegLabel.text}
                     </div>
                   )}
-
-                  {/* Rental Period */}
-                  {elements.rentalPeriodTitle && (
+                  {elements.vehicleReg && (
                     <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalPeriodTitle' ? 'ring-2 ring-blue-500' : ''}`}
+                      className={`absolute cursor-move ${selectedElement === 'vehicleReg' ? 'ring-2 ring-blue-500' : ''}`}
                       style={{
-                        left: elements.rentalPeriodTitle.x,
-                        top: elements.rentalPeriodTitle.y,
-                        fontSize: elements.rentalPeriodTitle.fontSize,
-                        fontFamily: elements.rentalPeriodTitle.fontFamily,
-                        color: elements.rentalPeriodTitle.color,
-                        fontWeight: elements.rentalPeriodTitle.fontWeight,
-                        fontStyle: elements.rentalPeriodTitle.fontStyle,
-                        textDecoration: elements.rentalPeriodTitle.textDecoration,
-                        textAlign: elements.rentalPeriodTitle.textAlign,
-                        backgroundColor: elements.rentalPeriodTitle.backgroundColor,
-                        padding: elements.rentalPeriodTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                        left: elements.vehicleReg.x,
+                        top: elements.vehicleReg.y,
+                        fontSize: elements.vehicleReg.fontSize,
+                        fontFamily: elements.vehicleReg.fontFamily,
+                        color: elements.vehicleReg.color,
+                        fontWeight: elements.vehicleReg.fontWeight,
+                        fontStyle: elements.vehicleReg.fontStyle,
+                        textDecoration: elements.vehicleReg.textDecoration,
+                        textAlign: elements.vehicleReg.textAlign,
+                        backgroundColor: elements.vehicleReg.backgroundColor,
+                        padding: elements.vehicleReg.backgroundColor !== 'transparent' ? '4px 8px' : '0'
                       }}
-                      onMouseDown={(e) => handleMouseDown('rentalPeriodTitle', e)}
+                      onMouseDown={(e) => handleMouseDown('vehicleReg', e)}
                     >
-                      {elements.rentalPeriodTitle.text}
+                      {elements.vehicleReg.text}
+                    </div>
+                  )}
+                  {elements.rentalPeriodLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'rentalPeriodLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.rentalPeriodLabel.x,
+                        top: elements.rentalPeriodLabel.y,
+                        fontSize: elements.rentalPeriodLabel.fontSize,
+                        fontFamily: elements.rentalPeriodLabel.fontFamily,
+                        color: elements.rentalPeriodLabel.color,
+                        fontWeight: elements.rentalPeriodLabel.fontWeight,
+                        fontStyle: elements.rentalPeriodLabel.fontStyle,
+                        textDecoration: elements.rentalPeriodLabel.textDecoration,
+                        textAlign: elements.rentalPeriodLabel.textAlign,
+                        backgroundColor: elements.rentalPeriodLabel.backgroundColor,
+                        padding: elements.rentalPeriodLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('rentalPeriodLabel', e)}
+                    >
+                      {elements.rentalPeriodLabel.text}
                     </div>
                   )}
                   {elements.rentalPeriod && (
@@ -2570,27 +2826,6 @@ const PersonalizationModal: React.FC<{
                       onMouseDown={(e) => handleMouseDown('rentalPeriod', e)}
                     >
                       {elements.rentalPeriod.text}
-                    </div>
-                  )}
-                  {elements.rentalDuration && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalDuration' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalDuration.x,
-                        top: elements.rentalDuration.y,
-                        fontSize: elements.rentalDuration.fontSize,
-                        fontFamily: elements.rentalDuration.fontFamily,
-                        color: elements.rentalDuration.color,
-                        fontWeight: elements.rentalDuration.fontWeight,
-                        fontStyle: elements.rentalDuration.fontStyle,
-                        textDecoration: elements.rentalDuration.textDecoration,
-                        textAlign: elements.rentalDuration.textAlign,
-                        backgroundColor: elements.rentalDuration.backgroundColor,
-                        padding: elements.rentalDuration.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalDuration', e)}
-                    >
-                      {elements.rentalDuration.text}
                     </div>
                   )}
 
@@ -2744,6 +2979,71 @@ const PersonalizationModal: React.FC<{
                       onMouseDown={(e) => handleMouseDown('supplementaryFees', e)}
                     >
                       {elements.supplementaryFees.text}
+                    </div>
+                  )}
+
+                  {/* Tarification Section */}
+                  {elements.tarificationSectionTitle && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'tarificationSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.tarificationSectionTitle.x,
+                        top: elements.tarificationSectionTitle.y,
+                        fontSize: elements.tarificationSectionTitle.fontSize,
+                        fontFamily: elements.tarificationSectionTitle.fontFamily,
+                        color: elements.tarificationSectionTitle.color,
+                        fontWeight: elements.tarificationSectionTitle.fontWeight,
+                        fontStyle: elements.tarificationSectionTitle.fontStyle,
+                        textDecoration: elements.tarificationSectionTitle.textDecoration,
+                        textAlign: elements.tarificationSectionTitle.textAlign,
+                        backgroundColor: elements.tarificationSectionTitle.backgroundColor,
+                        padding: elements.tarificationSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('tarificationSectionTitle', e)}
+                    >
+                      {elements.tarificationSectionTitle.text}
+                    </div>
+                  )}
+                  {elements.basePriceLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'basePriceLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.basePriceLabel.x,
+                        top: elements.basePriceLabel.y,
+                        fontSize: elements.basePriceLabel.fontSize,
+                        fontFamily: elements.basePriceLabel.fontFamily,
+                        color: elements.basePriceLabel.color,
+                        fontWeight: elements.basePriceLabel.fontWeight,
+                        fontStyle: elements.basePriceLabel.fontStyle,
+                        textDecoration: elements.basePriceLabel.textDecoration,
+                        textAlign: elements.basePriceLabel.textAlign,
+                        backgroundColor: elements.basePriceLabel.backgroundColor,
+                        padding: elements.basePriceLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('basePriceLabel', e)}
+                    >
+                      {elements.basePriceLabel.text}
+                    </div>
+                  )}
+                  {elements.basePrice && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'basePrice' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.basePrice.x,
+                        top: elements.basePrice.y,
+                        fontSize: elements.basePrice.fontSize,
+                        fontFamily: elements.basePrice.fontFamily,
+                        color: elements.basePrice.color,
+                        fontWeight: elements.basePrice.fontWeight,
+                        fontStyle: elements.basePrice.fontStyle,
+                        textDecoration: elements.basePrice.textDecoration,
+                        textAlign: elements.basePrice.textAlign,
+                        backgroundColor: elements.basePrice.backgroundColor,
+                        padding: elements.basePrice.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('basePrice', e)}
+                    >
+                      {elements.basePrice.text}
                     </div>
                   )}
 
@@ -2982,6 +3282,71 @@ const PersonalizationModal: React.FC<{
                     </div>
                   )}
 
+                  {/* Caution Section */}
+                  {elements.cautionSectionTitle && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'cautionSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.cautionSectionTitle.x,
+                        top: elements.cautionSectionTitle.y,
+                        fontSize: elements.cautionSectionTitle.fontSize,
+                        fontFamily: elements.cautionSectionTitle.fontFamily,
+                        color: elements.cautionSectionTitle.color,
+                        fontWeight: elements.cautionSectionTitle.fontWeight,
+                        fontStyle: elements.cautionSectionTitle.fontStyle,
+                        textDecoration: elements.cautionSectionTitle.textDecoration,
+                        textAlign: elements.cautionSectionTitle.textAlign,
+                        backgroundColor: elements.cautionSectionTitle.backgroundColor,
+                        padding: elements.cautionSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('cautionSectionTitle', e)}
+                    >
+                      {elements.cautionSectionTitle.text}
+                    </div>
+                  )}
+                  {elements.cautionAmountLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'cautionAmountLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.cautionAmountLabel.x,
+                        top: elements.cautionAmountLabel.y,
+                        fontSize: elements.cautionAmountLabel.fontSize,
+                        fontFamily: elements.cautionAmountLabel.fontFamily,
+                        color: elements.cautionAmountLabel.color,
+                        fontWeight: elements.cautionAmountLabel.fontWeight,
+                        fontStyle: elements.cautionAmountLabel.fontStyle,
+                        textDecoration: elements.cautionAmountLabel.textDecoration,
+                        textAlign: elements.cautionAmountLabel.textAlign,
+                        backgroundColor: elements.cautionAmountLabel.backgroundColor,
+                        padding: elements.cautionAmountLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('cautionAmountLabel', e)}
+                    >
+                      {elements.cautionAmountLabel.text}
+                    </div>
+                  )}
+                  {elements.cautionAmount && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'cautionAmount' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.cautionAmount.x,
+                        top: elements.cautionAmount.y,
+                        fontSize: elements.cautionAmount.fontSize,
+                        fontFamily: elements.cautionAmount.fontFamily,
+                        color: elements.cautionAmount.color,
+                        fontWeight: elements.cautionAmount.fontWeight,
+                        fontStyle: elements.cautionAmount.fontStyle,
+                        textDecoration: elements.cautionAmount.textDecoration,
+                        textAlign: elements.cautionAmount.textAlign,
+                        backgroundColor: elements.cautionAmount.backgroundColor,
+                        padding: elements.cautionAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('cautionAmount', e)}
+                    >
+                      {elements.cautionAmount.text}
+                    </div>
+                  )}
+
                   {/* Payment History */}
                   {elements.paymentHistoryTitle && (
                     <div
@@ -3024,6 +3389,30 @@ const PersonalizationModal: React.FC<{
                       onMouseDown={(e) => handleMouseDown('paymentHistory', e)}
                     >
                       {elements.paymentHistory.text}
+                    </div>
+                  )}
+
+                  {/* Footer */}
+                  {elements.footerText && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'footerText' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.footerText.x,
+                        top: elements.footerText.y,
+                        fontSize: elements.footerText.fontSize,
+                        fontFamily: elements.footerText.fontFamily,
+                        color: elements.footerText.color,
+                        fontWeight: elements.footerText.fontWeight,
+                        fontStyle: elements.footerText.fontStyle,
+                        textDecoration: elements.footerText.textDecoration,
+                        textAlign: elements.footerText.textAlign,
+                        backgroundColor: elements.footerText.backgroundColor,
+                        padding: elements.footerText.backgroundColor !== 'transparent' ? '4px 8px' : '0',
+                        whiteSpace: 'pre-line'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('footerText', e)}
+                    >
+                      {elements.footerText.text}
                     </div>
                   )}
                 </>
@@ -3076,113 +3465,6 @@ const PersonalizationModal: React.FC<{
                     </div>
                   )}
 
-                  {/* Company Information */}
-                  {elements.companySectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'companySectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.companySectionTitle.x,
-                        top: elements.companySectionTitle.y,
-                        fontSize: elements.companySectionTitle.fontSize,
-                        fontFamily: elements.companySectionTitle.fontFamily,
-                        color: elements.companySectionTitle.color,
-                        fontWeight: elements.companySectionTitle.fontWeight,
-                        fontStyle: elements.companySectionTitle.fontStyle,
-                        textDecoration: elements.companySectionTitle.textDecoration,
-                        textAlign: elements.companySectionTitle.textAlign,
-                        backgroundColor: elements.companySectionTitle.backgroundColor,
-                        padding: elements.companySectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('companySectionTitle', e)}
-                    >
-                      {elements.companySectionTitle.text}
-                    </div>
-                  )}
-                  {elements.companyName && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'companyName' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.companyName.x,
-                        top: elements.companyName.y,
-                        fontSize: elements.companyName.fontSize,
-                        fontFamily: elements.companyName.fontFamily,
-                        color: elements.companyName.color,
-                        fontWeight: elements.companyName.fontWeight,
-                        fontStyle: elements.companyName.fontStyle,
-                        textDecoration: elements.companyName.textDecoration,
-                        textAlign: elements.companyName.textAlign,
-                        backgroundColor: elements.companyName.backgroundColor,
-                        padding: elements.companyName.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('companyName', e)}
-                    >
-                      {elements.companyName.text}
-                    </div>
-                  )}
-                  {elements.companyCoordinates && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'companyCoordinates' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.companyCoordinates.x,
-                        top: elements.companyCoordinates.y,
-                        fontSize: elements.companyCoordinates.fontSize,
-                        fontFamily: elements.companyCoordinates.fontFamily,
-                        color: elements.companyCoordinates.color,
-                        fontWeight: elements.companyCoordinates.fontWeight,
-                        fontStyle: elements.companyCoordinates.fontStyle,
-                        textDecoration: elements.companyCoordinates.textDecoration,
-                        textAlign: elements.companyCoordinates.textAlign,
-                        backgroundColor: elements.companyCoordinates.backgroundColor,
-                        padding: elements.companyCoordinates.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('companyCoordinates', e)}
-                    >
-                      {elements.companyCoordinates.text}
-                    </div>
-                  )}
-                  {elements.companyAddress && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'companyAddress' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.companyAddress.x,
-                        top: elements.companyAddress.y,
-                        fontSize: elements.companyAddress.fontSize,
-                        fontFamily: elements.companyAddress.fontFamily,
-                        color: elements.companyAddress.color,
-                        fontWeight: elements.companyAddress.fontWeight,
-                        fontStyle: elements.companyAddress.fontStyle,
-                        textDecoration: elements.companyAddress.textDecoration,
-                        textAlign: elements.companyAddress.textAlign,
-                        backgroundColor: elements.companyAddress.backgroundColor,
-                        padding: elements.companyAddress.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('companyAddress', e)}
-                    >
-                      {elements.companyAddress.text}
-                    </div>
-                  )}
-                  {elements.companyEmail && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'companyEmail' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.companyEmail.x,
-                        top: elements.companyEmail.y,
-                        fontSize: elements.companyEmail.fontSize,
-                        fontFamily: elements.companyEmail.fontFamily,
-                        color: elements.companyEmail.color,
-                        fontWeight: elements.companyEmail.fontWeight,
-                        fontStyle: elements.companyEmail.fontStyle,
-                        textDecoration: elements.companyEmail.textDecoration,
-                        textAlign: elements.companyEmail.textAlign,
-                        backgroundColor: elements.companyEmail.backgroundColor,
-                        padding: elements.companyEmail.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('companyEmail', e)}
-                    >
-                      {elements.companyEmail.text}
-                    </div>
-                  )}
-
                   {/* Vehicle Specifications */}
                   {elements.vehicleSpecsTitle && (
                     <div
@@ -3203,6 +3485,27 @@ const PersonalizationModal: React.FC<{
                       onMouseDown={(e) => handleMouseDown('vehicleSpecsTitle', e)}
                     >
                       {elements.vehicleSpecsTitle.text}
+                    </div>
+                  )}
+                  {elements.vehicleBrandModelLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleBrandModelLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleBrandModelLabel.x,
+                        top: elements.vehicleBrandModelLabel.y,
+                        fontSize: elements.vehicleBrandModelLabel.fontSize,
+                        fontFamily: elements.vehicleBrandModelLabel.fontFamily,
+                        color: elements.vehicleBrandModelLabel.color,
+                        fontWeight: elements.vehicleBrandModelLabel.fontWeight,
+                        fontStyle: elements.vehicleBrandModelLabel.fontStyle,
+                        textDecoration: elements.vehicleBrandModelLabel.textDecoration,
+                        textAlign: elements.vehicleBrandModelLabel.textAlign,
+                        backgroundColor: elements.vehicleBrandModelLabel.backgroundColor,
+                        padding: elements.vehicleBrandModelLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleBrandModelLabel', e)}
+                    >
+                      {elements.vehicleBrandModelLabel.text}
                     </div>
                   )}
                   {elements.vehicleBrandModel && (
@@ -3226,6 +3529,27 @@ const PersonalizationModal: React.FC<{
                       {elements.vehicleBrandModel.text}
                     </div>
                   )}
+                  {elements.vehicleCodeLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleCodeLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleCodeLabel.x,
+                        top: elements.vehicleCodeLabel.y,
+                        fontSize: elements.vehicleCodeLabel.fontSize,
+                        fontFamily: elements.vehicleCodeLabel.fontFamily,
+                        color: elements.vehicleCodeLabel.color,
+                        fontWeight: elements.vehicleCodeLabel.fontWeight,
+                        fontStyle: elements.vehicleCodeLabel.fontStyle,
+                        textDecoration: elements.vehicleCodeLabel.textDecoration,
+                        textAlign: elements.vehicleCodeLabel.textAlign,
+                        backgroundColor: elements.vehicleCodeLabel.backgroundColor,
+                        padding: elements.vehicleCodeLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleCodeLabel', e)}
+                    >
+                      {elements.vehicleCodeLabel.text}
+                    </div>
+                  )}
                   {elements.vehicleCode && (
                     <div
                       className={`absolute cursor-move ${selectedElement === 'vehicleCode' ? 'ring-2 ring-blue-500' : ''}`}
@@ -3245,6 +3569,27 @@ const PersonalizationModal: React.FC<{
                       onMouseDown={(e) => handleMouseDown('vehicleCode', e)}
                     >
                       {elements.vehicleCode.text}
+                    </div>
+                  )}
+                  {elements.vehicleRegistrationLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleRegistrationLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleRegistrationLabel.x,
+                        top: elements.vehicleRegistrationLabel.y,
+                        fontSize: elements.vehicleRegistrationLabel.fontSize,
+                        fontFamily: elements.vehicleRegistrationLabel.fontFamily,
+                        color: elements.vehicleRegistrationLabel.color,
+                        fontWeight: elements.vehicleRegistrationLabel.fontWeight,
+                        fontStyle: elements.vehicleRegistrationLabel.fontStyle,
+                        textDecoration: elements.vehicleRegistrationLabel.textDecoration,
+                        textAlign: elements.vehicleRegistrationLabel.textAlign,
+                        backgroundColor: elements.vehicleRegistrationLabel.backgroundColor,
+                        padding: elements.vehicleRegistrationLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleRegistrationLabel', e)}
+                    >
+                      {elements.vehicleRegistrationLabel.text}
                     </div>
                   )}
                   {elements.vehicleRegistration && (
@@ -3352,6 +3697,195 @@ const PersonalizationModal: React.FC<{
                       {elements.fuelType.text}
                     </div>
                   )}
+                  {elements.vehicleColorLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleColorLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleColorLabel.x,
+                        top: elements.vehicleColorLabel.y,
+                        fontSize: elements.vehicleColorLabel.fontSize,
+                        fontFamily: elements.vehicleColorLabel.fontFamily,
+                        color: elements.vehicleColorLabel.color,
+                        fontWeight: elements.vehicleColorLabel.fontWeight,
+                        fontStyle: elements.vehicleColorLabel.fontStyle,
+                        textDecoration: elements.vehicleColorLabel.textDecoration,
+                        textAlign: elements.vehicleColorLabel.textAlign,
+                        backgroundColor: elements.vehicleColorLabel.backgroundColor,
+                        padding: elements.vehicleColorLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleColorLabel', e)}
+                    >
+                      {elements.vehicleColorLabel.text}
+                    </div>
+                  )}
+                  {elements.vehicleColor && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleColor' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleColor.x,
+                        top: elements.vehicleColor.y,
+                        fontSize: elements.vehicleColor.fontSize,
+                        fontFamily: elements.vehicleColor.fontFamily,
+                        color: elements.vehicleColor.color,
+                        fontWeight: elements.vehicleColor.fontWeight,
+                        fontStyle: elements.vehicleColor.fontStyle,
+                        textDecoration: elements.vehicleColor.textDecoration,
+                        textAlign: elements.vehicleColor.textAlign,
+                        backgroundColor: elements.vehicleColor.backgroundColor,
+                        padding: elements.vehicleColor.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleColor', e)}
+                    >
+                      {elements.vehicleColor.text}
+                    </div>
+                  )}
+                  {elements.vehicleClassLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleClassLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleClassLabel.x,
+                        top: elements.vehicleClassLabel.y,
+                        fontSize: elements.vehicleClassLabel.fontSize,
+                        fontFamily: elements.vehicleClassLabel.fontFamily,
+                        color: elements.vehicleClassLabel.color,
+                        fontWeight: elements.vehicleClassLabel.fontWeight,
+                        fontStyle: elements.vehicleClassLabel.fontStyle,
+                        textDecoration: elements.vehicleClassLabel.textDecoration,
+                        textAlign: elements.vehicleClassLabel.textAlign,
+                        backgroundColor: elements.vehicleClassLabel.backgroundColor,
+                        padding: elements.vehicleClassLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleClassLabel', e)}
+                    >
+                      {elements.vehicleClassLabel.text}
+                    </div>
+                  )}
+                  {elements.vehicleClass && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleClass' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleClass.x,
+                        top: elements.vehicleClass.y,
+                        fontSize: elements.vehicleClass.fontSize,
+                        fontFamily: elements.vehicleClass.fontFamily,
+                        color: elements.vehicleClass.color,
+                        fontWeight: elements.vehicleClass.fontWeight,
+                        fontStyle: elements.vehicleClass.fontStyle,
+                        textDecoration: elements.vehicleClass.textDecoration,
+                        textAlign: elements.vehicleClass.textAlign,
+                        backgroundColor: elements.vehicleClass.backgroundColor,
+                        padding: elements.vehicleClass.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleClass', e)}
+                    >
+                      {elements.vehicleClass.text}
+                    </div>
+                  )}
+                  {elements.vehicleCharacteristicsLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleCharacteristicsLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleCharacteristicsLabel.x,
+                        top: elements.vehicleCharacteristicsLabel.y,
+                        fontSize: elements.vehicleCharacteristicsLabel.fontSize,
+                        fontFamily: elements.vehicleCharacteristicsLabel.fontFamily,
+                        color: elements.vehicleCharacteristicsLabel.color,
+                        fontWeight: elements.vehicleCharacteristicsLabel.fontWeight,
+                        fontStyle: elements.vehicleCharacteristicsLabel.fontStyle,
+                        textDecoration: elements.vehicleCharacteristicsLabel.textDecoration,
+                        textAlign: elements.vehicleCharacteristicsLabel.textAlign,
+                        backgroundColor: elements.vehicleCharacteristicsLabel.backgroundColor,
+                        padding: elements.vehicleCharacteristicsLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleCharacteristicsLabel', e)}
+                    >
+                      {elements.vehicleCharacteristicsLabel.text}
+                    </div>
+                  )}
+                  {elements.vehicleCharacteristics && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'vehicleCharacteristics' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.vehicleCharacteristics.x,
+                        top: elements.vehicleCharacteristics.y,
+                        fontSize: elements.vehicleCharacteristics.fontSize,
+                        fontFamily: elements.vehicleCharacteristics.fontFamily,
+                        color: elements.vehicleCharacteristics.color,
+                        fontWeight: elements.vehicleCharacteristics.fontWeight,
+                        fontStyle: elements.vehicleCharacteristics.fontStyle,
+                        textDecoration: elements.vehicleCharacteristics.textDecoration,
+                        textAlign: elements.vehicleCharacteristics.textAlign,
+                        backgroundColor: elements.vehicleCharacteristics.backgroundColor,
+                        padding: elements.vehicleCharacteristics.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('vehicleCharacteristics', e)}
+                    >
+                      {elements.vehicleCharacteristics.text}
+                    </div>
+                  )}
+                  {elements.fuelTypeLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'fuelTypeLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.fuelTypeLabel.x,
+                        top: elements.fuelTypeLabel.y,
+                        fontSize: elements.fuelTypeLabel.fontSize,
+                        fontFamily: elements.fuelTypeLabel.fontFamily,
+                        color: elements.fuelTypeLabel.color,
+                        fontWeight: elements.fuelTypeLabel.fontWeight,
+                        fontStyle: elements.fuelTypeLabel.fontStyle,
+                        textDecoration: elements.fuelTypeLabel.textDecoration,
+                        textAlign: elements.fuelTypeLabel.textAlign,
+                        backgroundColor: elements.fuelTypeLabel.backgroundColor,
+                        padding: elements.fuelTypeLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('fuelTypeLabel', e)}
+                    >
+                      {elements.fuelTypeLabel.text}
+                    </div>
+                  )}
+                  {elements.fuelType && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'fuelType' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.fuelType.x,
+                        top: elements.fuelType.y,
+                        fontSize: elements.fuelType.fontSize,
+                        fontFamily: elements.fuelType.fontFamily,
+                        color: elements.fuelType.color,
+                        fontWeight: elements.fuelType.fontWeight,
+                        fontStyle: elements.fuelType.fontStyle,
+                        textDecoration: elements.fuelType.textDecoration,
+                        textAlign: elements.fuelType.textAlign,
+                        backgroundColor: elements.fuelType.backgroundColor,
+                        padding: elements.fuelType.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('fuelType', e)}
+                    >
+                      {elements.fuelType.text}
+                    </div>
+                  )}
+                  {elements.currentMileageLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'currentMileageLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.currentMileageLabel.x,
+                        top: elements.currentMileageLabel.y,
+                        fontSize: elements.currentMileageLabel.fontSize,
+                        fontFamily: elements.currentMileageLabel.fontFamily,
+                        color: elements.currentMileageLabel.color,
+                        fontWeight: elements.currentMileageLabel.fontWeight,
+                        fontStyle: elements.currentMileageLabel.fontStyle,
+                        textDecoration: elements.currentMileageLabel.textDecoration,
+                        textAlign: elements.currentMileageLabel.textAlign,
+                        backgroundColor: elements.currentMileageLabel.backgroundColor,
+                        padding: elements.currentMileageLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('currentMileageLabel', e)}
+                    >
+                      {elements.currentMileageLabel.text}
+                    </div>
+                  )}
                   {elements.currentMileage && (
                     <div
                       className={`absolute cursor-move ${selectedElement === 'currentMileage' ? 'ring-2 ring-blue-500' : ''}`}
@@ -3373,6 +3907,28 @@ const PersonalizationModal: React.FC<{
                       {elements.currentMileage.text}
                     </div>
                   )}
+                  {elements.serialNumberLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'serialNumberLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.serialNumberLabel.x,
+                        top: elements.serialNumberLabel.y,
+                        fontSize: elements.serialNumberLabel.fontSize,
+                        fontFamily: elements.serialNumberLabel.fontFamily,
+                        color: elements.serialNumberLabel.color,
+                        fontWeight: elements.serialNumberLabel.fontWeight,
+                        fontStyle: elements.serialNumberLabel.fontStyle,
+                        textDecoration: elements.serialNumberLabel.textDecoration,
+                        textAlign: elements.serialNumberLabel.textAlign,
+                        backgroundColor: elements.serialNumberLabel.backgroundColor,
+                        padding: elements.serialNumberLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('serialNumberLabel', e)}
+                    >
+                      {elements.serialNumberLabel.text}
+                    </div>
+                  )}
+
                   {elements.serialNumber && (
                     <div
                       className={`absolute cursor-move ${selectedElement === 'serialNumber' ? 'ring-2 ring-blue-500' : ''}`}
@@ -3417,6 +3973,27 @@ const PersonalizationModal: React.FC<{
                       {elements.rentalConditionsTitle.text}
                     </div>
                   )}
+                  {elements.dailyPriceLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'dailyPriceLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.dailyPriceLabel.x,
+                        top: elements.dailyPriceLabel.y,
+                        fontSize: elements.dailyPriceLabel.fontSize,
+                        fontFamily: elements.dailyPriceLabel.fontFamily,
+                        color: elements.dailyPriceLabel.color,
+                        fontWeight: elements.dailyPriceLabel.fontWeight,
+                        fontStyle: elements.dailyPriceLabel.fontStyle,
+                        textDecoration: elements.dailyPriceLabel.textDecoration,
+                        textAlign: elements.dailyPriceLabel.textAlign,
+                        backgroundColor: elements.dailyPriceLabel.backgroundColor,
+                        padding: elements.dailyPriceLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('dailyPriceLabel', e)}
+                    >
+                      {elements.dailyPriceLabel.text}
+                    </div>
+                  )}
                   {elements.dailyPrice && (
                     <div
                       className={`absolute cursor-move ${selectedElement === 'dailyPrice' ? 'ring-2 ring-blue-500' : ''}`}
@@ -3436,6 +4013,27 @@ const PersonalizationModal: React.FC<{
                       onMouseDown={(e) => handleMouseDown('dailyPrice', e)}
                     >
                       {elements.dailyPrice.text}
+                    </div>
+                  )}
+                  {elements.numberOfDaysLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'numberOfDaysLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.numberOfDaysLabel.x,
+                        top: elements.numberOfDaysLabel.y,
+                        fontSize: elements.numberOfDaysLabel.fontSize,
+                        fontFamily: elements.numberOfDaysLabel.fontFamily,
+                        color: elements.numberOfDaysLabel.color,
+                        fontWeight: elements.numberOfDaysLabel.fontWeight,
+                        fontStyle: elements.numberOfDaysLabel.fontStyle,
+                        textDecoration: elements.numberOfDaysLabel.textDecoration,
+                        textAlign: elements.numberOfDaysLabel.textAlign,
+                        backgroundColor: elements.numberOfDaysLabel.backgroundColor,
+                        padding: elements.numberOfDaysLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('numberOfDaysLabel', e)}
+                    >
+                      {elements.numberOfDaysLabel.text}
                     </div>
                   )}
                   {elements.numberOfDays && (
@@ -3459,6 +4057,27 @@ const PersonalizationModal: React.FC<{
                       {elements.numberOfDays.text}
                     </div>
                   )}
+                  {elements.rentalPeriodLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'rentalPeriodLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.rentalPeriodLabel.x,
+                        top: elements.rentalPeriodLabel.y,
+                        fontSize: elements.rentalPeriodLabel.fontSize,
+                        fontFamily: elements.rentalPeriodLabel.fontFamily,
+                        color: elements.rentalPeriodLabel.color,
+                        fontWeight: elements.rentalPeriodLabel.fontWeight,
+                        fontStyle: elements.rentalPeriodLabel.fontStyle,
+                        textDecoration: elements.rentalPeriodLabel.textDecoration,
+                        textAlign: elements.rentalPeriodLabel.textAlign,
+                        backgroundColor: elements.rentalPeriodLabel.backgroundColor,
+                        padding: elements.rentalPeriodLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('rentalPeriodLabel', e)}
+                    >
+                      {elements.rentalPeriodLabel.text}
+                    </div>
+                  )}
                   {elements.rentalPeriod && (
                     <div
                       className={`absolute cursor-move ${selectedElement === 'rentalPeriod' ? 'ring-2 ring-blue-500' : ''}`}
@@ -3478,6 +4097,27 @@ const PersonalizationModal: React.FC<{
                       onMouseDown={(e) => handleMouseDown('rentalPeriod', e)}
                     >
                       {elements.rentalPeriod.text}
+                    </div>
+                  )}
+                  {elements.totalHTLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'totalHTLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.totalHTLabel.x,
+                        top: elements.totalHTLabel.y,
+                        fontSize: elements.totalHTLabel.fontSize,
+                        fontFamily: elements.totalHTLabel.fontFamily,
+                        color: elements.totalHTLabel.color,
+                        fontWeight: elements.totalHTLabel.fontWeight,
+                        fontStyle: elements.totalHTLabel.fontStyle,
+                        textDecoration: elements.totalHTLabel.textDecoration,
+                        textAlign: elements.totalHTLabel.textAlign,
+                        backgroundColor: elements.totalHTLabel.backgroundColor,
+                        padding: elements.totalHTLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('totalHTLabel', e)}
+                    >
+                      {elements.totalHTLabel.text}
                     </div>
                   )}
                   {elements.totalHT && (
@@ -3501,6 +4141,27 @@ const PersonalizationModal: React.FC<{
                       {elements.totalHT.text}
                     </div>
                   )}
+                  {elements.totalTTCLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'totalTTCLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.totalTTCLabel.x,
+                        top: elements.totalTTCLabel.y,
+                        fontSize: elements.totalTTCLabel.fontSize,
+                        fontFamily: elements.totalTTCLabel.fontFamily,
+                        color: elements.totalTTCLabel.color,
+                        fontWeight: elements.totalTTCLabel.fontWeight,
+                        fontStyle: elements.totalTTCLabel.fontStyle,
+                        textDecoration: elements.totalTTCLabel.textDecoration,
+                        textAlign: elements.totalTTCLabel.textAlign,
+                        backgroundColor: elements.totalTTCLabel.backgroundColor,
+                        padding: elements.totalTTCLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('totalTTCLabel', e)}
+                    >
+                      {elements.totalTTCLabel.text}
+                    </div>
+                  )}
                   {elements.totalTTC && (
                     <div
                       className={`absolute cursor-move ${selectedElement === 'totalTTC' ? 'ring-2 ring-blue-500' : ''}`}
@@ -3520,6 +4181,27 @@ const PersonalizationModal: React.FC<{
                       onMouseDown={(e) => handleMouseDown('totalTTC', e)}
                     >
                       {elements.totalTTC.text}
+                    </div>
+                  )}
+                  {elements.numberOfVehiclesLabel && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'numberOfVehiclesLabel' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.numberOfVehiclesLabel.x,
+                        top: elements.numberOfVehiclesLabel.y,
+                        fontSize: elements.numberOfVehiclesLabel.fontSize,
+                        fontFamily: elements.numberOfVehiclesLabel.fontFamily,
+                        color: elements.numberOfVehiclesLabel.color,
+                        fontWeight: elements.numberOfVehiclesLabel.fontWeight,
+                        fontStyle: elements.numberOfVehiclesLabel.fontStyle,
+                        textDecoration: elements.numberOfVehiclesLabel.textDecoration,
+                        textAlign: elements.numberOfVehiclesLabel.textAlign,
+                        backgroundColor: elements.numberOfVehiclesLabel.backgroundColor,
+                        padding: elements.numberOfVehiclesLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('numberOfVehiclesLabel', e)}
+                    >
+                      {elements.numberOfVehiclesLabel.text}
                     </div>
                   )}
                   {elements.numberOfVehicles && (
@@ -3635,10 +4317,103 @@ const PersonalizationModal: React.FC<{
                 </>
               ) : null}
 
-              {/* Contract-specific elements */}
+              {/* Contract-specific elements - rendering helper */}
               {type === 'contract' && (
                 <>
-                  {/* Contract number and date */}
+                  {/* Helper function to render a contract element */}
+                  {(() => {
+                    const renderElement = (key: string, element: any) => {
+                      if (!element) return null;
+                      return (
+                        <div
+                          key={key}
+                          className={`absolute cursor-move ${selectedElement === key ? 'ring-2 ring-blue-500' : ''}`}
+                          style={{
+                            left: element.x,
+                            top: element.y,
+                            fontSize: element.fontSize,
+                            fontFamily: element.fontFamily,
+                            color: element.color,
+                            fontWeight: element.fontWeight,
+                            fontStyle: element.fontStyle,
+                            textDecoration: element.textDecoration,
+                            textAlign: element.textAlign,
+                            backgroundColor: element.backgroundColor,
+                            padding: element.backgroundColor !== 'transparent' ? '4px 8px' : '0',
+                            whiteSpace: 'pre-line',
+                            maxWidth: key === 'termsContent' ? '500px' : 'auto'
+                          }}
+                          onMouseDown={(e) => handleMouseDown(key, e)}
+                        >
+                          {element.text}
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <>
+                        {/* Page 1 elements */}
+                        {renderElement('title', elements.title)}
+                        {renderElement('contractNumber', elements.contractNumber)}
+                        {renderElement('contractDate', elements.contractDate)}
+                        
+                        {/* Client Information */}
+                        {renderElement('clientSectionTitle', elements.clientSectionTitle)}
+                        {renderElement('clientNameLabel', elements.clientNameLabel)}
+                        {renderElement('clientName', elements.clientName)}
+                        {renderElement('clientPhoneLabel', elements.clientPhoneLabel)}
+                        {renderElement('clientPhone', elements.clientPhone)}
+                        {renderElement('clientIdLabel', elements.clientIdLabel)}
+                        {renderElement('clientId', elements.clientId)}
+                        {renderElement('clientAddressLabel', elements.clientAddressLabel)}
+                        {renderElement('clientAddress', elements.clientAddress)}
+                        {renderElement('driverLicenseLabel', elements.driverLicenseLabel)}
+                        {renderElement('driverLicense', elements.driverLicense)}
+                        
+                        {/* Vehicle Information */}
+                        {renderElement('vehicleSectionTitle', elements.vehicleSectionTitle)}
+                        {renderElement('vehicleBrandLabel', elements.vehicleBrandLabel)}
+                        {renderElement('vehicleBrand', elements.vehicleBrand)}
+                        {renderElement('vehicleModelLabel', elements.vehicleModelLabel)}
+                        {renderElement('vehicleModel', elements.vehicleModel)}
+                        {renderElement('vehicleRegistrationLabel', elements.vehicleRegistrationLabel)}
+                        {renderElement('vehicleRegistration', elements.vehicleRegistration)}
+                        {renderElement('vehicleYearLabel', elements.vehicleYearLabel)}
+                        {renderElement('vehicleYear', elements.vehicleYear)}
+                        {renderElement('vehicleColorLabel', elements.vehicleColorLabel)}
+                        {renderElement('vehicleColor', elements.vehicleColor)}
+                        
+                        {/* Reservation Details */}
+                        {renderElement('reservationSectionTitle', elements.reservationSectionTitle)}
+                        {renderElement('periodLabel', elements.periodLabel)}
+                        {renderElement('reservationPeriod', elements.reservationPeriod)}
+                        {renderElement('durationLabel', elements.durationLabel)}
+                        {renderElement('reservationDuration', elements.reservationDuration)}
+                        {renderElement('priceLabel', elements.priceLabel)}
+                        {renderElement('reservationPrice', elements.reservationPrice)}
+                        
+                        {/* Inspection Information */}
+                        {renderElement('inspectionSectionTitle', elements.inspectionSectionTitle)}
+                        {renderElement('departureMileageLabel', elements.departureMileageLabel)}
+                        {renderElement('departureMileage', elements.departureMileage)}
+                        {renderElement('departureFuelLabel', elements.departureFuelLabel)}
+                        {renderElement('departureFuel', elements.departureFuel)}
+                        
+                        {/* Signatures - Page 1 */}
+                        {renderElement('agencySignatureText', elements.agencySignatureText)}
+                        {renderElement('clientSignatureText', elements.clientSignatureText)}
+                        
+                        {/* Page 2 elements */}
+                        {renderElement('termsPageTitle', elements.termsPageTitle)}
+                        {renderElement('termsTitle', elements.termsTitle)}
+                        {renderElement('termsContent', elements.termsContent)}
+                        {renderElement('termsAgencySignatureText', elements.termsAgencySignatureText)}
+                        {renderElement('termsClientSignatureText', elements.termsClientSignatureText)}
+                      </>
+                    );
+                  })()}
+
+                  {/* Original contract number and date - keeping for reference, can be removed */}
                   {elements.contractNumber && (
                     <div
                       className={`absolute cursor-move ${selectedElement === 'contractNumber' ? 'ring-2 ring-blue-500' : ''}`}
