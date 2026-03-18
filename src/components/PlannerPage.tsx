@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Language, ReservationDetails, Client, Car } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, MoreVertical } from 'lucide-react';
+import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, MoreVertical, Grid3x3, CalendarDays } from 'lucide-react';
 import { ReservationDetailsView } from './ReservationDetailsView';
 import { CreateReservationForm } from './CreateReservationForm';
 import { EditReservationForm } from './EditReservationForm';
 import { ActivationModal, CompletionModal } from './ReservationDetailsView';
+import { ReservationTimelineView } from './ReservationTimelineView';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { supabase } from '../supabase';
@@ -15,7 +16,8 @@ interface PlannerPageProps {
 }
 
 export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
-  const [currentView, setCurrentView] = useState<'list' | 'create' | 'details' | 'edit'>('list');
+  const [currentView, setCurrentView] = useState<'list' | 'calendar' | 'create' | 'details' | 'edit'>('list');
+  const [displayMode, setDisplayMode] = useState<'grid' | 'calendar'>('grid');
   const [selectedReservation, setSelectedReservation] = useState<ReservationDetails | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -328,15 +330,42 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
     );
   }
 
+  if (currentView === 'calendar' && displayMode === 'calendar') {
+    return (
+      <div className="space-y-8">
+        <ReservationTimelineView 
+          lang={lang} 
+          reservations={reservations}
+          onSelectReservation={(res) => {
+            setSelectedReservation(res);
+            setCurrentView('details');
+          }}
+        />
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => {
+            setCurrentView('list');
+            setDisplayMode('grid');
+          }}
+          className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+        >
+          <Grid3x3 className="w-4 h-4" />
+          {lang === 'fr' ? 'Vue Liste' : 'عرض القائمة'}
+        </motion.button>
+      </div>
+    );
+  }
+
   if (currentView === 'details' && selectedReservation) {
-    return <ReservationDetailsView lang={lang} reservation={selectedReservation} onBack={() => setCurrentView('list')} onUpdate={updateReservation} />;
+    return <ReservationDetailsView lang={lang} reservation={selectedReservation} onBack={() => setCurrentView(displayMode === 'calendar' ? 'calendar' : 'list')} onUpdate={updateReservation} />;
   }
 
   if (currentView === 'edit' && selectedReservation) {
     return <EditReservationForm 
       lang={lang} 
       reservation={selectedReservation} 
-      onBack={() => setCurrentView('list')} 
+      onBack={() => setCurrentView(displayMode === 'calendar' ? 'calendar' : 'list')} 
       onUpdate={updateReservation}
       agencies={agencies}
       isLoadingAgencies={isLoadingAgencies}
@@ -385,6 +414,21 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
             <option value="cancelled">{lang === 'fr' ? 'Annulé' : 'ملغي'}</option>
           </select>
         </div>
+
+        {/* View Toggle Button */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => {
+            setDisplayMode('calendar');
+            setCurrentView('calendar');
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold rounded-lg transition-all"
+          title={lang === 'fr' ? 'Voir le calendrier' : 'عرض التقويم'}
+        >
+          <CalendarDays className="w-4 h-4" />
+          {lang === 'fr' ? 'Calendrier' : 'التقويم'}
+        </motion.button>
 
         {/* Add New Reservation */}
         <button
