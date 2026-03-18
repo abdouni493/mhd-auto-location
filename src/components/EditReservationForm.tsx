@@ -155,56 +155,117 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
 
   const handleSave = async () => {
     try {
-      // Calculate the new total price including services with proper null checks
-      const pricePerDay = reservation.pricePerDay || 0;
-      const totalDays = reservation.totalDays || 0;
-      const basePrice = pricePerDay * totalDays;
+      console.log('🔍 === EDIT SAVE STARTED ===');
+      console.log('📋 Current formData:', JSON.stringify(formData, null, 2));
+      console.log('📋 Original reservation:', JSON.stringify(reservation, null, 2));
 
+      // === DATES & DURATION CALCULATION ===
+      const newDepartureDate = formData.step1?.departureDate || reservation.step1.departureDate;
+      const newReturnDate = formData.step1?.returnDate || reservation.step1.returnDate;
+      
+      console.log('📅 Departure Date - Original:', reservation.step1.departureDate, '→ New:', newDepartureDate);
+      console.log('📅 Return Date - Original:', reservation.step1.returnDate, '→ New:', newReturnDate);
+
+      // Calculate new total days from dates
+      const newTotalDays = Math.ceil(
+        (new Date(newReturnDate).getTime() - new Date(newDepartureDate).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      
+      console.log('📊 Total Days - Original:', reservation.totalDays, '→ New:', newTotalDays);
+
+      // === PRICING CALCULATION ===
+      const pricePerDay = reservation.pricePerDay || reservation.car?.priceDay || 0;
+      const basePrice = pricePerDay * newTotalDays;
+      
+      console.log('💰 Price/Day:', pricePerDay, 'DA');
+      console.log('💰 Base Price (old):', (pricePerDay * (reservation.totalDays || 0)).toLocaleString(), 'DA');
+      console.log('💰 Base Price (new):', basePrice.toLocaleString(), 'DA');
+
+      // === SERVICES & FEES ===
       const servicesTotal = formData.step5?.additionalServices?.reduce((sum, s) => sum + (s.price || 0), 0) || 0;
       const discountAmount = formData.discountAmount || 0;
       const additionalFees = formData.step6?.additionalFees || formData.additionalFees || 0;
       const tvaAmount = formData.step6?.tvaAmount || 0;
+      
+      console.log('🛒 Services Total:', servicesTotal.toLocaleString(), 'DA');
+      console.log('💳 Discount Amount:', discountAmount.toLocaleString(), 'DA', '(Type:', formData.discountType, ')');
+      console.log('📝 Additional Fees:', additionalFees.toLocaleString(), 'DA');
+      console.log('📊 TVA Amount:', tvaAmount.toLocaleString(), 'DA (Applied:', formData.step6?.tvaApplied, ')');
 
-      // Calculate new total price with null safety
+      // === TOTAL PRICE CALCULATION ===
       let newTotalPrice = basePrice + servicesTotal + additionalFees + tvaAmount;
+      
+      console.log('💰 Subtotal before discount:', newTotalPrice.toLocaleString(), 'DA');
 
       // Apply discount
       if (formData.discountType === 'percentage' && discountAmount > 0) {
         newTotalPrice = newTotalPrice * (1 - discountAmount / 100);
+        console.log('💰 After discount (' + discountAmount + '%):', newTotalPrice.toLocaleString(), 'DA');
       } else if (formData.discountType === 'fixed' && discountAmount > 0) {
         newTotalPrice = newTotalPrice - discountAmount;
+        console.log('💰 After discount (fixed ' + discountAmount + ' DA):', newTotalPrice.toLocaleString(), 'DA');
       }
 
       // Ensure total price is not negative and is a valid number
       newTotalPrice = Math.max(0, Math.round(newTotalPrice || 0));
+      
+      console.log('💰 FINAL TOTAL PRICE:', newTotalPrice.toLocaleString(), 'DA');
+
+      // === DEPOSIT (CAUTION) ===
+      const newDeposit = formData.deposit !== undefined ? formData.deposit : reservation.deposit;
+      console.log('🔐 Deposit - Original:', (reservation.deposit || 0).toLocaleString(), 'DA → New:', newDeposit.toLocaleString(), 'DA');
+
+      // === ADVANCE & REMAINING PAYMENT ===
+      const newAdvancePayment = formData.step6?.advancePayment || formData.advancePayment || 0;
+      const newRemainingPayment = Math.max(0, newTotalPrice - newAdvancePayment);
+      
+      console.log('💳 Advance Payment:', newAdvancePayment.toLocaleString(), 'DA');
+      console.log('💳 Remaining Payment:', newRemainingPayment.toLocaleString(), 'DA');
 
       // Prepare the update data
       const updateData: any = {
+        // Dates & Duration
+        departureDate: newDepartureDate,
+        returnDate: newReturnDate,
+        totalDays: newTotalDays,
+        
+        // Pricing
         discountAmount: formData.discountAmount,
         discountType: formData.discountType,
-        advancePayment: formData.step6?.advancePayment || formData.advancePayment,
-        remainingPayment: formData.step6?.remainingPayment || formData.remainingPayment,
+        advancePayment: newAdvancePayment,
+        remainingPayment: newRemainingPayment,
         notes: formData.step6?.paymentNotes || formData.notes,
         tvaApplied: formData.step6?.tvaApplied || formData.tvaApplied,
         tvaAmount: formData.step6?.tvaAmount,
         additionalFees: formData.step6?.additionalFees || formData.additionalFees,
-        totalPrice: newTotalPrice, // Ensure this is never null
+        totalPrice: newTotalPrice,
+        
+        // Deposit & Status
+        deposit: newDeposit,
         cautionEnabled: formData.step6?.cautionEnabled,
+        
         // If in inspection mode (accepted), set status to confirmed
         ...(isInspectionMode ? { status: 'confirmed' } : {})
       };
 
+      console.log('📤 UPDATE DATA TO SAVE:', JSON.stringify(updateData, null, 2));
+
       // Update the reservation
+      console.log('💾 Saving to database...');
       await ReservationsService.updateReservation(reservation.id, updateData);
+      console.log('✅ Reservation saved successfully');
 
       // Update reservation services
       const services = formData.step5?.additionalServices || [];
+      console.log('🛒 Updating services:', services.length, 'items');
       await ReservationsService.updateReservationServices(reservation.id, services);
+      console.log('✅ Services updated successfully');
 
       // Save/update departure inspection if present
       const inspection = formData.step3?.departureInspection;
       if (inspection) {
         try {
+          console.log('🔍 Updating inspection...');
           // Determine agency_id from inspection location
           let agencyId = reservation.step1.departureAgency || reservation.step1.returnAgency || '';
           if (inspection.location) {
@@ -296,32 +357,34 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
               });
             }
           }
+          console.log('✅ Inspection updated successfully');
         } catch (err) {
           console.error('Error saving inspection during edit:', err);
           throw err; // propagate so outer catch prevents closing the modal
         }
       }
 
-      // Success notification removed (handled by UI state)
-
       // Update local reservation data for immediate UI feedback
       const updatedReservation = {
         ...reservation,
         ...updateData,
+        step1: formData.step1,
         step6: formData.step6,
         step3: formData.step3,
         step5: formData.step5
       };
 
-      console.log('Reservation updated successfully:', updateData);
+      console.log('✅ === SAVE COMPLETED SUCCESSFULLY ===');
+      console.log('📊 Updated Reservation Data:', JSON.stringify(updatedReservation, null, 2));
+      
       // notify parent so it can refresh its state
       if (onUpdate) {
         onUpdate(updatedReservation as ReservationDetails);
       }
       onBack();
     } catch (error) {
-      console.error('Error updating reservation:', error);
-      alert(lang === 'fr' ? '❌ Erreur lors de la mise à jour de la réservation. Les services n\'ont pas été sauvegardés.' : '❌ Error updating reservation. Services were not saved.');
+      console.error('❌ === ERROR DURING SAVE ===', error);
+      alert(lang === 'fr' ? '❌ Erreur lors de la mise à jour de la réservation. Vérifiez la console pour plus de détails.' : '❌ Error updating reservation. Check console for details.');
     }
   };
 

@@ -2437,6 +2437,7 @@ export const Step6FinalPricing: React.FC<{
   const [isManualTotal, setIsManualTotal] = useState(false);
   const [manualTotal, setManualTotal] = useState<number | ''>('');
   const [cautionEnabled, setCautionEnabled] = useState(true);
+  const [editedDeposit, setEditedDeposit] = useState<number | ''>('');
 
   // TVA rates options
   const tvaRates = [0, 9, 19, 21];
@@ -2450,6 +2451,17 @@ export const Step6FinalPricing: React.FC<{
       setPaymentNotes(formData.step6.paymentNotes || '');
     }
   }, [formData.step6]);
+
+  // Initialize editedDeposit from formData or selectedCar
+  useEffect(() => {
+    if (formData.deposit) {
+      setEditedDeposit(formData.deposit);
+    } else if (formData.step2?.selectedCar) {
+      setEditedDeposit(formData.step2.selectedCar.deposit || 0);
+    } else if ((formData as any).car) {
+      setEditedDeposit((formData as any).car.deposit || 0);
+    }
+  }, [formData.step2?.selectedCar, (formData as any).car]);
 
   // Calculate pricing
   // Get car data from either step2 (new flow) or car (existing reservation/inspection)
@@ -2488,14 +2500,35 @@ export const Step6FinalPricing: React.FC<{
   const subtotal = calculatedBasePrice + servicesTotal;
   const tvaAmount = tvaEnabled ? (subtotal * tvaRate) / 100 : 0;
   const computedPrice = subtotal + tvaAmount;
-  const deposit = selectedCar?.deposit || 0;
+  const deposit = editedDeposit !== '' ? Number(editedDeposit) : (selectedCar?.deposit || 0);
   const totalPrice = isManualTotal && manualTotal !== '' ? Number(manualTotal) : computedPrice;
+
+  // Console logging for debugging
+  React.useEffect(() => {
+    console.log('📊 === STEP 6 PRICING UPDATE ===');
+    console.log('📅 Dates:', formData.step1?.departureDate, '→', formData.step1?.returnDate);
+    console.log('📊 Duration:', 'Weeks:', weeks, '| Days:', remainingDays, '| Total:', days, 'jours');
+    console.log('💰 Base Price:', calculatedBasePrice.toLocaleString(), 'DA');
+    console.log('🛒 Services:', servicesTotal.toLocaleString(), 'DA');
+    console.log('📝 TVA:', tvaAmount.toLocaleString(), 'DA (Enabled:', tvaEnabled, 'Rate:', tvaRate, '%)');
+    console.log('💰 Subtotal:', subtotal.toLocaleString(), 'DA');
+    console.log('💰 Total Price:', totalPrice.toLocaleString(), 'DA');
+    console.log('🔐 Deposit/Caution:', deposit.toLocaleString(), 'DA (Edited:', editedDeposit, ')');
+    console.log('---');
+  }, [days, weeks, remainingDays, calculatedBasePrice, servicesTotal, tvaAmount, computedPrice, totalPrice, deposit, editedDeposit, tvaEnabled, tvaRate]);
 
   // Update formData with values (manual override takes precedence)
   React.useEffect(() => {
+    console.log('💾 Saving Step6 to formData');
     setFormData(prev => ({
       ...prev,
+      step1: {
+        ...prev.step1,
+        departureDate: formData.step1?.departureDate || prev.step1?.departureDate,
+        returnDate: formData.step1?.returnDate || prev.step1?.returnDate
+      },
       step6: {
+
         ...prev.step6,
         totalPrice,
         tvaApplied: tvaEnabled,
@@ -2505,9 +2538,10 @@ export const Step6FinalPricing: React.FC<{
         remainingPayment: prev.step6?.remainingPayment ?? prev.remainingPayment,
         paymentNotes: prev.step6?.paymentNotes ?? prev.notes,
         cautionEnabled
-      }
+      },
+      deposit: deposit
     }));
-  }, [totalPrice, tvaEnabled, tvaAmount, days]);
+  }, [totalPrice, tvaEnabled, tvaAmount, days, deposit, cautionEnabled]);
 
   return (
     <div className="space-y-8">
@@ -2632,8 +2666,57 @@ export const Step6FinalPricing: React.FC<{
             <p className="text-lg font-bold text-slate-900">{days} {lang === 'fr' ? 'jours' : 'أيام'}</p>
           </div>
           <div className="bg-white rounded-lg p-4 border border-slate-200">
-            <p className="text-sm font-bold text-slate-700 mb-1">📊 {lang === 'fr' ? 'Semaines/Jours' : 'أسابيع/أيام'}</p>
-            <p className="text-lg font-bold text-slate-900">{weeks} {lang === 'fr' ? 'sem' : 'أسبوع'} + {remainingDays} {lang === 'fr' ? 'j' : 'يوم'}</p>
+            <p className="text-sm font-bold text-slate-700 mb-2">📊 {lang === 'fr' ? 'Semaines/Jours (Éditable)' : 'أسابيع/أيام (قابل للتعديل)'}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-bold text-slate-600 mb-1 block">{lang === 'fr' ? 'Semaines' : 'أسابيع'}</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={weeks}
+                  onChange={(e) => {
+                    const newWeeks = Number(e.target.value) || 0;
+                    const newRemainingDays = remainingDays;
+                    const totalNewDays = (newWeeks * 7) + newRemainingDays;
+                    if (totalNewDays > 0 && formData.step1?.departureDate) {
+                      const departure = new Date(formData.step1.departureDate);
+                      const newReturn = new Date(departure);
+                      newReturn.setDate(newReturn.getDate() + totalNewDays);
+                      const returnDateStr = newReturn.toISOString().split('T')[0];
+                      setFormData(prev => ({
+                        ...prev,
+                        step1: { ...prev.step1!, returnDate: returnDateStr }
+                      }));
+                    }
+                  }}
+                  className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-bold"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600 mb-1 block">{lang === 'fr' ? 'Jours' : 'أيام'}</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="6"
+                  value={remainingDays}
+                  onChange={(e) => {
+                    const newRemainingDays = Math.min(Number(e.target.value) || 0, 6);
+                    const totalNewDays = (weeks * 7) + newRemainingDays;
+                    if (totalNewDays > 0 && formData.step1?.departureDate) {
+                      const departure = new Date(formData.step1.departureDate);
+                      const newReturn = new Date(departure);
+                      newReturn.setDate(newReturn.getDate() + totalNewDays);
+                      const returnDateStr = newReturn.toISOString().split('T')[0];
+                      setFormData(prev => ({
+                        ...prev,
+                        step1: { ...prev.step1!, returnDate: returnDateStr }
+                      }));
+                    }
+                  }}
+                  className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-bold"
+                />
+              </div>
+            </div>
           </div>
           <div className="bg-white rounded-lg p-4 border border-slate-200">
             <p className="text-sm font-bold text-slate-700 mb-1">📍 {lang === 'fr' ? 'Lieu de Départ' : 'مكان المغادرة'}</p>
@@ -2822,8 +2905,8 @@ export const Step6FinalPricing: React.FC<{
             )}
           </div>
 
-          {/* Deposit with toggle, only display if activated */}
-          <div className="flex items-center py-2 border-t border-slate-300">
+          {/* Deposit with toggle and manual edit, only display if activated */}
+          <div className="space-y-3 py-3 border-t border-slate-300">
             <label className="flex items-center gap-2 ml-4">
               <input
                 type="checkbox"
@@ -2834,7 +2917,17 @@ export const Step6FinalPricing: React.FC<{
               <span className="font-bold text-blue-700">{lang === 'fr' ? 'Activer Caution' : 'تفعيل الضمان'}</span>
             </label>
             {cautionEnabled && (
-              <span className="font-bold text-blue-700 ml-4">{lang === 'fr' ? 'Caution (remboursable)' : 'الضمان (قابل للاسترداد)'}: {deposit.toLocaleString()} DA</span>
+              <div className="ml-4 flex gap-2 items-center">
+                <span className="font-bold text-blue-700">{lang === 'fr' ? 'Caution (remboursable)' : 'الضمان (قابل للاسترداد)'}: </span>
+                <input
+                  type="number"
+                  value={editedDeposit}
+                  onChange={(e) => setEditedDeposit(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-32 p-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right font-bold"
+                  placeholder="0"
+                />
+                <span className="text-blue-700 font-bold">DA</span>
+              </div>
             )}
           </div>
         </div>
