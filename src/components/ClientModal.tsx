@@ -257,18 +257,6 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
             </h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="label-saas">✍️ {lang === 'fr' ? 'Prénom *' : 'الاسم الأول *'}</label>
-                <input
-                  type="text"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  placeholder="Ahmed"
-                  className="input-saas"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
                 <label className="label-saas">✍️ {lang === 'fr' ? 'Nom de Famille *' : 'اسم العائلة *'}</label>
                 <input
                   type="text"
@@ -276,6 +264,18 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSav
                   value={formData.lastName}
                   onChange={handleChange}
                   placeholder="Boudjellal"
+                  className="input-saas"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="label-saas">✍️ {lang === 'fr' ? 'Prénom *' : 'الاسم الأول *'}</label>
+                <input
+                  type="text"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  placeholder="Ahmed"
                   className="input-saas"
                   required
                 />

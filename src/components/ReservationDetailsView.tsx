@@ -3,6 +3,7 @@ import { Language, ReservationDetails, Payment, VehicleInspection, InspectionIte
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Calendar, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, CheckCircle, XCircle, Plus, Trash2, Edit, Eye, Car as CarIcon, User, Phone, Mail, CreditCard as CardIcon, Shield, Wrench, Sofa, Sparkles, Droplets } from 'lucide-react';
 import { ReservationsService } from '../services/ReservationsService';
+import { supabase } from '../supabase';
 
 interface ReservationDetailsViewProps {
   lang: Language;
@@ -370,6 +371,35 @@ const InspectionsTab: React.FC<{ lang: Language; reservation: ReservationDetails
           )}
           </div>
 
+          {/* Photos Gallery */}
+          <div className="space-y-4">
+            {(reservation.departureInspection.exteriorPhotos && reservation.departureInspection.exteriorPhotos.length > 0) && (
+              <div>
+                <h4 className="font-bold text-saas-text-main mb-3">📸 {lang === 'fr' ? 'Photos Extérieures' : 'الصور الخارجية'}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {reservation.departureInspection.exteriorPhotos.map((photo, idx) => (
+                    <div key={`exterior-${idx}`} className="rounded-lg overflow-hidden border border-saas-border shadow-md">
+                      <img src={photo} alt={`Exterior ${idx + 1}`} className="w-full h-48 object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {(reservation.departureInspection.interiorPhotos && reservation.departureInspection.interiorPhotos.length > 0) && (
+              <div>
+                <h4 className="font-bold text-saas-text-main mb-3">🏎️ {lang === 'fr' ? 'Photos Intérieures' : 'الصور الداخلية'}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {reservation.departureInspection.interiorPhotos.map((photo, idx) => (
+                    <div key={`interior-${idx}`} className="rounded-lg overflow-hidden border border-saas-border shadow-md">
+                      <img src={photo} alt={`Interior ${idx + 1}`} className="w-full h-48 object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Inspection Items */}
           <div className="space-y-6">
             {/* Security Items */}
@@ -471,6 +501,35 @@ const InspectionsTab: React.FC<{ lang: Language; reservation: ReservationDetails
                 <p className="font-bold text-indigo-900">✍️ {lang === 'fr' ? 'Signature' : 'التوقيع'}</p>
                 <div className="mt-2">
                   <img src={reservation.returnInspection.signature} alt="Client Signature" className="w-full h-16 object-contain border border-indigo-300 rounded" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Photos Gallery */}
+          <div className="space-y-4">
+            {(reservation.returnInspection.exteriorPhotos && reservation.returnInspection.exteriorPhotos.length > 0) && (
+              <div>
+                <h4 className="font-bold text-saas-text-main mb-3">📸 {lang === 'fr' ? 'Photos Extérieures' : 'الصور الخارجية'}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {reservation.returnInspection.exteriorPhotos.map((photo, idx) => (
+                    <div key={`return-exterior-${idx}`} className="rounded-lg overflow-hidden border border-saas-border shadow-md">
+                      <img src={photo} alt={`Exterior ${idx + 1}`} className="w-full h-48 object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {(reservation.returnInspection.interiorPhotos && reservation.returnInspection.interiorPhotos.length > 0) && (
+              <div>
+                <h4 className="font-bold text-saas-text-main mb-3">🏎️ {lang === 'fr' ? 'Photos Intérieures' : 'الصور الداخلية'}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {reservation.returnInspection.interiorPhotos.map((photo, idx) => (
+                    <div key={`return-interior-${idx}`} className="rounded-lg overflow-hidden border border-saas-border shadow-md">
+                      <img src={photo} alt={`Interior ${idx + 1}`} className="w-full h-48 object-cover" />
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -974,6 +1033,9 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>(
     reservation.departureInspection?.inspectionItems || []
   );
+  
+  // New states for enhanced features
+
 
   const fuelLevels = [
     { value: 'full', label: 'PLEIN' },
@@ -995,6 +1057,7 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
     );
   };
 
+  
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1006,19 +1069,80 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 max-h-[95vh] overflow-y-auto"
       >
         <h3 className="text-2xl font-black text-saas-text-main mb-6">
           ✅ {lang === 'fr' ? 'Activer la Location' : 'تفعيل التأجير'}
         </h3>
 
-        <div className="space-y-6">
+        <div className="space-y-8">
+          {/* CAR INFORMATION SECTION */}
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
+            <h4 className="text-lg font-black text-saas-text-main mb-4">
+              🚗 {lang === 'fr' ? 'Informations du Véhicule' : 'معلومات المركبة'}
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-1">
+                  {lang === 'fr' ? 'Marque & Modèle' : 'الماركة والموديل'}
+                </p>
+                <p className="text-lg font-bold text-saas-text-main">
+                  {reservation.car.brand} {reservation.car.model}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-1">
+                  {lang === 'fr' ? 'Couleur' : 'اللون'}
+                </p>
+                <p className="text-lg font-bold text-saas-text-main">
+                  {reservation.car.color}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-1">
+                  {lang === 'fr' ? 'Immatriculation' : 'لوحة الترخيص'}
+                </p>
+                <p className="text-lg font-bold text-saas-text-main font-mono">
+                  {reservation.car.registration}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-1">
+                  {lang === 'fr' ? 'VIN' : 'رقم VIN'}
+                </p>
+                <p className="text-lg font-bold text-saas-text-main font-mono">
+                  {reservation.car.vin || 'N/A'}
+                </p>
+              </div>
+            </div>
+
+            {/* Car Images Display */}
+            {reservation.car.images && reservation.car.images.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-3">
+                  {lang === 'fr' ? 'Photos du Véhicule' : 'صور المركبة'}
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {reservation.car.images.slice(0, 4).map((image, idx) => (
+                    <img
+                      key={idx}
+                      src={image}
+                      alt={`Car ${idx + 1}`}
+                      className="w-full h-24 object-cover rounded-lg border border-blue-200"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* DEPARTURE INSPECTION DETAILS */}
           <div className="text-center bg-gradient-to-r from-saas-primary-start/10 to-saas-primary-end/10 rounded-xl p-4 border border-saas-primary-start/20">
             <h4 className="text-lg font-black text-saas-text-main mb-2">
-              🧭 {lang === 'fr' ? 'Kilométrage au départ confirmation' : 'تأكيد عداد الكيلومترات عند المغادرة'}
+              🧭 {lang === 'fr' ? 'Détails du Départ' : 'تفاصيل المغادرة'}
             </h4>
             <p className="text-saas-text-muted">
-              {lang === 'fr' ? 'Veuillez confirmer les informations de départ du véhicule' : 'يرجى تأكيد معلومات مغادرة المركبة'}
+              {lang === 'fr' ? 'Confirmez les informations de départ du véhicule' : 'تأكيد معلومات مغادرة المركبة'}
             </p>
           </div>
 
@@ -1085,7 +1209,7 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
             />
           </div>
 
-          {/* Inspection Items */}
+          {/* INSPECTION ITEMS */}
           <div className="bg-gradient-to-r from-saas-primary-start/10 to-saas-primary-end/10 rounded-xl p-6 border border-saas-primary-start/20">
             <h4 className="text-lg font-black text-saas-text-main mb-4">
               🔍 {lang === 'fr' ? 'Vérification du Véhicule' : 'فحص المركبة'}
@@ -1152,9 +1276,9 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex gap-3 mt-6">
+          {/* ACTION BUTTONS */}
+          <div className="flex gap-3 mt-8">
           <button
             onClick={onClose}
             className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-4 rounded-lg transition-colors"
@@ -1166,12 +1290,24 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
               try {
                 await ReservationsService.activateReservationWithInspection({
                   reservationId: reservation.id,
+                  carId: reservation.car.id,
                   mileage: parseInt(mileage),
                   fuelLevel: fuelLevel as 'full' | 'half' | 'quarter' | 'eighth' | 'empty',
                   location,
                   notes,
                   inspectionItems,
+                  departureAgencyId: reservation.step1?.departureAgency
                 });
+
+                // Update car status to "louer" and set mileage and fuel level
+                await supabase
+                  .from('cars')
+                  .update({ 
+                    status: 'louer',
+                    mileage: parseInt(mileage),
+                    fuel_level: fuelLevel
+                  })
+                  .eq('id', reservation.car.id);
 
                 // Update the local reservation state
                 const updatedReservation = {
@@ -1199,13 +1335,14 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
                 onClose();
               } catch (error) {
                 console.error('Error activating reservation:', error);
-                // TODO: Show error message to user
+                alert(lang === 'fr' ? 'Erreur lors de l\'activation: ' + (error as any).message : 'خطأ في التفعيل: ' + (error as any).message);
               }
             }}
-            className="flex-1 btn-saas-primary"
+            className="flex-1 btn-saas-primary py-3"
           >
             ✅ {lang === 'fr' ? 'Confirmer et Activer' : 'تأكيد وتفعيل'}
           </button>
+        </div>
         </div>
       </motion.div>
     </motion.div>
@@ -1260,12 +1397,23 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
         returnMileage: parseInt(returnMileage),
         returnFuelLevel: returnFuelLevel,
         returnLocation: reservation.step1.returnAgency || reservation.step1.departureAgency,
+        returnAgencyId: reservation.step1.returnAgency || reservation.step1.departureAgency,
         excessMileage: parseFloat(excessMileage) || 0,
         missingFuel: parseFloat(missingFuel) || 0,
         signatureDataUrl: signature,
         notes: notes,
         inspectionItems: returnInspectionItems,
       });
+
+      // Update car status to "disponible" and set return mileage and fuel level
+      await supabase
+        .from('cars')
+        .update({ 
+          status: 'disponible',
+          mileage: parseInt(returnMileage),
+          fuel_level: returnFuelLevel
+        })
+        .eq('id', reservation.car.id);
 
       // Update the local reservation state
       const updatedReservation = {

@@ -7,6 +7,7 @@ import { CreateReservationForm } from './CreateReservationForm';
 import { EditReservationForm } from './EditReservationForm';
 import { ActivationModal, CompletionModal } from './ReservationDetailsView';
 import { ReservationTimelineView } from './ReservationTimelineView';
+import { ConditionsPersonalizer } from './ConditionsPersonalizer';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { supabase } from '../supabase';
@@ -35,6 +36,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
   const [showPersonalization, setShowPersonalization] = useState<{reservation: ReservationDetails, type: string} | null>(null);
   const [showInspectionMode, setShowInspectionMode] = useState(false);
   const [showConditionsModal, setShowConditionsModal] = useState(false);
+  const [showConditionsPersonalizer, setShowConditionsPersonalizer] = useState<ReservationDetails | null>(null);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,6 +53,33 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
         const data = await ReservationsService.getReservations();
         setReservations(data);
         setError(null);
+
+        // Only restore view state if we have a valid selected reservation
+        // This prevents auto-loading create/edit views on fresh navigation
+        const savedViewState = localStorage.getItem('plannerViewState');
+        if (savedViewState) {
+          try {
+            const { view, selectedId } = JSON.parse(savedViewState);
+            
+            if (selectedId && data.length > 0) {
+              const selected = data.find(r => r.id === selectedId);
+              if (selected && view && ['details', 'edit'].includes(view)) {
+                // Only restore if view is details or edit (not create)
+                setSelectedReservation(selected);
+                setCurrentView(view);
+              } else {
+                // Clear invalid saved state
+                localStorage.removeItem('plannerViewState');
+              }
+            } else {
+              // Clear if no selectedId or no reservations
+              localStorage.removeItem('plannerViewState');
+            }
+          } catch (err) {
+            // Silent fail for view state restore
+            localStorage.removeItem('plannerViewState');
+          }
+        }
       } catch (err: any) {
         console.error('Error loading reservations:', err);
         // Check if it's a table not found error
@@ -82,15 +111,42 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
 
   const updateReservation = async (updatedReservation: ReservationDetails) => {
     try {
+      // Update reservation in database
       await ReservationsService.updateReservation(updatedReservation.id, updatedReservation);
-      setReservations(prev => prev.map(res => res.id === updatedReservation.id ? updatedReservation : res));
-      if (selectedReservation && selectedReservation.id === updatedReservation.id) {
-        setSelectedReservation(updatedReservation);
+
+      // Refetch the latest reservation data from database to ensure accuracy
+      const freshReservation = await ReservationsService.getReservationById(updatedReservation.id);
+
+      // Update local state with fresh data
+      setReservations(prev => {
+        return prev.map(res => res.id === freshReservation.id ? freshReservation : res);
+      });
+
+      // Update selected reservation with fresh data
+      if (selectedReservation && selectedReservation.id === freshReservation.id) {
+        setSelectedReservation(freshReservation);
       }
     } catch (err) {
-      console.error('Error updating reservation:', err);
+      console.error('❌ Error updating reservation:', err);
       setError('Failed to update reservation');
     }
+  };
+
+  // Save view state when it changes (for page refresh persistence)
+  useEffect(() => {
+    if (currentView !== 'list' && currentView !== 'calendar' && selectedReservation) {
+      const viewState = {
+        view: currentView,
+        selectedId: selectedReservation.id
+      };
+      localStorage.setItem('plannerViewState', JSON.stringify(viewState));
+    }
+  }, [currentView, selectedReservation?.id]);
+
+  // Clear view state when returning to list/calendar
+  const handleReturnToList = () => {
+    localStorage.removeItem('plannerViewState');
+    setCurrentView(displayMode === 'calendar' ? 'calendar' : 'list');
   };
 
   const handleViewDetails = (reservation: ReservationDetails) => {
@@ -113,7 +169,6 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
         await ReservationsService.deleteReservation(showDeleteConfirm.id);
         setReservations(prev => prev.filter(res => res.id !== showDeleteConfirm.id));
         setShowDeleteConfirm(null);
-        console.log('Delete reservation:', showDeleteConfirm.id);
       } catch (err) {
         console.error('Error deleting reservation:', err);
         setError('Failed to delete reservation');
@@ -358,14 +413,25 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
   }
 
   if (currentView === 'details' && selectedReservation) {
-    return <ReservationDetailsView lang={lang} reservation={selectedReservation} onBack={() => setCurrentView(displayMode === 'calendar' ? 'calendar' : 'list')} onUpdate={updateReservation} />;
+    return <ReservationDetailsView 
+      lang={lang} 
+      reservation={selectedReservation} 
+      onBack={() => {
+        localStorage.removeItem('plannerViewState');
+        setCurrentView(displayMode === 'calendar' ? 'calendar' : 'list');
+      }} 
+      onUpdate={updateReservation} 
+    />;
   }
 
   if (currentView === 'edit' && selectedReservation) {
     return <EditReservationForm 
       lang={lang} 
       reservation={selectedReservation} 
-      onBack={() => setCurrentView(displayMode === 'calendar' ? 'calendar' : 'list')} 
+      onBack={() => {
+        localStorage.removeItem('plannerViewState');
+        setCurrentView(displayMode === 'calendar' ? 'calendar' : 'list');
+      }} 
       onUpdate={updateReservation}
       agencies={agencies}
       isLoadingAgencies={isLoadingAgencies}
@@ -483,10 +549,14 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
           const basePrice = weeklyPrice + remainingPrice;
           const subtotal = basePrice + servicesTotal;
           const totalCost = subtotal + (Number(reservation.additionalFees) || 0) + (Number((reservation as any).tvaAmount) || 0);
+          
+          // Use the actual totalPrice from database, not the recalculated one
+          const displayTotalPrice = reservation.totalPrice || totalCost;
+          
           const paidAmount = (reservation.payments && reservation.payments.length > 0)
             ? reservation.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
             : (Number(reservation.advancePayment) || 0);
-          const remainingAmount = Math.max(0, totalCost - paidAmount);
+          const remainingAmount = Math.max(0, displayTotalPrice - paidAmount);
 
           return (
           <motion.div
@@ -566,7 +636,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <div className="text-xs text-slate-500">{lang === 'fr' ? 'Total Réservation' : 'الإجمالي'}</div>
-                      <div className="text-xl font-black text-slate-900">{totalCost.toLocaleString()} {lang === 'fr' ? 'DA' : 'د.ج'}</div>
+                      <div className="text-xl font-black text-slate-900">{displayTotalPrice.toLocaleString()} {lang === 'fr' ? 'DA' : 'د.ج'}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-slate-500">{lang === 'fr' ? 'Payé' : 'مدفوع'}</div>
@@ -578,7 +648,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
                   <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden mb-2">
                     <div
                       className={`h-2 rounded-full ${remainingAmount === 0 ? 'bg-green-500' : 'bg-orange-400'}`}
-                      style={{ width: `${Math.min(100, Math.round((paidAmount / (totalCost || 1)) * 100))}%` }}
+                      style={{ width: `${Math.min(100, Math.round((paidAmount / (displayTotalPrice || 1)) * 100))}%` }}
                     />
                   </div>
 
@@ -824,26 +894,41 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
                   className="flex-1 bg-saas-secondary-start hover:bg-saas-secondary-end text-white font-bold py-3 px-4 rounded-lg transition-all"
                 >
                   🎨 {lang === 'fr' ? 'Personnaliser' : 'تخصيص'}
-                </button>
-              </div>
-              {showPrintModal?.type === 'contract' && (
-                <button
-                  onClick={() => {
-                    setShowPrintModal(null);
-                    setShowConditionsModal(true);
-                  }}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all"
-                >
-                  📋 {lang === 'fr' ? 'Conditions' : 'الشروط والأحكام'}
-                </button>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </button>
+          </div>
+          {showPrintModal?.type === 'contract' && (
+            <>
+              <button
+                onClick={() => {
+                  setShowPrintModal(null);
+                  setShowConditionsPersonalizer(showPrintModal?.reservation || null);
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all mb-3"
+              >
+                📋 {lang === 'fr' ? 'Personnaliser les Conditions' : 'تخصيص الشروط'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowPrintModal(null);
+                  // Trigger conditions print
+                  setTimeout(() => {
+                    setShowConditionsPersonalizer(showPrintModal?.reservation || null);
+                    // This will be handled by the conditions personalizer's print button
+                  }, 100);
+                }}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all"
+              >
+                🖨️ {lang === 'fr' ? 'Imprimer les Conditions' : 'طباعة الشروط'}
+              </button>
+            </>
+          )}
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
 
-      {/* Personalization Modal */}
-      <AnimatePresence>
+  {/* Personalization Modal */}
+  <AnimatePresence>
         {showPersonalization && (
           <PersonalizationModal
             lang={lang}
@@ -1078,6 +1163,26 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
           onComplete={updateReservation}
         />
       )}
+      
+      {/* Conditions Personalizer */}
+      <AnimatePresence>
+        {showConditionsPersonalizer && (
+          <ConditionsPersonalizer
+            lang={lang}
+            reservationId={showConditionsPersonalizer.id}
+            onClose={() => setShowConditionsPersonalizer(null)}
+            onSave={(conditions) => {
+              // Update reservation with new conditions
+              if (selectedReservation) {
+                setSelectedReservation({
+                  ...selectedReservation,
+                  conditions: conditions
+                });
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1229,103 +1334,19 @@ const getInitialElements = (type: string, reservation: ReservationDetails, lang:
       clientSignatureText: { x: 300, y: 905, text: lang === 'fr' ? 'Signature du Client' : 'توقيع العميل', fontSize: 11, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
     };
   } else if (type === 'contract') {
-    // Contract template - Professional layout like devis with all details
-    const inspectionItems = reservation.departureInspection?.inspectionItems || [];
-    
+    // Contract template - Load from database, fallback to default
+    // Note: This returns a basic structure; the actual template from database will be loaded in the component
     return {
       logo: { x: 50, y: 50, width: 90, height: 90 },
-      agenceName: { x: 180, y: 70, text: 'SARL OUKKAL LISAYARAT', fontSize: 16, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      
-      // Main Title
-      title: { x: 50, y: 160, text: 'Contrat de Location de Véhicule / اتفاقية إيجار السيارة', fontSize: 22, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: '#1a3a52', maxWidth: 500 },
-      
-      // Contract Details Section (Blue Header)
-      contractDetailsTitle: { x: 50, y: 210, text: 'Contract Details / تفاصيل العقد', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#1a3a52' },
-      contractNumberLabel: { x: 50, y: 235, text: 'Contract Number / رقم العقد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      contractNumber: { x: 250, y: 235, text: reservation.id, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      contractDateLabel: { x: 50, y: 253, text: 'Contract Date / تاريخ العقد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      contractDate: { x: 250, y: 253, text: new Date().toLocaleDateString('fr-FR'), fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      
-      // Rental Period Section (Green Header)
-      rentalPeriodTitle: { x: 50, y: 285, text: 'Rental Period / فترة الإيجار', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#2d7a4d' },
-      startDateLabel: { x: 50, y: 310, text: 'Start Date / من:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      startDate: { x: 250, y: 310, text: reservation.step1.departureDate, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      endDateLabel: { x: 50, y: 328, text: 'End Date / إلى:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      endDate: { x: 250, y: 328, text: reservation.step1.returnDate, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      durationLabel: { x: 50, y: 346, text: 'Duration / المدة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      duration: { x: 250, y: 346, text: `${reservation.totalDays} days / أيام`, fontSize: 11, fontFamily: 'Arial', color: '#2d7a4d', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      
-      // Driver Information Section (Purple Header)
-      driverInfoTitle: { x: 50, y: 378, text: 'Driver Information (Driver 01) / معلومات السائق 01', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#6a1b9a' },
-      driverNameLabel: { x: 50, y: 403, text: 'Name / الاسم:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      driverName: { x: 180, y: 403, text: `${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      driverBirthDateLabel: { x: 50, y: 421, text: 'Date of Birth / تاريخ الميلاد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      driverBirthDate: { x: 180, y: 421, text: '03/08/1978', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      placeOfBirthLabel: { x: 50, y: 439, text: 'Place of Birth / مكان الميلاد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      placeOfBirth: { x: 180, y: 439, text: 'El Harrouch', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      documentTypeLabel: { x: 50, y: 457, text: 'Document Type / نوع الوثيقة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      documentType: { x: 180, y: 457, text: 'Biometric driver\'s license', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      documentNumberLabel: { x: 50, y: 475, text: 'Document Number / رقم الوثيقة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      documentNumber: { x: 180, y: 475, text: reservation.client.licenseNumber || 'N/A', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      issueeDateLabel: { x: 50, y: 493, text: 'Issue Date / تاريخ الإصدار:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      issueDate: { x: 180, y: 493, text: '07/11/2024', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      expirationDateLabel: { x: 50, y: 511, text: 'Expiration Date / تاريخ الانتهاء:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      expirationDate: { x: 180, y: 511, text: '06/11/2034', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      placeOfIssueLabel: { x: 50, y: 529, text: 'Place of Issue / مكان الإصدار:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      placeOfIssue: { x: 180, y: 529, text: 'Lyon', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      
-      // Vehicle Information Section (Orange Header)
-      vehicleInfoTitle: { x: 50, y: 561, text: 'Vehicle Information / معلومات المركبة', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#e65100' },
-      vehicleModelLabel: { x: 50, y: 586, text: 'Model / الطراز:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleModel: { x: 180, y: 586, text: `${reservation.car.brand} ${reservation.car.model}`, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleColorLabel: { x: 50, y: 604, text: 'Color / اللون:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleColor: { x: 180, y: 604, text: reservation.car.color || 'N/A', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehiclePlateLabel: { x: 50, y: 622, text: 'License Plate / لوحة التسجيل:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehiclePlate: { x: 180, y: 622, text: reservation.car.registration, fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleVINLabel: { x: 50, y: 640, text: 'Serial Number / رقم المسلسل:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleVIN: { x: 180, y: 640, text: reservation.car.vin || 'BRYEKNFJ2S5718503', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleFuelLabel: { x: 50, y: 658, text: 'Fuel Type / نوع الوقود:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleFuel: { x: 180, y: 658, text: 'Essence Sans plomb', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleMileageLabel: { x: 50, y: 676, text: 'Kilometer Reading / قراءة العداد:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      vehicleMileage: { x: 180, y: 676, text: '8400 km', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      
-      // Financials Section (Red Header)
-      financialsTitle: { x: 50, y: 708, text: 'Financials / التفاصيل المالية', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c62828' },
-      unitPriceLabel: { x: 50, y: 733, text: 'Unit Price / سعر الوحدة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      unitPrice: { x: 280, y: 733, text: '10,000.00', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
-      totalHTLabel: { x: 50, y: 751, text: 'Total Price (HT) / السعر الإجمالي بدون ضريبة:', fontSize: 11, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      totalHT: { x: 280, y: 751, text: '60,000.00', fontSize: 11, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
-      totalAmountLabel: { x: 50, y: 771, text: 'Total Contract Amount / إجمالي العقد:', fontSize: 12, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c62828' },
-      totalAmount: { x: 280, y: 771, text: `${reservation.totalPrice.toLocaleString()}`, fontSize: 12, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: '#c62828' },
-      
-      // Equipment Checklist Section (Blue Header)
-      equipmentTitle: { x: 50, y: 803, text: 'Equipment Checklist of Inspection / قائمة المعدات', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#1565c0' },
-      equipment1: { x: 50, y: 828, text: '✓ Tires / الإطارات', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
-      equipment2: { x: 50, y: 843, text: '✓ Brakes / الفرامل', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
-      equipment3: { x: 50, y: 858, text: '✓ Lighting / الأضواء', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
-      equipment4: { x: 50, y: 873, text: '✓ Mirrors / المرايا', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
-      equipment5: { x: 280, y: 828, text: '✓ Seats / المقاعد', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
-      equipment6: { x: 280, y: 843, text: '✓ Windows / الزجاج', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
-      equipment7: { x: 280, y: 858, text: '✓ Engine / المحرك', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
-      equipment8: { x: 280, y: 873, text: '✓ Air Conditioning / جهاز التكييف', fontSize: 10, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#c8e6c9' },
-      
-      // Signatures
-      agencySignatureText: { x: 80, y: 920, text: 'Agency Signature / توقيع الوكالة', fontSize: 10, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
-      clientSignatureText: { x: 300, y: 920, text: 'Driver Signature / توقيع السائق', fontSize: 10, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
-      dateSignatureText: { x: 470, y: 920, text: 'Date / التاريخ', fontSize: 10, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
+      title: { x: 50, y: 160, text: 'Contrat de Location / عقد الإيجار', fontSize: 22, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
+      client_name: { x: 80, y: 140, text: `${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      car_model: { x: 80, y: 180, text: `${reservation.car.brand} ${reservation.car.model}`, fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      rental_dates: { x: 80, y: 220, text: `${reservation.step1.departureDate} - ${reservation.step1.returnDate}`, fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      price_total: { x: 80, y: 260, text: `${reservation.totalPrice.toLocaleString()} DA`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      signature_line: { x: 80, y: 450, text: '_________________________________', fontSize: 10, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
     };
   } else {
     // Engagement template - include logo and agency name with actual settings
-    console.log('Engagement template generation - Client data:', {
-      documentType: reservation.client.documentType,
-      documentNumber: reservation.client.documentNumber,
-      idCardNumber: reservation.client.idCardNumber,
-      documentDeliveryDate: reservation.client.documentDeliveryDate,
-      licenseDeliveryDate: reservation.client.licenseDeliveryDate,
-      documentDeliveryAddress: reservation.client.documentDeliveryAddress,
-      wilaya: reservation.client.wilaya
-    });
-
     const isPassport = reservation.client.documentType === 'passport';
     const documentText = isPassport ? 'Avoir déposé mon passeport' : 'Avoir déposé ma carte d\'identité';
     const documentNumber = isPassport ? 
@@ -1337,14 +1358,6 @@ const getInitialElements = (type: string, reservation: ReservationDetails, lang:
     const documentDeliveryPlace = isPassport ?
       (reservation.client.documentDeliveryAddress || reservation.client.wilaya) :
       (reservation.client.licenseDeliveryPlace || reservation.client.wilaya);
-
-    console.log('Engagement template - Resolved values:', {
-      isPassport,
-      documentText,
-      documentNumber,
-      documentDeliveryDate,
-      documentDeliveryPlace
-    });
 
     return {
       logo: { x: 50, y: 50, width: 100, height: 100 },
@@ -1401,7 +1414,7 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
       } else {
         // Fallback placeholder logo
         bodyContent += `<div class="draggable logo" style="position: absolute; left: ${elements.logo.x || 50}px; top: ${elements.logo.y || 50}px; width: ${elements.logo.width || 100}px; height: ${elements.logo.height || 100}px;">
-          <img src="https://via.placeholder.com/100x100/007bff/ffffff?text=LUXDRIVE" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;" />
+          <img src="https://via.placeholder.com/100x100/007bff/ffffff?text=AGENCY" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;" />
         </div>`;
       }
     }
@@ -1421,7 +1434,7 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
     // For other types, use the standard logo and agency name
     if (elements.logo) {
       bodyContent += `<div class="draggable logo" style="position: absolute; left: ${elements.logo.x || 50}px; top: ${elements.logo.y || 50}px; width: ${elements.logo.width || 100}px; height: ${elements.logo.height || 100}px;">
-        <img src="https://via.placeholder.com/100x100/007bff/ffffff?text=LUXDRIVE" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;" />
+        <img src="https://via.placeholder.com/100x100/007bff/ffffff?text=AGENCY" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;" />
       </div>`;
     }
     
@@ -1450,7 +1463,7 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
     // Versement (payment receipt) content - same as payment/receipt
     // Add logo
     if (elements.logo) {
-      const logoUrl = agencySettings?.logo || 'https://via.placeholder.com/100x100/007bff/ffffff?text=LUXDRIVE';
+      const logoUrl = agencySettings?.logo || 'https://via.placeholder.com/100x100/007bff/ffffff?text=AGENCY';
       bodyContent += `<div class="draggable logo" style="position: absolute; left: ${elements.logo.x || 50}px; top: ${elements.logo.y || 50}px; width: ${elements.logo.width || 100}px; height: ${elements.logo.height || 100}px;">
         <img src="${logoUrl}" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;" />
       </div>`;
@@ -1703,14 +1716,48 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
     <head>
       <meta charset="utf-8">
       <style>
-        body { font-family: Arial, sans-serif; padding: 40px; position: relative; min-height: 800px; }
-        .draggable { position: absolute; cursor: move; }
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          padding: 30px 40px; 
+          position: relative; 
+          min-height: 1000px;
+          background: #f5f5f5;
+        }
+        .page {
+          width: 210mm;
+          min-height: 297mm;
+          background: white;
+          padding: 20px;
+          margin: 0 auto 20px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .draggable { 
+          position: absolute; 
+          cursor: move;
+          max-width: 600px;
+          word-wrap: break-word;
+        }
         .selected { border: 2px solid #007bff; }
-        .logo { border: 1px solid #ddd; }
+        .logo { border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
+        
+        /* Print specific styles */
+        @media print {
+          body {
+            padding: 0;
+            background: white;
+          }
+          .page {
+            box-shadow: none;
+            margin: 0;
+            page-break-after: always;
+          }
+        }
       </style>
     </head>
     <body>
-      ${bodyContent}
+      <div class="page">
+        ${bodyContent}
+      </div>
     </body>
     </html>
   `;
@@ -1730,8 +1777,318 @@ const PersonalizationModal: React.FC<{
   const [savedTemplates, setSavedTemplates] = useState<any[]>([]);
   const [newTextElements, setNewTextElements] = useState<any[]>([]);
   const [agencySettings, setAgencySettings] = useState<any>(null);
+  const [loading, setLoading] = useState(type === 'contract');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [selectedTemplateType, setSelectedTemplateType] = useState(type);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [allDatabaseTemplates, setAllDatabaseTemplates] = useState<any[]>([]);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   
   const [elements, setElements] = useState(getInitialElements(type, reservation, lang));
+
+  // Load template from database on component mount
+  useEffect(() => {
+    if (type === 'contract' || type === 'devis' || type === 'facture' || type === 'engagement' || type === 'recu') {
+      loadTemplateFromDatabase();
+      loadAgencySettings();
+    }
+  }, [type]);
+
+  const loadAgencySettings = async () => {
+    try {
+      // Try to load agency settings without agency_id requirement
+      const { data: settings } = await supabase
+        .from('website_settings')
+        .select('logo, name')
+        .limit(1)
+        .single();
+
+      if (settings) {
+        setAgencySettings(settings);
+      }
+    } catch (error) {
+      console.error('❌ Error loading agency settings:', error);
+    }
+  };
+
+  const loadTemplateFromDatabase = async () => {
+    try {
+      setLoading(true);
+      
+      // Load all templates for this type
+      const { data: allTemplates, error: allTemplatesError } = await supabase
+        .from('document_templates')
+        .select('id, name, template, created_at, updated_at')
+        .eq('template_type', type)
+        .order('created_at', { ascending: false });
+
+      if (allTemplates && !allTemplatesError) {
+        setAllDatabaseTemplates(allTemplates);
+      }
+
+      // Load the most recent template as default
+      const { data: templateData, error } = await supabase
+        .from('document_templates')
+        .select('id, name, template')
+        .eq('template_type', type)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (templateData && !error) {
+        setSelectedTemplateId(templateData.id);
+        setTemplateName(templateData.name || '');
+        
+        // Build new elements from template
+        const dbTemplate = templateData.template as any;
+        const newElements: any = {};
+        
+        // Build all fields from the database template
+        for (const fieldName in dbTemplate) {
+          const field = dbTemplate[fieldName];
+          const fieldValue = getFieldValue(fieldName, reservation);
+          
+          newElements[fieldName] = {
+            x: field.x || 0,
+            y: field.y || 0,
+            text: fieldValue,
+            fontSize: field.fontSize || 12,
+            fontFamily: field.fontFamily || 'Arial',
+            color: field.color || '#000000',
+            fontWeight: field.fontWeight || 'normal',
+            fontStyle: field.fontStyle || 'normal',
+            textDecoration: field.textDecoration || 'none',
+            textAlign: field.textAlign || 'left',
+            backgroundColor: field.backgroundColor || 'transparent'
+          };
+        }
+        
+        setElements(newElements);
+      } else {
+        const defaultElements = createDefaultContractElements(reservation, lang);
+        setElements(defaultElements);
+      }
+    } catch (error) {
+      console.error('❌ Error loading template:', error);
+      const defaultElements = createDefaultContractElements(reservation, lang);
+      setElements(defaultElements);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSpecificTemplate = async (templateId: string) => {
+    try {
+      setLoading(true);
+      const { data: templateData, error } = await supabase
+        .from('document_templates')
+        .select('name, template')
+        .eq('id', templateId)
+        .single();
+
+      if (templateData && !error) {
+        setTemplateName(templateData.name || '');
+        const dbTemplate = templateData.template as any;
+        const elementsFromDB: any = { logo: { x: 50, y: 20, width: 80, height: 80 } };
+        
+        Object.keys(dbTemplate).forEach((fieldName) => {
+          const field = dbTemplate[fieldName];
+          elementsFromDB[fieldName] = {
+            x: field.x || 0,
+            y: field.y || 0,
+            text: getFieldValue(fieldName, reservation),
+            fontSize: field.fontSize || 12,
+            fontFamily: field.fontFamily || 'Arial',
+            color: field.color || '#000000',
+            fontWeight: field.fontWeight || 'normal',
+            fontStyle: field.fontStyle || 'normal',
+            textDecoration: field.textDecoration || 'none',
+            textAlign: field.textAlign || 'left',
+            backgroundColor: field.backgroundColor || 'transparent'
+          };
+        });
+        
+        setElements(elementsFromDB);
+        setSelectedTemplateId(templateId);
+      }
+    } catch (error) {
+      console.error('Error loading specific template:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createDefaultContractElements = (res: ReservationDetails, language: Language): any => {
+    const fields = [
+      'logo', 'agency_name', 'title',
+      'contract_details_title', 'contract_date_label', 'contract_date', 'contract_number_label', 'contract_number',
+      'rental_period_title', 'start_date_label', 'start_date', 'end_date_label', 'end_date', 'duration_label', 'duration',
+      'driver_info_title', 'driver_name_label', 'driver_name', 'driver_birth_date_label', 'driver_birth_date',
+      'driver_birth_place_label', 'driver_birth_place', 'document_type_label', 'document_type',
+      'document_number_label', 'document_number', 'issue_date_label', 'issue_date',
+      'expiration_date_label', 'expiration_date', 'issue_place_label', 'issue_place',
+      'vehicle_info_title', 'vehicle_model_label', 'vehicle_model', 'vehicle_color_label', 'vehicle_color',
+      'vehicle_license_plate_label', 'vehicle_license_plate', 'vehicle_vin_label', 'vehicle_vin',
+      'vehicle_fuel_label', 'vehicle_fuel', 'vehicle_mileage_label', 'vehicle_mileage',
+      'financials_title', 'unit_price_label', 'unit_price', 'total_ht_label', 'total_ht',
+      'total_amount_label', 'total_amount', 'equipment_title', 'equipment_list',
+      'signature_title', 'signature_line'
+    ];
+    
+    const elements: any = {};
+    let yPosition = 50;
+    
+    fields.forEach(fieldName => {
+      const value = getFieldValue(fieldName, res);
+      elements[fieldName] = {
+        x: 50,
+        y: yPosition,
+        text: value,
+        fontSize: fieldName.includes('_title') ? 14 : fieldName.includes('_label') ? 11 : 12,
+        fontFamily: 'Arial',
+        color: fieldName.includes('_title') ? '#1a365d' : '#000000',
+        fontWeight: fieldName.includes('_title') || fieldName === 'title' ? 'bold' : 'normal',
+        fontStyle: 'normal',
+        textDecoration: 'none',
+        textAlign: fieldName === 'title' ? 'center' : 'left',
+        backgroundColor: 'transparent'
+      };
+      yPosition += fieldName.includes('_title') ? 40 : 25;
+    });
+    
+    return elements;
+  };
+
+  const getFieldValue = (fieldName: string, res: ReservationDetails): string => {
+    // Defensive check - if reservation is undefined, return empty string
+    if (!res) return '';
+    
+    const inspectionData = res.departureInspection || res.returnInspection;
+    switch (fieldName) {
+      case 'logo':
+        return 'LOGO'; // This is handled specially in rendering
+      case 'agency_name':
+        return 'Agency Name'; // This will be replaced with actual value in rendering
+      case 'title':
+        return 'Contrat de Location / عقد الإيجار';
+      case 'contract_date':
+        return res.step1?.departureDate || '';
+      case 'contract_number':
+        return `#${Math.random().toString(36).substring(7).toUpperCase()}`;
+      case 'start_date':
+        return res.step1?.departureDate || '';
+      case 'end_date':
+        return res.step1?.returnDate || '';
+      case 'duration':
+        try {
+          const start = new Date(res.step1?.departureDate || '');
+          const end = new Date(res.step1?.returnDate || '');
+          const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+          return `${days.toString().padStart(2, '0')} days`;
+        } catch {
+          return `${res.totalDays || 0} days`;
+        }
+      case 'driver_name':
+        return `${res.client?.firstName || ''} ${res.client?.lastName || ''}`;
+      case 'driver_birth_date':
+        return res.client?.birthDate || '';
+      case 'driver_birth_place':
+        return res.client?.birthPlace || '';
+      case 'document_type':
+        return res.client?.documentType || 'Biometric driver\'s license';
+      case 'document_number':
+        return res.client?.documentNumber || '';
+      case 'issue_date':
+        return res.client?.issueDate || '';
+      case 'expiration_date':
+        return res.client?.expirationDate || '';
+      case 'issue_place':
+        return res.client?.issuePlace || '';
+      case 'vehicle_model':
+        return `${res.car?.brand || ''} ${res.car?.model || ''} ${res.car?.color || ''}`;
+      case 'vehicle_color':
+        return res.car?.color || '';
+      case 'vehicle_license_plate':
+        return res.car?.licensePlate || '';
+      case 'vehicle_vin':
+        return res.car?.vin || res.car?.serialNumber || '';
+      case 'vehicle_fuel':
+        return res.car?.fuelType || '';
+      case 'vehicle_mileage':
+        return `${inspectionData?.startMileage || 0} km`;
+      case 'unit_price':
+        return `${(res.car?.pricePerDay || res.car?.priceDay || 0)?.toLocaleString?.() || 0} DA`;
+      case 'total_ht':
+        return `${res.totalPrice?.toLocaleString?.() || 0} DA`;
+      case 'total_amount':
+        return `${res.totalPrice?.toLocaleString?.() || 0} DA`;
+      case 'equipment_list':
+        return inspectionData?.equipmentItems?.map((item: any) => `✓ ${item}`).join(', ') || 'Standard Equipment';
+      case 'signature_line':
+        return '_________________________________';
+      case 'contract_details_title':
+        return 'Contract Details';
+      case 'rental_period_title':
+        return 'Rental Period';
+      case 'driver_info_title':
+        return 'Driver Information (Driver 01)';
+      case 'vehicle_info_title':
+        return 'Vehicle Information';
+      case 'financials_title':
+        return 'Financials';
+      case 'equipment_title':
+        return 'Equipment Checklist from inspection';
+      case 'signature_title':
+        return 'Signatures';
+      case 'contract_date_label':
+        return 'Contract Date:';
+      case 'contract_number_label':
+        return 'Contract Number:';
+      case 'start_date_label':
+        return 'Start Date:';
+      case 'end_date_label':
+        return 'End Date:';
+      case 'duration_label':
+        return 'Duration:';
+      case 'driver_name_label':
+        return 'Name:';
+      case 'driver_birth_date_label':
+        return 'Date of Birth:';
+      case 'driver_birth_place_label':
+        return 'Place of Birth:';
+      case 'document_type_label':
+        return 'Document Type:';
+      case 'document_number_label':
+        return 'Document Number:';
+      case 'issue_date_label':
+        return 'Issue Date:';
+      case 'expiration_date_label':
+        return 'Expiration Date:';
+      case 'issue_place_label':
+        return 'Place of Issue:';
+      case 'vehicle_model_label':
+        return 'Model:';
+      case 'vehicle_color_label':
+        return 'Color:';
+      case 'vehicle_license_plate_label':
+        return 'License Plate:';
+      case 'vehicle_vin_label':
+        return 'Serial Number:';
+      case 'vehicle_fuel_label':
+        return 'Fuel Type:';
+      case 'vehicle_mileage_label':
+        return 'Kilometer Reading (at start):';
+      case 'unit_price_label':
+        return 'Unit Price:';
+      case 'total_ht_label':
+        return 'Total Price (HT):';
+      case 'total_amount_label':
+        return 'Total Contract Amount:';
+      default:
+        return '';
+    }
+  };
 
   const handleMouseDown = (elementId: string, e: React.MouseEvent) => {
     setSelectedElement(elementId);
@@ -1764,6 +2121,38 @@ const PersonalizationModal: React.FC<{
     setIsDragging(false);
   };
 
+  const renderField = (fieldName: string) => {
+    const element = elements[fieldName];
+    if (!element) return null;
+    
+    return (
+      <div
+        key={fieldName}
+        className={`absolute cursor-move ${selectedElement === fieldName ? 'ring-2 ring-blue-500' : ''}`}
+        style={{
+          left: element.x || 0,
+          top: element.y || 0,
+          fontSize: element.fontSize || 12,
+          fontFamily: element.fontFamily || 'Arial',
+          color: element.color || '#000000',
+          fontWeight: element.fontWeight || 'normal',
+          fontStyle: element.fontStyle || 'normal',
+          textDecoration: element.textDecoration || 'none',
+          textAlign: element.textAlign || 'left',
+          backgroundColor: element.backgroundColor || 'transparent',
+          padding: element.backgroundColor !== 'transparent' ? '4px 8px' : '0',
+          maxWidth: '300px',
+          overflow: 'visible',
+          whiteSpace: 'normal',
+          wordWrap: 'break-word'
+        }}
+        onMouseDown={(e) => handleMouseDown(fieldName, e)}
+      >
+        {element.text || ''}
+      </div>
+    );
+  };
+
   const updateElement = (elementId: string, updates: any) => {
     setElements(prev => ({
       ...prev,
@@ -1794,60 +2183,86 @@ const PersonalizationModal: React.FC<{
     setSelectedElement(newId);
   };
 
-  const saveTemplate = () => {
-    // Check if a template of this type already exists
-    const existingTemplateIndex = savedTemplates.findIndex(template => template.type === type);
+  const saveTemplate = async () => {
+    if (!templateName.trim()) {
+      alert(lang === 'fr' ? 'Veuillez entrer un nom de modèle' : 'يرجى إدخال اسم القالب');
+      return;
+    }
 
-    if (existingTemplateIndex >= 0) {
-      // Update existing template
-      const existingTemplate = savedTemplates[existingTemplateIndex];
-      const updatedTemplate = {
-        ...existingTemplate,
-        elements: { ...elements },
-        newTextElements: [...newTextElements],
-        createdAt: new Date().toISOString() // Update timestamp
-      };
+    setSavingTemplate(true);
+    try {
+      // Convert elements to database template format
+      const dbTemplate: any = {};
+      Object.keys(elements).forEach((fieldName) => {
+        const element = elements[fieldName];
+        if (fieldName !== 'logo') {
+          dbTemplate[fieldName] = {
+            x: element.x || 0,
+            y: element.y || 0,
+            fontSize: element.fontSize || 12,
+            fontFamily: element.fontFamily || 'Arial',
+            color: element.color || '#000000',
+            fontWeight: element.fontWeight || 'normal',
+            fontStyle: element.fontStyle || 'normal',
+            textDecoration: element.textDecoration || 'none',
+            textAlign: element.textAlign || 'left',
+            backgroundColor: element.backgroundColor || 'transparent'
+          };
+        }
+      });
 
-      const updatedTemplates = [...savedTemplates];
-      updatedTemplates[existingTemplateIndex] = updatedTemplate;
+      // If updating existing template
+      if (selectedTemplateId) {
+        const { error } = await supabase
+          .from('document_templates')
+          .update({
+            name: templateName,
+            template: dbTemplate,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', selectedTemplateId);
 
-      setSavedTemplates(updatedTemplates);
-      localStorage.setItem('savedTemplates', JSON.stringify(updatedTemplates));
-      alert(lang === 'fr' ? 'Modèle mis à jour!' : 'تم تحديث النموذج!');
-    } else {
-      // Create new template - ask for name and type
-      const templateName = prompt(lang === 'fr' ? 'Nom du modèle:' : 'اسم النموذج:');
-      if (!templateName) return;
+        if (error) {
+          console.error('Error updating template:', error);
+          alert(lang === 'fr' ? 'Erreur lors de la mise à jour du modèle' : 'خطأ في تحديث القالب');
+        } else {
+          alert(lang === 'fr' ? 'Modèle mis à jour avec succès!' : 'تم تحديث القالب بنجاح!');
+          await loadTemplateFromDatabase();
+          setShowSaveDialog(false);
+          setTemplateName('');
+        }
+      } else {
+        // Create new template
+        const { data, error } = await supabase
+          .from('document_templates')
+          .insert([{
+            template_type: selectedTemplateType,
+            name: templateName,
+            template: dbTemplate,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select();
 
-      // ask for document type
-      const types: Array<'engagement'|'contrat'|'versement'|'facture'|'devis'> = ['engagement','contrat','versement','facture','devis'];
-      let templateType = prompt(
-        (lang === 'fr'
-          ? 'Type de modèle (engagement, contrat, versement, facture, devis):'
-          : 'نوع النموذج (engagement, contrat, versement, facture, devis):')
-      );
-
-      if (!templateType || !types.includes(templateType as any)) {
-        alert(lang === 'fr' ? 'Type invalide, opération annulée.' : 'نوع غير صالح، تم الإلغاء.');
-        return;
+        if (error) {
+          console.error('Error saving template:', error);
+          alert(lang === 'fr' ? 'Erreur lors de la sauvegarde du modèle' : 'خطأ في حفظ القالب');
+        } else {
+          alert(lang === 'fr' ? 'Modèle sauvegardé avec succès!' : 'تم حفظ القالب بنجاح!');
+          if (data && data[0]) {
+            setSelectedTemplateId(data[0].id);
+            setTemplateName(data[0].name || '');
+          }
+          await loadTemplateFromDatabase();
+          setShowSaveDialog(false);
+          setTemplateName('');
+        }
       }
-
-      // ensure cast
-      templateType = templateType as 'engagement'|'contrat'|'versement'|'facture'|'devis';
-
-      const template = {
-        id: Date.now().toString(),
-        name: templateName,
-        type: templateType,
-        elements: { ...elements },
-        newTextElements: [...newTextElements],
-        createdAt: new Date().toISOString()
-      };
-
-      const updatedTemplates = [...savedTemplates, template];
-      setSavedTemplates(updatedTemplates);
-      localStorage.setItem('savedTemplates', JSON.stringify(updatedTemplates));
-      alert(lang === 'fr' ? 'Modèle sauvegardé!' : 'تم حفظ النموذج!');
+    } catch (error) {
+      console.error('Error in saveTemplate:', error);
+      alert(lang === 'fr' ? 'Une erreur est survenue' : 'حدث خطأ ما');
+    } finally {
+      setSavingTemplate(false);
     }
   };
 
@@ -1913,7 +2328,6 @@ const PersonalizationModal: React.FC<{
           console.error('PersonalizationModal: Error fetching website_settings:', agencyError);
         } else {
           setAgencySettings(agencyData);
-          console.log('PersonalizationModal loaded website settings:', agencyData);
         }
       } catch (error) {
         console.error('PersonalizationModal: Error loading website settings:', error);
@@ -2007,11 +2421,7 @@ const PersonalizationModal: React.FC<{
                     className="object-contain border border-gray-300 rounded"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      console.error('PersonalizationModal: Logo failed to load from agency_settings:', agencySettings.logo);
                       (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                    onLoad={() => {
-                      console.log('PersonalizationModal: Logo loaded successfully from agency_settings:', agencySettings.logo);
                     }}
                   />
                 </div>
@@ -2061,8 +2471,127 @@ const PersonalizationModal: React.FC<{
                 </div>
               )}
 
+              {/* Contract-specific elements */}
+              {type === 'contract' && (
+                <>
+                  {/* Logo */}
+                  {agencySettings?.logo && elements.logo && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'logo' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{ left: elements.logo.x || 50, top: elements.logo.y || 20 }}
+                      onMouseDown={(e) => handleMouseDown('logo', e)}
+                    >
+                      <img
+                        src={agencySettings.logo}
+                        alt="Agency Logo"
+                        style={{ height: elements.logo.width || 80 }}
+                        className="object-contain border border-gray-300 rounded"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          console.error('Logo failed to load:', agencySettings.logo);
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Agency Name */}
+                  {agencySettings?.name && elements.agency_name && (
+                    <div
+                      className={`absolute cursor-move ${selectedElement === 'agency_name' ? 'ring-2 ring-blue-500' : ''}`}
+                      style={{
+                        left: elements.agency_name.x || 150,
+                        top: elements.agency_name.y || 30,
+                        fontSize: elements.agency_name.fontSize || 18,
+                        fontFamily: elements.agency_name.fontFamily || 'Arial',
+                        color: elements.agency_name.color || '#1a365d',
+                        fontWeight: elements.agency_name.fontWeight || 'bold',
+                        fontStyle: elements.agency_name.fontStyle || 'normal',
+                        textDecoration: elements.agency_name.textDecoration || 'none',
+                        textAlign: elements.agency_name.textAlign || 'left',
+                        backgroundColor: elements.agency_name.backgroundColor || 'transparent',
+                        padding: elements.agency_name.backgroundColor !== 'transparent' ? '4px 8px' : '0'
+                      }}
+                      onMouseDown={(e) => handleMouseDown('agency_name', e)}
+                    >
+                      {agencySettings.name}
+                    </div>
+                  )}
+
+                  {/* Title */}
+                  {renderField('title')}
+
+                  {/* Contract Details Section */}
+                  {renderField('contract_details_title')}
+                  {renderField('contract_date_label')}
+                  {renderField('contract_date')}
+                  {renderField('contract_number_label')}
+                  {renderField('contract_number')}
+
+                  {/* Rental Period Section */}
+                  {renderField('rental_period_title')}
+                  {renderField('start_date_label')}
+                  {renderField('start_date')}
+                  {renderField('end_date_label')}
+                  {renderField('end_date')}
+                  {renderField('duration_label')}
+                  {renderField('duration')}
+
+                  {/* Driver Information Section */}
+                  {renderField('driver_info_title')}
+                  {renderField('driver_name_label')}
+                  {renderField('driver_name')}
+                  {renderField('driver_birth_date_label')}
+                  {renderField('driver_birth_date')}
+                  {renderField('driver_birth_place_label')}
+                  {renderField('driver_birth_place')}
+                  {renderField('document_type_label')}
+                  {renderField('document_type')}
+                  {renderField('document_number_label')}
+                  {renderField('document_number')}
+                  {renderField('issue_date_label')}
+                  {renderField('issue_date')}
+                  {renderField('expiration_date_label')}
+                  {renderField('expiration_date')}
+                  {renderField('issue_place_label')}
+                  {renderField('issue_place')}
+
+                  {/* Vehicle Information Section */}
+                  {renderField('vehicle_info_title')}
+                  {renderField('vehicle_model_label')}
+                  {renderField('vehicle_model')}
+                  {renderField('vehicle_color_label')}
+                  {renderField('vehicle_color')}
+                  {renderField('vehicle_license_plate_label')}
+                  {renderField('vehicle_license_plate')}
+                  {renderField('vehicle_vin_label')}
+                  {renderField('vehicle_vin')}
+                  {renderField('vehicle_fuel_label')}
+                  {renderField('vehicle_fuel')}
+                  {renderField('vehicle_mileage_label')}
+                  {renderField('vehicle_mileage')}
+
+                  {/* Financials Section */}
+                  {renderField('financials_title')}
+                  {renderField('unit_price_label')}
+                  {renderField('unit_price')}
+                  {renderField('total_ht_label')}
+                  {renderField('total_ht')}
+                  {renderField('total_amount_label')}
+                  {renderField('total_amount')}
+
+                  {/* Equipment Section */}
+                  {renderField('equipment_title')}
+                  {renderField('equipment_list')}
+
+                  {/* Signature Section */}
+                  {renderField('signature_title')}
+                  {renderField('signature_line')}
+                </>
+              )}
+
               {/* Engagement-specific elements */}
-              {!(type === 'payment' || type === 'receipt') && (
+              {!(type === 'payment' || type === 'receipt') && type !== 'contract' && (
                 <>
                   {/* Client Info */}
                   <div
@@ -5941,18 +6470,41 @@ const PersonalizationModal: React.FC<{
             </div>
           </div>
 
-          <div className="p-6 border-t border-saas-border flex justify-between">
-            <div className="flex gap-3">
+          <div className="p-6 border-t border-saas-border flex justify-between items-center">
+            <div className="flex gap-3 flex-1">
               <button
                 onClick={onClose}
                 className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
               >
                 {lang === 'fr' ? 'Annuler' : 'إلغاء'}
               </button>
+              
+              {/* Template Selector */}
+              {allDatabaseTemplates.length > 0 && (
+                <select
+                  value={selectedTemplateId || ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      loadSpecificTemplate(e.target.value);
+                    }
+                  }}
+                  className="px-4 py-2 border border-saas-border rounded-lg text-sm font-medium focus:ring-2 focus:ring-saas-primary-start outline-none"
+                >
+                  <option value="">
+                    {lang === 'fr' ? 'Choisir un modèle' : 'اختر قالبًا'}
+                  </option>
+                  {allDatabaseTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name || (lang === 'fr' ? 'Modèle du' : 'قالب من')} {new Date(template.created_at).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
+            
             <div className="flex gap-3">
               <button
-                onClick={saveTemplate}
+                onClick={() => setShowSaveDialog(true)}
                 className="px-6 py-2 bg-saas-primary-start hover:bg-saas-primary-end text-white font-bold rounded-lg transition-colors"
               >
                 💾 {lang === 'fr' ? 'Sauvegarder' : 'حفظ'}
@@ -5977,39 +6529,139 @@ const PersonalizationModal: React.FC<{
             </div>
           </div>
 
-          {/* Saved Templates Section */}
-          {savedTemplates.length > 0 && (
+{/* Save Dialog Modal Overlay */}
+          {showSaveDialog && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+              onClick={() => {
+                setShowSaveDialog(false);
+                setTemplateName('');
+              }}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-2xl font-black text-saas-text-main mb-6">
+                  💾 {lang === 'fr' ? 'Sauvegarder le modèle' : 'حفظ القالب'}
+                </h3>
+                
+                <div className="space-y-6">
+                  {/* Template Name Input */}
+                  <div>
+                    <label className="block text-sm font-bold text-saas-text-main mb-3">
+                      📄 {lang === 'fr' ? 'Nom du modèle' : 'اسم القالب'}
+                    </label>
+                    <input
+                      type="text"
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && templateName.trim()) {
+                          saveTemplate();
+                        }
+                      }}
+                      placeholder={lang === 'fr' ? 'Ex: Contrat Standard' : 'مثال: عقد قياسي'}
+                      autoFocus
+                      className="w-full px-4 py-3 border-2 border-saas-border rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-saas-primary-start outline-none transition-all text-base"
+                    />
+                    <p className="text-xs text-saas-text-muted mt-2">
+                      {lang === 'fr' ? 'Donnez un nom descriptif à votre modèle' : 'أعط اسماً واضحاً لقالبك'}
+                    </p>
+                  </div>
+
+                  {/* Document Type Selector */}
+                  <div>
+                    <label className="block text-sm font-bold text-saas-text-main mb-3">
+                      📋 {lang === 'fr' ? 'Type de document' : 'نوع المستند'}
+                    </label>
+                    <select
+                      value={selectedTemplateType}
+                      onChange={(e) => setSelectedTemplateType(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-saas-border rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-saas-primary-start outline-none transition-all text-base"
+                    >
+                      <option value="contrat">{lang === 'fr' ? 'Contrat de Location' : 'عقد التأجير'}</option>
+                      <option value="devis">{lang === 'fr' ? 'Devis/Offre' : 'عرض الأسعار'}</option>
+                      <option value="facture">{lang === 'fr' ? 'Facture' : 'الفاتورة'}</option>
+                      <option value="engagement">{lang === 'fr' ? 'Lettre d\'Engagement' : 'رسالة الالتزام'}</option>
+                      <option value="recu">{lang === 'fr' ? 'Reçu de Paiement' : 'إيصال الدفع'}</option>
+                    </select>
+                  </div>
+
+                  {/* Warning for updates */}
+                  {selectedTemplateId && (
+                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded">
+                      <p className="text-sm text-amber-700 font-medium">
+                        ⚠️ {lang === 'fr' 
+                          ? 'Vous mettez à jour un modèle existant' 
+                          : 'أنت تحدث قالبًا موجودًا'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 pt-4 border-t border-saas-border">
+                    <button
+                      onClick={() => {
+                        setShowSaveDialog(false);
+                        setTemplateName('');
+                      }}
+                      className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition-colors"
+                    >
+                      {lang === 'fr' ? 'Annuler' : 'إلغاء'}
+                    </button>
+                    <button
+                      onClick={saveTemplate}
+                      disabled={savingTemplate || !templateName.trim()}
+                      className="flex-1 px-4 py-3 bg-gradient-to-r from-saas-primary-start to-saas-primary-end hover:from-saas-primary-end hover:to-saas-secondary-start text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingTemplate 
+                        ? (lang === 'fr' ? '⏳ Sauvegarde...' : '⏳ جاري الحفظ...')
+                        : (lang === 'fr' ? '💾 Sauvegarder' : '💾 حفظ')}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* Database Templates Section */}
+          {allDatabaseTemplates.length > 0 && !showSaveDialog && (
             <div className="border-t border-saas-border bg-gray-50 p-6">
               <h4 className="font-bold text-saas-text-main mb-4">
-                📁 {lang === 'fr' ? 'Modèles sauvegardés' : 'القوالب المحفوظة'}
+                📁 {lang === 'fr' ? 'Modèles disponibles' : 'القوالب المتاحة'}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-48 overflow-y-auto">
-                {savedTemplates.map((template) => (
-                  <div key={template.id} className="bg-white border border-saas-border rounded-lg p-4 hover:shadow-md transition-shadow">
+                {allDatabaseTemplates.map((template) => (
+                  <div 
+                    key={template.id} 
+                    onClick={() => loadSpecificTemplate(template.id)}
+                    className={`bg-white border-2 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
+                      selectedTemplateId === template.id 
+                        ? 'border-saas-primary-start shadow-md' 
+                        : 'border-saas-border'
+                    }`}
+                  >
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex-1">
-                        <h5 className="font-bold text-saas-text-main text-sm">{template.name}</h5>
+                        <h5 className="font-bold text-saas-text-main text-sm">
+                          {template.name || (lang === 'fr' ? 'Modèle' : 'قالب')}
+                        </h5>
                         <p className="text-xs text-saas-text-muted">
-                          {new Date(template.createdAt).toLocaleDateString()}
+                          {new Date(template.created_at).toLocaleDateString()}
                         </p>
+                        {selectedTemplateId === template.id && (
+                          <span className="text-xs text-saas-primary-start font-bold mt-1">
+                            ✓ {lang === 'fr' ? 'Actif' : 'نشط'}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          loadTemplate(template);
-                          setSelectedElement(null);
-                        }}
-                        className="flex-1 px-3 py-1 bg-saas-primary-start hover:bg-saas-primary-end text-white text-xs rounded transition-colors font-bold"
-                      >
-                        ✏️ {lang === 'fr' ? 'Modifier' : 'تعديل'}
-                      </button>
-                      <button
-                        onClick={() => deleteTemplate(template.id)}
-                        className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded transition-colors font-bold"
-                      >
-                        🗑️
-                      </button>
                     </div>
                   </div>
                 ))}

@@ -196,6 +196,7 @@ export class ReservationsService {
       additionalFees: res.additional_fees || 0,
       status: res.status,
       notes: res.notes,
+      conditions: res.conditions_text,
       createdAt: res.created_at,
       activatedAt: res.activated_at,
       completedAt: res.completed_at,
@@ -391,6 +392,7 @@ export class ReservationsService {
       activatedAt: data.activated_at,
       completedAt: data.completed_at,
       notes: data.notes,
+      conditions: data.conditions_text,
       departureInspection: (() => {
         // Get latest departure inspection (most recent by created_at)
         const departureInspections = data.vehicle_inspections?.filter((i: any) => i.type === 'departure') || [];
@@ -469,6 +471,7 @@ export class ReservationsService {
     advancePayment: number;
     remainingPayment: number;
     notes: string;
+    conditionsText?: string;
     tvaApplied: boolean;
     tvaAmount: number;
     additionalFees: number;
@@ -485,6 +488,7 @@ export class ReservationsService {
     if (updates.advancePayment !== undefined) updateData.advance_payment = updates.advancePayment;
     if (updates.remainingPayment !== undefined) updateData.remaining_payment = updates.remainingPayment;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
+    if (updates.conditionsText !== undefined) updateData.conditions_text = updates.conditionsText;
     if (updates.tvaApplied !== undefined) updateData.tva_applied = updates.tvaApplied;
     if (updates.tvaAmount !== undefined) updateData.tva_amount = updates.tvaAmount;
     if (updates.additionalFees !== undefined) updateData.additional_fees = updates.additionalFees;
@@ -514,28 +518,74 @@ export class ReservationsService {
 
   static async activateReservationWithInspection(data: {
     reservationId: string;
+    carId: string;
     mileage: number;
     fuelLevel: 'full' | 'half' | 'quarter' | 'eighth' | 'empty';
     location: string;
     notes?: string;
     signatureDataUrl?: string;
+    departurePhotos?: string[];
     inspectionItems: any[];
+    departureAgencyId?: string;
   }): Promise<void> {
+    // First activate the reservation
+    await this.activateReservation(data.reservationId);
+
+    // Check if departure inspection already exists for this reservation
+    try {
+      const { data: existingInspection, error } = await supabase
+        .from('vehicle_inspections')
+        .select('id')
+        .eq('reservation_id', data.reservationId)
+        .eq('type', 'departure')
+        .single();
+
+      if (existingInspection) {
+        // Inspection already exists, skip creation to avoid 409 conflict
+        console.log('Departure inspection already exists for this reservation');
+        return;
+      }
+    } catch (e) {
+      // No existing inspection, continue with creation
+      console.log('No existing departure inspection, creating new one');
+    }
+
     // Upload signature if provided
     let signatureUrl = '';
     if (data.signatureDataUrl) {
-      // Convert data URL to File
       const response = await fetch(data.signatureDataUrl);
       const blob = await response.blob();
       const file = new File([blob], `signature-departure-${data.reservationId}-${Date.now()}.png`, { type: 'image/png' });
       signatureUrl = await this.uploadSignature(file, data.reservationId);
     }
 
-    // First activate the reservation
-    await this.activateReservation(data.reservationId);
+    // Upload departure photos if provided
+    let photoUrls: string[] = [];
+    if (data.departurePhotos && data.departurePhotos.length > 0) {
+      for (let i = 0; i < data.departurePhotos.length; i++) {
+        const photoDataUrl = data.departurePhotos[i];
+        const response = await fetch(photoDataUrl);
+        const blob = await response.blob();
+        const file = new File([blob], `departure-photo-${data.reservationId}-${i}-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const url = await this.uploadInspectionImage(file, data.reservationId, 'departure');
+        photoUrls.push(url);
+      }
+    }
 
-    // Use location as agencyId for now - this should be improved to use actual agency IDs
-    const agencyId = data.location || 'default-agency';
+    // Update car mileage and fuel level
+    await supabase
+      .from('cars')
+      .update({
+        mileage: data.mileage,
+        energy: data.fuelLevel === 'full' ? 'Plein' : 
+                data.fuelLevel === 'half' ? '1/2' :
+                data.fuelLevel === 'quarter' ? '1/4' :
+                data.fuelLevel === 'eighth' ? '1/8' : 'Vide'
+      })
+      .eq('id', data.carId);
+
+    // Use agency ID from reservation, fall back to location if not provided
+    const agencyId = data.departureAgencyId || data.location || 'default-agency';
 
     await this.createInspection({
       reservationId: data.reservationId,
@@ -546,10 +596,31 @@ export class ReservationsService {
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString(),
       notes: data.notes,
+      exteriorFrontPhotoUrl: photoUrls.length > 0 ? photoUrls[0] : undefined,
+      interiorPhotoUrl: photoUrls.length > 1 ? photoUrls[1] : undefined,
+      otherPhotosUrls: photoUrls.length > 2 ? photoUrls.slice(2) : [],
       clientSignatureUrl: signatureUrl,
     });
 
-    // TODO: Save inspection items if needed
+    // Save inspection items if provided
+    if (data.inspectionItems && data.inspectionItems.length > 0) {
+      const { data: inspection } = await supabase
+        .from('vehicle_inspections')
+        .select('id')
+        .eq('reservation_id', data.reservationId)
+        .eq('type', 'departure')
+        .single();
+
+      if (inspection) {
+        const responses = data.inspectionItems.map((item: any) => ({
+          inspection_id: inspection.id,
+          checklist_item_id: item.id,
+          status: !!item.checked,
+          note: item.note || null
+        }));
+        await supabase.from('inspection_responses').insert(responses);
+      }
+    }
   }
 
   static async completeReservationWithInspection(data: {
@@ -563,6 +634,7 @@ export class ReservationsService {
     signatureDataUrl?: string;
     notes?: string;
     inspectionItems: any[];
+    returnAgencyId?: string;
   }): Promise<void> {
     // Upload signature if provided
     let signatureUrl = '';
@@ -580,7 +652,7 @@ export class ReservationsService {
       type: 'return' as const,
       mileage: data.returnMileage,
       fuelLevel: data.returnFuelLevel,
-      agencyId: data.returnLocation,
+      agencyId: data.returnAgencyId || data.returnLocation,
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString(),
       notes: data.notes,
@@ -629,21 +701,79 @@ export class ReservationsService {
   }
 
   static async cancelReservation(id: string): Promise<void> {
+    // First, get the reservation to find the car ID
+    const { data: reservation, error: fetchError } = await supabase
+      .from('reservations')
+      .select('car_id')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Update reservation status to cancelled
     const { error } = await supabase
       .from('reservations')
       .update({ status: 'cancelled' })
       .eq('id', id);
 
     if (error) throw error;
+
+    // Check if there are any other active/pending/confirmed reservations for this car
+    if (reservation) {
+      const { data: activeReservations, error: checkError } = await supabase
+        .from('reservations')
+        .select('id')
+        .eq('car_id', reservation.car_id)
+        .in('status', ['pending', 'confirmed', 'active']);
+
+      if (checkError) throw checkError;
+
+      // If no active reservations, update car status to "disponible"
+      if (!activeReservations || activeReservations.length === 0) {
+        await supabase
+          .from('cars')
+          .update({ status: 'disponible' })
+          .eq('id', reservation.car_id);
+      }
+    }
   }
 
   static async deleteReservation(id: string): Promise<void> {
+    // First, get the reservation to find the car ID
+    const { data: reservation, error: fetchError } = await supabase
+      .from('reservations')
+      .select('car_id')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Delete the reservation
     const { error } = await supabase
       .from('reservations')
       .delete()
       .eq('id', id);
 
     if (error) throw error;
+
+    // Check if there are any other active/pending/confirmed reservations for this car
+    if (reservation) {
+      const { data: activeReservations, error: checkError } = await supabase
+        .from('reservations')
+        .select('id')
+        .eq('car_id', reservation.car_id)
+        .in('status', ['pending', 'confirmed', 'active']);
+
+      if (checkError) throw checkError;
+
+      // If no active reservations, update car status to "disponible"
+      if (!activeReservations || activeReservations.length === 0) {
+        await supabase
+          .from('cars')
+          .update({ status: 'disponible' })
+          .eq('id', reservation.car_id);
+      }
+    }
   }
 
   // ========== VEHICLE INSPECTIONS ==========

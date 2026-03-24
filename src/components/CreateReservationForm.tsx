@@ -148,7 +148,6 @@ interface CreateReservationFormProps {
 }
 
 export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ lang, onBack, inspectionMode = false, initialData, defaultStatus = 'pending' }) => {
-    console.log('Reservation initialData:', initialData);
   const [currentStep, setCurrentStep] = useState(inspectionMode ? 3 : 1);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
@@ -183,14 +182,26 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           additionalServices: services
         };
       }
-      // Auto-select locations
-      if (!formData.step1?.departureLocation && (initialData as any).departureLocation) {
+      // Auto-select locations from step1
+      if (!formData.step1?.departureLocation) {
+        // First try to get from step1, then try direct properties
+        const departureLocation = (initialData as any).step1?.departureLocation || (initialData as any).departureLocation || '';
+        const returnLocation = (initialData as any).step1?.returnLocation || (initialData as any).returnLocation || departureLocation;
+        const departureDate = (initialData as any).step1?.departureDate || (initialData as any).departureDate || formData.step1?.departureDate;
+        const returnDate = (initialData as any).step1?.returnDate || (initialData as any).returnDate || formData.step1?.returnDate;
+        const departureTime = (initialData as any).step1?.departureTime || (initialData as any).departureTime || '';
+        const returnTime = (initialData as any).step1?.returnTime || (initialData as any).returnTime || '';
+        
         updates.step1 = {
           ...(formData.step1 || {}),
-          departureLocation: (initialData as any).departureLocation,
-          returnLocation: (initialData as any).returnLocation || (initialData as any).departureLocation,
-          departureDate: (initialData as any).departureDate || formData.step1?.departureDate,
-          returnDate: (initialData as any).returnDate || formData.step1?.returnDate
+          departureLocation,
+          returnLocation,
+          departureDate,
+          returnDate,
+          departureTime,
+          returnTime,
+          departureAgency: (initialData as any).step1?.departureAgency,
+          returnAgency: (initialData as any).step1?.returnAgency
         };
       }
       // Auto-select car
@@ -283,8 +294,8 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
       const departureAgency = agencies.find(a => a.name === formData.step1?.departureLocation || a.address === formData.step1?.departureLocation);
       const returnAgency = agencies.find(a => a.name === formData.step1?.returnLocation || a.address === formData.step1?.returnLocation) || departureAgency;
 
-      // Skip agency validation if inspectionMode and accepted reservation
-      if (!(inspectionMode && initialData && initialData.status === 'accepted')) {
+      // Skip agency validation if inspectionMode (for both pending and accepted reservations)
+      if (!(inspectionMode && initialData)) {
         if (!departureAgency || !returnAgency) {
           alert(lang === 'fr' ? 'Agence introuvable' : 'الوكالة غير موجودة');
           return;
@@ -301,8 +312,8 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
       const remainingPayment = Math.max(0, totalPrice - advancePayment);
 
       // Create reservation using ReservationsService
-      // Skip client/car validation if inspectionMode and accepted reservation
-      if (!(inspectionMode && initialData && initialData.status === 'accepted')) {
+      // Skip client/car validation if inspectionMode (for both pending and accepted reservations)
+      if (!(inspectionMode && initialData)) {
         if (!formData.step4?.selectedClient?.id || !formData.step2?.selectedCar?.id || !departureAgency?.id || !returnAgency?.id) {
           alert(lang === 'fr' ? 'Veuillez sélectionner un client, un véhicule et des agences valides.' : 'يرجى اختيار عميل ومركبة ووكالات صحيحة.');
           return;
@@ -312,42 +323,59 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
       let carId = formData.step2?.selectedCar?.id || '';
       let departureAgencyId = departureAgency?.id || '';
       let returnAgencyId = returnAgency?.id || '';
-      if (inspectionMode && initialData && initialData.status === 'accepted') {
+      if (inspectionMode && initialData) {
         clientId = (initialData as any)?.client?.id || '';
         carId = (initialData as any)?.car?.id || '';
-        departureAgencyId = (initialData as any)?.departure_agency_id || (initialData as any)?.departureAgencyId || '';
-        returnAgencyId = (initialData as any)?.return_agency_id || (initialData as any)?.returnAgencyId || '';
+        departureAgencyId = (initialData as any)?.departure_agency_id || (initialData as any)?.departureAgencyId || (initialData as any)?.step1?.departureAgency || '';
+        returnAgencyId = (initialData as any)?.return_agency_id || (initialData as any)?.returnAgencyId || (initialData as any)?.step1?.returnAgency || '';
         // Block if any required UUID is missing
         if (!clientId || !carId || !departureAgencyId || !returnAgencyId) {
           alert(lang === 'fr' ? "Impossible de créer la réservation: données manquantes (client, véhicule ou agence)." : "لا يمكن إنشاء الحجز: بيانات مفقودة (عميل أو مركبة أو وكالة).");
           return;
         }
       }
-      const result = await ReservationsService.createReservation({
-        clientId,
-        carId,
-        departureDate: formData.step1?.departureDate || '',
-        departureTime: formData.step1?.departureTime || '',
-        departureAgencyId,
-        returnDate: formData.step1?.returnDate || '',
-        returnTime: formData.step1?.returnTime || '',
-        returnAgencyId,
-        pricePerDay: formData.step2?.selectedCar?.priceDay || 0,
-        priceWeek: formData.step2?.selectedCar?.priceWeek || 0,
-        priceMonth: formData.step2?.selectedCar?.priceMonth || 0,
-        totalDays: totalDays,
-        totalPrice: totalPrice,
-        deposit: formData.step2?.selectedCar?.deposit || 0,
-        advancePayment: advancePayment,
-        remainingPayment: remainingPayment,
-        status: 'confirmed', // always create as confirmed
-        notes: formData.step6?.notes || '',
-      });
+      
+      // Use appropriate function based on mode
+      let reservationId: string;
+      if (inspectionMode && initialData) {
+        // Update existing reservation in inspection mode and change status to confirmed
+        reservationId = (initialData as any).id;
+        await ReservationsService.updateReservation(reservationId, {
+          status: 'confirmed',
+          notes: formData.step6?.notes || '',
+          totalPrice: totalPrice,
+          advancePayment: advancePayment,
+          remainingPayment: remainingPayment,
+        });
+      } else {
+        // Create new reservation
+        const result = await ReservationsService.createReservation({
+          clientId,
+          carId,
+          departureDate: formData.step1?.departureDate || '',
+          departureTime: formData.step1?.departureTime || '',
+          departureAgencyId,
+          returnDate: formData.step1?.returnDate || '',
+          returnTime: formData.step1?.returnTime || '',
+          returnAgencyId,
+          pricePerDay: formData.step2?.selectedCar?.priceDay || 0,
+          priceWeek: formData.step2?.selectedCar?.priceWeek || 0,
+          priceMonth: formData.step2?.selectedCar?.priceMonth || 0,
+          totalDays: totalDays,
+          totalPrice: totalPrice,
+          deposit: formData.step2?.selectedCar?.deposit || 0,
+          advancePayment: advancePayment,
+          remainingPayment: remainingPayment,
+          status: 'pending', // save as pending until confirmed
+          notes: formData.step6?.notes || '',
+        });
+        reservationId = result.id;
+      }
 
       // Save selected services
       const selectedServices = formData.step5?.additionalServices || [];
       if (selectedServices.length > 0) {
-        await ReservationsService.updateReservationServices(result.id, selectedServices);
+        await ReservationsService.updateReservationServices(reservationId, selectedServices);
       }
 
       // Save departure inspection if present
@@ -396,7 +424,7 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           } else {
             // Create new inspection if none exists
             const createdInspection = await DatabaseService.createVehicleInspection({
-              reservation_id: result.id,
+              reservation_id: reservationId,
               type: 'departure',
               mileage: inspection.mileage || 0,
               fuel_level: inspection.fuelLevel || 'full',
@@ -435,10 +463,10 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
         }
       }
 
-      console.log('Reservation created successfully:', result);
+
       onBack();
     } catch (err: any) {
-      console.error('Error creating reservation:', err);
+      console.error('Error ' + (inspectionMode && initialData ? 'updating' : 'creating') + ' reservation:', err);
       alert(lang === 'fr' ? `Erreur: ${err.message}` : `خطأ: ${err.message}`);
     }
   };
@@ -802,7 +830,7 @@ export const Step2VehicleSelection: React.FC<{
     const loadCars = async () => {
       try {
         setIsLoadingCars(true);
-        const data = await DatabaseService.getCars();
+        const data = await DatabaseService.getAvailableCars();
         setCars(data || []);
       } catch (err) {
         console.error('Error loading cars:', err);
@@ -1831,11 +1859,17 @@ export const Step4ClientSelection: React.FC<{
                 }`}
               >
                 <div className="text-center">
-                  <img
-                    src={client.profilePhoto || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'}
-                    alt={`${client.firstName} ${client.lastName}`}
-                    className="w-16 h-16 rounded-full object-cover mx-auto mb-3 border-2 border-saas-primary-muted"
-                  />
+                  {client.profilePhoto ? (
+                    <img
+                      src={client.profilePhoto}
+                      alt={`${client.firstName} ${client.lastName}`}
+                      className="w-16 h-16 rounded-full object-cover mx-auto mb-3 border-2 border-saas-primary-muted"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full mx-auto mb-3 border-2 border-saas-primary-muted flex items-center justify-center bg-saas-bg">
+                      <span className="text-2xl">👤</span>
+                    </div>
+                  )}
                   <p className="font-bold text-sm text-saas-text-main">{client.firstName} {client.lastName}</p>
                   <p className="text-saas-text-muted text-xs">📱 {client.phone}</p>
                   <p className="text-saas-text-muted text-xs">🆔 {client.licenseNumber}</p>
@@ -1858,11 +1892,17 @@ export const Step4ClientSelection: React.FC<{
             {lang === 'fr' ? 'Client Sélectionné' : 'العميل المختار'}
           </h4>
           <div className="flex items-center gap-4">
-            <img
-              src={formData.step4.selectedClient.profilePhoto || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'}
-              alt={`${formData.step4.selectedClient.firstName} ${formData.step4.selectedClient.lastName}`}
-              className="w-12 h-12 rounded-full object-cover"
-            />
+            {formData.step4.selectedClient.profilePhoto ? (
+              <img
+                src={formData.step4.selectedClient.profilePhoto}
+                alt={`${formData.step4.selectedClient.firstName} ${formData.step4.selectedClient.lastName}`}
+                className="w-12 h-12 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full flex items-center justify-center bg-green-200">
+                <span className="text-lg">👤</span>
+              </div>
+            )}
             <div>
               <p className="font-bold text-lg text-saas-text-main">{formData.step4.selectedClient.firstName} {formData.step4.selectedClient.lastName}</p>
               <p className="text-saas-text-muted">{formData.step4.selectedClient.phone}</p>
@@ -2442,6 +2482,12 @@ export const Step6FinalPricing: React.FC<{
   // TVA rates options
   const tvaRates = [0, 9, 19, 21];
 
+  // Log on component mount
+  useEffect(() => {
+    return () => {
+    };
+  }, []);
+
   // Initialize from existing step6 data
   useEffect(() => {
     if (formData.step6) {
@@ -2449,6 +2495,7 @@ export const Step6FinalPricing: React.FC<{
       setTvaRate(19); // Default, could be calculated from tvaAmount if needed
       setAdvancePayment(formData.step6.advancePayment || 0);
       setPaymentNotes(formData.step6.paymentNotes || '');
+    } else {
     }
   }, [formData.step6]);
 
@@ -2499,27 +2546,16 @@ export const Step6FinalPricing: React.FC<{
   const servicesTotal = formData.step5?.additionalServices?.reduce((sum, s) => sum + s.price, 0) || 0;
   const subtotal = calculatedBasePrice + servicesTotal;
   const tvaAmount = tvaEnabled ? (subtotal * tvaRate) / 100 : 0;
-  const computedPrice = subtotal + tvaAmount;
+  const computedPrice = Math.max(0, Math.round(subtotal + tvaAmount));
   const deposit = editedDeposit !== '' ? Number(editedDeposit) : (selectedCar?.deposit || 0);
-  const totalPrice = isManualTotal && manualTotal !== '' ? Number(manualTotal) : computedPrice;
+  const totalPrice = isManualTotal && manualTotal !== '' ? Math.max(0, Math.round(Number(manualTotal))) : computedPrice;
 
   // Console logging for debugging
   React.useEffect(() => {
-    console.log('📊 === STEP 6 PRICING UPDATE ===');
-    console.log('📅 Dates:', formData.step1?.departureDate, '→', formData.step1?.returnDate);
-    console.log('📊 Duration:', 'Weeks:', weeks, '| Days:', remainingDays, '| Total:', days, 'jours');
-    console.log('💰 Base Price:', calculatedBasePrice.toLocaleString(), 'DA');
-    console.log('🛒 Services:', servicesTotal.toLocaleString(), 'DA');
-    console.log('📝 TVA:', tvaAmount.toLocaleString(), 'DA (Enabled:', tvaEnabled, 'Rate:', tvaRate, '%)');
-    console.log('💰 Subtotal:', subtotal.toLocaleString(), 'DA');
-    console.log('💰 Total Price:', totalPrice.toLocaleString(), 'DA');
-    console.log('🔐 Deposit/Caution:', deposit.toLocaleString(), 'DA (Edited:', editedDeposit, ')');
-    console.log('---');
-  }, [days, weeks, remainingDays, calculatedBasePrice, servicesTotal, tvaAmount, computedPrice, totalPrice, deposit, editedDeposit, tvaEnabled, tvaRate]);
+  }, [days, weeks, remainingDays, calculatedBasePrice, servicesTotal, tvaAmount, computedPrice, totalPrice, deposit, editedDeposit, tvaEnabled, tvaRate, isManualTotal, manualTotal]);
 
   // Update formData with values (manual override takes precedence)
   React.useEffect(() => {
-    console.log('💾 Saving Step6 to formData');
     setFormData(prev => ({
       ...prev,
       step1: {
@@ -2528,20 +2564,22 @@ export const Step6FinalPricing: React.FC<{
         returnDate: formData.step1?.returnDate || prev.step1?.returnDate
       },
       step6: {
-
         ...prev.step6,
-        totalPrice,
+        totalPrice: totalPrice,
+        isManualTotal: isManualTotal,
+        manualTotal: manualTotal,
         tvaApplied: tvaEnabled,
-        tvaAmount,
+        tvaAmount: tvaAmount,
         additionalFees: prev.step6?.additionalFees ?? prev.additionalFees,
         advancePayment: prev.step6?.advancePayment ?? prev.advancePayment,
         remainingPayment: prev.step6?.remainingPayment ?? prev.remainingPayment,
         paymentNotes: prev.step6?.paymentNotes ?? prev.notes,
-        cautionEnabled
+        cautionEnabled: cautionEnabled
       },
-      deposit: deposit
+      deposit: deposit,
+      totalPrice: totalPrice
     }));
-  }, [totalPrice, tvaEnabled, tvaAmount, days, deposit, cautionEnabled]);
+  }, [totalPrice, isManualTotal, manualTotal, tvaEnabled, tvaAmount, days, cautionEnabled, setFormData]);
 
   return (
     <div className="space-y-8">
@@ -2876,9 +2914,20 @@ export const Step6FinalPricing: React.FC<{
               ) : (
                 <input
                   type="number"
-                  value={manualTotal}
-                  onChange={(e) => setManualTotal(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-24 p-1 border border-green-300 rounded text-right"
+                  inputMode="decimal"
+                  value={manualTotal === '' ? '' : manualTotal}
+                  onChange={(e) => {
+                    const value = e.target.value.trim();
+                    if (value === '') {
+                      setManualTotal('');
+                    } else {
+                      const numValue = parseInt(value, 10);
+                      if (!isNaN(numValue) && numValue >= 0) {
+                        setManualTotal(numValue);
+                      }
+                    }
+                  }}
+                  className="w-32 p-1 border border-green-300 rounded text-right font-bold"
                 />
               )}
             </div>
@@ -2921,8 +2970,19 @@ export const Step6FinalPricing: React.FC<{
                 <span className="font-bold text-blue-700">{lang === 'fr' ? 'Caution (remboursable)' : 'الضمان (قابل للاسترداد)'}: </span>
                 <input
                   type="number"
-                  value={editedDeposit}
-                  onChange={(e) => setEditedDeposit(e.target.value === '' ? '' : Number(e.target.value))}
+                  inputMode="decimal"
+                  value={editedDeposit === '' ? '' : editedDeposit}
+                  onChange={(e) => {
+                    const value = e.target.value.trim();
+                    if (value === '') {
+                      setEditedDeposit('');
+                    } else {
+                      const numValue = parseInt(value, 10);
+                      if (!isNaN(numValue) && numValue >= 0) {
+                        setEditedDeposit(numValue);
+                      }
+                    }
+                  }}
                   className="w-32 p-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right font-bold"
                   placeholder="0"
                 />
@@ -2930,6 +2990,91 @@ export const Step6FinalPricing: React.FC<{
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* PRICING SUMMARY & VERIFICATION */}
+      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-6 border-2 border-indigo-200">
+        <h4 className="text-lg font-black text-indigo-900 mb-4">📋 {lang === 'fr' ? 'Vérification Finale' : 'التحقق النهائي'}</h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Left Column - Pricing */}
+          <div className="space-y-2 bg-white rounded-lg p-4 border border-indigo-200">
+            <h5 className="font-bold text-indigo-900 text-center mb-3">💰 {lang === 'fr' ? 'Détails des Prix' : 'تفاصيل الأسعار'}</h5>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-indigo-700">{lang === 'fr' ? 'Prix Base:' : 'السعر الأساسي:'}</span>
+              <span className="font-bold text-indigo-900">{calculatedBasePrice.toLocaleString()} DA</span>
+            </div>
+            
+            {servicesTotal > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-indigo-700">{lang === 'fr' ? 'Services:' : 'الخدمات:'}</span>
+                <span className="font-bold text-indigo-900">{servicesTotal.toLocaleString()} DA</span>
+              </div>
+            )}
+            
+            {tvaEnabled && tvaAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-indigo-700">{lang === 'fr' ? 'TVA (' + tvaRate + '%):' : 'TVA (' + tvaRate + '%):'}</span>
+                <span className="font-bold text-indigo-900">{tvaAmount.toLocaleString()} DA</span>
+              </div>
+            )}
+            
+            <div className="border-t border-indigo-200 pt-2 flex justify-between text-base font-bold">
+              <span className="text-indigo-900">{lang === 'fr' ? 'TOTAL:' : 'المجموع:'}</span>
+              <span className="text-lg text-indigo-600">{totalPrice.toLocaleString()} DA</span>
+            </div>
+
+            <div className="flex justify-between text-sm pt-2">
+              <span className="text-indigo-700">{lang === 'fr' ? 'Caution:' : 'الضمان:'}</span>
+              <span className="font-bold text-indigo-900">{deposit.toLocaleString()} DA</span>
+            </div>
+          </div>
+
+          {/* Right Column - Duration & Payment */}
+          <div className="space-y-2 bg-white rounded-lg p-4 border border-indigo-200">
+            <h5 className="font-bold text-indigo-900 text-center mb-3">⏱️ {lang === 'fr' ? 'Durée et Paiement' : 'المدة والدفع'}</h5>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-indigo-700">{lang === 'fr' ? 'Nombre de jours:' : 'عدد الأيام:'}</span>
+              <span className="font-bold text-indigo-900">{days}</span>
+            </div>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-indigo-700">{lang === 'fr' ? 'Semaines:' : 'الأسابيع:'}</span>
+              <span className="font-bold text-indigo-900">{weeks}</span>
+            </div>
+            
+            <div className="flex justify-between text-sm">
+              <span className="text-indigo-700">{lang === 'fr' ? 'Jours restants:' : 'الأيام المتبقية:'}</span>
+              <span className="font-bold text-indigo-900">{remainingDays}</span>
+            </div>
+
+            <div className="border-t border-indigo-200 pt-2">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-indigo-700">{lang === 'fr' ? 'Acompte:' : 'الدفعة الأولى:'}</span>
+                <span className="font-bold text-indigo-900">{advancePayment.toLocaleString()} DA</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-indigo-700">{lang === 'fr' ? 'Reste à payer:' : 'المتبقي:'}</span>
+                <span className="font-bold text-indigo-900">{(totalPrice - advancePayment).toLocaleString()} DA</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Data Storage Info */}
+        <div className="mt-4 bg-indigo-100 rounded-lg p-3 border border-indigo-300">
+          <p className="text-xs text-indigo-900 mb-2">
+            <span className="font-bold">💾 {lang === 'fr' ? 'Cette étape sauvegarde:' : 'هذه الخطوة تحفظ:'}</span>
+          </p>
+          <ul className="text-xs text-indigo-800 space-y-1 ml-4">
+            <li>✓ {lang === 'fr' ? 'Prix Total: ' : 'السعر الكلي: '}<span className="font-bold">{totalPrice.toLocaleString()} DA</span></li>
+            <li>✓ {lang === 'fr' ? 'Caution: ' : 'الضمان: '}<span className="font-bold">{deposit.toLocaleString()} DA</span></li>
+            <li>✓ {lang === 'fr' ? 'Durée: ' : 'المدة: '}<span className="font-bold">{days} {lang === 'fr' ? 'jours' : 'أيام'}</span></li>
+            <li>✓ {lang === 'fr' ? 'TVA Appliquée: ' : 'تطبيق TVA: '}<span className="font-bold">{tvaEnabled ? (lang === 'fr' ? 'Oui (' + tvaRate + '%)' : 'نعم (' + tvaRate + '%)') : (lang === 'fr' ? 'Non' : 'لا')}</span></li>
+          </ul>
         </div>
       </div>
 

@@ -7,7 +7,7 @@ import { ExpenseModal } from './ExpenseModal';
 import { HistoryModal } from './HistoryModal';
 import { CarReportModal } from './CarReportModal';
 import { ConfirmModal } from './ConfirmModal';
-import { Plus, Search, Loader2 } from 'lucide-react';
+import { Plus, Search, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { getCars, addCar, updateCar, deleteCar, AddCarData } from '../services/carService';
 import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
@@ -43,43 +43,45 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
   const [reportExpenses, setReportExpenses] = useState<Expense[]>([]);
   const [reportReservations, setReportReservations] = useState<ReservationDetails[]>([]);
 
-  useEffect(() => {
-    const loadCars = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getCars();
-        if (result.success && result.cars) {
-          const mappedCars: Car[] = result.cars.map(dbCar => ({
-            id: dbCar.id || '',
-            brand: dbCar.brand,
-            model: dbCar.model,
-            registration: dbCar.plate_number,
-            year: dbCar.year,
-            color: dbCar.color || 'Premium',
-            vin: dbCar.vin || '',
-            energy: dbCar.energy || 'Essence',
-            transmission: dbCar.transmission || 'Automatique',
-            seats: dbCar.seats || 5,
-            doors: dbCar.doors || 4,
-            priceDay: Math.round(Number(dbCar.price_per_day)),
-            priceWeek: Math.round(Number(dbCar.price_week || dbCar.price_per_day * 2)),
-            priceMonth: Math.round(Number(dbCar.price_month || dbCar.price_per_day * 4)),
-            deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
-            images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
-            mileage: dbCar.mileage || 0,
-          }));
-          setCars(mappedCars);
-        }
-      } catch (err) {
-        console.error('Error loading cars:', err);
-        setError('Failed to load cars');
-      } finally {
-        setLoading(false);
+  const loadCarsData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await getCars();
+      if (result.success && result.cars) {
+        const mappedCars: Car[] = result.cars.map(dbCar => ({
+          id: dbCar.id || '',
+          brand: dbCar.brand,
+          model: dbCar.model,
+          registration: dbCar.plate_number,
+          year: dbCar.year,
+          color: dbCar.color || 'Premium',
+          vin: dbCar.vin || '',
+          energy: dbCar.energy || 'Essence',
+          transmission: dbCar.transmission || 'Automatique',
+          seats: dbCar.seats || 5,
+          doors: dbCar.doors || 4,
+          priceDay: Math.round(Number(dbCar.price_per_day)),
+          priceWeek: Math.round(Number(dbCar.price_week || dbCar.price_per_day * 2)),
+          priceMonth: Math.round(Number(dbCar.price_month || dbCar.price_per_day * 4)),
+          deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
+          images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
+          mileage: dbCar.mileage || 0,
+          status: dbCar.status || 'disponible',
+          fuelLevel: dbCar.fuel_level || 'full',
+        }));
+        setCars(mappedCars);
       }
-    };
+    } catch (err) {
+      console.error('Error loading cars:', err);
+      setError('Failed to load cars');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadCars();
+  useEffect(() => {
+    loadCarsData();
   }, []);
 
   useEffect(() => {
@@ -122,7 +124,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
           year: carData.year || selectedCar.year,
           plate_number: carData.registration || selectedCar.registration,
           price_per_day: carData.priceDay || selectedCar.priceDay,
-          status: 'available',
+          status: carData.status || selectedCar.status || 'disponible',
           image_url: carData.images?.[0] || selectedCar.images[0],
           color: carData.color || selectedCar.color,
           vin: carData.vin || selectedCar.vin,
@@ -134,6 +136,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
           price_month: carData.priceMonth || selectedCar.priceMonth,
           deposit: carData.deposit || selectedCar.deposit,
           mileage: carData.mileage || selectedCar.mileage,
+          fuel_level: carData.fuelLevel || selectedCar.fuelLevel || 'full',
         };
         const result = await updateCar(selectedCar.id, updateData);
         if (result.success) {
@@ -146,7 +149,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
           year: carData.year || new Date().getFullYear(),
           plate_number: carData.registration || '',
           price_per_day: carData.priceDay || 0,
-          status: 'available',
+          status: 'disponible',
           image_url: carData.images?.[0],
           color: carData.color || '',
           vin: carData.vin || '',
@@ -243,6 +246,26 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
     setIsReportModalOpen(true);
   };
 
+  const handleStatusChange = async (carId: string, newStatus: string) => {
+    try {
+      // Update car status in database
+      const updateData = {
+        status: newStatus,
+      };
+      const result = await updateCar(carId, updateData as any);
+      if (result.success) {
+        setCars(prev => prev.map(c => 
+          c.id === carId ? { ...c, status: newStatus as any } : c
+        ));
+      } else {
+        setError('Failed to update car status');
+      }
+    } catch (err) {
+      console.error('Error updating car status:', err);
+      setError('Failed to update car status');
+    }
+  };
+
   const handleSaveExpense = async (
     expenseData: Partial<Expense> & {
       currentMileage?: number;
@@ -307,6 +330,16 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
             />
           </div>
           <button
+            onClick={loadCarsData}
+            className="btn-saas-secondary px-6 py-3.5 group w-full sm:w-auto justify-center"
+            title={lang === 'fr' ? 'Actualiser' : 'تحديث'}
+          >
+            <RefreshCw size={20} className="group-hover:rotate-180 transition-transform duration-500" />
+            <span className="font-bold uppercase tracking-widest text-xs">
+              {lang === 'fr' ? 'Actualiser' : 'تحديث'}
+            </span>
+          </button>
+          <button
             onClick={handleAddCar}
             className="btn-saas-primary px-8 py-3.5 group w-full sm:w-auto justify-center"
           >
@@ -345,6 +378,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
                 onHistory={handleHistory}
                 onExpenses={handleExpenses}
                 onReports={handleReports}
+                onStatusChange={handleStatusChange}
               />
             ))}
           </div>

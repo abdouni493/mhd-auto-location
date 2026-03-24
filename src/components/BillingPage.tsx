@@ -826,11 +826,14 @@ export const BillingPage: React.FC<BillingPageProps> = ({ lang }) => {
             >
               <DocumentTemplateEditor
                 documentType={editingDocumentType}
+                reservationId={selectedInvoice?.reservationId}
+                carId={selectedInvoice?.carId}
+                clientId={selectedInvoice?.clientId}
+                inspectionId={selectedInvoice?.inspectionId}
                 onClose={() => {
                   setShowTemplateEditor(false);
                   setEditingDocumentType(null);
                 }}
-                lang={lang}
                 onSave={() => {
                   // Reload templates if needed
                 }}

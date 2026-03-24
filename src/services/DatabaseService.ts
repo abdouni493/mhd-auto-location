@@ -31,7 +31,34 @@ export class DatabaseService {
       deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
       images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
       mileage: dbCar.mileage || 0,
+      status: (dbCar.status || 'available') === 'available' ? 'disponible' : dbCar.status,
     }));
+  }
+
+  static async getAvailableCars(): Promise<Car[]> {
+    // Get all cars
+    const allCars = await this.getCars();
+    
+    // Get all active/pending reservations
+    const { data: activeReservations, error } = await supabase
+      .from('reservations')
+      .select('car_id')
+      .in('status', ['pending', 'confirmed', 'active']);
+
+    if (error) {
+      console.error('Error fetching active reservations:', error);
+      // If there's an error, return all cars with disponible status
+      return allCars.filter(car => car.status === 'disponible');
+    }
+
+    // Get IDs of cars that are currently rented
+    const rentedCarIds = new Set(activeReservations?.map(r => r.car_id) || []);
+
+    // Return only cars that are not currently rented and have status 'disponible'
+    return allCars.filter(car => 
+      !rentedCarIds.has(car.id) && 
+      (car.status === 'disponible' || !car.status)
+    );
   }
 
   static async createCar(car: Omit<Car, 'id' | 'created_at'>): Promise<Car> {
@@ -789,7 +816,7 @@ export class DatabaseService {
       vehicleExpensesResult,
       clientsResult,
       carsResult,
-      availableCarsResult,
+      activeReservationsForCarsResult,
       totalReservationsResult,
       activeReservationsResult,
       overduePaymentsResult,
@@ -802,7 +829,7 @@ export class DatabaseService {
       supabase.from('vehicle_expenses').select('cost'),
       supabase.from('clients').select('id', { count: 'exact' }),
       supabase.from('cars').select('id', { count: 'exact' }),
-      supabase.from('cars').select('id', { count: 'exact' }).eq('status', 'available'),
+      supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active']),
       supabase.from('reservations').select('id', { count: 'exact' }),
       supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active']),
       supabase.from('payments').select('id', { count: 'exact' }).eq('status', 'pending'),
@@ -817,7 +844,7 @@ export class DatabaseService {
     const { data: vehicleExpenses, error: vehicleError } = vehicleExpensesResult;
     const { data: clients, error: clientsError } = clientsResult;
     const { data: cars, error: carsError } = carsResult;
-    const { data: availableCars, error: availableCarsError } = availableCarsResult;
+    const { data: activeReservationsForCars, error: activeReservationsForCarsError } = activeReservationsForCarsResult;
     const { data: totalReservations, error: totalReservationsError } = totalReservationsResult;
     const { data: activeReservations, error: activeResError } = activeReservationsResult;
     const { data: overduePayments, error: overduePaymentsError } = overduePaymentsResult;
@@ -828,6 +855,10 @@ export class DatabaseService {
     if (revenueError || storeError || vehicleError || clientsError || carsError || activeResError) {
       throw revenueError || storeError || vehicleError || clientsError || carsError || activeResError;
     }
+
+    // Calculate available cars: total cars minus those with active/pending reservations
+    const rentedCarIds = new Set(activeReservationsForCars?.map((r: any) => r.car_id) || []);
+    const availableCarsCount = (cars?.length || 0) - rentedCarIds.size;
 
     // Calculate totals
     const totalRevenue = revenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
@@ -866,7 +897,7 @@ export class DatabaseService {
       netProfit: totalRevenue - totalExpenses,
       totalClients: clients?.length || 0,
       totalCars: cars?.length || 0,
-      availableCars: availableCars?.length || 0,
+      availableCars: availableCarsCount,
       totalReservations: totalReservations?.length || 0,
       activeReservations: activeReservations?.length || 0,
       overduePayments: overduePayments?.length || 0,

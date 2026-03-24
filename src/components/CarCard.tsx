@@ -11,6 +11,7 @@ interface CarCardProps {
   onHistory: (car: Car) => void;
   onExpenses: (car: Car) => void;
   onReports: (car: Car) => void;
+  onStatusChange?: (carId: string, newStatus: string) => void;
 }
 
 export const CarCard: React.FC<CarCardProps> = ({
@@ -22,7 +23,31 @@ export const CarCard: React.FC<CarCardProps> = ({
   onHistory,
   onExpenses,
   onReports,
+  onStatusChange,
 }) => {
+  const getStatusColor = (status?: string) => {
+    switch(status) {
+      case 'louer':
+        return 'bg-red-100 text-red-800 border-red-300';
+      case 'maintenance':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'disponible':
+      default:
+        return 'bg-green-100 text-green-800 border-green-300';
+    }
+  };
+
+  const getStatusLabel = (status?: string) => {
+    switch(status) {
+      case 'louer':
+        return lang === 'fr' ? 'En Location' : 'في الإيجار';
+      case 'maintenance':
+        return lang === 'fr' ? 'En Maintenance' : 'في الصيانة';
+      case 'disponible':
+      default:
+        return lang === 'fr' ? 'Disponible' : 'متاح';
+    }
+  };
   return (
     <motion.div
       layout
@@ -63,6 +88,25 @@ export const CarCard: React.FC<CarCardProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="text-saas-primary-via">🎨</span> {car.color}
           </div>
+        </div>
+
+        {/* Status Badge */}
+        <div className="flex items-center justify-between pt-2">
+          <div className={`text-[9px] font-bold px-3 py-1.5 rounded-lg border ${getStatusColor(car.status)}`}>
+            {getStatusLabel(car.status)}
+          </div>
+          {onStatusChange && (
+            <button
+              onClick={() => {
+                const newStatus = car.status === 'louer' ? 'disponible' : 'louer';
+                onStatusChange(car.id, newStatus);
+              }}
+              className="text-[9px] font-bold px-2 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors"
+              title={lang === 'fr' ? 'Changer le statut' : 'تغيير الحالة'}
+            >
+              ↔️ {lang === 'fr' ? 'Changer' : 'تغيير'}
+            </button>
+          )}
         </div>
 
         <div className="pt-3 border-t border-saas-border flex items-center justify-between">

@@ -77,6 +77,7 @@ export const DocumentRenderer: React.FC<DocumentRendererProps> = ({
   const [agencySettings, setAgencySettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [agencyId, setAgencyId] = useState<string | null>(null);
 
   useEffect(() => {
     loadAllData();
@@ -87,15 +88,26 @@ export const DocumentRenderer: React.FC<DocumentRendererProps> = ({
     setDataLoaded(false);
 
     try {
-      // Load template and agency settings in parallel
-      const [docTemplate, { data: agencyData, error: agencyError }] = await Promise.all([
-        DocumentTemplateService.getDocumentTemplate(documentType),
-        supabase
-          .from('agency_settings')
-          .select('agency_name, logo, address, phone')
-          .limit(1)
-          .single()
-      ]);
+      // Get current user's agency
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('agency_id')
+        .eq('id', userData?.user?.id)
+        .single();
+
+      const currentAgencyId = userProfile?.agency_id || '';
+      setAgencyId(currentAgencyId);
+
+      // Load template with agency context
+      const docTemplate = await DocumentTemplateService.getDocumentTemplate(documentType, currentAgencyId);
+      
+      // Load agency settings
+      const { data: agencyData, error: agencyError } = await supabase
+        .from('agency_settings')
+        .select('agency_name, logo, address, phone')
+        .limit(1)
+        .single();
 
       if (agencyError) {
         console.error('DocumentRenderer: Error fetching agency_settings:', agencyError);
@@ -172,7 +184,7 @@ export const DocumentRenderer: React.FC<DocumentRendererProps> = ({
     return <div className="animate-pulse bg-gray-200 h-96 rounded"></div>;
   }
 
-  // Specialized render for contract with new structure
+  // Specialized render for contract - using template from database
   if (documentType === 'contrat') {
     return (
       <div className="relative">
@@ -213,187 +225,53 @@ export const DocumentRenderer: React.FC<DocumentRendererProps> = ({
             )}
           </div>
 
-          {/* Title */}
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-blue-900 mb-2">اتفاقية إيجار السيارة</h2>
-            <h3 className="text-xl font-semibold text-gray-700">Contrat de Location de Véhicule</h3>
-          </div>
+          {/* Template Edit Button */}
+          {onEditTemplate && (
+            <button
+              onClick={onEditTemplate}
+              className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-lg transition-colors z-10 flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              title="Edit template"
+            >
+              <Edit2 size={16} /> Edit Template
+            </button>
+          )}
 
-          {/* Contract Details Section */}
-          <div className="mb-8">
-            <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-600 mb-4">
-              <h4 className="text-lg font-bold text-blue-900 mb-3">📋 تفاصيل العقد / Détails du Contrat</h4>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">رقم العقد / N° Contrat:</p>
-                  <p className="text-lg font-bold text-gray-900">{invoice.invoiceNumber || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">تاريخ العقد / Date du Contrat:</p>
-                  <p className="text-lg font-bold text-gray-900">{invoice.date || 'N/A'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Dynamically Rendered Template Fields from Database */}
+          {template && (
+            <div style={{ position: 'relative', minHeight: '1100px' }}>
+              {Object.entries(template).map(([fieldName, fieldValue]) => {
+                const field = fieldValue as any;
+                const fieldContent = getFieldValue(fieldName);
 
-          {/* Rental Period Section */}
-          <div className="mb-8">
-            <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-600 mb-4">
-              <h4 className="text-lg font-bold text-green-900 mb-3">📅 فترة الإيجار / Période de Location</h4>
-              <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">من / Du:</p>
-                  <p className="text-lg font-bold text-gray-900">14/02/2026</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">إلى / Au:</p>
-                  <p className="text-lg font-bold text-gray-900">20/02/2026</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">المدة / Durée:</p>
-                  <p className="text-lg font-bold text-green-600">06 أيام / jours</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Driver Information Section */}
-          <div className="mb-8">
-            <div className="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-600 mb-4">
-              <h4 className="text-lg font-bold text-purple-900 mb-3">👤 معلومات السائق 01 / Informations du Conducteur 01</h4>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">الاسم / Nom:</p>
-                  <p className="text-base font-bold text-gray-900">{invoice.clientName || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">تاريخ الميلاد / Date de Naissance:</p>
-                  <p className="text-base font-bold text-gray-900">03/08/1978</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">مكان الميلاد / Lieu de Naissance:</p>
-                  <p className="text-base font-bold text-gray-900">El Harrouch</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">نوع الرخصة / Type Permis:</p>
-                  <p className="text-base font-bold text-gray-900">Biometric driver's license</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">رقم الرخصة / N° Permis:</p>
-                  <p className="text-base font-bold text-gray-900">312657043</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">تاريخ الإصدار / Date Délivrance:</p>
-                  <p className="text-base font-bold text-gray-900">07/11/2024</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">تاريخ الانتهاء / Date Expiration:</p>
-                  <p className="text-base font-bold text-gray-900">06/11/2034</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">مكان الإصدار / Lieu Délivrance:</p>
-                  <p className="text-base font-bold text-gray-900">Lyon</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Vehicle Information Section */}
-          <div className="mb-8">
-            <div className="bg-orange-50 p-4 rounded-lg border-l-4 border-orange-600 mb-4">
-              <h4 className="text-lg font-bold text-orange-900 mb-3">🚗 معلومات المركبة / Informations du Véhicule</h4>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">الموديل / Modèle:</p>
-                  <p className="text-base font-bold text-gray-900">Doblo Blanc</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">اللون / Couleur:</p>
-                  <p className="text-base font-bold text-gray-900">Bleu</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">لوحة التسجيل / Plaque d'Immatriculation:</p>
-                  <p className="text-base font-bold text-gray-900">032045.125.16</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">رقم المسلسل / Numéro de Série:</p>
-                  <p className="text-base font-bold text-gray-900">BRYEKNFJ2S5718503</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">نوع الوقود / Type Carburant:</p>
-                  <p className="text-base font-bold text-gray-900">Essence Sans plomb</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">قراءة العداد / Kilométrage:</p>
-                  <p className="text-base font-bold text-gray-900">8400 km</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Financials Section */}
-          <div className="mb-8">
-            <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-600 mb-4">
-              <h4 className="text-lg font-bold text-red-900 mb-3">💰 التفاصيل المالية / Détails Financiers</h4>
-              <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">سعر الوحدة / Prix Unitaire:</p>
-                  <p className="text-lg font-bold text-gray-900">10,000.00 DA</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-semibold">السعر الإجمالي بدون ضريبة / Total HT:</p>
-                  <p className="text-lg font-bold text-gray-900">60,000.00 DA</p>
-                </div>
-                <div className="bg-white p-3 rounded border-2 border-red-600">
-                  <p className="text-sm text-gray-600 font-semibold">إجمالي العقد / Montant Total:</p>
-                  <p className="text-2xl font-bold text-red-600">{invoice.totalAmount.toLocaleString('fr-FR')} DA</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Equipment Checklist Section */}
-          <div className="mb-8">
-            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border-l-4 border-indigo-600 mb-4">
-              <h4 className="text-lg font-bold text-indigo-900 mb-4">✅ قائمة المعدات / Checklist de l'Équipement</h4>
-              
-              <div className="grid grid-cols-2 gap-4">
-                {/* Equipment Items */}
-                {[
-                  { ar: 'الإطارات', fr: 'Pneus', checked: true },
-                  { ar: 'الفرامل', fr: 'Freins', checked: true },
-                  { ar: 'الأضواء', fr: 'Éclairage', checked: true },
-                  { ar: 'المرايا', fr: 'Rétroviseurs', checked: true },
-                  { ar: 'المقاعد', fr: 'Sièges', checked: true },
-                  { ar: 'الزجاج', fr: 'Vitres', checked: true },
-                  { ar: 'المحرك', fr: 'Moteur', checked: true },
-                  { ar: 'جهاز التكييف', fr: 'Climatisation', checked: true },
-                ].map((item, idx) => (
+                return (
                   <div
-                    key={idx}
-                    className={`flex items-center p-3 rounded-lg border-2 transition-all ${
-                      item.checked
-                        ? 'bg-green-50 border-green-300'
-                        : 'bg-red-50 border-red-300'
-                    }`}
+                    key={fieldName}
+                    style={{
+                      position: 'absolute',
+                      left: `${field.x || 0}px`,
+                      top: `${field.y || 0}px`,
+                      color: field.color || '#000000',
+                      fontSize: `${field.fontSize || 12}px`,
+                      fontFamily: field.fontFamily || 'Arial',
+                      fontWeight: field.fontWeight || 'normal',
+                      fontStyle: field.fontStyle || 'normal',
+                      textDecoration: field.textDecoration || 'none',
+                      textAlign: field.textAlign || 'left',
+                      backgroundColor: field.backgroundColor || 'transparent',
+                      maxWidth: `${field.maxWidth || 300}px`,
+                      whiteSpace: 'pre-wrap',
+                      wordWrap: 'break-word',
+                    }}
                   >
-                    {item.checked ? (
-                      <CheckCircle size={20} className="text-green-600 mr-3 flex-shrink-0" />
-                    ) : (
-                      <AlertCircle size={20} className="text-red-600 mr-3 flex-shrink-0" />
-                    )}
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm text-gray-900">{item.ar}</p>
-                      <p className="text-xs text-gray-600">{item.fr}</p>
-                    </div>
+                    <p className="m-0">{fieldContent}</p>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          </div>
+          )}
 
-          {/* Signature Section */}
-          <div className="border-t-2 border-gray-300 pt-8 mt-8">
+          {/* Footer - Signature Section */}
+          <div className="border-t-2 border-gray-300 pt-8 mt-12">
             <div className="grid grid-cols-3 gap-8 text-center">
               <div>
                 <p className="text-sm font-bold text-gray-700 mb-8">توقيع السائق</p>

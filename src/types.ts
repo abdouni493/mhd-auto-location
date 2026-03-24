@@ -36,6 +36,8 @@ export interface Car {
   deposit: number;
   images: string[];
   mileage: number;
+  fuelLevel?: 'full' | 'half' | 'quarter' | 'eighth' | 'empty';
+  status?: 'disponible' | 'louer' | 'maintenance' | 'available';
 }
 
 export type ExpenseType = 'vidange' | 'assurance' | 'controle' | 'autre';
@@ -359,6 +361,7 @@ export interface ReservationDetails {
   additionalFees: number;
   tvaApplied: boolean;
   notes?: string;
+  conditions?: string;
   createdAt: string;
   activatedAt?: string;
   completedAt?: string;

@@ -1,6 +1,15 @@
 import { supabase } from '../supabase';
 import { DocumentTemplates, DocumentTemplate, DocumentField, DocumentType, AgencySettings } from '../types';
 
+export interface SavedDocumentTemplate {
+  id: string;
+  agency_id: string;
+  template_type: DocumentType;
+  template: DocumentTemplate;
+  created_at: string;
+  updated_at: string;
+}
+
 export class DocumentTemplateService {
   /**
    * Get all document templates for the current agency
@@ -21,11 +30,137 @@ export class DocumentTemplateService {
   }
 
   /**
-   * Get a specific document type template with fallback to defaults
+   * Get all saved templates for a specific document type from database
    */
-  static async getDocumentTemplate(documentType: DocumentType): Promise<DocumentTemplate> {
-    const templates = await this.getDocumentTemplates();
-    return templates[documentType] || this.getDefaultTemplate(documentType);
+  static async getSavedTemplates(documentType: DocumentType, agencyId?: string): Promise<SavedDocumentTemplate[]> {
+    let query = supabase
+      .from('document_templates')
+      .select('*')
+      .eq('template_type', documentType);
+
+    if (agencyId) {
+      query = query.eq('agency_id', agencyId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching saved templates:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Save a new document template to the database
+   */
+  static async saveTemplate(
+    documentType: DocumentType,
+    template: DocumentTemplate,
+    agencyId: string
+  ): Promise<SavedDocumentTemplate> {
+    const { data, error } = await supabase
+      .from('document_templates')
+      .insert({
+        agency_id: agencyId,
+        template_type: documentType,
+        template: template,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to save template: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Update an existing saved template
+   */
+  static async updateSavedTemplate(
+    templateId: string,
+    template: DocumentTemplate
+  ): Promise<SavedDocumentTemplate> {
+    const { data, error } = await supabase
+      .from('document_templates')
+      .update({
+        template: template,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', templateId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to update template: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Delete a saved template
+   */
+  static async deleteTemplate(templateId: string): Promise<void> {
+    const { error } = await supabase
+      .from('document_templates')
+      .delete()
+      .eq('id', templateId);
+
+    if (error) {
+      throw new Error(`Failed to delete template: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get a specific saved template by ID
+   */
+  static async getTemplateById(templateId: string): Promise<SavedDocumentTemplate | null> {
+    const { data, error } = await supabase
+      .from('document_templates')
+      .select('*')
+      .eq('id', templateId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching template:', error);
+      return null;
+    }
+
+    return data || null;
+  }
+
+  /**
+   * Get a specific document type template with fallback to defaults
+   * Loads from the document_templates table first, then falls back to defaults
+   */
+  static async getDocumentTemplate(documentType: DocumentType, agencyId?: string): Promise<DocumentTemplate> {
+    try {
+      // First, try to load saved template from document_templates table
+      let query = supabase
+        .from('document_templates')
+        .select('template')
+        .eq('template_type', documentType);
+
+      if (agencyId) {
+        query = query.eq('agency_id', agencyId);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(1).single();
+
+      if (data && !error) {
+        console.log(`Loaded saved template for ${documentType} from database`);
+        return data.template;
+      }
+    } catch (error) {
+      console.log(`No saved template found for ${documentType}, using default`);
+    }
+
+    // Fall back to default template
+    return this.getDefaultTemplate(documentType);
   }
 
   /**

@@ -741,21 +741,21 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ lang, cars, agencies, is
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-bold text-slate-600 mb-2">✍️ {{fr: 'Prénom *', ar: 'الاسم الأول *'}[lang]}</label>
-                        <input
-                          type="text"
-                          name="firstName"
-                          value={step2.firstName}
-                          onChange={handleStep2Change}
-                          className="w-full px-4 py-3 border-2 border-slate-300 focus:border-blue-600 focus:outline-none rounded-xl transition-colors"
-                        />
-                      </div>
-                      <div>
                         <label className="block text-sm font-bold text-slate-600 mb-2">✍️ {{fr: 'Nom de Famille *', ar: 'الاسم الأخير *'}[lang]}</label>
                         <input
                           type="text"
                           name="lastName"
                           value={step2.lastName}
+                          onChange={handleStep2Change}
+                          className="w-full px-4 py-3 border-2 border-slate-300 focus:border-blue-600 focus:outline-none rounded-xl transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-600 mb-2">✍️ {{fr: 'Prénom *', ar: 'الاسم الأول *'}[lang]}</label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={step2.firstName}
                           onChange={handleStep2Change}
                           className="w-full px-4 py-3 border-2 border-slate-300 focus:border-blue-600 focus:outline-none rounded-xl transition-colors"
                         />

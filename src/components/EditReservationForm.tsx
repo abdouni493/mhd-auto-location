@@ -69,6 +69,8 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
     },
     step6: {
       totalPrice: reservation.totalPrice,
+      isManualTotal: false,
+      manualTotal: '',
       tvaApplied: reservation.tvaApplied,
       tvaAmount: 0, // Will be calculated
       additionalFees: reservation.additionalFees,
@@ -180,6 +182,7 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       console.log('💰 Price/Day:', pricePerDay, 'DA');
       console.log('💰 Base Price (old):', (pricePerDay * (reservation.totalDays || 0)).toLocaleString(), 'DA');
       console.log('💰 Base Price (new):', basePrice.toLocaleString(), 'DA');
+      console.log('💾 Base Price calculation: pricePerDay (' + pricePerDay + ') × newTotalDays (' + newTotalDays + ') =', basePrice);
 
       // === SERVICES & FEES ===
       const servicesTotal = formData.step5?.additionalServices?.reduce((sum, s) => sum + (s.price || 0), 0) || 0;
@@ -187,29 +190,64 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       const additionalFees = formData.step6?.additionalFees || formData.additionalFees || 0;
       const tvaAmount = formData.step6?.tvaAmount || 0;
       
-      console.log('🛒 Services Total:', servicesTotal.toLocaleString(), 'DA');
+      console.log('🛒 Services Total:', servicesTotal.toLocaleString(), 'DA', '| Services count:', formData.step5?.additionalServices?.length || 0);
       console.log('💳 Discount Amount:', discountAmount.toLocaleString(), 'DA', '(Type:', formData.discountType, ')');
       console.log('📝 Additional Fees:', additionalFees.toLocaleString(), 'DA');
-      console.log('📊 TVA Amount:', tvaAmount.toLocaleString(), 'DA (Applied:', formData.step6?.tvaApplied, ')');
+      console.log('📊 TVA Amount (from formData.step6):', tvaAmount.toLocaleString(), 'DA (Applied:', formData.step6?.tvaApplied, ')');
 
       // === TOTAL PRICE CALCULATION ===
-      let newTotalPrice = basePrice + servicesTotal + additionalFees + tvaAmount;
+      // CHECK FOR MANUALLY EDITED TOTAL PRICE FIRST
+      console.log('🔍 Checking for manual total price:');
+      console.log('   ├─ formData.step6?.isManualTotal:', formData.step6?.isManualTotal);
+      console.log('   ├─ formData.step6?.manualTotal:', formData.step6?.manualTotal);
+      console.log('   ├─ formData.step6?.totalPrice:', formData.step6?.totalPrice);
+      console.log('   └─ formData.totalPrice:', formData.totalPrice);
+      
+      let newTotalPrice: number;
+      
+      if (formData.step6?.isManualTotal && formData.step6?.totalPrice) {
+        // User manually edited the total price - use that value
+        newTotalPrice = formData.step6.totalPrice;
+        console.log('🔧 MANUAL TOTAL PRICE DETECTED: Using manually edited value', newTotalPrice.toLocaleString(), 'DA');
+      } else if (formData.totalPrice && formData.totalPrice > 0 && 
+                 formData.step6?.isManualTotal) {
+        // Alternative: Check top-level totalPrice if manually edited
+        newTotalPrice = formData.totalPrice;
+        console.log('🔧 MANUAL TOTAL PRICE (from top-level): Using manually edited value', newTotalPrice.toLocaleString(), 'DA');
+      } else {
+        // Calculate normally
+        newTotalPrice = basePrice + servicesTotal + additionalFees + tvaAmount;
+        console.log('💰 Calculation: basePrice (' + basePrice + ') + servicesTotal (' + servicesTotal + ') + additionalFees (' + additionalFees + ') + tvaAmount (' + tvaAmount + ') = ' + newTotalPrice);
+      }
       
       console.log('💰 Subtotal before discount:', newTotalPrice.toLocaleString(), 'DA');
 
-      // Apply discount
-      if (formData.discountType === 'percentage' && discountAmount > 0) {
-        newTotalPrice = newTotalPrice * (1 - discountAmount / 100);
-        console.log('💰 After discount (' + discountAmount + '%):', newTotalPrice.toLocaleString(), 'DA');
-      } else if (formData.discountType === 'fixed' && discountAmount > 0) {
-        newTotalPrice = newTotalPrice - discountAmount;
-        console.log('💰 After discount (fixed ' + discountAmount + ' DA):', newTotalPrice.toLocaleString(), 'DA');
+      // Apply discount ONLY if not manually set
+      if (!formData.step6?.isManualTotal) {
+        if (formData.discountType === 'percentage' && discountAmount > 0) {
+          const oldPrice = newTotalPrice;
+          newTotalPrice = newTotalPrice * (1 - discountAmount / 100);
+          console.log('💰 After discount (' + discountAmount + '%): ' + oldPrice + ' × (1 - ' + discountAmount + '/100) =', newTotalPrice.toLocaleString(), 'DA');
+        } else if (formData.discountType === 'fixed' && discountAmount > 0) {
+          const oldPrice = newTotalPrice;
+          newTotalPrice = newTotalPrice - discountAmount;
+          console.log('💰 After discount (fixed ' + discountAmount + ' DA): ' + oldPrice + ' - ' + discountAmount + ' =', newTotalPrice.toLocaleString(), 'DA');
+        }
+      } else {
+        console.log('⚠️ MANUAL TOTAL SET: Skipping discount application');
       }
 
       // Ensure total price is not negative and is a valid number
       newTotalPrice = Math.max(0, Math.round(newTotalPrice || 0));
       
       console.log('💰 FINAL TOTAL PRICE:', newTotalPrice.toLocaleString(), 'DA');
+      console.log('✅ Price calculation summary:');
+      console.log('   - Base Price: ' + basePrice);
+      console.log('   - Services: ' + servicesTotal);
+      console.log('   - Additional Fees: ' + additionalFees);
+      console.log('   - TVA: ' + tvaAmount);
+      console.log('   - Discount: ' + (formData.discountType === 'percentage' ? discountAmount + '%' : discountAmount + ' DA'));
+      console.log('   - FINAL: ' + newTotalPrice);
 
       // === DEPOSIT (CAUTION) ===
       const newDeposit = formData.deposit !== undefined ? formData.deposit : reservation.deposit;
@@ -220,7 +258,7 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       const newRemainingPayment = Math.max(0, newTotalPrice - newAdvancePayment);
       
       console.log('💳 Advance Payment:', newAdvancePayment.toLocaleString(), 'DA');
-      console.log('💳 Remaining Payment:', newRemainingPayment.toLocaleString(), 'DA');
+      console.log('💳 Remaining Payment:', newRemainingPayment.toLocaleString(), 'DA (calculation: ' + newTotalPrice + ' - ' + newAdvancePayment + ')');
 
       // Prepare the update data
       const updateData: any = {
@@ -249,11 +287,19 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       };
 
       console.log('📤 UPDATE DATA TO SAVE:', JSON.stringify(updateData, null, 2));
+      console.log('📊 Key values being saved:');
+      console.log('   ├─ totalPrice: ' + updateData.totalPrice);
+      console.log('   ├─ deposit: ' + updateData.deposit);
+      console.log('   ├─ advancePayment: ' + updateData.advancePayment);
+      console.log('   ├─ remainingPayment: ' + updateData.remainingPayment);
+      console.log('   ├─ totalDays: ' + updateData.totalDays);
+      console.log('   └─ status: ' + (updateData.status || 'unchanged'));
 
       // Update the reservation
       console.log('💾 Saving to database...');
-      await ReservationsService.updateReservation(reservation.id, updateData);
+      const savedResult = await ReservationsService.updateReservation(reservation.id, updateData);
       console.log('✅ Reservation saved successfully');
+      console.log('📊 Saved result:', JSON.stringify(savedResult, null, 2));
 
       // Update reservation services
       const services = formData.step5?.additionalServices || [];
@@ -376,14 +422,39 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
 
       console.log('✅ === SAVE COMPLETED SUCCESSFULLY ===');
       console.log('📊 Updated Reservation Data:', JSON.stringify(updatedReservation, null, 2));
+      console.log('✨ Price Update Summary:');
+      console.log('   ├─ BEFORE: totalPrice=' + reservation.totalPrice + ' DA | deposit=' + reservation.deposit + ' DA');
+      console.log('   └─ AFTER:  totalPrice=' + updateData.totalPrice + ' DA | deposit=' + updateData.deposit + ' DA');
+      console.log('✨ Duration Update Summary:');
+      console.log('   ├─ BEFORE: totalDays=' + reservation.totalDays);
+      console.log('   └─ AFTER:  totalDays=' + updateData.totalDays);
+      console.log('✨ Payment Summary:');
+      console.log('   ├─ Advance: ' + updateData.advancePayment + ' DA');
+      console.log('   ├─ Remaining: ' + updateData.remainingPayment + ' DA');
+      console.log('   └─ Total: ' + (updateData.advancePayment + updateData.remainingPayment) + ' DA (should equal ' + updateData.totalPrice + ')');
       
       // notify parent so it can refresh its state
       if (onUpdate) {
+        console.log('🔔 Notifying parent component with updated data...');
+        console.log('📤 Data passed to parent onUpdate:', JSON.stringify(updatedReservation, null, 2));
         onUpdate(updatedReservation as ReservationDetails);
+        console.log('✅ Parent component notified with:');
+        console.log('   ├─ ID: ' + updatedReservation.id);
+        console.log('   ├─ totalPrice: ' + updatedReservation.totalPrice);
+        console.log('   ├─ deposit: ' + updatedReservation.deposit);
+        console.log('   ├─ totalDays: ' + updatedReservation.totalDays);
+        console.log('   └─ status: ' + updatedReservation.status);
       }
-      onBack();
+      
+      // Show success message briefly before navigating back
+      console.log('🎉 Waiting 500ms before returning to previous view...');
+      setTimeout(() => {
+        console.log('👈 Navigating back to previous view');
+        onBack();
+      }, 500);
     } catch (error) {
       console.error('❌ === ERROR DURING SAVE ===', error);
+      console.error('📋 Error stack:', error instanceof Error ? error.stack : 'Unknown error');
       alert(lang === 'fr' ? '❌ Erreur lors de la mise à jour de la réservation. Vérifiez la console pour plus de détails.' : '❌ Error updating reservation. Check console for details.');
     }
   };

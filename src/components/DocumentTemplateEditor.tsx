@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DocumentType, DocumentTemplate, DocumentField } from '../types';
-import { DocumentTemplateService } from '../services/DocumentTemplateService';
+import { DocumentTemplateService, SavedDocumentTemplate } from '../services/DocumentTemplateService';
 import { supabase } from '../supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Edit2, Plus, Trash2, RotateCcw, Save, X } from 'lucide-react';
@@ -9,6 +9,10 @@ interface DocumentTemplateEditorProps {
   documentType: DocumentType;
   onClose: () => void;
   onSave?: () => void;
+  reservationId?: string;
+  carId?: string;
+  clientId?: string;
+  inspectionId?: string;
 }
 
 interface DraggingField {
@@ -17,21 +21,63 @@ interface DraggingField {
   offsetY: number;
 }
 
+interface SaveDialogState {
+  isOpen: boolean;
+  isSaveAsNew: boolean;
+  selectedTemplateId?: string;
+}
+
+interface RealData {
+  client?: {
+    first_name: string;
+    last_name: string;
+    phone: string;
+    email: string;
+  };
+  car?: {
+    brand: string;
+    model: string;
+    year: number;
+    color: string;
+  };
+  reservation?: {
+    departure_date: string;
+    return_date: string;
+    total_price: number;
+  };
+  inspection?: {
+    mileage: number;
+    fuel_level: string;
+  };
+  agencySettings?: {
+    agency_name: string;
+    logo: string;
+    phone: string;
+    address: string;
+  };
+}
+
 const DEFAULT_FIELD_NAMES: Record<DocumentType, string[]> = {
   contrat: ['title', 'client_name', 'car_model', 'rental_dates', 'price_total', 'signature_line'],
   devis: ['title', 'quote_number', 'client_name', 'car_model', 'validity_date', 'price_total'],
   facture: ['title', 'invoice_number', 'invoice_date', 'client_name', 'car_model', 'amount_due', 'payment_terms'],
-  recu: ['logo', 'agenceName', 'title', 'receipt_number', 'receipt_date', 'client_name', 'amount_paid', 'payment_method', 'totalLabel', 'totalAmount', 'paidLabel', 'paidAmount', 'remainingLabel', 'remainingAmount'],
-  engagement: ['title', 'subtitle', 'engagement_number', 'commitment_date', 'client_label', 'client_name', 'vehicle_label', 'vehicle_info', 'terms_label', 'terms_conditions', 'signature_label', 'signature_line', 'date_label', 'date_line'],
+  recu: ['logo', 'agenceName', 'title', 'receipt_number', 'receipt_date', 'client_name', 'amount_paid', 'payment_method'],
+  engagement: ['title', 'client_name', 'car_model', 'rental_dates', 'price_total'],
 };
 
 export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
   documentType,
   onClose,
   onSave,
+  reservationId,
+  carId,
+  clientId,
+  inspectionId,
 }) => {
   const [template, setTemplate] = useState<DocumentTemplate | null>(null);
-  const [agencySettings, setAgencySettings] = useState<any>(null);
+  const [savedTemplates, setSavedTemplates] = useState<SavedDocumentTemplate[]>([]);
+  const [currentTemplateId, setCurrentTemplateId] = useState<string | null>(null);
+  const [realData, setRealData] = useState<RealData>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [draggingField, setDraggingField] = useState<DraggingField | null>(null);
@@ -39,61 +85,171 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
   const [selectedColor, setSelectedColor] = useState('#000000');
   const [selectedFontSize, setSelectedFontSize] = useState(12);
   const [newFieldName, setNewFieldName] = useState('');
+  const [saveDialog, setSaveDialog] = useState<SaveDialogState>({
+    isOpen: false,
+    templateName: '',
+    isSaveAsNew: true,
+  });
+  const [agencyId, setAgencyId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    loadTemplate();
-  }, [documentType]);
+    loadAllData();
+  }, [documentType, reservationId, carId, clientId]);
 
-  const loadTemplate = async () => {
+  const loadAllData = async () => {
     try {
       setLoading(true);
-      
-      // Load all data in parallel
-      const [templates, { data: agencyData, error: agencyError }] = await Promise.all([
-        DocumentTemplateService.getDocumentTemplates(),
-        supabase
-          .from('agency_settings')
-          .select('agency_name, logo, address, phone')
-          .limit(1)
-          .single()
-      ]);
-      
-      if (agencyError) {
-        console.error('DocumentTemplateEditor: Error fetching agency_settings:', agencyError);
+
+      // Get current user's agency
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('agency_id')
+        .eq('id', userData?.user?.id)
+        .single();
+
+      const currentAgencyId = userProfile?.agency_id || '';
+      setAgencyId(currentAgencyId);
+
+      // Load saved templates from database - CONTRAT TYPE ONLY
+      if (documentType === 'contrat') {
+        const templates = await DocumentTemplateService.getSavedTemplates(documentType, currentAgencyId);
+        console.log('DocumentTemplateEditor: Loaded templates from database:', templates);
+        setSavedTemplates(templates);
+
+        // Load the first template if available, otherwise create new one
+        if (templates.length > 0) {
+          console.log('DocumentTemplateEditor: Setting template from database:', templates[0].template);
+          setTemplate(templates[0].template);
+          setCurrentTemplateId(templates[0].id);
+        } else {
+          console.log('DocumentTemplateEditor: No templates found, using default');
+          setTemplate(DocumentTemplateService.getDefaultTemplate(documentType));
+          setCurrentTemplateId(null);
+        }
+      } else {
+        // For other types, just use default
+        console.log('DocumentTemplateEditor: Using default template for', documentType);
+        setTemplate(DocumentTemplateService.getDefaultTemplate(documentType));
+        setCurrentTemplateId(null);
+        setSavedTemplates([]);
       }
-      
-      const docTemplate = templates[documentType] || {};
-      setTemplate(docTemplate);
-      setAgencySettings(agencyData);
-      
-      console.log('DocumentTemplateEditor loaded data:', {
-        template: !!docTemplate,
-        agencySettings: agencyData,
-        agencyName: agencyData?.agency_name,
-        logoUrl: agencyData?.logo,
-        documentType
-      });
-      
+
+      // Load real data
+      await loadRealData(currentAgencyId);
     } catch (error) {
-      console.error('DocumentTemplateEditor: Error loading template data:', error);
-      console.error('DocumentTemplateEditor: Detailed error:', {
-        message: error?.message,
-        stack: error?.stack,
-        documentType
-      });
-      // Set defaults on error
-      setTemplate({});
-      setAgencySettings({
-        agency_name: 'LuxDrive Premium Car Rental',
-        logo: undefined
-      });
+      console.error('Error loading data:', error);
+      setTemplate(DocumentTemplateService.getDefaultTemplate(documentType));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFieldMouseDown = (fieldName: string, e: React.MouseEvent) => {
+  const loadRealData = async (currentAgencyId: string) => {
+    try {
+      const data: RealData = {};
+
+      // Load agency settings
+      const { data: agencyData } = await supabase
+        .from('agency_settings')
+        .select('agency_name, logo, phone, address')
+        .limit(1)
+        .single();
+
+      if (agencyData) {
+        data.agencySettings = agencyData;
+      }
+
+      // Load client info
+      if (clientId) {
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('first_name, last_name, phone, email')
+          .eq('id', clientId)
+          .single();
+
+        if (clientData) {
+          data.client = clientData;
+        }
+      }
+
+      // Load car info
+      if (carId) {
+        const { data: carData } = await supabase
+          .from('cars')
+          .select('brand, model, year, color')
+          .eq('id', carId)
+          .single();
+
+        if (carData) {
+          data.car = carData;
+        }
+      }
+
+      // Load reservation info
+      if (reservationId) {
+        const { data: resData } = await supabase
+          .from('reservations')
+          .select('departure_date, return_date, total_price')
+          .eq('id', reservationId)
+          .single();
+
+        if (resData) {
+          data.reservation = resData;
+        }
+      }
+
+      // Load inspection info
+      if (inspectionId) {
+        const { data: inspData } = await supabase
+          .from('vehicle_inspections')
+          .select('mileage, fuel_level')
+          .eq('id', inspectionId)
+          .single();
+
+        if (inspData) {
+          data.inspection = inspData;
+        }
+      }
+
+      setRealData(data);
+    } catch (error) {
+      console.error('Error loading real data:', error);
+    }
+  };
+
+  const buildPreviewData = (): Record<string, string> => {
+    const { client, car, reservation, agencySettings, inspection } = realData;
+
+    return {
+      title: `${documentType.toUpperCase()} de Location`,
+      client_name: client ? `${client.first_name} ${client.last_name}` : 'Client Name',
+      car_model: car ? `${car.brand} ${car.model} ${car.year} - ${car.color}` : 'Car Model',
+      rental_dates: reservation ? `${reservation.departure_date} - ${reservation.return_date}` : 'Dates',
+      price_total: reservation ? `${reservation.total_price.toLocaleString()} DA` : 'Price',
+      signature_line: '_________________________________',
+      agenceName: agencySettings?.agency_name || 'Agency Name',
+      quote_number: `DEVIS-${Date.now().toString().slice(-6)}`,
+      validity_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR'),
+      invoice_number: `FAC-${Date.now().toString().slice(-6)}`,
+      invoice_date: new Date().toLocaleDateString('fr-FR'),
+      amount_due: reservation ? `${reservation.total_price.toLocaleString()} DA` : 'Amount',
+      payment_terms: 'Net 30',
+      receipt_number: `REC-${Date.now().toString().slice(-6)}`,
+      receipt_date: new Date().toLocaleDateString('fr-FR'),
+      amount_paid: reservation ? `${reservation.total_price.toLocaleString()} DA` : 'Amount',
+      payment_method: 'Virement Bancaire',
+      mileage: inspection?.mileage?.toString() || '0',
+      fuel_level: inspection?.fuel_level || 'Full',
+    };
+  };
+
+  const handleSelectTemplate = async (template: SavedDocumentTemplate) => {
+    setTemplate(template.template);
+    setCurrentTemplateId(template.id);
+    setEditingField(null);
+  };
     e.preventDefault();
     const field = template?.[fieldName];
     if (!field) return;
@@ -176,11 +332,43 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
   };
 
   const handleSave = async () => {
-    if (!template) return;
+    if (!template || !agencyId) return;
+
+    // Show save dialog
+    setSaveDialog({
+      isOpen: true,
+      isSaveAsNew: !currentTemplateId,
+      selectedTemplateId: currentTemplateId || undefined,
+    });
+  };
+
+  const handleConfirmSave = async () => {
+    if (!template || !agencyId) return;
 
     try {
       setSaving(true);
-      await DocumentTemplateService.updateDocumentType(documentType, template);
+
+      if (saveDialog.isSaveAsNew || !currentTemplateId) {
+        // Save as new template
+        const newTemplate = await DocumentTemplateService.saveTemplate(
+          documentType,
+          template,
+          agencyId
+        );
+        setCurrentTemplateId(newTemplate.id);
+        setSavedTemplates([newTemplate, ...savedTemplates]);
+      } else {
+        // Update existing template
+        const updated = await DocumentTemplateService.updateSavedTemplate(
+          currentTemplateId,
+          template
+        );
+        setSavedTemplates(
+          savedTemplates.map((t) => (t.id === currentTemplateId ? updated : t))
+        );
+      }
+
+      setSaveDialog({ isOpen: false, isSaveAsNew: true });
       onSave?.();
       onClose();
     } catch (error) {
@@ -191,19 +379,36 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
     }
   };
 
-  const handleReset = () => {
-    if (confirm('Are you sure you want to reset this template to default?')) {
-      DocumentTemplateService.resetDocumentType(documentType).then((templates) => {
-        setTemplate(templates[documentType] || {});
-      });
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!confirm('Are you sure you want to delete this template?')) return;
+
+    try {
+      await DocumentTemplateService.deleteTemplate(templateId);
+      setSavedTemplates(savedTemplates.filter((t) => t.id !== templateId));
+
+      if (currentTemplateId === templateId) {
+        if (savedTemplates.length > 1) {
+          const remaining = savedTemplates.filter((t) => t.id !== templateId)[0];
+          handleSelectTemplate(remaining);
+        } else {
+          setTemplate(DocumentTemplateService.getDefaultTemplate(documentType));
+          setCurrentTemplateId(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      alert('Error deleting template');
     }
   };
+
+  const previewData = buildPreviewData();
 
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-8">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-700">Loading templates...</p>
         </div>
       </div>
     );
@@ -223,9 +428,16 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
         className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto"
       >
         <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Customize {documentType.toUpperCase()} Template
-          </h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Customize {documentType.toUpperCase()} Template
+            </h2>
+            {currentTemplateId && (
+              <p className="text-sm text-gray-600 mt-1">
+                Editing: Template {currentTemplateId.substring(0, 8)}...
+              </p>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -234,7 +446,81 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
           </button>
         </div>
 
-        <div className="p-6 grid grid-cols-3 gap-6">
+        <div className="p-6 grid grid-cols-4 gap-6">
+          {/* Sidebar - Saved Templates */}
+          <div className="col-span-1 space-y-4 max-h-[calc(90vh-200px)] overflow-y-auto">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+              <h3 className="font-semibold text-indigo-900 mb-3">📋 Saved Templates</h3>
+              <div className="space-y-2">
+                {savedTemplates.length === 0 ? (
+                  <p className="text-xs text-indigo-700">No saved templates yet</p>
+                ) : (
+                  savedTemplates.map((tmpl) => (
+                    <div
+                      key={tmpl.id}
+                      className={`p-2 rounded border cursor-pointer transition-colors ${
+                        currentTemplateId === tmpl.id
+                          ? 'bg-indigo-500 text-white border-indigo-600'
+                          : 'bg-white border-indigo-200 hover:bg-indigo-100'
+                      }`}
+                    >
+                      <button
+                        onClick={() => handleSelectTemplate(tmpl)}
+                        className="w-full text-left text-sm font-medium mb-1"
+                      >
+                        Template {tmpl.id.substring(0, 8)}...
+                      </button>
+                      {currentTemplateId === tmpl.id && (
+                        <button
+                          onClick={() => handleDeleteTemplate(tmpl.id)}
+                          className="w-full text-xs bg-red-600 text-white py-1 rounded hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Preview Data Editor */}
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 max-h-48 overflow-y-auto">
+              <h3 className="font-semibold text-purple-900 mb-2 text-sm">👁️ Preview Data</h3>
+              <div className="space-y-1 text-xs">
+                {Object.entries(previewData).slice(0, 8).map(([key, value]) => (
+                  <div key={key} className="text-purple-700">
+                    <span className="font-medium">{key}:</span> {value}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Add Custom Field */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <h3 className="font-semibold text-blue-900 mb-2 text-sm flex items-center gap-1">
+                <Plus size={14} /> Custom Text
+              </h3>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newFieldName}
+                  onChange={(e) => setNewFieldName(e.target.value)}
+                  placeholder="Field name..."
+                  className="w-full px-2 py-1 border border-blue-300 rounded text-xs"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') handleAddCustomField();
+                  }}
+                />
+                <button
+                  onClick={handleAddCustomField}
+                  className="w-full bg-blue-600 text-white py-1 rounded text-xs font-medium hover:bg-blue-700"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
           {/* Canvas - Document Preview */}
           <div className="col-span-2">
             <div
@@ -242,44 +528,37 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
-              className="relative bg-gray-50 border-2 border-gray-300 rounded-lg p-8"
+              className="relative bg-white border-2 border-gray-300 rounded-lg overflow-hidden"
               style={{
                 width: '100%',
-                minHeight: '600px',
+                height: '800px',
+                minHeight: '800px',
                 cursor: draggingField ? 'grabbing' : 'default',
+                position: 'relative',
               }}
             >
               {/* Document Background */}
               <div
-                className="absolute inset-8 bg-white shadow-lg rounded"
+                className="absolute inset-0 bg-white"
                 style={{ pointerEvents: 'none' }}
               />
 
-              {/* Agency Header - From agency_settings table except for engagement */}
-              {agencySettings && documentType !== 'engagement' && (
-                <div className="absolute top-12 left-12 right-12 z-10" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                  <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-gray-300">
-                    <div className="flex-1">
-                      <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                        {agencySettings.agency_name || 'LuxDrive Premium Car Rental'}
+              {/* Agency Header */}
+              {realData.agencySettings && documentType !== 'engagement' && (
+                <div style={{ position: 'absolute', top: '20px', left: '20px', right: '20px', zIndex: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid #ccc' }}>
+                    <div style={{ flex: 1 }}>
+                      <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>
+                        {realData.agencySettings.agency_name}
                       </h1>
                     </div>
-                    {agencySettings.logo && (
-                      <div className="ml-4">
+                    {realData.agencySettings.logo && (
+                      <div style={{ marginLeft: '20px' }}>
                         <img
-                          src={agencySettings.logo}
+                          src={realData.agencySettings.logo}
                           alt="Agency Logo"
-                          style={{ height: 70 }}
-                          className="object-contain"
+                          style={{ height: 50, width: 'auto', objectFit: 'contain' }}
                           referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            console.error('DocumentTemplateEditor: Logo failed to load from agency_settings:', agencySettings.logo);
-                            console.error('DocumentTemplateEditor: Logo load error details:', e);
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                          onLoad={() => {
-                            console.log('DocumentTemplateEditor: Logo loaded successfully from agency_settings:', agencySettings.logo);
-                          }}
                         />
                       </div>
                     )}
@@ -291,23 +570,33 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
               {template &&
                 Object.entries(template).map(([fieldName, fieldValue]) => {
                   const field = fieldValue as any;
+                  const fieldContent = previewData[fieldName] || `[${fieldName}]`;
+
                   return (
-                    <motion.div
+                    <div
                       key={fieldName}
-                      className={`absolute p-2 border-2 rounded transition-all ${
-                        editingField === fieldName
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-300 hover:border-blue-400 bg-white'
-                      } cursor-grab active:cursor-grabbing`}
                       style={{
-                        left: `${field.x}px`,
-                        top: `${field.y}px`,
+                        position: 'absolute',
+                        left: `${field.x || 0}px`,
+                        top: `${field.y || 0}px`,
                         color: field.color || '#000000',
                         fontSize: `${field.fontSize || 12}px`,
+                        fontFamily: field.fontFamily || 'Arial',
                         fontWeight: field.fontWeight || 'normal',
+                        fontStyle: field.fontStyle || 'normal',
+                        textDecoration: field.textDecoration || 'none',
                         textAlign: field.textAlign || 'left',
-                        maxWidth: `${field.maxWidth || 200}px`,
+                        backgroundColor: editingField === fieldName ? '#dbeafe' : 'transparent',
+                        padding: '4px 8px',
+                        border: editingField === fieldName ? '2px solid #3b82f6' : '1px dashed #999',
+                        borderRadius: '4px',
+                        cursor: 'grab',
                         zIndex: editingField === fieldName ? 50 : 40,
+                        minWidth: '120px',
+                        maxWidth: '300px',
+                        whiteSpace: 'normal',
+                        wordWrap: 'break-word',
+                        overflow: 'visible',
                       }}
                       onMouseDown={(e) => handleFieldMouseDown(fieldName, e)}
                       onClick={(e) => {
@@ -316,57 +605,40 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
                         setSelectedColor(field.color || '#000000');
                         setSelectedFontSize(field.fontSize || 12);
                       }}
+                      title={`${fieldName} (${field.x}, ${field.y})`}
                     >
-                      <span className="text-xs font-semibold text-gray-600 block mb-1">
+                      <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#666', marginBottom: '2px', opacity: 0.7 }}>
                         {fieldName}
-                      </span>
-                      <div className="text-sm">{field.customText || `[${fieldName}]`}</div>
-                    </motion.div>
+                      </div>
+                      <div style={{ 
+                        fontSize: `${field.fontSize || 12}px`, 
+                        color: field.color || '#000000',
+                        fontWeight: field.fontWeight || 'normal',
+                        maxWidth: '250px',
+                      }}>
+                        {String(fieldContent).substring(0, 100)}
+                      </div>
+                    </div>
                   );
                 })}
             </div>
           </div>
 
-          {/* Sidebar - Field Editor */}
-          <div className="col-span-1">
-            <div className="space-y-6">
-              {/* Add Custom Field */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                  <Plus size={16} /> Add Custom Text
-                </h3>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={newFieldName}
-                    onChange={(e) => setNewFieldName(e.target.value)}
-                    placeholder="Field name..."
-                    className="w-full px-3 py-2 border border-blue-300 rounded text-sm"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') handleAddCustomField();
-                    }}
-                  />
-                  <button
-                    onClick={handleAddCustomField}
-                    className="w-full bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    Add Field
-                  </button>
-                </div>
-              </div>
-
+          {/* Right Sidebar - Field Editor */}
+          <div className="col-span-1 max-h-[calc(90vh-200px)] overflow-y-auto">
+            <div className="space-y-4">
               {/* Field Editor */}
               {editingField && template?.[editingField] && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Edit2 size={16} /> {editingField}
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
+                    <Edit2 size={14} /> {editingField}
                   </h3>
 
-                  <div className="space-y-3">
-                    {/* Position */}
+                  <div className="space-y-3 text-xs">
+                    {/* Position X */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Position X: {template[editingField].x}px
+                      <label className="block font-medium text-gray-700 mb-1">
+                        X: {template[editingField].x}px
                       </label>
                       <input
                         type="range"
@@ -380,9 +652,10 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
                       />
                     </div>
 
+                    {/* Position Y */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Position Y: {template[editingField].y}px
+                      <label className="block font-medium text-gray-700 mb-1">
+                        Y: {template[editingField].y}px
                       </label>
                       <input
                         type="range"
@@ -398,9 +671,7 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
 
                     {/* Color */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Color
-                      </label>
+                      <label className="block font-medium text-gray-700 mb-1">Color</label>
                       <div className="flex gap-2">
                         <input
                           type="color"
@@ -409,7 +680,7 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
                             setSelectedColor(e.target.value);
                             handleUpdateField(editingField, { color: e.target.value });
                           }}
-                          className="w-12 h-10 rounded cursor-pointer"
+                          className="w-10 h-8 rounded cursor-pointer"
                         />
                         <input
                           type="text"
@@ -418,15 +689,15 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
                             setSelectedColor(e.target.value);
                             handleUpdateField(editingField, { color: e.target.value });
                           }}
-                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                          className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs"
                         />
                       </div>
                     </div>
 
                     {/* Font Size */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Font Size: {selectedFontSize}px
+                      <label className="block font-medium text-gray-700 mb-1">
+                        Size: {selectedFontSize}px
                       </label>
                       <input
                         type="range"
@@ -445,16 +716,14 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
                     {/* Custom Text */}
                     {template[editingField].customText && (
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Custom Text
-                        </label>
+                        <label className="block font-medium text-gray-700 mb-1">Text</label>
                         <input
                           type="text"
                           value={template[editingField].customText || ''}
                           onChange={(e) =>
                             handleUpdateField(editingField, { customText: e.target.value })
                           }
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                         />
                       </div>
                     )}
@@ -463,25 +732,25 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
                     {editingField.startsWith('custom_') && (
                       <button
                         onClick={() => handleDeleteField(editingField)}
-                        className="w-full bg-red-600 text-white py-2 rounded text-sm font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                        className="w-full bg-red-600 text-white py-2 rounded text-xs font-medium hover:bg-red-700 flex items-center justify-center gap-2"
                       >
-                        <Trash2 size={14} /> Delete Field
+                        <Trash2 size={12} /> Delete
                       </button>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Default Fields List */}
+              {/* Fields List */}
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Fields</h3>
-                <div className="space-y-1 max-h-64 overflow-y-auto">
+                <h3 className="font-semibold text-gray-900 mb-3 text-sm">Fields</h3>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
                   {template &&
                     Object.keys(template).map((fieldName) => (
                       <button
                         key={fieldName}
                         onClick={() => setEditingField(fieldName)}
-                        className={`w-full text-left px-2 py-2 rounded text-sm transition-colors ${
+                        className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${
                           editingField === fieldName
                             ? 'bg-blue-500 text-white'
                             : 'hover:bg-gray-200 text-gray-900'
@@ -498,39 +767,127 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
 
         {/* Footer */}
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex justify-between gap-4">
-          <button
-            onClick={handleReset}
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2 transition-colors"
-          >
-            <RotateCcw size={16} /> Reset to Default
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                if (confirm('Reset to default template?')) {
+                  setTemplate(DocumentTemplateService.getDefaultTemplate(documentType));
+                  setCurrentTemplateId(null);
+                }
+              }}
+              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium flex items-center gap-2 text-sm"
+            >
+              <RotateCcw size={14} /> Reset
+            </button>
+          </div>
 
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+              className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-sm"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-6 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400 transition-colors flex items-center gap-2"
+              className="px-6 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400 flex items-center gap-2 text-sm"
             >
               {saving ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
                   Saving...
                 </>
               ) : (
                 <>
-                  <Save size={16} /> Save Changes
+                  <Save size={14} /> Save
                 </>
               )}
             </button>
           </div>
         </div>
       </motion.div>
+
+      {/* Save Dialog Modal */}
+      <AnimatePresence>
+        {saveDialog.isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-white rounded-lg p-6 max-w-md w-full"
+            >
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Save Template</h3>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={saveDialog.isSaveAsNew}
+                      onChange={() =>
+                        setSaveDialog((prev) => ({ ...prev, isSaveAsNew: true }))
+                      }
+                      className="rounded"
+                    />
+                    <span className="text-sm font-medium text-gray-900">Save as new template</span>
+                  </label>
+                  {saveDialog.isSaveAsNew && (
+                    <p className="ml-6 text-xs text-gray-600 mt-2">
+                      Template will be saved with a unique ID
+                    </p>
+                  )}
+                </div>
+
+                {currentTemplateId && (
+                  <div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={!saveDialog.isSaveAsNew}
+                        onChange={() =>
+                          setSaveDialog((prev) => ({ ...prev, isSaveAsNew: false }))
+                        }
+                        className="rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-900">Update current template</span>
+                    </label>
+                    {!saveDialog.isSaveAsNew && (
+                      <p className="ml-6 text-xs text-gray-600 mt-2">
+                        Template ID: {currentTemplateId.substring(0, 8)}...
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() =>
+                    setSaveDialog({ isOpen: false, isSaveAsNew: true })
+                  }
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmSave}
+                  disabled={saving}
+                  className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400 text-sm"
+                >
+                  Save
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
