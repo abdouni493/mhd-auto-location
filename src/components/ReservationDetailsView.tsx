@@ -1299,11 +1299,10 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
                   departureAgencyId: reservation.step1?.departureAgency
                 });
 
-                // Update car status to "louer" and set mileage and fuel level
+                // Update car mileage and fuel level only (no status changes for period-based availability)
                 await supabase
                   .from('cars')
                   .update({ 
-                    status: 'louer',
                     mileage: parseInt(mileage),
                     fuel_level: fuelLevel
                   })
@@ -1405,11 +1404,10 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
         inspectionItems: returnInspectionItems,
       });
 
-      // Update car status to "disponible" and set return mileage and fuel level
+      // Update car mileage and fuel level only (no status changes for period-based availability)
       await supabase
         .from('cars')
         .update({ 
-          status: 'disponible',
           mileage: parseInt(returnMileage),
           fuel_level: returnFuelLevel
         })

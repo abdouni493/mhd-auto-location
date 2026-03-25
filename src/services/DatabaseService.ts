@@ -35,30 +35,94 @@ export class DatabaseService {
     }));
   }
 
-  static async getAvailableCars(): Promise<Car[]> {
-    // Get all cars
+  static async getAvailableCars(departureDate?: string, returnDate?: string): Promise<Car[]> {
+    // Get all cars with 'disponible' status
     const allCars = await this.getCars();
-    
-    // Get all active/pending reservations
-    const { data: activeReservations, error } = await supabase
+    const availableStatusCars = allCars.filter(car => car.status === 'disponible' || !car.status);
+
+    // If no date range provided, return all cars with disponible status
+    if (!departureDate || !returnDate) {
+      return availableStatusCars;
+    }
+
+    // Check for date overlaps
+    const { data: allReservations, error } = await supabase
       .from('reservations')
-      .select('car_id')
+      .select('car_id, departure_date, return_date')
       .in('status', ['pending', 'confirmed', 'active']);
 
     if (error) {
-      console.error('Error fetching active reservations:', error);
-      // If there's an error, return all cars with disponible status
-      return allCars.filter(car => car.status === 'disponible');
+      console.error('Error fetching reservations:', error);
+      return availableStatusCars;
     }
 
-    // Get IDs of cars that are currently rented
-    const rentedCarIds = new Set(activeReservations?.map(r => r.car_id) || []);
+    // Filter cars by checking date overlaps
+    const departureTime = new Date(departureDate).getTime();
+    const returnTime = new Date(returnDate).getTime();
 
-    // Return only cars that are not currently rented and have status 'disponible'
-    return allCars.filter(car => 
-      !rentedCarIds.has(car.id) && 
-      (car.status === 'disponible' || !car.status)
-    );
+    const availableCars = availableStatusCars.filter(car => {
+      // Check if this car has any overlapping reservations
+      const carReservations = allReservations?.filter(r => r.car_id === car.id) || [];
+      
+      return !carReservations.some(reservation => {
+        const resStart = new Date(reservation.departure_date).getTime();
+        const resEnd = new Date(reservation.return_date).getTime();
+        
+        // Check for overlap: current reservation overlaps if it starts before our end and ends after our start
+        return departureTime < resEnd && returnTime > resStart;
+      });
+    });
+
+    return availableCars;
+  }
+
+  static async getReservedCarsForPeriod(departureDate: string, returnDate: string): Promise<Array<{
+    id: string;
+    carId: string;
+    brand: string;
+    model: string;
+    image: string;
+    departureDate: string;
+    returnDate: string;
+    clientName: string;
+  }>> {
+    const { data: reservations, error } = await supabase
+      .from('reservations')
+      .select(`
+        id,
+        car_id,
+        departure_date,
+        return_date,
+        client:clients(first_name, last_name),
+        car:cars(brand, model, image_url)
+      `)
+      .in('status', ['pending', 'confirmed', 'active']);
+
+    if (error) {
+      console.error('Error fetching reservations:', error);
+      return [];
+    }
+
+    const departureTime = new Date(departureDate).getTime();
+    const returnTime = new Date(returnDate).getTime();
+
+    // Filter reservations that overlap with the provided date range
+    const overlappingReservations = (reservations || []).filter(res => {
+      const resStart = new Date(res.departure_date).getTime();
+      const resEnd = new Date(res.return_date).getTime();
+      return departureTime < resEnd && returnTime > resStart;
+    });
+
+    return overlappingReservations.map(res => ({
+      id: res.id,
+      carId: res.car_id,
+      brand: res.car?.brand || '',
+      model: res.car?.model || '',
+      image: res.car?.image_url || 'https://picsum.photos/seed/car/400/300',
+      departureDate: res.departure_date,
+      returnDate: res.return_date,
+      clientName: `${res.client?.first_name || ''} ${res.client?.last_name || ''}`,
+    }));
   }
 
   static async createCar(car: Omit<Car, 'id' | 'created_at'>): Promise<Car> {

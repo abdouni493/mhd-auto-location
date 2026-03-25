@@ -718,24 +718,8 @@ export class ReservationsService {
 
     if (error) throw error;
 
-    // Check if there are any other active/pending/confirmed reservations for this car
-    if (reservation) {
-      const { data: activeReservations, error: checkError } = await supabase
-        .from('reservations')
-        .select('id')
-        .eq('car_id', reservation.car_id)
-        .in('status', ['pending', 'confirmed', 'active']);
-
-      if (checkError) throw checkError;
-
-      // If no active reservations, update car status to "disponible"
-      if (!activeReservations || activeReservations.length === 0) {
-        await supabase
-          .from('cars')
-          .update({ status: 'disponible' })
-          .eq('id', reservation.car_id);
-      }
-    }
+    // With period-based availability, we no longer need to update car status globally
+    // The car status is no longer used for availability checks - only date overlaps matter
   }
 
   static async deleteReservation(id: string): Promise<void> {
@@ -756,24 +740,8 @@ export class ReservationsService {
 
     if (error) throw error;
 
-    // Check if there are any other active/pending/confirmed reservations for this car
-    if (reservation) {
-      const { data: activeReservations, error: checkError } = await supabase
-        .from('reservations')
-        .select('id')
-        .eq('car_id', reservation.car_id)
-        .in('status', ['pending', 'confirmed', 'active']);
-
-      if (checkError) throw checkError;
-
-      // If no active reservations, update car status to "disponible"
-      if (!activeReservations || activeReservations.length === 0) {
-        await supabase
-          .from('cars')
-          .update({ status: 'disponible' })
-          .eq('id', reservation.car_id);
-      }
-    }
+    // With period-based availability, we no longer need to update car status globally
+    // The car status is no longer used for availability checks - only date overlaps matter
   }
 
   // ========== VEHICLE INSPECTIONS ==========

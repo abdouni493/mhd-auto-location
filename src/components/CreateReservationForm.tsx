@@ -823,36 +823,111 @@ export const Step2VehicleSelection: React.FC<{
 }> = ({ lang, formData, setFormData }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cars, setCars] = useState<Car[]>([]);
+  const [reservedCars, setReservedCars] = useState<any[]>([]);
   const [isLoadingCars, setIsLoadingCars] = useState(true);
 
-  // Load cars from database on component mount
+  // Load cars from database, passing date range for period-based availability
   useEffect(() => {
     const loadCars = async () => {
       try {
         setIsLoadingCars(true);
-        const data = await DatabaseService.getAvailableCars();
+        const departureDate = formData.step1?.departureDate;
+        const returnDate = formData.step1?.returnDate;
+        
+        // Get available cars for the selected dates
+        const data = await DatabaseService.getAvailableCars(departureDate, returnDate);
         setCars(data || []);
+
+        // Get reserved cars for this period to show in alerts
+        if (departureDate && returnDate) {
+          const reserved = await DatabaseService.getReservedCarsForPeriod(departureDate, returnDate);
+          setReservedCars(reserved || []);
+        }
       } catch (err) {
         console.error('Error loading cars:', err);
         setCars([]);
+        setReservedCars([]);
       } finally {
         setIsLoadingCars(false);
       }
     };
 
     loadCars();
-  }, []);
+  }, [formData.step1?.departureDate, formData.step1?.returnDate]);
 
   const filteredCars = cars.filter(car =>
     car.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
     car.model.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Group reserved cars by car ID
+  const reservedCarsByCarId = new Map<string, any[]>();
+  reservedCars.forEach(res => {
+    if (!reservedCarsByCarId.has(res.carId)) {
+      reservedCarsByCarId.set(res.carId, []);
+    }
+    reservedCarsByCarId.get(res.carId)!.push(res);
+  });
+
   return (
     <div className="space-y-8">
       <h3 className="text-2xl font-black text-slate-900">
         🚗 {lang === 'fr' ? 'Sélection du Véhicule' : 'اختيار المركبة'}
       </h3>
+
+      {/* Reserved Cars Alert */}
+      {reservedCars.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-6">
+          <div className="flex items-start gap-3 mb-4">
+            <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-1" />
+            <div>
+              <h4 className="font-black text-amber-900 text-lg">
+                {lang === 'fr' ? 'Véhicules Réservés sur cette Période' : 'المركبات المحجوزة في هذه الفترة'}
+              </h4>
+              <p className="text-sm text-amber-700 mt-1">
+                {lang === 'fr' 
+                  ? 'Ces véhicules ne sont pas disponibles pendant votre période de location' 
+                  : 'هذه المركبات غير متاحة خلال فترة التأجير الخاصة بك'}
+              </p>
+            </div>
+          </div>
+
+          {/* Reserved Cars Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {reservedCars.map((reservation) => (
+              <div key={reservation.id} className="bg-white rounded-lg p-3 border border-amber-200">
+                {/* Car Image */}
+                <div className="relative mb-2 overflow-hidden rounded-lg bg-slate-100 h-24">
+                  <img
+                    src={reservation.image}
+                    alt={`${reservation.brand} ${reservation.model}`}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+
+                {/* Car Info */}
+                <div className="text-xs">
+                  <p className="font-bold text-slate-900 truncate">
+                    {reservation.brand} {reservation.model}
+                  </p>
+                  <p className="text-slate-600 text-xs mt-1">
+                    {lang === 'fr' ? 'Client: ' : 'العميل: '}{reservation.clientName}
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-amber-100 text-slate-700">
+                    <p className="text-xs font-bold">
+                      📅 {new Date(reservation.departureDate).toLocaleDateString()}
+                    </p>
+                    <p className="text-xs">
+                      → {new Date(reservation.returnDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">
