@@ -339,8 +339,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Grant execute permission to authenticated users
+-- Grant execute permission to ALL users (authenticated and unauthenticated)
 GRANT EXECUTE ON FUNCTION login_worker(TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION login_worker(TEXT, TEXT) TO anon;
 
 -- Insert some sample data (optional - you can remove this)
 INSERT INTO agencies (id, name, address, phone, email, wilaya, city, manager, opening_hours) VALUES

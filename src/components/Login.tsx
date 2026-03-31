@@ -231,8 +231,20 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
           p_password: password
         });
 
+        console.log('[Login] Worker RPC response:', { loginResult, loginError });
+
         if (loginError) {
           console.log('[Login] Worker RPC error:', loginError);
+          setErrorMessage(lang === 'fr' 
+            ? 'Erreur de connexion. Veuillez réessayer.' 
+            : 'خطأ في الاتصال. يرجى المحاولة مجددا.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Check if response indicates success
+        if (!loginResult) {
+          console.log('[Login] Worker RPC returned empty result');
           setErrorMessage(lang === 'fr' 
             ? 'Identifiants invalides.' 
             : 'بيانات اعتماد غير صحيحة.');
@@ -240,7 +252,16 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
           return;
         }
 
-        if (loginResult?.success && loginResult?.worker) {
+        if (loginResult.success === false) {
+          console.log('[Login] Worker authentication failed:', loginResult.error);
+          setErrorMessage(lang === 'fr' 
+            ? 'Identifiants invalides.' 
+            : 'بيانات اعتماد غير صحيحة.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (loginResult.success && loginResult.worker) {
           const worker = loginResult.worker;
           const workerRole = (worker.type as UserRole) || 'worker';
           
@@ -262,7 +283,7 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
           });
           return;
         } else {
-          console.log('[Login] Worker login failed - no success or worker in response');
+          console.log('[Login] Worker login failed - unexpected response structure:', loginResult);
           setErrorMessage(lang === 'fr' 
             ? 'Identifiants invalides.' 
             : 'بيانات اعتماد غير صحيحة.');
