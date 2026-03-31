@@ -68,10 +68,10 @@ app.all('/functions/v1/send-contract-email', async (req, res) => {
     console.log(`👤 Language: ${payload.language}`);
 
     // BREVO EMAIL SERVICE INTEGRATION
-    const BREVO_API_KEY = process.env.BREVO_API_KEY;
+    const BREVO_API_KEY = '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';
 
     if (!BREVO_API_KEY) {
-      throw new Error('BREVO_API_KEY environment variable not configured');
+      throw new Error('BREVO_API_KEY not configured');
     }
 
     // Decode base64 HTML content

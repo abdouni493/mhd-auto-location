@@ -21,32 +21,7 @@ export class EmailService {
         .limit(1);
 
       const agencyName = settingsData?.[0]?.name || 'AUTO LOCATION';
-      let logoDataUri = '';
-      
-      // Convert logo to base64 data URI if it exists
-      const logoPath = settingsData?.[0]?.logo;
-      if (logoPath) {
-        try {
-          // Download logo from Supabase storage
-          const { data: logoData, error: logoError } = await supabase.storage
-            .from('website_assets')
-            .download(logoPath);
-          
-          if (logoData && !logoError) {
-            // Convert blob to base64 data URI
-            const reader = new FileReader();
-            const base64Promise = new Promise<string>((resolve) => {
-              reader.onloadend = () => {
-                resolve(reader.result as string);
-              };
-              reader.readAsDataURL(logoData);
-            });
-            logoDataUri = await base64Promise;
-          }
-        } catch (logoErr) {
-          console.warn('Could not load logo from storage:', logoErr);
-        }
-      }
+      const logoUrl = settingsData?.[0]?.logo || '';
 
       const isRTL = templateLang === 'ar';
       const dirAttr = isRTL ? 'rtl' : 'ltr';
@@ -238,7 +213,7 @@ export class EmailService {
   <div class="container">
     <!-- Header -->
     <div class="header">
-      ${logoDataUri ? `<div class="logo"><img src="${logoDataUri}" alt="Logo"></div>` : ''}
+      ${logoUrl ? `<div class="logo"><img src="${logoUrl}" alt="Logo"></div>` : ''}
       <div class="agency-info">
         <div class="agency-name">${agencyName}</div>
       </div>
@@ -406,7 +381,7 @@ export class EmailService {
       const base64Content = await this.blobToBase64(htmlBlob);
 
       // DEVELOPMENT: Use local mock proxy server on port 3002
-      // PRODUCTION: Should use backend API endpoint
+      // PRODUCTION: Should use supabase.functions.invoke() instead
       const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       
       let functionUrl: string;
@@ -415,10 +390,9 @@ export class EmailService {
         // Development: Use local mock proxy
         functionUrl = 'http://localhost:3002/functions/v1/send-contract-email';
       } else {
-        // Production: Use backend API endpoint from environment or fallback
-        // For now, use a backend service or deployed proxy
-        const backendUrl = import.meta.env.VITE_EMAIL_BACKEND_URL || 'http://localhost:3002';
-        functionUrl = `${backendUrl}/functions/v1/send-contract-email`;
+        // Production: Use actual Supabase Edge Function
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tjyqmxiqeegcnvopibyb.supabase.co';
+        functionUrl = `${supabaseUrl}/functions/v1/send-contract-email`;
       }
 
       const response = await fetch(functionUrl, {
