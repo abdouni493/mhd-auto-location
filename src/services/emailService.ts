@@ -381,7 +381,7 @@ export class EmailService {
       const base64Content = await this.blobToBase64(htmlBlob);
 
       // DEVELOPMENT: Use local mock proxy server on port 3002
-      // PRODUCTION: Should use supabase.functions.invoke() instead
+      // PRODUCTION: Use Vercel API route
       const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       
       let functionUrl: string;
@@ -390,9 +390,9 @@ export class EmailService {
         // Development: Use local mock proxy
         functionUrl = 'http://localhost:3002/functions/v1/send-contract-email';
       } else {
-        // Production: Use actual Supabase Edge Function
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tjyqmxiqeegcnvopibyb.supabase.co';
-        functionUrl = `${supabaseUrl}/functions/v1/send-contract-email`;
+        // Production: Use Vercel API route
+        const host = window.location.origin;
+        functionUrl = `${host}/api/send-contract-email`;
       }
 
       const response = await fetch(functionUrl, {
