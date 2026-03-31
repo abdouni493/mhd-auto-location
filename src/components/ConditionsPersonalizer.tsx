@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, Edit2, Save, Printer, FileText } from 'lucide-react';
-import { supabase } from '../supabase';
-import { ContractTemplates } from './ContractTemplates';
+import { X, Plus, Trash2, Edit2, Save, Printer } from 'lucide-react';
+
 
 interface ConditionsPersonalizerProps {
   lang: 'fr' | 'ar';
@@ -12,6 +11,29 @@ interface ConditionsPersonalizerProps {
   agencyId?: string;
 }
 
+// Constant templates for conditions
+const FRENCH_CONDITIONS = [
+  'Âge: Le conducteur doit être âgé de 20 ans minimum avec un permis depuis 2 ans au moins.',
+  'Pièce d\'identité: Dépôt d\'une pièce d\'identité valide (passeport biométrique) + caution initiale requise.',
+  'Carburant: Le carburant est à la charge du client.',
+  'Paiement: Paiement à la remise du véhicule (espèces ou carte bancaire).',
+  'Propreté: Le véhicule doit être rendu dans le même état de propreté, sinon une pénalité de nettoyage s\'applique.',
+  'Dommages: Tout dommage constaté sera facturé selon le devis du réparateur.',
+  'Assurance: L\'assurance tous risques est obligatoire pour tous les véhicules.',
+  'Kilométrage: Le dépassement du kilométrage inclus entraîne un supplément.',
+];
+
+const ARABIC_CONDITIONS = [
+  'السن: يجب أن يكون السائق 20 عاماً على الأقل، مع رخصة قيادة منذ سنتين على الأقل.',
+  'الهوية: إيداع بطاقة هوية صحيحة (جواز السفر البيومتري) + كفالة ابتدائية مطلوبة.',
+  'الوقود: الوقود على نفقة العميل.',
+  'الدفع: الدفع عند تسليم السيارة (نقداً أو بطاقة ائتمان).',
+  'النظافة: يجب إعادة السيارة بنفس حالة النظافة، وإلا تُفرض غرامة تنظيف.',
+  'الأضرار: أي ضرر يتم اكتشافه سيتم فوترته حسب تقدير المصلح.',
+  'التأمين: التأمين الشامل إلزامي لجميع السيارات.',
+  'المسافة: تجاوز المسافة المشمولة ينتج عنه رسوم إضافية.',
+];
+
 export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
   lang,
   reservationId,
@@ -19,14 +41,10 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
   onSave,
   agencyId
 }) => {
-  const [conditions, setConditions] = useState<string[]>([
-    'السن: يجب أن يكون السائق 20 عاماً على الأقل، مع رخصة قيادة منذ سنتين على الأقل.',
-    'جواز السفر: إيداع جواز السفر البيومتري + تأمين ابتدائي من 30,000.00 دج.',
-    'الوقود: الوقود على نفقة الزبون.',
-    'الدفع: يتم الدفع نقداً عند تسليم السيارة.',
-    'النظافة: السيارة تُسلم نظيفة وتُرجع بنفس الحالة، وإلا غرامة غسيل 1000 دج.',
-  ]);
+  // Initialize with constant templates based on language
+  const DEFAULT_CONDITIONS = lang === 'fr' ? FRENCH_CONDITIONS : ARABIC_CONDITIONS;
   
+  const [conditions, setConditions] = useState<string[]>(DEFAULT_CONDITIONS);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
   const [newCondition, setNewCondition] = useState('');
@@ -36,42 +54,8 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
   const [fontSize, setFontSize] = useState(13);
   const [fontColor, setFontColor] = useState('#333333');
   const [backgroundColor, setBackgroundColor] = useState('#ffffff');
-  const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
-  const [showContractTemplates, setShowContractTemplates] = useState(false);
 
-  // Load saved conditions from database
-  useEffect(() => {
-    if (reservationId) {
-      loadSavedConditions();
-    }
-  }, [reservationId]);
-
-  const loadSavedConditions = async () => {
-    try {
-      setLoading(true);
-      if (!reservationId) return;
-
-      const { data, error } = await supabase
-        .from('reservations')
-        .select('conditions_text')
-        .eq('id', reservationId)
-        .single();
-
-      if (error) {
-        console.error('Error loading conditions:', error);
-        return;
-      }
-
-      if (data?.conditions_text) {
-        setConditions(data.conditions_text.split('\n').filter((c: string) => c.trim()));
-      }
-    } catch (error) {
-      console.error('Error loading conditions:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleEditCondition = (index: number) => {
     setEditingIndex(index);
@@ -89,7 +73,7 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
     }
   };
 
-  const handleDeleteCondition = async (index: number) => {
+  const handleDeleteCondition = (index: number) => {
     const updatedConditions = conditions.filter((_, i) => i !== index);
     setConditions(updatedConditions);
     if (selectedElements === index) {
@@ -97,26 +81,9 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
     }
     setDeleteConfirm(null);
 
-    // Auto-save to database after deletion
-    try {
-      const conditionsText = updatedConditions.join('\n');
-
-      if (reservationId) {
-        const { error } = await supabase
-          .from('reservations')
-          .update({ conditions_text: conditionsText })
-          .eq('id', reservationId);
-
-        if (error) {
-          console.error('Error deleting condition:', error);
-        }
-      }
-
-      if (onSave) {
-        onSave(conditionsText);
-      }
-    } catch (error) {
-      console.error('Error saving after deletion:', error);
+    // Call onSave callback
+    if (onSave) {
+      onSave(updatedConditions.join('\n'));
     }
   };
 
@@ -146,37 +113,15 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
     }
   };
 
-  const handleSaveAll = async () => {
-    try {
-      setLoading(true);
-      const conditionsText = conditions.join('\n');
+  const handleSaveAll = () => {
+    const conditionsText = conditions.join('\n');
 
-      if (reservationId) {
-        const { error } = await supabase
-          .from('reservations')
-          .update({ conditions_text: conditionsText })
-          .eq('id', reservationId);
-
-        if (error) {
-          console.error('Error updating conditions:', error);
-          alert(lang === 'fr' ? 'Erreur lors de la sauvegarde' : 'خطأ في الحفظ');
-          setLoading(false);
-          return;
-        }
-      }
-
-      if (onSave) {
-        onSave(conditionsText);
-      }
-
-      alert(lang === 'fr' ? 'Conditions sauvegardées!' : 'تم حفظ الشروط!');
-      onClose();
-    } catch (error) {
-      console.error('Error saving conditions:', error);
-      alert(lang === 'fr' ? 'Erreur lors de la sauvegarde' : 'خطأ في الحفظ');
-    } finally {
-      setLoading(false);
+    if (onSave) {
+      onSave(conditionsText);
     }
+
+    alert(lang === 'fr' ? 'Conditions sauvegardées!' : 'تم حفظ الشروط!');
+    onClose();
   };
 
   const handlePrint = () => {
@@ -437,23 +382,12 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
             <h2 className="text-2xl font-bold flex items-center gap-2">
               📋 {lang === 'fr' ? 'Personnaliser les Conditions' : 'تخصيص الشروط والأحكام'}
             </h2>
-            <div className="flex items-center gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowContractTemplates(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition"
-              >
-                <FileText size={18} />
-                {lang === 'fr' ? 'Modèles de Contrat' : 'نماذج العقد'}
-              </motion.button>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-blue-500 rounded-lg transition"
-              >
-                <X size={24} />
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-blue-500 rounded-lg transition"
+            >
+              <X size={24} />
+            </button>
           </div>
 
           {/* Main Content */}
@@ -684,20 +618,11 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
             </button>
             <button
               onClick={handleSaveAll}
-              disabled={loading || conditions.length === 0}
+              disabled={conditions.length === 0}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold disabled:opacity-50 flex items-center gap-2"
             >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                  {lang === 'fr' ? 'Sauvegarde...' : 'جاري الحفظ...'}
-                </>
-              ) : (
-                <>
-                  <Save size={18} />
-                  {lang === 'fr' ? 'Sauvegarder les conditions' : 'حفظ الشروط'}
-                </>
-              )}
+              <Save size={18} />
+              {lang === 'fr' ? 'Sauvegarder les conditions' : 'حفظ الشروط'}
             </button>
           </div>
         </motion.div>
@@ -760,19 +685,7 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
         )}
       </AnimatePresence>
 
-      {showContractTemplates && (
-        <ContractTemplates
-          onClose={() => setShowContractTemplates(false)}
-          onSave={(contract) => {
-            setConditions([contract]);
-            setShowContractTemplates(false);
-          }}
-          contractData={{
-            agencyName: 'SARL OUKKAL LISAYA',
-            language: lang
-          }}
-        />
-      )}
+
     </>
   );
 };

@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Language, ReservationDetails, Client, Car } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, MoreVertical, Grid3x3, CalendarDays } from 'lucide-react';
+import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, MoreVertical, Grid3x3, CalendarDays, X } from 'lucide-react';
 import { ReservationDetailsView } from './ReservationDetailsView';
 import { CreateReservationForm } from './CreateReservationForm';
 import { EditReservationForm } from './EditReservationForm';
 import { ActivationModal, CompletionModal } from './ReservationDetailsView';
 import { ReservationTimelineView } from './ReservationTimelineView';
 import { ConditionsPersonalizer } from './ConditionsPersonalizer';
+import { SendContractModal } from './SendContractModal';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { supabase } from '../supabase';
@@ -34,6 +35,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
   const [openPrintMenu, setOpenPrintMenu] = useState<string | null>(null);
   const [showPrintModal, setShowPrintModal] = useState<{reservation: ReservationDetails, type: string} | null>(null);
   const [showPersonalization, setShowPersonalization] = useState<{reservation: ReservationDetails, type: string} | null>(null);
+  const [showSendContractModal, setShowSendContractModal] = useState<ReservationDetails | null>(null);
   const [showInspectionMode, setShowInspectionMode] = useState(false);
   const [showConditionsModal, setShowConditionsModal] = useState(false);
   const [showConditionsPersonalizer, setShowConditionsPersonalizer] = useState<ReservationDetails | null>(null);
@@ -185,63 +187,11 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
     if (!showPrintModal) return;
 
     if (choice === 'same') {
-      // Load agency settings first
-      let agencySettings = null;
-      try {
-        const { data: agencyData, error: agencyError } = await supabase
-          .from('website_settings')
-          .select('name, logo')
-          .limit(1)
-          .single();
-
-        if (!agencyError && agencyData) {
-          agencySettings = agencyData;
-        }
-      } catch (error) {
-        console.error('Error loading agency settings for print:', error);
-      }
-
-      // Check if there's a saved template for this type
-      const savedTemplates = JSON.parse(localStorage.getItem('savedTemplates') || '[]');
-      const savedTemplate = savedTemplates.find((template: any) => template.type === showPrintModal.type);
-
-      let elements, newTextElements;
-      if (savedTemplate) {
-        // Use saved template but regenerate text content for payment/receipt/engagement/versement
-        const freshElements = getInitialElements(showPrintModal.type, showPrintModal.reservation, lang);
-        elements = { ...freshElements };
-        
-        // Keep positions from saved template
-        Object.keys(savedTemplate.elements).forEach(key => {
-          if (elements[key] && savedTemplate.elements[key].x !== undefined) {
-            elements[key] = {
-              ...elements[key],
-              x: savedTemplate.elements[key].x,
-              y: savedTemplate.elements[key].y
-            };
-          }
-        });
-        newTextElements = savedTemplate.newTextElements || [];
-      } else {
-        // Use default template
-        elements = getInitialElements(showPrintModal.type, showPrintModal.reservation, lang);
-        newTextElements = [];
-      }
-
-      const printContent = generatePersonalizedContent(
-        elements,
-        newTextElements,
-        showPrintModal.reservation,
-        showPrintModal.type,
-        lang,
-        agencySettings
-      );
-      const printWindow = window.open('', '', 'height=600,width=800');
-      if (printWindow) {
-        printWindow.document.write(printContent);
-        printWindow.document.close();
-        printWindow.print();
-      }
+      // Print same template using the professional contract template from PersonalizationModal
+      setShowPersonalization({
+        reservation: showPrintModal.reservation,
+        type: showPrintModal.type
+      });
     } else {
       setShowPersonalization(showPrintModal);
     }
@@ -796,9 +746,18 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
                         </button>
                         <button
                           onClick={() => handlePrint(reservation, 'engagement')}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 transition-colors"
+                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
                         >
                           🤝 {lang === 'fr' ? 'Engagement' : 'التزام'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowSendContractModal(reservation);
+                            setOpenPrintMenu(null);
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-green-50 text-saas-text-main font-bold flex items-center gap-2 transition-colors"
+                        >
+                          📧 {lang === 'fr' ? 'Envoyer par Email' : 'إرسال بالبريد الإلكتروني'}
                         </button>
                       </motion.div>
                     )}
@@ -1183,6 +1142,17 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
           />
         )}
       </AnimatePresence>
+
+      {/* Send Contract by Email Modal */}
+      <AnimatePresence>
+        {showSendContractModal && (
+          <SendContractModal
+            lang={lang}
+            reservation={showSendContractModal}
+            onClose={() => setShowSendContractModal(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1224,7 +1194,7 @@ const getInitialElements = (type: string, reservation: ReservationDetails, lang:
     const subtotal = reservation.totalPrice;
     const tvaRate = reservation.tvaApplied ? 0.19 : 0;
     const tvaAmount = subtotal * tvaRate;
-    const caution = reservation.caution || 0;
+    const caution = reservation.deposit || 0;
     const totalPaid = reservation.payments?.reduce((sum, payment) => sum + payment.amount, 0) || reservation.advancePayment || 0;
     const remaining = subtotal - totalPaid;
 
@@ -1771,39 +1741,21 @@ const PersonalizationModal: React.FC<{
   onClose: () => void;
   onPrint: (content: string) => void;
 }> = ({ lang, reservation, type, onClose, onPrint }) => {
-  const [selectedElement, setSelectedElement] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [savedTemplates, setSavedTemplates] = useState<any[]>([]);
-  const [newTextElements, setNewTextElements] = useState<any[]>([]);
   const [agencySettings, setAgencySettings] = useState<any>(null);
-  const [loading, setLoading] = useState(type === 'contract');
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [templateName, setTemplateName] = useState('');
-  const [selectedTemplateType, setSelectedTemplateType] = useState(type);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [allDatabaseTemplates, setAllDatabaseTemplates] = useState<any[]>([]);
-  const [savingTemplate, setSavingTemplate] = useState(false);
-  
-  const [elements, setElements] = useState(getInitialElements(type, reservation, lang));
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<'fr' | 'ar'>(lang === 'fr' ? 'fr' : 'ar');
 
-  // Load template from database on component mount
   useEffect(() => {
-    if (type === 'contract' || type === 'devis' || type === 'facture' || type === 'engagement' || type === 'recu') {
-      loadTemplateFromDatabase();
-      loadAgencySettings();
-    }
-  }, [type]);
+    loadAgencySettings();
+  }, []);
 
   const loadAgencySettings = async () => {
     try {
-      // Try to load agency settings without agency_id requirement
       const { data: settings } = await supabase
         .from('website_settings')
         .select('logo, name')
         .limit(1)
         .single();
-
       if (settings) {
         setAgencySettings(settings);
       }
@@ -1812,4863 +1764,520 @@ const PersonalizationModal: React.FC<{
     }
   };
 
-  const loadTemplateFromDatabase = async () => {
-    try {
-      setLoading(true);
-      
-      // Load all templates for this type
-      const { data: allTemplates, error: allTemplatesError } = await supabase
-        .from('document_templates')
-        .select('id, name, template, created_at, updated_at')
-        .eq('template_type', type)
-        .order('created_at', { ascending: false });
+  const generateContractHTML = (templateLang: 'fr' | 'ar'): string => {
+    const isFrench = templateLang === 'fr';
+    const textDir = isFrench ? 'ltr' : 'rtl';
+    
+    const labels = {
+      contractTitle: isFrench ? 'Contrat de Location' : 'عقد التأجير',
+      contractDate: isFrench ? 'Date du Contrat' : 'تاريخ العقد',
+      contractNumber: isFrench ? 'N° de Contrat' : 'رقم العقد',
+      client: isFrench ? 'Client' : 'العميل',
+      rentalPeriod: isFrench ? 'Période de Location' : 'فترة الإيجار',
+      departure: isFrench ? 'Départ' : 'المغادرة',
+      return: isFrench ? 'Retour' : 'العودة',
+      duration: isFrench ? 'Durée' : 'المدة',
+      days: isFrench ? 'jours' : 'أيام',
+      driverInfo: isFrench ? 'Informations du Conducteur' : 'معلومات السائق',
+      fullName: isFrench ? 'Nom Complet' : 'الاسم الكامل',
+      birthDate: isFrench ? 'Date de Naissance' : 'تاريخ الميلاد',
+      birthPlace: isFrench ? 'Lieu de Naissance' : 'مكان الميلاد',
+      licenseNumber: isFrench ? 'Numéro de Permis' : 'رقم الرخصة',
+      vehicleInfo: isFrench ? 'Informations du Véhicule' : 'معلومات المركبة',
+      model: isFrench ? 'Modèle' : 'الموديل',
+      registration: isFrench ? 'Immatriculation' : 'التسجيل',
+      color: isFrench ? 'Couleur' : 'اللون',
+      vin: isFrench ? 'VIN' : 'رقم المحرك',
+      fuel: isFrench ? 'Carburant' : 'الوقود',
+      mileage: isFrench ? 'Kilométrage' : 'الكيلومترات',
+      pricing: isFrench ? 'Tarification' : 'التسعير',
+      pricePerDay: isFrench ? 'Prix par Jour' : 'السعر في اليوم',
+      numberOfDays: isFrench ? 'Nombre de Jours' : 'عدد الأيام',
+      totalHT: isFrench ? 'Montant HT' : 'المبلغ غير ضريبي',
+      totalTTC: isFrench ? 'TOTAL TTC' : 'الإجمالي',
+      conditions: isFrench ? 'Conditions Acceptées' : 'الشروط المقبولة',
+      signatures: isFrench ? 'Signatures' : 'التوقيعات',
+      clientSignature: isFrench ? 'Signature du Client' : 'توقيع العميل',
+      agencySignature: isFrench ? "Signature de l'Agence" : 'توقيع الوكالة',
+      dateAndSignature: isFrench ? 'Date et signature' : 'التاريخ والتوقيع',
+    };
 
-      if (allTemplates && !allTemplatesError) {
-        setAllDatabaseTemplates(allTemplates);
-      }
+    const conditionsList = isFrench 
+      ? ['Permis de conduire valide', 'Assurance tous risques', 'Caution dépôt', 'Carburant plein', 'État du véhicule accepté', 'Pas de dégâts supplémentaires']
+      : ['رخصة قيادة سارية', 'تأمين شامل', 'ضمان الإيداع', 'خزان ممتلئ', 'حالة المركبة مقبولة', 'لا توجد أضرار إضافية'];
 
-      // Load the most recent template as default
-      const { data: templateData, error } = await supabase
-        .from('document_templates')
-        .select('id, name, template')
-        .eq('template_type', type)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (templateData && !error) {
-        setSelectedTemplateId(templateData.id);
-        setTemplateName(templateData.name || '');
-        
-        // Build new elements from template
-        const dbTemplate = templateData.template as any;
-        const newElements: any = {};
-        
-        // Build all fields from the database template
-        for (const fieldName in dbTemplate) {
-          const field = dbTemplate[fieldName];
-          const fieldValue = getFieldValue(fieldName, reservation);
-          
-          newElements[fieldName] = {
-            x: field.x || 0,
-            y: field.y || 0,
-            text: fieldValue,
-            fontSize: field.fontSize || 12,
-            fontFamily: field.fontFamily || 'Arial',
-            color: field.color || '#000000',
-            fontWeight: field.fontWeight || 'normal',
-            fontStyle: field.fontStyle || 'normal',
-            textDecoration: field.textDecoration || 'none',
-            textAlign: field.textAlign || 'left',
-            backgroundColor: field.backgroundColor || 'transparent'
-          };
+    const html = `
+    <!DOCTYPE html>
+    <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
+    <head>
+      <meta charset="UTF-8">
+      <title>Contrat de Location</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Arial, sans-serif;
+          line-height: 1.45;
+          color: #222;
+          background: white;
+          direction: ${textDir};
+          font-size: 20px;
         }
-        
-        setElements(newElements);
-      } else {
-        const defaultElements = createDefaultContractElements(reservation, lang);
-        setElements(defaultElements);
-      }
-    } catch (error) {
-      console.error('❌ Error loading template:', error);
-      const defaultElements = createDefaultContractElements(reservation, lang);
-      setElements(defaultElements);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadSpecificTemplate = async (templateId: string) => {
-    try {
-      setLoading(true);
-      const { data: templateData, error } = await supabase
-        .from('document_templates')
-        .select('name, template')
-        .eq('id', templateId)
-        .single();
-
-      if (templateData && !error) {
-        setTemplateName(templateData.name || '');
-        const dbTemplate = templateData.template as any;
-        const elementsFromDB: any = { logo: { x: 50, y: 20, width: 80, height: 80 } };
-        
-        Object.keys(dbTemplate).forEach((fieldName) => {
-          const field = dbTemplate[fieldName];
-          elementsFromDB[fieldName] = {
-            x: field.x || 0,
-            y: field.y || 0,
-            text: getFieldValue(fieldName, reservation),
-            fontSize: field.fontSize || 12,
-            fontFamily: field.fontFamily || 'Arial',
-            color: field.color || '#000000',
-            fontWeight: field.fontWeight || 'normal',
-            fontStyle: field.fontStyle || 'normal',
-            textDecoration: field.textDecoration || 'none',
-            textAlign: field.textAlign || 'left',
-            backgroundColor: field.backgroundColor || 'transparent'
-          };
-        });
-        
-        setElements(elementsFromDB);
-        setSelectedTemplateId(templateId);
-      }
-    } catch (error) {
-      console.error('Error loading specific template:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createDefaultContractElements = (res: ReservationDetails, language: Language): any => {
-    const fields = [
-      'logo', 'agency_name', 'title',
-      'contract_details_title', 'contract_date_label', 'contract_date', 'contract_number_label', 'contract_number',
-      'rental_period_title', 'start_date_label', 'start_date', 'end_date_label', 'end_date', 'duration_label', 'duration',
-      'driver_info_title', 'driver_name_label', 'driver_name', 'driver_birth_date_label', 'driver_birth_date',
-      'driver_birth_place_label', 'driver_birth_place', 'document_type_label', 'document_type',
-      'document_number_label', 'document_number', 'issue_date_label', 'issue_date',
-      'expiration_date_label', 'expiration_date', 'issue_place_label', 'issue_place',
-      'vehicle_info_title', 'vehicle_model_label', 'vehicle_model', 'vehicle_color_label', 'vehicle_color',
-      'vehicle_license_plate_label', 'vehicle_license_plate', 'vehicle_vin_label', 'vehicle_vin',
-      'vehicle_fuel_label', 'vehicle_fuel', 'vehicle_mileage_label', 'vehicle_mileage',
-      'financials_title', 'unit_price_label', 'unit_price', 'total_ht_label', 'total_ht',
-      'total_amount_label', 'total_amount', 'equipment_title', 'equipment_list',
-      'signature_title', 'signature_line'
-    ];
-    
-    const elements: any = {};
-    let yPosition = 50;
-    
-    fields.forEach(fieldName => {
-      const value = getFieldValue(fieldName, res);
-      elements[fieldName] = {
-        x: 50,
-        y: yPosition,
-        text: value,
-        fontSize: fieldName.includes('_title') ? 14 : fieldName.includes('_label') ? 11 : 12,
-        fontFamily: 'Arial',
-        color: fieldName.includes('_title') ? '#1a365d' : '#000000',
-        fontWeight: fieldName.includes('_title') || fieldName === 'title' ? 'bold' : 'normal',
-        fontStyle: 'normal',
-        textDecoration: 'none',
-        textAlign: fieldName === 'title' ? 'center' : 'left',
-        backgroundColor: 'transparent'
-      };
-      yPosition += fieldName.includes('_title') ? 40 : 25;
-    });
-    
-    return elements;
-  };
-
-  const getFieldValue = (fieldName: string, res: ReservationDetails): string => {
-    // Defensive check - if reservation is undefined, return empty string
-    if (!res) return '';
-    
-    const inspectionData = res.departureInspection || res.returnInspection;
-    switch (fieldName) {
-      case 'logo':
-        return 'LOGO'; // This is handled specially in rendering
-      case 'agency_name':
-        return 'Agency Name'; // This will be replaced with actual value in rendering
-      case 'title':
-        return 'Contrat de Location / عقد الإيجار';
-      case 'contract_date':
-        return res.step1?.departureDate || '';
-      case 'contract_number':
-        return `#${Math.random().toString(36).substring(7).toUpperCase()}`;
-      case 'start_date':
-        return res.step1?.departureDate || '';
-      case 'end_date':
-        return res.step1?.returnDate || '';
-      case 'duration':
-        try {
-          const start = new Date(res.step1?.departureDate || '');
-          const end = new Date(res.step1?.returnDate || '');
-          const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-          return `${days.toString().padStart(2, '0')} days`;
-        } catch {
-          return `${res.totalDays || 0} days`;
+        .page {
+          width: 210mm;
+          height: 297mm;
+          padding: 5mm;
+          margin: 0 auto;
+          background: white;
+          display: flex;
+          flex-direction: column;
         }
-      case 'driver_name':
-        return `${res.client?.firstName || ''} ${res.client?.lastName || ''}`;
-      case 'driver_birth_date':
-        return res.client?.birthDate || '';
-      case 'driver_birth_place':
-        return res.client?.birthPlace || '';
-      case 'document_type':
-        return res.client?.documentType || 'Biometric driver\'s license';
-      case 'document_number':
-        return res.client?.documentNumber || '';
-      case 'issue_date':
-        return res.client?.issueDate || '';
-      case 'expiration_date':
-        return res.client?.expirationDate || '';
-      case 'issue_place':
-        return res.client?.issuePlace || '';
-      case 'vehicle_model':
-        return `${res.car?.brand || ''} ${res.car?.model || ''} ${res.car?.color || ''}`;
-      case 'vehicle_color':
-        return res.car?.color || '';
-      case 'vehicle_license_plate':
-        return res.car?.licensePlate || '';
-      case 'vehicle_vin':
-        return res.car?.vin || res.car?.serialNumber || '';
-      case 'vehicle_fuel':
-        return res.car?.fuelType || '';
-      case 'vehicle_mileage':
-        return `${inspectionData?.startMileage || 0} km`;
-      case 'unit_price':
-        return `${(res.car?.pricePerDay || res.car?.priceDay || 0)?.toLocaleString?.() || 0} DA`;
-      case 'total_ht':
-        return `${res.totalPrice?.toLocaleString?.() || 0} DA`;
-      case 'total_amount':
-        return `${res.totalPrice?.toLocaleString?.() || 0} DA`;
-      case 'equipment_list':
-        return inspectionData?.equipmentItems?.map((item: any) => `✓ ${item}`).join(', ') || 'Standard Equipment';
-      case 'signature_line':
-        return '_________________________________';
-      case 'contract_details_title':
-        return 'Contract Details';
-      case 'rental_period_title':
-        return 'Rental Period';
-      case 'driver_info_title':
-        return 'Driver Information (Driver 01)';
-      case 'vehicle_info_title':
-        return 'Vehicle Information';
-      case 'financials_title':
-        return 'Financials';
-      case 'equipment_title':
-        return 'Equipment Checklist from inspection';
-      case 'signature_title':
-        return 'Signatures';
-      case 'contract_date_label':
-        return 'Contract Date:';
-      case 'contract_number_label':
-        return 'Contract Number:';
-      case 'start_date_label':
-        return 'Start Date:';
-      case 'end_date_label':
-        return 'End Date:';
-      case 'duration_label':
-        return 'Duration:';
-      case 'driver_name_label':
-        return 'Name:';
-      case 'driver_birth_date_label':
-        return 'Date of Birth:';
-      case 'driver_birth_place_label':
-        return 'Place of Birth:';
-      case 'document_type_label':
-        return 'Document Type:';
-      case 'document_number_label':
-        return 'Document Number:';
-      case 'issue_date_label':
-        return 'Issue Date:';
-      case 'expiration_date_label':
-        return 'Expiration Date:';
-      case 'issue_place_label':
-        return 'Place of Issue:';
-      case 'vehicle_model_label':
-        return 'Model:';
-      case 'vehicle_color_label':
-        return 'Color:';
-      case 'vehicle_license_plate_label':
-        return 'License Plate:';
-      case 'vehicle_vin_label':
-        return 'Serial Number:';
-      case 'vehicle_fuel_label':
-        return 'Fuel Type:';
-      case 'vehicle_mileage_label':
-        return 'Kilometer Reading (at start):';
-      case 'unit_price_label':
-        return 'Unit Price:';
-      case 'total_ht_label':
-        return 'Total Price (HT):';
-      case 'total_amount_label':
-        return 'Total Contract Amount:';
-      default:
-        return '';
-    }
-  };
-
-  const handleMouseDown = (elementId: string, e: React.MouseEvent) => {
-    setSelectedElement(elementId);
-    setIsDragging(true);
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging && selectedElement) {
-      const containerRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const newX = e.clientX - containerRect.left - dragOffset.x;
-      const newY = e.clientY - containerRect.top - dragOffset.y;
-      
-      setElements(prev => ({
-        ...prev,
-        [selectedElement]: {
-          ...prev[selectedElement],
-          x: Math.max(0, Math.min(newX, 700)), // Constrain to container
-          y: Math.max(0, Math.min(newY, 900))
+        .header {
+          border-bottom: 3px solid #1a3a8a;
+          padding-bottom: 7px;
+          margin-bottom: 10px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
         }
-      }));
-    }
-  };
+        .logo {
+          width: 55px;
+          height: 55px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
+        .header-text {
+          flex: 1;
+        }
+        .agency-name {
+          font-size: 36px;
+          font-weight: bold;
+          color: #1a3a8a;
+          text-align: center;
+          margin: 0;
+        }
+        .contract-title {
+          font-size: 23px;
+          color: #555;
+          text-align: center;
+          margin-top: 2px;
+        }
+        .header-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+        .info-box {
+          padding: 8px 9px;
+          border-radius: 3px;
+          font-size: 19px;
+          line-height: 1.4;
+        }
+        .info-box.blue {
+          background-color: #dbeafe;
+          border-left: 4px solid #2563eb;
+        }
+        .info-box.green {
+          background-color: #dcfce7;
+          border-left: 4px solid #16a34a;
+        }
+        .info-box.amber {
+          background-color: #fef3c7;
+          border-left: 4px solid #d97706;
+        }
+        .info-label {
+          font-weight: 600;
+          color: #222;
+          margin-bottom: 2px;
+          font-size: 18px;
+        }
+        .info-value {
+          color: #333;
+          font-size: 19px;
+        }
+        .section {
+          margin-bottom: 8px;
+          page-break-inside: avoid;
+        }
+        .section-title {
+          font-size: 20px;
+          font-weight: 700;
+          background-color: #f0f1f3;
+          padding: 6px 7px;
+          border-radius: 2px;
+          margin-bottom: 6px;
+          border-left: 4px solid #2563eb;
+          color: #1a3a8a;
+        }
+        .section-content {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px 12px;
+          font-size: 19px;
+        }
+        .section-content.full {
+          grid-template-columns: 1fr 1fr 1fr;
+        }
+        .field {
+          padding: 5px 0;
+          border-bottom: 0.5px solid #ddd;
+        }
+        .field-label {
+          font-weight: 600;
+          color: #1a3a8a;
+          font-size: 18px;
+        }
+        .field-value {
+          color: #444;
+          margin-top: 1px;
+          font-size: 19px;
+        }
+        .pricing-table {
+          width: 100%;
+          margin-bottom: 10px;
+          font-size: 19px;
+          border-collapse: collapse;
+        }
+        .pricing-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 5px 0;
+          border-bottom: 0.5px solid #ddd;
+        }
+        .pricing-row.total {
+          border-top: 1px solid #222;
+          font-weight: 600;
+          margin-top: 3px;
+          padding-top: 5px;
+        }
+        .pricing-row.grand-total {
+          font-size: 20px;
+          font-weight: 700;
+          color: #1a3a8a;
+          border-top: 2px solid #1a3a8a;
+          padding-top: 5px;
+        }
+        .conditions-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px 12px;
+          font-size: 19px;
+          margin-bottom: 10px;
+        }
+        .condition-item {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          line-height: 1.3;
+        }
+        .checkbox {
+          width: 16px;
+          height: 16px;
+          border: 1px solid #999;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          flex-shrink: 0;
+        }
+        .signatures {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 32px;
+          margin-top: auto;
+          font-size: 19px;
+          padding-top: 12px;
+        }
+        .signature-block {
+          text-align: center;
+        }
+        .signature-line {
+          border-top: 1px solid #333;
+          margin-bottom: 5px;
+          height: 45px;
+        }
+        .signature-label {
+          font-weight: 600;
+          font-size: 19px;
+        }
+        .date-sig {
+          font-size: 18px;
+          color: #666;
+          margin-top: 2px;
+        }
+        @media print {
+          body { margin: 0; padding: 0; }
+          .page { margin: 0; padding: 5mm; height: auto; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <!-- Header -->
+        <div class="header">
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
+          <div class="header-text">
+            <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
+            <p class="contract-title">${labels.contractTitle}</p>
+          </div>
+        </div>
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+        <!-- Header Info Boxes -->
+        <div class="header-info">
+          <div class="info-box blue">
+            <div class="info-label">📅 ${labels.contractDate}</div>
+            <div class="info-value">${new Date().toLocaleDateString(isFrench ? 'fr-FR' : 'ar-SA')}</div>
+          </div>
+          <div class="info-box green">
+            <div class="info-label">🔢 ${labels.contractNumber}</div>
+            <div class="info-value">#${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'}</div>
+          </div>
+          <div class="info-box amber">
+            <div class="info-label">👤 ${labels.client}</div>
+            <div class="info-value">${reservation?.client?.lastName || 'N/A'}</div>
+          </div>
+        </div>
 
-  const renderField = (fieldName: string) => {
-    const element = elements[fieldName];
-    if (!element) return null;
-    
-    return (
-      <div
-        key={fieldName}
-        className={`absolute cursor-move ${selectedElement === fieldName ? 'ring-2 ring-blue-500' : ''}`}
-        style={{
-          left: element.x || 0,
-          top: element.y || 0,
-          fontSize: element.fontSize || 12,
-          fontFamily: element.fontFamily || 'Arial',
-          color: element.color || '#000000',
-          fontWeight: element.fontWeight || 'normal',
-          fontStyle: element.fontStyle || 'normal',
-          textDecoration: element.textDecoration || 'none',
-          textAlign: element.textAlign || 'left',
-          backgroundColor: element.backgroundColor || 'transparent',
-          padding: element.backgroundColor !== 'transparent' ? '4px 8px' : '0',
-          maxWidth: '300px',
-          overflow: 'visible',
-          whiteSpace: 'normal',
-          wordWrap: 'break-word'
-        }}
-        onMouseDown={(e) => handleMouseDown(fieldName, e)}
-      >
-        {element.text || ''}
+        <!-- Rental Period -->
+        <div class="section">
+          <div class="section-title">📅 ${labels.rentalPeriod}</div>
+          <div class="section-content full">
+            <div class="field">
+              <div class="field-label">${labels.departure}</div>
+              <div class="field-value">${new Date(reservation?.step1?.departureDate).toLocaleDateString(isFrench ? 'fr-FR' : 'ar-SA')}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">${labels.return}</div>
+              <div class="field-value">${new Date(reservation?.step1?.returnDate).toLocaleDateString(isFrench ? 'fr-FR' : 'ar-SA')}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">${labels.duration}</div>
+              <div class="field-value">${reservation?.totalDays || 0} ${labels.days}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Driver & Vehicle Info (2 columns) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <!-- Driver Info -->
+          <div class="section">
+            <div class="section-title">👤 ${labels.driverInfo}</div>
+            <div class="section-content">
+              <div class="field">
+                <div class="field-label">${labels.fullName}</div>
+                <div class="field-value">${reservation?.client?.firstName} ${reservation?.client?.lastName}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">${labels.licenseNumber}</div>
+                <div class="field-value">${reservation?.client?.licenseNumber || 'N/A'}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">${labels.birthDate}</div>
+                <div class="field-value">${new Date(reservation?.client?.dateOfBirth).toLocaleDateString(isFrench ? 'fr-FR' : 'ar-SA')}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">${labels.birthPlace}</div>
+                <div class="field-value">${reservation?.client?.placeOfBirth || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vehicle Info -->
+          <div class="section">
+            <div class="section-title">🚗 ${labels.vehicleInfo}</div>
+            <div class="section-content">
+              <div class="field">
+                <div class="field-label">${labels.model}</div>
+                <div class="field-value">${reservation?.car?.brand} ${reservation?.car?.model}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">${labels.registration}</div>
+                <div class="field-value">${reservation?.car?.registration || 'N/A'}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">${labels.color}</div>
+                <div class="field-value">${reservation?.car?.color || 'N/A'}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">${labels.fuel}</div>
+                <div class="field-value">${reservation?.car?.energy || 'N/A'}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">${labels.vin}</div>
+                <div class="field-value">${reservation?.car?.vin || 'N/A'}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">${labels.mileage}</div>
+                <div class="field-value">${reservation?.departureInspection?.mileage || 'N/A'} km</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing & Conditions (2 columns) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <!-- Pricing -->
+          <div class="section">
+            <div class="section-title">💰 ${labels.pricing}</div>
+            <div class="pricing-table">
+              <div class="pricing-row">
+                <span>${labels.pricePerDay}:</span>
+                <span>${reservation?.car?.priceDay || 0} DH</span>
+              </div>
+              <div class="pricing-row">
+                <span>${labels.numberOfDays}:</span>
+                <span>${reservation?.totalDays || 0}</span>
+              </div>
+              <div class="pricing-row total">
+                <span>${labels.totalHT}:</span>
+                <span>${(reservation?.totalPrice || 0).toFixed(2)} DH</span>
+              </div>
+              <div class="pricing-row grand-total">
+                <span>${labels.totalTTC}:</span>
+                <span>${(reservation?.totalPrice || 0).toFixed(2)} DH</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Conditions -->
+          <div class="section">
+            <div class="section-title">✓ ${labels.conditions}</div>
+            <div class="conditions-grid">
+              ${conditionsList.map(condition => `
+                <div class="condition-item">
+                  <div class="checkbox">✓</div>
+                  <span>${condition}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <!-- Signatures -->
+        <div class="signatures">
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">${labels.clientSignature}</div>
+            <div class="date-sig">${labels.dateAndSignature}</div>
+          </div>
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">${labels.agencySignature}</div>
+            <div class="date-sig">${labels.dateAndSignature}</div>
+          </div>
+        </div>
       </div>
-    );
+    </body>
+    </html>
+    `;
+    return html;
   };
 
-  const updateElement = (elementId: string, updates: any) => {
-    setElements(prev => ({
-      ...prev,
-      [elementId]: {
-        ...prev[elementId],
-        ...updates
+  const handlePrint = () => {
+    setIsPrinting(true);
+    const content = generateContractHTML(selectedTemplate);
+    setTimeout(() => {
+      const printWindow = window.open('', '', 'height=600,width=800');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        setTimeout(() => setIsPrinting(false), 100);
       }
-    }));
+    }, 300);
   };
-
-  const addNewText = () => {
-    const newId = `newText_${Date.now()}`;
-    const newElement = {
-      id: newId,
-      x: 100,
-      y: 100,
-      text: lang === 'fr' ? 'Nouveau texte' : 'نص جديد',
-      fontSize: 16,
-      fontFamily: 'Arial',
-      color: '#000000',
-      fontWeight: 'normal',
-      fontStyle: 'normal',
-      textDecoration: 'none',
-      textAlign: 'left',
-      backgroundColor: 'transparent'
-    };
-    setNewTextElements(prev => [...prev, newElement]);
-    setSelectedElement(newId);
-  };
-
-  const saveTemplate = async () => {
-    if (!templateName.trim()) {
-      alert(lang === 'fr' ? 'Veuillez entrer un nom de modèle' : 'يرجى إدخال اسم القالب');
-      return;
-    }
-
-    setSavingTemplate(true);
-    try {
-      // Convert elements to database template format
-      const dbTemplate: any = {};
-      Object.keys(elements).forEach((fieldName) => {
-        const element = elements[fieldName];
-        if (fieldName !== 'logo') {
-          dbTemplate[fieldName] = {
-            x: element.x || 0,
-            y: element.y || 0,
-            fontSize: element.fontSize || 12,
-            fontFamily: element.fontFamily || 'Arial',
-            color: element.color || '#000000',
-            fontWeight: element.fontWeight || 'normal',
-            fontStyle: element.fontStyle || 'normal',
-            textDecoration: element.textDecoration || 'none',
-            textAlign: element.textAlign || 'left',
-            backgroundColor: element.backgroundColor || 'transparent'
-          };
-        }
-      });
-
-      // If updating existing template
-      if (selectedTemplateId) {
-        const { error } = await supabase
-          .from('document_templates')
-          .update({
-            name: templateName,
-            template: dbTemplate,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', selectedTemplateId);
-
-        if (error) {
-          console.error('Error updating template:', error);
-          alert(lang === 'fr' ? 'Erreur lors de la mise à jour du modèle' : 'خطأ في تحديث القالب');
-        } else {
-          alert(lang === 'fr' ? 'Modèle mis à jour avec succès!' : 'تم تحديث القالب بنجاح!');
-          await loadTemplateFromDatabase();
-          setShowSaveDialog(false);
-          setTemplateName('');
-        }
-      } else {
-        // Create new template
-        const { data, error } = await supabase
-          .from('document_templates')
-          .insert([{
-            template_type: selectedTemplateType,
-            name: templateName,
-            template: dbTemplate,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }])
-          .select();
-
-        if (error) {
-          console.error('Error saving template:', error);
-          alert(lang === 'fr' ? 'Erreur lors de la sauvegarde du modèle' : 'خطأ في حفظ القالب');
-        } else {
-          alert(lang === 'fr' ? 'Modèle sauvegardé avec succès!' : 'تم حفظ القالب بنجاح!');
-          if (data && data[0]) {
-            setSelectedTemplateId(data[0].id);
-            setTemplateName(data[0].name || '');
-          }
-          await loadTemplateFromDatabase();
-          setShowSaveDialog(false);
-          setTemplateName('');
-        }
-      }
-    } catch (error) {
-      console.error('Error in saveTemplate:', error);
-      alert(lang === 'fr' ? 'Une erreur est survenue' : 'حدث خطأ ما');
-    } finally {
-      setSavingTemplate(false);
-    }
-  };
-
-  const loadTemplate = (template: any) => {
-    // For engagement and payment documents, preserve positioning but update text with fresh data
-    if (type === 'engagement' || type === 'payment' || type === 'receipt' || type === 'versement') {
-      const freshElements = getInitialElements(type, reservation, lang);
-      const mergedElements = { ...freshElements };
-      
-      // Keep positions from saved template but use fresh text
-      Object.keys(template.elements).forEach(key => {
-        if (mergedElements[key] && template.elements[key].x !== undefined) {
-          mergedElements[key] = {
-            ...mergedElements[key],
-            x: template.elements[key].x,
-            y: template.elements[key].y
-          };
-        }
-      });
-      
-      setElements(mergedElements);
-    } else {
-      setElements(template.elements);
-    }
-    setNewTextElements(template.newTextElements || []);
-  };
-
-  const deleteTemplate = (templateId: string) => {
-    const updatedTemplates = savedTemplates.filter(t => t.id !== templateId);
-    setSavedTemplates(updatedTemplates);
-    localStorage.setItem('savedTemplates', JSON.stringify(updatedTemplates));
-  };
-
-  // Load saved templates on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('savedTemplates');
-    if (saved) {
-      setSavedTemplates(JSON.parse(saved));
-    }
-  }, []);
-
-  // Auto-load saved template when modal opens
-  useEffect(() => {
-    if (savedTemplates.length > 0) {
-      const savedTemplate = savedTemplates.find(template => template.type === type);
-      if (savedTemplate) {
-        loadTemplate(savedTemplate);
-      }
-    }
-  }, [savedTemplates, type]);
-
-  // Load agency settings on mount
-  useEffect(() => {
-    const loadAgencySettings = async () => {
-      try {
-        const { data: agencyData, error: agencyError } = await supabase
-          .from('website_settings')
-          .select('name, logo')
-          .limit(1)
-          .single();
-
-        if (agencyError) {
-          console.error('PersonalizationModal: Error fetching website_settings:', agencyError);
-        } else {
-          setAgencySettings(agencyData);
-        }
-      } catch (error) {
-        console.error('PersonalizationModal: Error loading website settings:', error);
-      }
-    };
-
-    loadAgencySettings();
-  }, []);
-
-  // Update engagement and payment template elements when reservation changes
-  useEffect(() => {
-    if (type === 'engagement' || type === 'payment' || type === 'receipt' || type === 'versement') {
-      // Regenerate the template with the latest data
-      const updatedElements = getInitialElements(type, reservation, lang);
-      // Keep positions from current elements but update text content
-      const mergedElements = { ...updatedElements };
-      Object.keys(updatedElements).forEach(key => {
-        if (elements[key] && elements[key].x !== undefined) {
-          // Preserve position and styling, update text if it changed
-          mergedElements[key] = {
-            ...elements[key],
-            text: updatedElements[key].text // Update text to latest
-          };
-        }
-      });
-      setElements(mergedElements);
-    }
-  }, [reservation, type, lang]);
-
-  const handleDrag = (elementId: string, deltaX: number, deltaY: number) => {
-    setElements(prev => ({
-      ...prev,
-      [elementId]: {
-        ...prev[elementId],
-        x: prev[elementId].x + deltaX,
-        y: prev[elementId].y + deltaY
-      }
-    }));
-  };
-
-  const getPersonalizedContent = () => generatePersonalizedContent(elements, newTextElements, reservation, type, lang, agencySettings);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full h-[90vh] flex flex-col"
-      >
-        <div className="p-6 border-b border-saas-border">
-          <div className="flex justify-between items-center">
-            <h3 className="text-2xl font-black text-saas-text-main">
-              🎨 {lang === 'fr' ? 'Personnalisation' : 'التخصيص'}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-saas-text-muted hover:text-saas-text-main text-2xl"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-1 overflow-hidden">
-          {/* Preview Area */}
-          <div className="flex-1 bg-gray-50 p-6 overflow-auto">
-            <div 
-              className="bg-white shadow-lg rounded-lg p-8 min-h-[600px] relative cursor-move"
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              style={{ width: '210mm', minHeight: '297mm' }}
-            >
-              {/* Logo - show actual logo for engagement, facture, invoice, devis and quote */}
-              {(type === 'engagement' || type === 'facture' || type === 'invoice' || type === 'devis' || type === 'quote') && agencySettings?.logo && elements.logo && (
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'logo' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{ left: elements.logo.x || 50, top: elements.logo.y || 50 }}
-                  onMouseDown={(e) => handleMouseDown('logo', e)}
-                >
-                  <img
-                    src={agencySettings.logo}
-                    alt="Agency Logo"
-                    style={{ height: 70 }}
-                    className="object-contain border border-gray-300 rounded"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Title */}
-              <div
-                className={`absolute cursor-move ${selectedElement === 'title' ? 'ring-2 ring-blue-500' : ''}`}
-                style={{
-                  left: elements.title?.x || 200,
-                  top: elements.title?.y || 50,
-                  fontSize: elements.title?.fontSize || 24,
-                  fontFamily: elements.title?.fontFamily || 'Arial',
-                  color: elements.title?.color || '#000000',
-                  fontWeight: elements.title?.fontWeight || 'bold',
-                  fontStyle: elements.title?.fontStyle || 'normal',
-                  textDecoration: elements.title?.textDecoration || 'none',
-                  textAlign: elements.title?.textAlign || 'left',
-                  backgroundColor: elements.title?.backgroundColor || 'transparent',
-                  padding: elements.title?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                }}
-                onMouseDown={(e) => handleMouseDown('title', e)}
-              >
-                {elements.title?.text || ''}
-              </div>
-
-              {/* Agence Name - show actual agency name for engagement, facture, and invoice */}
-              {(type === 'engagement' || type === 'facture' || type === 'invoice') && agencySettings?.name && elements.agenceName && (
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'agenceName' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.agenceName.x || 200,
-                    top: elements.agenceName.y || 100,
-                    fontSize: elements.agenceName.fontSize || 18,
-                    fontFamily: elements.agenceName.fontFamily || 'Arial',
-                    color: elements.agenceName.color || '#333333',
-                    fontWeight: elements.agenceName.fontWeight || 'normal',
-                    fontStyle: elements.agenceName.fontStyle || 'normal',
-                    textDecoration: elements.agenceName.textDecoration || 'none',
-                    textAlign: elements.agenceName.textAlign || 'left',
-                    backgroundColor: elements.agenceName.backgroundColor || 'transparent',
-                    padding: elements.agenceName.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                  }}
-                  onMouseDown={(e) => handleMouseDown('agenceName', e)}
-                >
-                  {agencySettings.name}
-                </div>
-              )}
-
-              {/* Contract-specific elements */}
-              {type === 'contract' && (
-                <>
-                  {/* Logo */}
-                  {agencySettings?.logo && elements.logo && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'logo' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{ left: elements.logo.x || 50, top: elements.logo.y || 20 }}
-                      onMouseDown={(e) => handleMouseDown('logo', e)}
-                    >
-                      <img
-                        src={agencySettings.logo}
-                        alt="Agency Logo"
-                        style={{ height: elements.logo.width || 80 }}
-                        className="object-contain border border-gray-300 rounded"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          console.error('Logo failed to load:', agencySettings.logo);
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {/* Agency Name */}
-                  {agencySettings?.name && elements.agency_name && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'agency_name' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.agency_name.x || 150,
-                        top: elements.agency_name.y || 30,
-                        fontSize: elements.agency_name.fontSize || 18,
-                        fontFamily: elements.agency_name.fontFamily || 'Arial',
-                        color: elements.agency_name.color || '#1a365d',
-                        fontWeight: elements.agency_name.fontWeight || 'bold',
-                        fontStyle: elements.agency_name.fontStyle || 'normal',
-                        textDecoration: elements.agency_name.textDecoration || 'none',
-                        textAlign: elements.agency_name.textAlign || 'left',
-                        backgroundColor: elements.agency_name.backgroundColor || 'transparent',
-                        padding: elements.agency_name.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('agency_name', e)}
-                    >
-                      {agencySettings.name}
-                    </div>
-                  )}
-
-                  {/* Title */}
-                  {renderField('title')}
-
-                  {/* Contract Details Section */}
-                  {renderField('contract_details_title')}
-                  {renderField('contract_date_label')}
-                  {renderField('contract_date')}
-                  {renderField('contract_number_label')}
-                  {renderField('contract_number')}
-
-                  {/* Rental Period Section */}
-                  {renderField('rental_period_title')}
-                  {renderField('start_date_label')}
-                  {renderField('start_date')}
-                  {renderField('end_date_label')}
-                  {renderField('end_date')}
-                  {renderField('duration_label')}
-                  {renderField('duration')}
-
-                  {/* Driver Information Section */}
-                  {renderField('driver_info_title')}
-                  {renderField('driver_name_label')}
-                  {renderField('driver_name')}
-                  {renderField('driver_birth_date_label')}
-                  {renderField('driver_birth_date')}
-                  {renderField('driver_birth_place_label')}
-                  {renderField('driver_birth_place')}
-                  {renderField('document_type_label')}
-                  {renderField('document_type')}
-                  {renderField('document_number_label')}
-                  {renderField('document_number')}
-                  {renderField('issue_date_label')}
-                  {renderField('issue_date')}
-                  {renderField('expiration_date_label')}
-                  {renderField('expiration_date')}
-                  {renderField('issue_place_label')}
-                  {renderField('issue_place')}
-
-                  {/* Vehicle Information Section */}
-                  {renderField('vehicle_info_title')}
-                  {renderField('vehicle_model_label')}
-                  {renderField('vehicle_model')}
-                  {renderField('vehicle_color_label')}
-                  {renderField('vehicle_color')}
-                  {renderField('vehicle_license_plate_label')}
-                  {renderField('vehicle_license_plate')}
-                  {renderField('vehicle_vin_label')}
-                  {renderField('vehicle_vin')}
-                  {renderField('vehicle_fuel_label')}
-                  {renderField('vehicle_fuel')}
-                  {renderField('vehicle_mileage_label')}
-                  {renderField('vehicle_mileage')}
-
-                  {/* Financials Section */}
-                  {renderField('financials_title')}
-                  {renderField('unit_price_label')}
-                  {renderField('unit_price')}
-                  {renderField('total_ht_label')}
-                  {renderField('total_ht')}
-                  {renderField('total_amount_label')}
-                  {renderField('total_amount')}
-
-                  {/* Equipment Section */}
-                  {renderField('equipment_title')}
-                  {renderField('equipment_list')}
-
-                  {/* Signature Section */}
-                  {renderField('signature_title')}
-                  {renderField('signature_line')}
-                </>
-              )}
-
-              {/* Engagement-specific elements */}
-              {!(type === 'payment' || type === 'receipt') && type !== 'contract' && (
-                <>
-                  {/* Client Info */}
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'introText' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.introText?.x || 50,
-                      top: elements.introText?.y || 150,
-                      fontSize: elements.introText?.fontSize || 16,
-                      fontFamily: elements.introText?.fontFamily || 'Arial',
-                      color: elements.introText?.color || '#000000',
-                      fontWeight: elements.introText?.fontWeight || 'normal',
-                      fontStyle: elements.introText?.fontStyle || 'normal',
-                      textDecoration: elements.introText?.textDecoration || 'none',
-                      textAlign: elements.introText?.textAlign || 'left',
-                      backgroundColor: elements.introText?.backgroundColor || 'transparent',
-                      padding: elements.introText?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('introText', e)}
-                  >
-                    {elements.introText?.text || ''}
-                  </div>
-
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'clientName' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.clientName?.x || 250,
-                      top: elements.clientName?.y || 150,
-                      fontSize: elements.clientName?.fontSize || 16,
-                      fontFamily: elements.clientName?.fontFamily || 'Arial',
-                      color: elements.clientName?.color || '#000000',
-                      fontWeight: elements.clientName?.fontWeight || 'bold',
-                      fontStyle: elements.clientName?.fontStyle || 'normal',
-                      textDecoration: elements.clientName?.textDecoration || 'none',
-                      textAlign: elements.clientName?.textAlign || 'left',
-                      backgroundColor: elements.clientName?.backgroundColor || 'transparent',
-                      padding: elements.clientName?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('clientName', e)}
-                  >
-                    {elements.clientName?.text || ''}
-                  </div>
-
-                  {/* Passport Info */}
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'passportText' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.passportText?.x || 50,
-                      top: elements.passportText?.y || 200,
-                      fontSize: elements.passportText?.fontSize || 16,
-                      fontFamily: elements.passportText?.fontFamily || 'Arial',
-                      color: elements.passportText?.color || '#000000',
-                      fontWeight: elements.passportText?.fontWeight || 'normal',
-                      fontStyle: elements.passportText?.fontStyle || 'normal',
-                      textDecoration: elements.passportText?.textDecoration || 'none',
-                      textAlign: elements.passportText?.textAlign || 'left',
-                      backgroundColor: elements.passportText?.backgroundColor || 'transparent',
-                      padding: elements.passportText?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('passportText', e)}
-                  >
-                    {elements.passportText?.text || ''}
-                  </div>
-
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'passportNumber' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.passportNumber?.x || 50,
-                      top: elements.passportNumber?.y || 250,
-                      fontSize: elements.passportNumber?.fontSize || 14,
-                      fontFamily: elements.passportNumber?.fontFamily || 'Arial',
-                      color: elements.passportNumber?.color || '#666666',
-                      fontWeight: elements.passportNumber?.fontWeight || 'normal',
-                      fontStyle: elements.passportNumber?.fontStyle || 'normal',
-                      textDecoration: elements.passportNumber?.textDecoration || 'none',
-                      textAlign: elements.passportNumber?.textAlign || 'left',
-                      backgroundColor: elements.passportNumber?.backgroundColor || 'transparent',
-                      padding: elements.passportNumber?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('passportNumber', e)}
-                  >
-                    {elements.passportNumber?.text || ''}
-                  </div>
-
-                  {/* Contract Info */}
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'agenceText' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.agenceText?.x || 50,
-                      top: elements.agenceText?.y || 300,
-                      fontSize: elements.agenceText?.fontSize || 16,
-                      fontFamily: elements.agenceText?.fontFamily || 'Arial',
-                      color: elements.agenceText?.color || '#000000',
-                      fontWeight: elements.agenceText?.fontWeight || 'normal',
-                      fontStyle: elements.agenceText?.fontStyle || 'normal',
-                      textDecoration: elements.agenceText?.textDecoration || 'none',
-                      textAlign: elements.agenceText?.textAlign || 'left',
-                      backgroundColor: elements.agenceText?.backgroundColor || 'transparent',
-                      padding: elements.agenceText?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('agenceText', e)}
-                  >
-                    {elements.agenceText?.text || ''}
-                  </div>
-
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'currentDate' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.currentDate?.x || 50,
-                      top: elements.currentDate?.y || 350,
-                      fontSize: elements.currentDate?.fontSize || 16,
-                      fontFamily: elements.currentDate?.fontFamily || 'Arial',
-                      color: elements.currentDate?.color || '#000000',
-                      fontWeight: elements.currentDate?.fontWeight || 'normal',
-                      fontStyle: elements.currentDate?.fontStyle || 'normal',
-                      textDecoration: elements.currentDate?.textDecoration || 'none',
-                      textAlign: elements.currentDate?.textAlign || 'left',
-                      backgroundColor: elements.currentDate?.backgroundColor || 'transparent',
-                      padding: elements.currentDate?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('currentDate', e)}
-                  >
-                    {elements.currentDate?.text || ''}
-                  </div>
-
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'contractText' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.contractText?.x || 50,
-                      top: elements.contractText?.y || 400,
-                      fontSize: elements.contractText?.fontSize || 16,
-                      fontFamily: elements.contractText?.fontFamily || 'Arial',
-                      color: elements.contractText?.color || '#000000',
-                      fontWeight: elements.contractText?.fontWeight || 'normal',
-                      fontStyle: elements.contractText?.fontStyle || 'normal',
-                      textDecoration: elements.contractText?.textDecoration || 'none',
-                      textAlign: elements.contractText?.textAlign || 'left',
-                      backgroundColor: elements.contractText?.backgroundColor || 'transparent',
-                      padding: elements.contractText?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('contractText', e)}
-                  >
-                    {elements.contractText?.text || ''}
-                  </div>
-
-                  {/* Car Info */}
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'cautionText' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.cautionText?.x || 50,
-                      top: elements.cautionText?.y || 450,
-                      fontSize: elements.cautionText?.fontSize || 16,
-                      fontFamily: elements.cautionText?.fontFamily || 'Arial',
-                      color: elements.cautionText?.color || '#000000',
-                      fontWeight: elements.cautionText?.fontWeight || 'normal',
-                      fontStyle: elements.cautionText?.fontStyle || 'normal',
-                      textDecoration: elements.cautionText?.textDecoration || 'none',
-                      textAlign: elements.cautionText?.textAlign || 'left',
-                      backgroundColor: elements.cautionText?.backgroundColor || 'transparent',
-                      padding: elements.cautionText?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('cautionText', e)}
-                  >
-                    {elements.cautionText?.text || ''}
-                  </div>
-
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'carInfo' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.carInfo?.x || 50,
-                      top: elements.carInfo?.y || 500,
-                      fontSize: elements.carInfo?.fontSize || 16,
-                      fontFamily: elements.carInfo?.fontFamily || 'Arial',
-                      color: elements.carInfo?.color || '#000000',
-                      fontWeight: elements.carInfo?.fontWeight || 'normal',
-                      fontStyle: elements.carInfo?.fontStyle || 'normal',
-                      textDecoration: elements.carInfo?.textDecoration || 'none',
-                      textAlign: elements.carInfo?.textAlign || 'left',
-                      backgroundColor: elements.carInfo?.backgroundColor || 'transparent',
-                      padding: elements.carInfo?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('carInfo', e)}
-                  >
-                    {elements.carInfo?.text || ''}
-                  </div>
-
-                  <div
-                    className={`absolute cursor-move ${selectedElement === 'datesText' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: elements.datesText?.x || 50,
-                      top: elements.datesText?.y || 550,
-                      fontSize: elements.datesText?.fontSize || 16,
-                      fontFamily: elements.datesText?.fontFamily || 'Arial',
-                      color: elements.datesText?.color || '#000000',
-                      fontWeight: elements.datesText?.fontWeight || 'normal',
-                      fontStyle: elements.datesText?.fontStyle || 'normal',
-                      textDecoration: elements.datesText?.textDecoration || 'none',
-                      textAlign: elements.datesText?.textAlign || 'left',
-                      backgroundColor: elements.datesText?.backgroundColor || 'transparent',
-                      padding: elements.datesText?.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                    }}
-                    onMouseDown={(e) => handleMouseDown('datesText', e)}
-                  >
-                    {elements.datesText?.text || ''}
-                  </div>
-                </>
-              )}
-
-              {/* Receipt-specific elements */}
-              {(type === 'payment' || type === 'receipt') && (
-                <>
-                  {elements.receiptNumber && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'receiptNumber' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.receiptNumber.x,
-                        top: elements.receiptNumber.y,
-                        fontSize: elements.receiptNumber.fontSize,
-                        fontFamily: elements.receiptNumber.fontFamily,
-                        color: elements.receiptNumber.color,
-                        fontWeight: elements.receiptNumber.fontWeight,
-                        fontStyle: elements.receiptNumber.fontStyle,
-                        textDecoration: elements.receiptNumber.textDecoration,
-                        textAlign: elements.receiptNumber.textAlign,
-                        backgroundColor: elements.receiptNumber.backgroundColor,
-                        padding: elements.receiptNumber.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('receiptNumber', e)}
-                    >
-                      {elements.receiptNumber.text}
-                    </div>
-                  )}
-                  {elements.receiptDate && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'receiptDate' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.receiptDate.x,
-                        top: elements.receiptDate.y,
-                        fontSize: elements.receiptDate.fontSize,
-                        fontFamily: elements.receiptDate.fontFamily,
-                        color: elements.receiptDate.color,
-                        fontWeight: elements.receiptDate.fontWeight,
-                        fontStyle: elements.receiptDate.fontStyle,
-                        textDecoration: elements.receiptDate.textDecoration,
-                        textAlign: elements.receiptDate.textAlign,
-                        backgroundColor: elements.receiptDate.backgroundColor,
-                        padding: elements.receiptDate.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('receiptDate', e)}
-                    >
-                      {elements.receiptDate.text}
-                    </div>
-                  )}
-                  {elements.clientLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientLabel.x,
-                        top: elements.clientLabel.y,
-                        fontSize: elements.clientLabel.fontSize,
-                        fontFamily: elements.clientLabel.fontFamily,
-                        color: elements.clientLabel.color,
-                        fontWeight: elements.clientLabel.fontWeight,
-                        fontStyle: elements.clientLabel.fontStyle,
-                        textDecoration: elements.clientLabel.textDecoration,
-                        textAlign: elements.clientLabel.textAlign,
-                        backgroundColor: elements.clientLabel.backgroundColor,
-                        padding: elements.clientLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientLabel', e)}
-                    >
-                      {elements.clientLabel.text}
-                    </div>
-                  )}
-                  {elements.clientPhone && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientPhone' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientPhone.x,
-                        top: elements.clientPhone.y,
-                        fontSize: elements.clientPhone.fontSize,
-                        fontFamily: elements.clientPhone.fontFamily,
-                        color: elements.clientPhone.color,
-                        fontWeight: elements.clientPhone.fontWeight,
-                        fontStyle: elements.clientPhone.fontStyle,
-                        textDecoration: elements.clientPhone.textDecoration,
-                        textAlign: elements.clientPhone.textAlign,
-                        backgroundColor: elements.clientPhone.backgroundColor,
-                        padding: elements.clientPhone.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientPhone', e)}
-                    >
-                      {elements.clientPhone.text}
-                    </div>
-                  )}
-                  {elements.carLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'carLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.carLabel.x,
-                        top: elements.carLabel.y,
-                        fontSize: elements.carLabel.fontSize,
-                        fontFamily: elements.carLabel.fontFamily,
-                        color: elements.carLabel.color,
-                        fontWeight: elements.carLabel.fontWeight,
-                        fontStyle: elements.carLabel.fontStyle,
-                        textDecoration: elements.carLabel.textDecoration,
-                        textAlign: elements.carLabel.textAlign,
-                        backgroundColor: elements.carLabel.backgroundColor,
-                        padding: elements.carLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('carLabel', e)}
-                    >
-                      {elements.carLabel.text}
-                    </div>
-                  )}
-                  {elements.rentalPeriod && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalPeriod' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalPeriod.x,
-                        top: elements.rentalPeriod.y,
-                        fontSize: elements.rentalPeriod.fontSize,
-                        fontFamily: elements.rentalPeriod.fontFamily,
-                        color: elements.rentalPeriod.color,
-                        fontWeight: elements.rentalPeriod.fontWeight,
-                        fontStyle: elements.rentalPeriod.fontStyle,
-                        textDecoration: elements.rentalPeriod.textDecoration,
-                        textAlign: elements.rentalPeriod.textAlign,
-                        backgroundColor: elements.rentalPeriod.backgroundColor,
-                        padding: elements.rentalPeriod.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalPeriod', e)}
-                    >
-                      {elements.rentalPeriod.text}
-                    </div>
-                  )}
-                  {elements.totalLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalLabel.x,
-                        top: elements.totalLabel.y,
-                        fontSize: elements.totalLabel.fontSize,
-                        fontFamily: elements.totalLabel.fontFamily,
-                        color: elements.totalLabel.color,
-                        fontWeight: elements.totalLabel.fontWeight,
-                        fontStyle: elements.totalLabel.fontStyle,
-                        textDecoration: elements.totalLabel.textDecoration,
-                        textAlign: elements.totalLabel.textAlign,
-                        backgroundColor: elements.totalLabel.backgroundColor,
-                        padding: elements.totalLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalLabel', e)}
-                    >
-                      {elements.totalLabel.text}
-                    </div>
-                  )}
-                  {elements.totalAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalAmount.x,
-                        top: elements.totalAmount.y,
-                        fontSize: elements.totalAmount.fontSize,
-                        fontFamily: elements.totalAmount.fontFamily,
-                        color: elements.totalAmount.color,
-                        fontWeight: elements.totalAmount.fontWeight,
-                        fontStyle: elements.totalAmount.fontStyle,
-                        textDecoration: elements.totalAmount.textDecoration,
-                        textAlign: elements.totalAmount.textAlign,
-                        backgroundColor: elements.totalAmount.backgroundColor,
-                        padding: elements.totalAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalAmount', e)}
-                    >
-                      {elements.totalAmount.text}
-                    </div>
-                  )}
-                  {elements.paidLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'paidLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.paidLabel.x,
-                        top: elements.paidLabel.y,
-                        fontSize: elements.paidLabel.fontSize,
-                        fontFamily: elements.paidLabel.fontFamily,
-                        color: elements.paidLabel.color,
-                        fontWeight: elements.paidLabel.fontWeight,
-                        fontStyle: elements.paidLabel.fontStyle,
-                        textDecoration: elements.paidLabel.textDecoration,
-                        textAlign: elements.paidLabel.textAlign,
-                        backgroundColor: elements.paidLabel.backgroundColor,
-                        padding: elements.paidLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('paidLabel', e)}
-                    >
-                      {elements.paidLabel.text}
-                    </div>
-                  )}
-                  {elements.paidAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'paidAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.paidAmount.x,
-                        top: elements.paidAmount.y,
-                        fontSize: elements.paidAmount.fontSize,
-                        fontFamily: elements.paidAmount.fontFamily,
-                        color: elements.paidAmount.color,
-                        fontWeight: elements.paidAmount.fontWeight,
-                        fontStyle: elements.paidAmount.fontStyle,
-                        textDecoration: elements.paidAmount.textDecoration,
-                        textAlign: elements.paidAmount.textAlign,
-                        backgroundColor: elements.paidAmount.backgroundColor,
-                        padding: elements.paidAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('paidAmount', e)}
-                    >
-                      {elements.paidAmount.text}
-                    </div>
-                  )}
-                  {elements.remainingLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'remainingLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.remainingLabel.x,
-                        top: elements.remainingLabel.y,
-                        fontSize: elements.remainingLabel.fontSize,
-                        fontFamily: elements.remainingLabel.fontFamily,
-                        color: elements.remainingLabel.color,
-                        fontWeight: elements.remainingLabel.fontWeight,
-                        fontStyle: elements.remainingLabel.fontStyle,
-                        textDecoration: elements.remainingLabel.textDecoration,
-                        textAlign: elements.remainingLabel.textAlign,
-                        backgroundColor: elements.remainingLabel.backgroundColor,
-                        padding: elements.remainingLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('remainingLabel', e)}
-                    >
-                      {elements.remainingLabel.text}
-                    </div>
-                  )}
-                  {elements.remainingAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'remainingAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.remainingAmount.x,
-                        top: elements.remainingAmount.y,
-                        fontSize: elements.remainingAmount.fontSize,
-                        fontFamily: elements.remainingAmount.fontFamily,
-                        color: elements.remainingAmount.color,
-                        fontWeight: elements.remainingAmount.fontWeight,
-                        fontStyle: elements.remainingAmount.fontStyle,
-                        textDecoration: elements.remainingAmount.textDecoration,
-                        textAlign: elements.remainingAmount.textAlign,
-                        backgroundColor: elements.remainingAmount.backgroundColor,
-                        padding: elements.remainingAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('remainingAmount', e)}
-                    >
-                      {elements.remainingAmount.text}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Invoice-specific elements */}
-              {type === 'invoice' || type === 'facture' ? (
-                <>
-                  {/* Invoice header */}
-                  {elements.invoiceNumber && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'invoiceNumber' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.invoiceNumber.x,
-                        top: elements.invoiceNumber.y,
-                        fontSize: elements.invoiceNumber.fontSize,
-                        fontFamily: elements.invoiceNumber.fontFamily,
-                        color: elements.invoiceNumber.color,
-                        fontWeight: elements.invoiceNumber.fontWeight,
-                        fontStyle: elements.invoiceNumber.fontStyle,
-                        textDecoration: elements.invoiceNumber.textDecoration,
-                        textAlign: elements.invoiceNumber.textAlign,
-                        backgroundColor: elements.invoiceNumber.backgroundColor,
-                        padding: elements.invoiceNumber.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('invoiceNumber', e)}
-                    >
-                      {elements.invoiceNumber.text}
-                    </div>
-                  )}
-                  {elements.invoiceDate && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'invoiceDate' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.invoiceDate.x,
-                        top: elements.invoiceDate.y,
-                        fontSize: elements.invoiceDate.fontSize,
-                        fontFamily: elements.invoiceDate.fontFamily,
-                        color: elements.invoiceDate.color,
-                        fontWeight: elements.invoiceDate.fontWeight,
-                        fontStyle: elements.invoiceDate.fontStyle,
-                        textDecoration: elements.invoiceDate.textDecoration,
-                        textAlign: elements.invoiceDate.textAlign,
-                        backgroundColor: elements.invoiceDate.backgroundColor,
-                        padding: elements.invoiceDate.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('invoiceDate', e)}
-                    >
-                      {elements.invoiceDate.text}
-                    </div>
-                  )}
-
-                  {/* Client Information */}
-                  {elements.clientSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientSectionTitle.x,
-                        top: elements.clientSectionTitle.y,
-                        fontSize: elements.clientSectionTitle.fontSize,
-                        fontFamily: elements.clientSectionTitle.fontFamily,
-                        color: elements.clientSectionTitle.color,
-                        fontWeight: elements.clientSectionTitle.fontWeight,
-                        fontStyle: elements.clientSectionTitle.fontStyle,
-                        textDecoration: elements.clientSectionTitle.textDecoration,
-                        textAlign: elements.clientSectionTitle.textAlign,
-                        backgroundColor: elements.clientSectionTitle.backgroundColor,
-                        padding: elements.clientSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientSectionTitle', e)}
-                    >
-                      {elements.clientSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.clientNameLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientNameLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientNameLabel.x,
-                        top: elements.clientNameLabel.y,
-                        fontSize: elements.clientNameLabel.fontSize,
-                        fontFamily: elements.clientNameLabel.fontFamily,
-                        color: elements.clientNameLabel.color,
-                        fontWeight: elements.clientNameLabel.fontWeight,
-                        fontStyle: elements.clientNameLabel.fontStyle,
-                        textDecoration: elements.clientNameLabel.textDecoration,
-                        textAlign: elements.clientNameLabel.textAlign,
-                        backgroundColor: elements.clientNameLabel.backgroundColor,
-                        padding: elements.clientNameLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientNameLabel', e)}
-                    >
-                      {elements.clientNameLabel.text}
-                    </div>
-                  )}
-                  {elements.clientName && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientName' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientName.x,
-                        top: elements.clientName.y,
-                        fontSize: elements.clientName.fontSize,
-                        fontFamily: elements.clientName.fontFamily,
-                        color: elements.clientName.color,
-                        fontWeight: elements.clientName.fontWeight,
-                        fontStyle: elements.clientName.fontStyle,
-                        textDecoration: elements.clientName.textDecoration,
-                        textAlign: elements.clientName.textAlign,
-                        backgroundColor: elements.clientName.backgroundColor,
-                        padding: elements.clientName.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientName', e)}
-                    >
-                      {elements.clientName.text}
-                    </div>
-                  )}
-                  {elements.clientPhoneLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientPhoneLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientPhoneLabel.x,
-                        top: elements.clientPhoneLabel.y,
-                        fontSize: elements.clientPhoneLabel.fontSize,
-                        fontFamily: elements.clientPhoneLabel.fontFamily,
-                        color: elements.clientPhoneLabel.color,
-                        fontWeight: elements.clientPhoneLabel.fontWeight,
-                        fontStyle: elements.clientPhoneLabel.fontStyle,
-                        textDecoration: elements.clientPhoneLabel.textDecoration,
-                        textAlign: elements.clientPhoneLabel.textAlign,
-                        backgroundColor: elements.clientPhoneLabel.backgroundColor,
-                        padding: elements.clientPhoneLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientPhoneLabel', e)}
-                    >
-                      {elements.clientPhoneLabel.text}
-                    </div>
-                  )}
-                  {elements.clientPhone && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientPhone' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientPhone.x,
-                        top: elements.clientPhone.y,
-                        fontSize: elements.clientPhone.fontSize,
-                        fontFamily: elements.clientPhone.fontFamily,
-                        color: elements.clientPhone.color,
-                        fontWeight: elements.clientPhone.fontWeight,
-                        fontStyle: elements.clientPhone.fontStyle,
-                        textDecoration: elements.clientPhone.textDecoration,
-                        textAlign: elements.clientPhone.textAlign,
-                        backgroundColor: elements.clientPhone.backgroundColor,
-                        padding: elements.clientPhone.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientPhone', e)}
-                    >
-                      {elements.clientPhone.text}
-                    </div>
-                  )}
-                  {elements.clientAddressLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientAddressLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientAddressLabel.x,
-                        top: elements.clientAddressLabel.y,
-                        fontSize: elements.clientAddressLabel.fontSize,
-                        fontFamily: elements.clientAddressLabel.fontFamily,
-                        color: elements.clientAddressLabel.color,
-                        fontWeight: elements.clientAddressLabel.fontWeight,
-                        fontStyle: elements.clientAddressLabel.fontStyle,
-                        textDecoration: elements.clientAddressLabel.textDecoration,
-                        textAlign: elements.clientAddressLabel.textAlign,
-                        backgroundColor: elements.clientAddressLabel.backgroundColor,
-                        padding: elements.clientAddressLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientAddressLabel', e)}
-                    >
-                      {elements.clientAddressLabel.text}
-                    </div>
-                  )}
-                  {elements.clientAddress && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientAddress' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientAddress.x,
-                        top: elements.clientAddress.y,
-                        fontSize: elements.clientAddress.fontSize,
-                        fontFamily: elements.clientAddress.fontFamily,
-                        color: elements.clientAddress.color,
-                        fontWeight: elements.clientAddress.fontWeight,
-                        fontStyle: elements.clientAddress.fontStyle,
-                        textDecoration: elements.clientAddress.textDecoration,
-                        textAlign: elements.clientAddress.textAlign,
-                        backgroundColor: elements.clientAddress.backgroundColor,
-                        padding: elements.clientAddress.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientAddress', e)}
-                    >
-                      {elements.clientAddress.text}
-                    </div>
-                  )}
-
-                  {/* Vehicle Information */}
-                  {elements.vehicleSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleSectionTitle.x,
-                        top: elements.vehicleSectionTitle.y,
-                        fontSize: elements.vehicleSectionTitle.fontSize,
-                        fontFamily: elements.vehicleSectionTitle.fontFamily,
-                        color: elements.vehicleSectionTitle.color,
-                        fontWeight: elements.vehicleSectionTitle.fontWeight,
-                        fontStyle: elements.vehicleSectionTitle.fontStyle,
-                        textDecoration: elements.vehicleSectionTitle.textDecoration,
-                        textAlign: elements.vehicleSectionTitle.textAlign,
-                        backgroundColor: elements.vehicleSectionTitle.backgroundColor,
-                        padding: elements.vehicleSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleSectionTitle', e)}
-                    >
-                      {elements.vehicleSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.vehicleBrandLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleBrandLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleBrandLabel.x,
-                        top: elements.vehicleBrandLabel.y,
-                        fontSize: elements.vehicleBrandLabel.fontSize,
-                        fontFamily: elements.vehicleBrandLabel.fontFamily,
-                        color: elements.vehicleBrandLabel.color,
-                        fontWeight: elements.vehicleBrandLabel.fontWeight,
-                        fontStyle: elements.vehicleBrandLabel.fontStyle,
-                        textDecoration: elements.vehicleBrandLabel.textDecoration,
-                        textAlign: elements.vehicleBrandLabel.textAlign,
-                        backgroundColor: elements.vehicleBrandLabel.backgroundColor,
-                        padding: elements.vehicleBrandLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleBrandLabel', e)}
-                    >
-                      {elements.vehicleBrandLabel.text}
-                    </div>
-                  )}
-                  {elements.vehicleInfo && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleInfo' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleInfo.x,
-                        top: elements.vehicleInfo.y,
-                        fontSize: elements.vehicleInfo.fontSize,
-                        fontFamily: elements.vehicleInfo.fontFamily,
-                        color: elements.vehicleInfo.color,
-                        fontWeight: elements.vehicleInfo.fontWeight,
-                        fontStyle: elements.vehicleInfo.fontStyle,
-                        textDecoration: elements.vehicleInfo.textDecoration,
-                        textAlign: elements.vehicleInfo.textAlign,
-                        backgroundColor: elements.vehicleInfo.backgroundColor,
-                        padding: elements.vehicleInfo.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleInfo', e)}
-                    >
-                      {elements.vehicleInfo.text}
-                    </div>
-                  )}
-                  {elements.vehicleRegLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleRegLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleRegLabel.x,
-                        top: elements.vehicleRegLabel.y,
-                        fontSize: elements.vehicleRegLabel.fontSize,
-                        fontFamily: elements.vehicleRegLabel.fontFamily,
-                        color: elements.vehicleRegLabel.color,
-                        fontWeight: elements.vehicleRegLabel.fontWeight,
-                        fontStyle: elements.vehicleRegLabel.fontStyle,
-                        textDecoration: elements.vehicleRegLabel.textDecoration,
-                        textAlign: elements.vehicleRegLabel.textAlign,
-                        backgroundColor: elements.vehicleRegLabel.backgroundColor,
-                        padding: elements.vehicleRegLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleRegLabel', e)}
-                    >
-                      {elements.vehicleRegLabel.text}
-                    </div>
-                  )}
-                  {elements.vehicleReg && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleReg' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleReg.x,
-                        top: elements.vehicleReg.y,
-                        fontSize: elements.vehicleReg.fontSize,
-                        fontFamily: elements.vehicleReg.fontFamily,
-                        color: elements.vehicleReg.color,
-                        fontWeight: elements.vehicleReg.fontWeight,
-                        fontStyle: elements.vehicleReg.fontStyle,
-                        textDecoration: elements.vehicleReg.textDecoration,
-                        textAlign: elements.vehicleReg.textAlign,
-                        backgroundColor: elements.vehicleReg.backgroundColor,
-                        padding: elements.vehicleReg.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleReg', e)}
-                    >
-                      {elements.vehicleReg.text}
-                    </div>
-                  )}
-                  {elements.rentalPeriodLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalPeriodLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalPeriodLabel.x,
-                        top: elements.rentalPeriodLabel.y,
-                        fontSize: elements.rentalPeriodLabel.fontSize,
-                        fontFamily: elements.rentalPeriodLabel.fontFamily,
-                        color: elements.rentalPeriodLabel.color,
-                        fontWeight: elements.rentalPeriodLabel.fontWeight,
-                        fontStyle: elements.rentalPeriodLabel.fontStyle,
-                        textDecoration: elements.rentalPeriodLabel.textDecoration,
-                        textAlign: elements.rentalPeriodLabel.textAlign,
-                        backgroundColor: elements.rentalPeriodLabel.backgroundColor,
-                        padding: elements.rentalPeriodLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalPeriodLabel', e)}
-                    >
-                      {elements.rentalPeriodLabel.text}
-                    </div>
-                  )}
-                  {elements.rentalPeriod && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalPeriod' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalPeriod.x,
-                        top: elements.rentalPeriod.y,
-                        fontSize: elements.rentalPeriod.fontSize,
-                        fontFamily: elements.rentalPeriod.fontFamily,
-                        color: elements.rentalPeriod.color,
-                        fontWeight: elements.rentalPeriod.fontWeight,
-                        fontStyle: elements.rentalPeriod.fontStyle,
-                        textDecoration: elements.rentalPeriod.textDecoration,
-                        textAlign: elements.rentalPeriod.textAlign,
-                        backgroundColor: elements.rentalPeriod.backgroundColor,
-                        padding: elements.rentalPeriod.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalPeriod', e)}
-                    >
-                      {elements.rentalPeriod.text}
-                    </div>
-                  )}
-
-                  {/* Services and Pricing */}
-                  {elements.servicesTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'servicesTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.servicesTitle.x,
-                        top: elements.servicesTitle.y,
-                        fontSize: elements.servicesTitle.fontSize,
-                        fontFamily: elements.servicesTitle.fontFamily,
-                        color: elements.servicesTitle.color,
-                        fontWeight: elements.servicesTitle.fontWeight,
-                        fontStyle: elements.servicesTitle.fontStyle,
-                        textDecoration: elements.servicesTitle.textDecoration,
-                        textAlign: elements.servicesTitle.textAlign,
-                        backgroundColor: elements.servicesTitle.backgroundColor,
-                        padding: elements.servicesTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('servicesTitle', e)}
-                    >
-                      {elements.servicesTitle.text}
-                    </div>
-                  )}
-                  {elements.rentalService && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalService' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalService.x,
-                        top: elements.rentalService.y,
-                        fontSize: elements.rentalService.fontSize,
-                        fontFamily: elements.rentalService.fontFamily,
-                        color: elements.rentalService.color,
-                        fontWeight: elements.rentalService.fontWeight,
-                        fontStyle: elements.rentalService.fontStyle,
-                        textDecoration: elements.rentalService.textDecoration,
-                        textAlign: elements.rentalService.textAlign,
-                        backgroundColor: elements.rentalService.backgroundColor,
-                        padding: elements.rentalService.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalService', e)}
-                    >
-                      {elements.rentalService.text}
-                    </div>
-                  )}
-                  {elements.rentalPrice && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalPrice' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalPrice.x,
-                        top: elements.rentalPrice.y,
-                        fontSize: elements.rentalPrice.fontSize,
-                        fontFamily: elements.rentalPrice.fontFamily,
-                        color: elements.rentalPrice.color,
-                        fontWeight: elements.rentalPrice.fontWeight,
-                        fontStyle: elements.rentalPrice.fontStyle,
-                        textDecoration: elements.rentalPrice.textDecoration,
-                        textAlign: elements.rentalPrice.textAlign,
-                        backgroundColor: elements.rentalPrice.backgroundColor,
-                        padding: elements.rentalPrice.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalPrice', e)}
-                    >
-                      {elements.rentalPrice.text}
-                    </div>
-                  )}
-
-                  {/* Additional Services */}
-                  {elements.additionalServicesTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'additionalServicesTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.additionalServicesTitle.x,
-                        top: elements.additionalServicesTitle.y,
-                        fontSize: elements.additionalServicesTitle.fontSize,
-                        fontFamily: elements.additionalServicesTitle.fontFamily,
-                        color: elements.additionalServicesTitle.color,
-                        fontWeight: elements.additionalServicesTitle.fontWeight,
-                        fontStyle: elements.additionalServicesTitle.fontStyle,
-                        textDecoration: elements.additionalServicesTitle.textDecoration,
-                        textAlign: elements.additionalServicesTitle.textAlign,
-                        backgroundColor: elements.additionalServicesTitle.backgroundColor,
-                        padding: elements.additionalServicesTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('additionalServicesTitle', e)}
-                    >
-                      {elements.additionalServicesTitle.text}
-                    </div>
-                  )}
-                  {elements.additionalServices && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'additionalServices' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.additionalServices.x,
-                        top: elements.additionalServices.y,
-                        fontSize: elements.additionalServices.fontSize,
-                        fontFamily: elements.additionalServices.fontFamily,
-                        color: elements.additionalServices.color,
-                        fontWeight: elements.additionalServices.fontWeight,
-                        fontStyle: elements.additionalServices.fontStyle,
-                        textDecoration: elements.additionalServices.textDecoration,
-                        textAlign: elements.additionalServices.textAlign,
-                        backgroundColor: elements.additionalServices.backgroundColor,
-                        padding: elements.additionalServices.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('additionalServices', e)}
-                    >
-                      {elements.additionalServices.text}
-                    </div>
-                  )}
-
-                  {/* Supplementary Fees */}
-                  {elements.supplementaryFeesTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'supplementaryFeesTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.supplementaryFeesTitle.x,
-                        top: elements.supplementaryFeesTitle.y,
-                        fontSize: elements.supplementaryFeesTitle.fontSize,
-                        fontFamily: elements.supplementaryFeesTitle.fontFamily,
-                        color: elements.supplementaryFeesTitle.color,
-                        fontWeight: elements.supplementaryFeesTitle.fontWeight,
-                        fontStyle: elements.supplementaryFeesTitle.fontStyle,
-                        textDecoration: elements.supplementaryFeesTitle.textDecoration,
-                        textAlign: elements.supplementaryFeesTitle.textAlign,
-                        backgroundColor: elements.supplementaryFeesTitle.backgroundColor,
-                        padding: elements.supplementaryFeesTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('supplementaryFeesTitle', e)}
-                    >
-                      {elements.supplementaryFeesTitle.text}
-                    </div>
-                  )}
-                  {elements.supplementaryFees && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'supplementaryFees' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.supplementaryFees.x,
-                        top: elements.supplementaryFees.y,
-                        fontSize: elements.supplementaryFees.fontSize,
-                        fontFamily: elements.supplementaryFees.fontFamily,
-                        color: elements.supplementaryFees.color,
-                        fontWeight: elements.supplementaryFees.fontWeight,
-                        fontStyle: elements.supplementaryFees.fontStyle,
-                        textDecoration: elements.supplementaryFees.textDecoration,
-                        textAlign: elements.supplementaryFees.textAlign,
-                        backgroundColor: elements.supplementaryFees.backgroundColor,
-                        padding: elements.supplementaryFees.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('supplementaryFees', e)}
-                    >
-                      {elements.supplementaryFees.text}
-                    </div>
-                  )}
-
-                  {/* Tarification Section */}
-                  {elements.tarificationSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'tarificationSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.tarificationSectionTitle.x,
-                        top: elements.tarificationSectionTitle.y,
-                        fontSize: elements.tarificationSectionTitle.fontSize,
-                        fontFamily: elements.tarificationSectionTitle.fontFamily,
-                        color: elements.tarificationSectionTitle.color,
-                        fontWeight: elements.tarificationSectionTitle.fontWeight,
-                        fontStyle: elements.tarificationSectionTitle.fontStyle,
-                        textDecoration: elements.tarificationSectionTitle.textDecoration,
-                        textAlign: elements.tarificationSectionTitle.textAlign,
-                        backgroundColor: elements.tarificationSectionTitle.backgroundColor,
-                        padding: elements.tarificationSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('tarificationSectionTitle', e)}
-                    >
-                      {elements.tarificationSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.basePriceLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'basePriceLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.basePriceLabel.x,
-                        top: elements.basePriceLabel.y,
-                        fontSize: elements.basePriceLabel.fontSize,
-                        fontFamily: elements.basePriceLabel.fontFamily,
-                        color: elements.basePriceLabel.color,
-                        fontWeight: elements.basePriceLabel.fontWeight,
-                        fontStyle: elements.basePriceLabel.fontStyle,
-                        textDecoration: elements.basePriceLabel.textDecoration,
-                        textAlign: elements.basePriceLabel.textAlign,
-                        backgroundColor: elements.basePriceLabel.backgroundColor,
-                        padding: elements.basePriceLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('basePriceLabel', e)}
-                    >
-                      {elements.basePriceLabel.text}
-                    </div>
-                  )}
-                  {elements.basePrice && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'basePrice' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.basePrice.x,
-                        top: elements.basePrice.y,
-                        fontSize: elements.basePrice.fontSize,
-                        fontFamily: elements.basePrice.fontFamily,
-                        color: elements.basePrice.color,
-                        fontWeight: elements.basePrice.fontWeight,
-                        fontStyle: elements.basePrice.fontStyle,
-                        textDecoration: elements.basePrice.textDecoration,
-                        textAlign: elements.basePrice.textAlign,
-                        backgroundColor: elements.basePrice.backgroundColor,
-                        padding: elements.basePrice.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('basePrice', e)}
-                    >
-                      {elements.basePrice.text}
-                    </div>
-                  )}
-
-                  {/* Subtotal, TVA, Total */}
-                  {elements.subtotalLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'subtotalLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.subtotalLabel.x,
-                        top: elements.subtotalLabel.y,
-                        fontSize: elements.subtotalLabel.fontSize,
-                        fontFamily: elements.subtotalLabel.fontFamily,
-                        color: elements.subtotalLabel.color,
-                        fontWeight: elements.subtotalLabel.fontWeight,
-                        fontStyle: elements.subtotalLabel.fontStyle,
-                        textDecoration: elements.subtotalLabel.textDecoration,
-                        textAlign: elements.subtotalLabel.textAlign,
-                        backgroundColor: elements.subtotalLabel.backgroundColor,
-                        padding: elements.subtotalLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('subtotalLabel', e)}
-                    >
-                      {elements.subtotalLabel.text}
-                    </div>
-                  )}
-                  {elements.subtotalAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'subtotalAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.subtotalAmount.x,
-                        top: elements.subtotalAmount.y,
-                        fontSize: elements.subtotalAmount.fontSize,
-                        fontFamily: elements.subtotalAmount.fontFamily,
-                        color: elements.subtotalAmount.color,
-                        fontWeight: elements.subtotalAmount.fontWeight,
-                        fontStyle: elements.subtotalAmount.fontStyle,
-                        textDecoration: elements.subtotalAmount.textDecoration,
-                        textAlign: elements.subtotalAmount.textAlign,
-                        backgroundColor: elements.subtotalAmount.backgroundColor,
-                        padding: elements.subtotalAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('subtotalAmount', e)}
-                    >
-                      {elements.subtotalAmount.text}
-                    </div>
-                  )}
-                  {elements.tvaLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'tvaLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.tvaLabel.x,
-                        top: elements.tvaLabel.y,
-                        fontSize: elements.tvaLabel.fontSize,
-                        fontFamily: elements.tvaLabel.fontFamily,
-                        color: elements.tvaLabel.color,
-                        fontWeight: elements.tvaLabel.fontWeight,
-                        fontStyle: elements.tvaLabel.fontStyle,
-                        textDecoration: elements.tvaLabel.textDecoration,
-                        textAlign: elements.tvaLabel.textAlign,
-                        backgroundColor: elements.tvaLabel.backgroundColor,
-                        padding: elements.tvaLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('tvaLabel', e)}
-                    >
-                      {elements.tvaLabel.text}
-                    </div>
-                  )}
-                  {elements.tvaAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'tvaAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.tvaAmount.x,
-                        top: elements.tvaAmount.y,
-                        fontSize: elements.tvaAmount.fontSize,
-                        fontFamily: elements.tvaAmount.fontFamily,
-                        color: elements.tvaAmount.color,
-                        fontWeight: elements.tvaAmount.fontWeight,
-                        fontStyle: elements.tvaAmount.fontStyle,
-                        textDecoration: elements.tvaAmount.textDecoration,
-                        textAlign: elements.tvaAmount.textAlign,
-                        backgroundColor: elements.tvaAmount.backgroundColor,
-                        padding: elements.tvaAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('tvaAmount', e)}
-                    >
-                      {elements.tvaAmount.text}
-                    </div>
-                  )}
-                  {elements.totalLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalLabel.x,
-                        top: elements.totalLabel.y,
-                        fontSize: elements.totalLabel.fontSize,
-                        fontFamily: elements.totalLabel.fontFamily,
-                        color: elements.totalLabel.color,
-                        fontWeight: elements.totalLabel.fontWeight,
-                        fontStyle: elements.totalLabel.fontStyle,
-                        textDecoration: elements.totalLabel.textDecoration,
-                        textAlign: elements.totalLabel.textAlign,
-                        backgroundColor: elements.totalLabel.backgroundColor,
-                        padding: elements.totalLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalLabel', e)}
-                    >
-                      {elements.totalLabel.text}
-                    </div>
-                  )}
-                  {elements.totalAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalAmount.x,
-                        top: elements.totalAmount.y,
-                        fontSize: elements.totalAmount.fontSize,
-                        fontFamily: elements.totalAmount.fontFamily,
-                        color: elements.totalAmount.color,
-                        fontWeight: elements.totalAmount.fontWeight,
-                        fontStyle: elements.totalAmount.fontStyle,
-                        textDecoration: elements.totalAmount.textDecoration,
-                        textAlign: elements.totalAmount.textAlign,
-                        backgroundColor: elements.totalAmount.backgroundColor,
-                        padding: elements.totalAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalAmount', e)}
-                    >
-                      {elements.totalAmount.text}
-                    </div>
-                  )}
-
-                  {/* Payment Information */}
-                  {elements.paymentSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'paymentSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.paymentSectionTitle.x,
-                        top: elements.paymentSectionTitle.y,
-                        fontSize: elements.paymentSectionTitle.fontSize,
-                        fontFamily: elements.paymentSectionTitle.fontFamily,
-                        color: elements.paymentSectionTitle.color,
-                        fontWeight: elements.paymentSectionTitle.fontWeight,
-                        fontStyle: elements.paymentSectionTitle.fontStyle,
-                        textDecoration: elements.paymentSectionTitle.textDecoration,
-                        textAlign: elements.paymentSectionTitle.textAlign,
-                        backgroundColor: elements.paymentSectionTitle.backgroundColor,
-                        padding: elements.paymentSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('paymentSectionTitle', e)}
-                    >
-                      {elements.paymentSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.totalPaidLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalPaidLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalPaidLabel.x,
-                        top: elements.totalPaidLabel.y,
-                        fontSize: elements.totalPaidLabel.fontSize,
-                        fontFamily: elements.totalPaidLabel.fontFamily,
-                        color: elements.totalPaidLabel.color,
-                        fontWeight: elements.totalPaidLabel.fontWeight,
-                        fontStyle: elements.totalPaidLabel.fontStyle,
-                        textDecoration: elements.totalPaidLabel.textDecoration,
-                        textAlign: elements.totalPaidLabel.textAlign,
-                        backgroundColor: elements.totalPaidLabel.backgroundColor,
-                        padding: elements.totalPaidLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalPaidLabel', e)}
-                    >
-                      {elements.totalPaidLabel.text}
-                    </div>
-                  )}
-                  {elements.totalPaidAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalPaidAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalPaidAmount.x,
-                        top: elements.totalPaidAmount.y,
-                        fontSize: elements.totalPaidAmount.fontSize,
-                        fontFamily: elements.totalPaidAmount.fontFamily,
-                        color: elements.totalPaidAmount.color,
-                        fontWeight: elements.totalPaidAmount.fontWeight,
-                        fontStyle: elements.totalPaidAmount.fontStyle,
-                        textDecoration: elements.totalPaidAmount.textDecoration,
-                        textAlign: elements.totalPaidAmount.textAlign,
-                        backgroundColor: elements.totalPaidAmount.backgroundColor,
-                        padding: elements.totalPaidAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalPaidAmount', e)}
-                    >
-                      {elements.totalPaidAmount.text}
-                    </div>
-                  )}
-                  {elements.remainingLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'remainingLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.remainingLabel.x,
-                        top: elements.remainingLabel.y,
-                        fontSize: elements.remainingLabel.fontSize,
-                        fontFamily: elements.remainingLabel.fontFamily,
-                        color: elements.remainingLabel.color,
-                        fontWeight: elements.remainingLabel.fontWeight,
-                        fontStyle: elements.remainingLabel.fontStyle,
-                        textDecoration: elements.remainingLabel.textDecoration,
-                        textAlign: elements.remainingLabel.textAlign,
-                        backgroundColor: elements.remainingLabel.backgroundColor,
-                        padding: elements.remainingLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('remainingLabel', e)}
-                    >
-                      {elements.remainingLabel.text}
-                    </div>
-                  )}
-                  {elements.remainingAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'remainingAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.remainingAmount.x,
-                        top: elements.remainingAmount.y,
-                        fontSize: elements.remainingAmount.fontSize,
-                        fontFamily: elements.remainingAmount.fontFamily,
-                        color: elements.remainingAmount.color,
-                        fontWeight: elements.remainingAmount.fontWeight,
-                        fontStyle: elements.remainingAmount.fontStyle,
-                        textDecoration: elements.remainingAmount.textDecoration,
-                        textAlign: elements.remainingAmount.textAlign,
-                        backgroundColor: elements.remainingAmount.backgroundColor,
-                        padding: elements.remainingAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('remainingAmount', e)}
-                    >
-                      {elements.remainingAmount.text}
-                    </div>
-                  )}
-
-                  {/* Caution Section */}
-                  {elements.cautionSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'cautionSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.cautionSectionTitle.x,
-                        top: elements.cautionSectionTitle.y,
-                        fontSize: elements.cautionSectionTitle.fontSize,
-                        fontFamily: elements.cautionSectionTitle.fontFamily,
-                        color: elements.cautionSectionTitle.color,
-                        fontWeight: elements.cautionSectionTitle.fontWeight,
-                        fontStyle: elements.cautionSectionTitle.fontStyle,
-                        textDecoration: elements.cautionSectionTitle.textDecoration,
-                        textAlign: elements.cautionSectionTitle.textAlign,
-                        backgroundColor: elements.cautionSectionTitle.backgroundColor,
-                        padding: elements.cautionSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('cautionSectionTitle', e)}
-                    >
-                      {elements.cautionSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.cautionAmountLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'cautionAmountLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.cautionAmountLabel.x,
-                        top: elements.cautionAmountLabel.y,
-                        fontSize: elements.cautionAmountLabel.fontSize,
-                        fontFamily: elements.cautionAmountLabel.fontFamily,
-                        color: elements.cautionAmountLabel.color,
-                        fontWeight: elements.cautionAmountLabel.fontWeight,
-                        fontStyle: elements.cautionAmountLabel.fontStyle,
-                        textDecoration: elements.cautionAmountLabel.textDecoration,
-                        textAlign: elements.cautionAmountLabel.textAlign,
-                        backgroundColor: elements.cautionAmountLabel.backgroundColor,
-                        padding: elements.cautionAmountLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('cautionAmountLabel', e)}
-                    >
-                      {elements.cautionAmountLabel.text}
-                    </div>
-                  )}
-                  {elements.cautionAmount && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'cautionAmount' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.cautionAmount.x,
-                        top: elements.cautionAmount.y,
-                        fontSize: elements.cautionAmount.fontSize,
-                        fontFamily: elements.cautionAmount.fontFamily,
-                        color: elements.cautionAmount.color,
-                        fontWeight: elements.cautionAmount.fontWeight,
-                        fontStyle: elements.cautionAmount.fontStyle,
-                        textDecoration: elements.cautionAmount.textDecoration,
-                        textAlign: elements.cautionAmount.textAlign,
-                        backgroundColor: elements.cautionAmount.backgroundColor,
-                        padding: elements.cautionAmount.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('cautionAmount', e)}
-                    >
-                      {elements.cautionAmount.text}
-                    </div>
-                  )}
-
-                  {/* Payment History */}
-                  {elements.paymentHistoryTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'paymentHistoryTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.paymentHistoryTitle.x,
-                        top: elements.paymentHistoryTitle.y,
-                        fontSize: elements.paymentHistoryTitle.fontSize,
-                        fontFamily: elements.paymentHistoryTitle.fontFamily,
-                        color: elements.paymentHistoryTitle.color,
-                        fontWeight: elements.paymentHistoryTitle.fontWeight,
-                        fontStyle: elements.paymentHistoryTitle.fontStyle,
-                        textDecoration: elements.paymentHistoryTitle.textDecoration,
-                        textAlign: elements.paymentHistoryTitle.textAlign,
-                        backgroundColor: elements.paymentHistoryTitle.backgroundColor,
-                        padding: elements.paymentHistoryTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('paymentHistoryTitle', e)}
-                    >
-                      {elements.paymentHistoryTitle.text}
-                    </div>
-                  )}
-                  {elements.paymentHistory && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'paymentHistory' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.paymentHistory.x,
-                        top: elements.paymentHistory.y,
-                        fontSize: elements.paymentHistory.fontSize,
-                        fontFamily: elements.paymentHistory.fontFamily,
-                        color: elements.paymentHistory.color,
-                        fontWeight: elements.paymentHistory.fontWeight,
-                        fontStyle: elements.paymentHistory.fontStyle,
-                        textDecoration: elements.paymentHistory.textDecoration,
-                        textAlign: elements.paymentHistory.textAlign,
-                        backgroundColor: elements.paymentHistory.backgroundColor,
-                        padding: elements.paymentHistory.backgroundColor !== 'transparent' ? '4px 8px' : '0',
-                        whiteSpace: 'pre-line'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('paymentHistory', e)}
-                    >
-                      {elements.paymentHistory.text}
-                    </div>
-                  )}
-
-                  {/* Footer */}
-                  {elements.footerText && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'footerText' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.footerText.x,
-                        top: elements.footerText.y,
-                        fontSize: elements.footerText.fontSize,
-                        fontFamily: elements.footerText.fontFamily,
-                        color: elements.footerText.color,
-                        fontWeight: elements.footerText.fontWeight,
-                        fontStyle: elements.footerText.fontStyle,
-                        textDecoration: elements.footerText.textDecoration,
-                        textAlign: elements.footerText.textAlign,
-                        backgroundColor: elements.footerText.backgroundColor,
-                        padding: elements.footerText.backgroundColor !== 'transparent' ? '4px 8px' : '0',
-                        whiteSpace: 'pre-line'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('footerText', e)}
-                    >
-                      {elements.footerText.text}
-                    </div>
-                  )}
-                </>
-              ) : null}
-
-              {/* Quote/Devis-specific elements */}
-              {type === 'quote' || type === 'devis' ? (
-                <>
-                  {/* Quote header */}
-                  {elements.quoteNumber && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'quoteNumber' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.quoteNumber.x,
-                        top: elements.quoteNumber.y,
-                        fontSize: elements.quoteNumber.fontSize,
-                        fontFamily: elements.quoteNumber.fontFamily,
-                        color: elements.quoteNumber.color,
-                        fontWeight: elements.quoteNumber.fontWeight,
-                        fontStyle: elements.quoteNumber.fontStyle,
-                        textDecoration: elements.quoteNumber.textDecoration,
-                        textAlign: elements.quoteNumber.textAlign,
-                        backgroundColor: elements.quoteNumber.backgroundColor,
-                        padding: elements.quoteNumber.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('quoteNumber', e)}
-                    >
-                      {elements.quoteNumber.text}
-                    </div>
-                  )}
-                  {elements.quoteDate && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'quoteDate' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.quoteDate.x,
-                        top: elements.quoteDate.y,
-                        fontSize: elements.quoteDate.fontSize,
-                        fontFamily: elements.quoteDate.fontFamily,
-                        color: elements.quoteDate.color,
-                        fontWeight: elements.quoteDate.fontWeight,
-                        fontStyle: elements.quoteDate.fontStyle,
-                        textDecoration: elements.quoteDate.textDecoration,
-                        textAlign: elements.quoteDate.textAlign,
-                        backgroundColor: elements.quoteDate.backgroundColor,
-                        padding: elements.quoteDate.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('quoteDate', e)}
-                    >
-                      {elements.quoteDate.text}
-                    </div>
-                  )}
-
-                  {/* Vehicle Specifications */}
-                  {elements.vehicleSpecsTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleSpecsTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleSpecsTitle.x,
-                        top: elements.vehicleSpecsTitle.y,
-                        fontSize: elements.vehicleSpecsTitle.fontSize,
-                        fontFamily: elements.vehicleSpecsTitle.fontFamily,
-                        color: elements.vehicleSpecsTitle.color,
-                        fontWeight: elements.vehicleSpecsTitle.fontWeight,
-                        fontStyle: elements.vehicleSpecsTitle.fontStyle,
-                        textDecoration: elements.vehicleSpecsTitle.textDecoration,
-                        textAlign: elements.vehicleSpecsTitle.textAlign,
-                        backgroundColor: elements.vehicleSpecsTitle.backgroundColor,
-                        padding: elements.vehicleSpecsTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleSpecsTitle', e)}
-                    >
-                      {elements.vehicleSpecsTitle.text}
-                    </div>
-                  )}
-                  {elements.vehicleBrandModelLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleBrandModelLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleBrandModelLabel.x,
-                        top: elements.vehicleBrandModelLabel.y,
-                        fontSize: elements.vehicleBrandModelLabel.fontSize,
-                        fontFamily: elements.vehicleBrandModelLabel.fontFamily,
-                        color: elements.vehicleBrandModelLabel.color,
-                        fontWeight: elements.vehicleBrandModelLabel.fontWeight,
-                        fontStyle: elements.vehicleBrandModelLabel.fontStyle,
-                        textDecoration: elements.vehicleBrandModelLabel.textDecoration,
-                        textAlign: elements.vehicleBrandModelLabel.textAlign,
-                        backgroundColor: elements.vehicleBrandModelLabel.backgroundColor,
-                        padding: elements.vehicleBrandModelLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleBrandModelLabel', e)}
-                    >
-                      {elements.vehicleBrandModelLabel.text}
-                    </div>
-                  )}
-                  {elements.vehicleBrandModel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleBrandModel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleBrandModel.x,
-                        top: elements.vehicleBrandModel.y,
-                        fontSize: elements.vehicleBrandModel.fontSize,
-                        fontFamily: elements.vehicleBrandModel.fontFamily,
-                        color: elements.vehicleBrandModel.color,
-                        fontWeight: elements.vehicleBrandModel.fontWeight,
-                        fontStyle: elements.vehicleBrandModel.fontStyle,
-                        textDecoration: elements.vehicleBrandModel.textDecoration,
-                        textAlign: elements.vehicleBrandModel.textAlign,
-                        backgroundColor: elements.vehicleBrandModel.backgroundColor,
-                        padding: elements.vehicleBrandModel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleBrandModel', e)}
-                    >
-                      {elements.vehicleBrandModel.text}
-                    </div>
-                  )}
-                  {elements.vehicleCodeLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleCodeLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleCodeLabel.x,
-                        top: elements.vehicleCodeLabel.y,
-                        fontSize: elements.vehicleCodeLabel.fontSize,
-                        fontFamily: elements.vehicleCodeLabel.fontFamily,
-                        color: elements.vehicleCodeLabel.color,
-                        fontWeight: elements.vehicleCodeLabel.fontWeight,
-                        fontStyle: elements.vehicleCodeLabel.fontStyle,
-                        textDecoration: elements.vehicleCodeLabel.textDecoration,
-                        textAlign: elements.vehicleCodeLabel.textAlign,
-                        backgroundColor: elements.vehicleCodeLabel.backgroundColor,
-                        padding: elements.vehicleCodeLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleCodeLabel', e)}
-                    >
-                      {elements.vehicleCodeLabel.text}
-                    </div>
-                  )}
-                  {elements.vehicleCode && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleCode' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleCode.x,
-                        top: elements.vehicleCode.y,
-                        fontSize: elements.vehicleCode.fontSize,
-                        fontFamily: elements.vehicleCode.fontFamily,
-                        color: elements.vehicleCode.color,
-                        fontWeight: elements.vehicleCode.fontWeight,
-                        fontStyle: elements.vehicleCode.fontStyle,
-                        textDecoration: elements.vehicleCode.textDecoration,
-                        textAlign: elements.vehicleCode.textAlign,
-                        backgroundColor: elements.vehicleCode.backgroundColor,
-                        padding: elements.vehicleCode.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleCode', e)}
-                    >
-                      {elements.vehicleCode.text}
-                    </div>
-                  )}
-                  {elements.vehicleRegistrationLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleRegistrationLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleRegistrationLabel.x,
-                        top: elements.vehicleRegistrationLabel.y,
-                        fontSize: elements.vehicleRegistrationLabel.fontSize,
-                        fontFamily: elements.vehicleRegistrationLabel.fontFamily,
-                        color: elements.vehicleRegistrationLabel.color,
-                        fontWeight: elements.vehicleRegistrationLabel.fontWeight,
-                        fontStyle: elements.vehicleRegistrationLabel.fontStyle,
-                        textDecoration: elements.vehicleRegistrationLabel.textDecoration,
-                        textAlign: elements.vehicleRegistrationLabel.textAlign,
-                        backgroundColor: elements.vehicleRegistrationLabel.backgroundColor,
-                        padding: elements.vehicleRegistrationLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleRegistrationLabel', e)}
-                    >
-                      {elements.vehicleRegistrationLabel.text}
-                    </div>
-                  )}
-                  {elements.vehicleRegistration && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleRegistration' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleRegistration.x,
-                        top: elements.vehicleRegistration.y,
-                        fontSize: elements.vehicleRegistration.fontSize,
-                        fontFamily: elements.vehicleRegistration.fontFamily,
-                        color: elements.vehicleRegistration.color,
-                        fontWeight: elements.vehicleRegistration.fontWeight,
-                        fontStyle: elements.vehicleRegistration.fontStyle,
-                        textDecoration: elements.vehicleRegistration.textDecoration,
-                        textAlign: elements.vehicleRegistration.textAlign,
-                        backgroundColor: elements.vehicleRegistration.backgroundColor,
-                        padding: elements.vehicleRegistration.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleRegistration', e)}
-                    >
-                      {elements.vehicleRegistration.text}
-                    </div>
-                  )}
-                  {elements.vehicleColor && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleColor' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleColor.x,
-                        top: elements.vehicleColor.y,
-                        fontSize: elements.vehicleColor.fontSize,
-                        fontFamily: elements.vehicleColor.fontFamily,
-                        color: elements.vehicleColor.color,
-                        fontWeight: elements.vehicleColor.fontWeight,
-                        fontStyle: elements.vehicleColor.fontStyle,
-                        textDecoration: elements.vehicleColor.textDecoration,
-                        textAlign: elements.vehicleColor.textAlign,
-                        backgroundColor: elements.vehicleColor.backgroundColor,
-                        padding: elements.vehicleColor.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleColor', e)}
-                    >
-                      {elements.vehicleColor.text}
-                    </div>
-                  )}
-                  {elements.vehicleClass && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleClass' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleClass.x,
-                        top: elements.vehicleClass.y,
-                        fontSize: elements.vehicleClass.fontSize,
-                        fontFamily: elements.vehicleClass.fontFamily,
-                        color: elements.vehicleClass.color,
-                        fontWeight: elements.vehicleClass.fontWeight,
-                        fontStyle: elements.vehicleClass.fontStyle,
-                        textDecoration: elements.vehicleClass.textDecoration,
-                        textAlign: elements.vehicleClass.textAlign,
-                        backgroundColor: elements.vehicleClass.backgroundColor,
-                        padding: elements.vehicleClass.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleClass', e)}
-                    >
-                      {elements.vehicleClass.text}
-                    </div>
-                  )}
-                  {elements.vehicleCharacteristics && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleCharacteristics' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleCharacteristics.x,
-                        top: elements.vehicleCharacteristics.y,
-                        fontSize: elements.vehicleCharacteristics.fontSize,
-                        fontFamily: elements.vehicleCharacteristics.fontFamily,
-                        color: elements.vehicleCharacteristics.color,
-                        fontWeight: elements.vehicleCharacteristics.fontWeight,
-                        fontStyle: elements.vehicleCharacteristics.fontStyle,
-                        textDecoration: elements.vehicleCharacteristics.textDecoration,
-                        textAlign: elements.vehicleCharacteristics.textAlign,
-                        backgroundColor: elements.vehicleCharacteristics.backgroundColor,
-                        padding: elements.vehicleCharacteristics.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleCharacteristics', e)}
-                    >
-                      {elements.vehicleCharacteristics.text}
-                    </div>
-                  )}
-                  {elements.fuelType && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'fuelType' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.fuelType.x,
-                        top: elements.fuelType.y,
-                        fontSize: elements.fuelType.fontSize,
-                        fontFamily: elements.fuelType.fontFamily,
-                        color: elements.fuelType.color,
-                        fontWeight: elements.fuelType.fontWeight,
-                        fontStyle: elements.fuelType.fontStyle,
-                        textDecoration: elements.fuelType.textDecoration,
-                        textAlign: elements.fuelType.textAlign,
-                        backgroundColor: elements.fuelType.backgroundColor,
-                        padding: elements.fuelType.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('fuelType', e)}
-                    >
-                      {elements.fuelType.text}
-                    </div>
-                  )}
-                  {elements.vehicleColorLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleColorLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleColorLabel.x,
-                        top: elements.vehicleColorLabel.y,
-                        fontSize: elements.vehicleColorLabel.fontSize,
-                        fontFamily: elements.vehicleColorLabel.fontFamily,
-                        color: elements.vehicleColorLabel.color,
-                        fontWeight: elements.vehicleColorLabel.fontWeight,
-                        fontStyle: elements.vehicleColorLabel.fontStyle,
-                        textDecoration: elements.vehicleColorLabel.textDecoration,
-                        textAlign: elements.vehicleColorLabel.textAlign,
-                        backgroundColor: elements.vehicleColorLabel.backgroundColor,
-                        padding: elements.vehicleColorLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleColorLabel', e)}
-                    >
-                      {elements.vehicleColorLabel.text}
-                    </div>
-                  )}
-                  {elements.vehicleColor && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleColor' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleColor.x,
-                        top: elements.vehicleColor.y,
-                        fontSize: elements.vehicleColor.fontSize,
-                        fontFamily: elements.vehicleColor.fontFamily,
-                        color: elements.vehicleColor.color,
-                        fontWeight: elements.vehicleColor.fontWeight,
-                        fontStyle: elements.vehicleColor.fontStyle,
-                        textDecoration: elements.vehicleColor.textDecoration,
-                        textAlign: elements.vehicleColor.textAlign,
-                        backgroundColor: elements.vehicleColor.backgroundColor,
-                        padding: elements.vehicleColor.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleColor', e)}
-                    >
-                      {elements.vehicleColor.text}
-                    </div>
-                  )}
-                  {elements.vehicleClassLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleClassLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleClassLabel.x,
-                        top: elements.vehicleClassLabel.y,
-                        fontSize: elements.vehicleClassLabel.fontSize,
-                        fontFamily: elements.vehicleClassLabel.fontFamily,
-                        color: elements.vehicleClassLabel.color,
-                        fontWeight: elements.vehicleClassLabel.fontWeight,
-                        fontStyle: elements.vehicleClassLabel.fontStyle,
-                        textDecoration: elements.vehicleClassLabel.textDecoration,
-                        textAlign: elements.vehicleClassLabel.textAlign,
-                        backgroundColor: elements.vehicleClassLabel.backgroundColor,
-                        padding: elements.vehicleClassLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleClassLabel', e)}
-                    >
-                      {elements.vehicleClassLabel.text}
-                    </div>
-                  )}
-                  {elements.vehicleClass && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleClass' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleClass.x,
-                        top: elements.vehicleClass.y,
-                        fontSize: elements.vehicleClass.fontSize,
-                        fontFamily: elements.vehicleClass.fontFamily,
-                        color: elements.vehicleClass.color,
-                        fontWeight: elements.vehicleClass.fontWeight,
-                        fontStyle: elements.vehicleClass.fontStyle,
-                        textDecoration: elements.vehicleClass.textDecoration,
-                        textAlign: elements.vehicleClass.textAlign,
-                        backgroundColor: elements.vehicleClass.backgroundColor,
-                        padding: elements.vehicleClass.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleClass', e)}
-                    >
-                      {elements.vehicleClass.text}
-                    </div>
-                  )}
-                  {elements.vehicleCharacteristicsLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleCharacteristicsLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleCharacteristicsLabel.x,
-                        top: elements.vehicleCharacteristicsLabel.y,
-                        fontSize: elements.vehicleCharacteristicsLabel.fontSize,
-                        fontFamily: elements.vehicleCharacteristicsLabel.fontFamily,
-                        color: elements.vehicleCharacteristicsLabel.color,
-                        fontWeight: elements.vehicleCharacteristicsLabel.fontWeight,
-                        fontStyle: elements.vehicleCharacteristicsLabel.fontStyle,
-                        textDecoration: elements.vehicleCharacteristicsLabel.textDecoration,
-                        textAlign: elements.vehicleCharacteristicsLabel.textAlign,
-                        backgroundColor: elements.vehicleCharacteristicsLabel.backgroundColor,
-                        padding: elements.vehicleCharacteristicsLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleCharacteristicsLabel', e)}
-                    >
-                      {elements.vehicleCharacteristicsLabel.text}
-                    </div>
-                  )}
-                  {elements.vehicleCharacteristics && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleCharacteristics' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleCharacteristics.x,
-                        top: elements.vehicleCharacteristics.y,
-                        fontSize: elements.vehicleCharacteristics.fontSize,
-                        fontFamily: elements.vehicleCharacteristics.fontFamily,
-                        color: elements.vehicleCharacteristics.color,
-                        fontWeight: elements.vehicleCharacteristics.fontWeight,
-                        fontStyle: elements.vehicleCharacteristics.fontStyle,
-                        textDecoration: elements.vehicleCharacteristics.textDecoration,
-                        textAlign: elements.vehicleCharacteristics.textAlign,
-                        backgroundColor: elements.vehicleCharacteristics.backgroundColor,
-                        padding: elements.vehicleCharacteristics.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleCharacteristics', e)}
-                    >
-                      {elements.vehicleCharacteristics.text}
-                    </div>
-                  )}
-                  {elements.fuelTypeLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'fuelTypeLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.fuelTypeLabel.x,
-                        top: elements.fuelTypeLabel.y,
-                        fontSize: elements.fuelTypeLabel.fontSize,
-                        fontFamily: elements.fuelTypeLabel.fontFamily,
-                        color: elements.fuelTypeLabel.color,
-                        fontWeight: elements.fuelTypeLabel.fontWeight,
-                        fontStyle: elements.fuelTypeLabel.fontStyle,
-                        textDecoration: elements.fuelTypeLabel.textDecoration,
-                        textAlign: elements.fuelTypeLabel.textAlign,
-                        backgroundColor: elements.fuelTypeLabel.backgroundColor,
-                        padding: elements.fuelTypeLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('fuelTypeLabel', e)}
-                    >
-                      {elements.fuelTypeLabel.text}
-                    </div>
-                  )}
-                  {elements.fuelType && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'fuelType' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.fuelType.x,
-                        top: elements.fuelType.y,
-                        fontSize: elements.fuelType.fontSize,
-                        fontFamily: elements.fuelType.fontFamily,
-                        color: elements.fuelType.color,
-                        fontWeight: elements.fuelType.fontWeight,
-                        fontStyle: elements.fuelType.fontStyle,
-                        textDecoration: elements.fuelType.textDecoration,
-                        textAlign: elements.fuelType.textAlign,
-                        backgroundColor: elements.fuelType.backgroundColor,
-                        padding: elements.fuelType.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('fuelType', e)}
-                    >
-                      {elements.fuelType.text}
-                    </div>
-                  )}
-                  {elements.currentMileageLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'currentMileageLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.currentMileageLabel.x,
-                        top: elements.currentMileageLabel.y,
-                        fontSize: elements.currentMileageLabel.fontSize,
-                        fontFamily: elements.currentMileageLabel.fontFamily,
-                        color: elements.currentMileageLabel.color,
-                        fontWeight: elements.currentMileageLabel.fontWeight,
-                        fontStyle: elements.currentMileageLabel.fontStyle,
-                        textDecoration: elements.currentMileageLabel.textDecoration,
-                        textAlign: elements.currentMileageLabel.textAlign,
-                        backgroundColor: elements.currentMileageLabel.backgroundColor,
-                        padding: elements.currentMileageLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('currentMileageLabel', e)}
-                    >
-                      {elements.currentMileageLabel.text}
-                    </div>
-                  )}
-                  {elements.currentMileage && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'currentMileage' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.currentMileage.x,
-                        top: elements.currentMileage.y,
-                        fontSize: elements.currentMileage.fontSize,
-                        fontFamily: elements.currentMileage.fontFamily,
-                        color: elements.currentMileage.color,
-                        fontWeight: elements.currentMileage.fontWeight,
-                        fontStyle: elements.currentMileage.fontStyle,
-                        textDecoration: elements.currentMileage.textDecoration,
-                        textAlign: elements.currentMileage.textAlign,
-                        backgroundColor: elements.currentMileage.backgroundColor,
-                        padding: elements.currentMileage.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('currentMileage', e)}
-                    >
-                      {elements.currentMileage.text}
-                    </div>
-                  )}
-                  {elements.serialNumberLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'serialNumberLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.serialNumberLabel.x,
-                        top: elements.serialNumberLabel.y,
-                        fontSize: elements.serialNumberLabel.fontSize,
-                        fontFamily: elements.serialNumberLabel.fontFamily,
-                        color: elements.serialNumberLabel.color,
-                        fontWeight: elements.serialNumberLabel.fontWeight,
-                        fontStyle: elements.serialNumberLabel.fontStyle,
-                        textDecoration: elements.serialNumberLabel.textDecoration,
-                        textAlign: elements.serialNumberLabel.textAlign,
-                        backgroundColor: elements.serialNumberLabel.backgroundColor,
-                        padding: elements.serialNumberLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('serialNumberLabel', e)}
-                    >
-                      {elements.serialNumberLabel.text}
-                    </div>
-                  )}
-
-                  {elements.serialNumber && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'serialNumber' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.serialNumber.x,
-                        top: elements.serialNumber.y,
-                        fontSize: elements.serialNumber.fontSize,
-                        fontFamily: elements.serialNumber.fontFamily,
-                        color: elements.serialNumber.color,
-                        fontWeight: elements.serialNumber.fontWeight,
-                        fontStyle: elements.serialNumber.fontStyle,
-                        textDecoration: elements.serialNumber.textDecoration,
-                        textAlign: elements.serialNumber.textAlign,
-                        backgroundColor: elements.serialNumber.backgroundColor,
-                        padding: elements.serialNumber.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('serialNumber', e)}
-                    >
-                      {elements.serialNumber.text}
-                    </div>
-                  )}
-
-                  {/* Rental Conditions and Pricing */}
-                  {elements.rentalConditionsTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalConditionsTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalConditionsTitle.x,
-                        top: elements.rentalConditionsTitle.y,
-                        fontSize: elements.rentalConditionsTitle.fontSize,
-                        fontFamily: elements.rentalConditionsTitle.fontFamily,
-                        color: elements.rentalConditionsTitle.color,
-                        fontWeight: elements.rentalConditionsTitle.fontWeight,
-                        fontStyle: elements.rentalConditionsTitle.fontStyle,
-                        textDecoration: elements.rentalConditionsTitle.textDecoration,
-                        textAlign: elements.rentalConditionsTitle.textAlign,
-                        backgroundColor: elements.rentalConditionsTitle.backgroundColor,
-                        padding: elements.rentalConditionsTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalConditionsTitle', e)}
-                    >
-                      {elements.rentalConditionsTitle.text}
-                    </div>
-                  )}
-                  {elements.dailyPriceLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'dailyPriceLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.dailyPriceLabel.x,
-                        top: elements.dailyPriceLabel.y,
-                        fontSize: elements.dailyPriceLabel.fontSize,
-                        fontFamily: elements.dailyPriceLabel.fontFamily,
-                        color: elements.dailyPriceLabel.color,
-                        fontWeight: elements.dailyPriceLabel.fontWeight,
-                        fontStyle: elements.dailyPriceLabel.fontStyle,
-                        textDecoration: elements.dailyPriceLabel.textDecoration,
-                        textAlign: elements.dailyPriceLabel.textAlign,
-                        backgroundColor: elements.dailyPriceLabel.backgroundColor,
-                        padding: elements.dailyPriceLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('dailyPriceLabel', e)}
-                    >
-                      {elements.dailyPriceLabel.text}
-                    </div>
-                  )}
-                  {elements.dailyPrice && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'dailyPrice' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.dailyPrice.x,
-                        top: elements.dailyPrice.y,
-                        fontSize: elements.dailyPrice.fontSize,
-                        fontFamily: elements.dailyPrice.fontFamily,
-                        color: elements.dailyPrice.color,
-                        fontWeight: elements.dailyPrice.fontWeight,
-                        fontStyle: elements.dailyPrice.fontStyle,
-                        textDecoration: elements.dailyPrice.textDecoration,
-                        textAlign: elements.dailyPrice.textAlign,
-                        backgroundColor: elements.dailyPrice.backgroundColor,
-                        padding: elements.dailyPrice.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('dailyPrice', e)}
-                    >
-                      {elements.dailyPrice.text}
-                    </div>
-                  )}
-                  {elements.numberOfDaysLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'numberOfDaysLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.numberOfDaysLabel.x,
-                        top: elements.numberOfDaysLabel.y,
-                        fontSize: elements.numberOfDaysLabel.fontSize,
-                        fontFamily: elements.numberOfDaysLabel.fontFamily,
-                        color: elements.numberOfDaysLabel.color,
-                        fontWeight: elements.numberOfDaysLabel.fontWeight,
-                        fontStyle: elements.numberOfDaysLabel.fontStyle,
-                        textDecoration: elements.numberOfDaysLabel.textDecoration,
-                        textAlign: elements.numberOfDaysLabel.textAlign,
-                        backgroundColor: elements.numberOfDaysLabel.backgroundColor,
-                        padding: elements.numberOfDaysLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('numberOfDaysLabel', e)}
-                    >
-                      {elements.numberOfDaysLabel.text}
-                    </div>
-                  )}
-                  {elements.numberOfDays && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'numberOfDays' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.numberOfDays.x,
-                        top: elements.numberOfDays.y,
-                        fontSize: elements.numberOfDays.fontSize,
-                        fontFamily: elements.numberOfDays.fontFamily,
-                        color: elements.numberOfDays.color,
-                        fontWeight: elements.numberOfDays.fontWeight,
-                        fontStyle: elements.numberOfDays.fontStyle,
-                        textDecoration: elements.numberOfDays.textDecoration,
-                        textAlign: elements.numberOfDays.textAlign,
-                        backgroundColor: elements.numberOfDays.backgroundColor,
-                        padding: elements.numberOfDays.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('numberOfDays', e)}
-                    >
-                      {elements.numberOfDays.text}
-                    </div>
-                  )}
-                  {elements.rentalPeriodLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalPeriodLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalPeriodLabel.x,
-                        top: elements.rentalPeriodLabel.y,
-                        fontSize: elements.rentalPeriodLabel.fontSize,
-                        fontFamily: elements.rentalPeriodLabel.fontFamily,
-                        color: elements.rentalPeriodLabel.color,
-                        fontWeight: elements.rentalPeriodLabel.fontWeight,
-                        fontStyle: elements.rentalPeriodLabel.fontStyle,
-                        textDecoration: elements.rentalPeriodLabel.textDecoration,
-                        textAlign: elements.rentalPeriodLabel.textAlign,
-                        backgroundColor: elements.rentalPeriodLabel.backgroundColor,
-                        padding: elements.rentalPeriodLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalPeriodLabel', e)}
-                    >
-                      {elements.rentalPeriodLabel.text}
-                    </div>
-                  )}
-                  {elements.rentalPeriod && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'rentalPeriod' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.rentalPeriod.x,
-                        top: elements.rentalPeriod.y,
-                        fontSize: elements.rentalPeriod.fontSize,
-                        fontFamily: elements.rentalPeriod.fontFamily,
-                        color: elements.rentalPeriod.color,
-                        fontWeight: elements.rentalPeriod.fontWeight,
-                        fontStyle: elements.rentalPeriod.fontStyle,
-                        textDecoration: elements.rentalPeriod.textDecoration,
-                        textAlign: elements.rentalPeriod.textAlign,
-                        backgroundColor: elements.rentalPeriod.backgroundColor,
-                        padding: elements.rentalPeriod.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('rentalPeriod', e)}
-                    >
-                      {elements.rentalPeriod.text}
-                    </div>
-                  )}
-                  {elements.totalHTLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalHTLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalHTLabel.x,
-                        top: elements.totalHTLabel.y,
-                        fontSize: elements.totalHTLabel.fontSize,
-                        fontFamily: elements.totalHTLabel.fontFamily,
-                        color: elements.totalHTLabel.color,
-                        fontWeight: elements.totalHTLabel.fontWeight,
-                        fontStyle: elements.totalHTLabel.fontStyle,
-                        textDecoration: elements.totalHTLabel.textDecoration,
-                        textAlign: elements.totalHTLabel.textAlign,
-                        backgroundColor: elements.totalHTLabel.backgroundColor,
-                        padding: elements.totalHTLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalHTLabel', e)}
-                    >
-                      {elements.totalHTLabel.text}
-                    </div>
-                  )}
-                  {elements.totalHT && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalHT' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalHT.x,
-                        top: elements.totalHT.y,
-                        fontSize: elements.totalHT.fontSize,
-                        fontFamily: elements.totalHT.fontFamily,
-                        color: elements.totalHT.color,
-                        fontWeight: elements.totalHT.fontWeight,
-                        fontStyle: elements.totalHT.fontStyle,
-                        textDecoration: elements.totalHT.textDecoration,
-                        textAlign: elements.totalHT.textAlign,
-                        backgroundColor: elements.totalHT.backgroundColor,
-                        padding: elements.totalHT.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalHT', e)}
-                    >
-                      {elements.totalHT.text}
-                    </div>
-                  )}
-                  {elements.totalTTCLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalTTCLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalTTCLabel.x,
-                        top: elements.totalTTCLabel.y,
-                        fontSize: elements.totalTTCLabel.fontSize,
-                        fontFamily: elements.totalTTCLabel.fontFamily,
-                        color: elements.totalTTCLabel.color,
-                        fontWeight: elements.totalTTCLabel.fontWeight,
-                        fontStyle: elements.totalTTCLabel.fontStyle,
-                        textDecoration: elements.totalTTCLabel.textDecoration,
-                        textAlign: elements.totalTTCLabel.textAlign,
-                        backgroundColor: elements.totalTTCLabel.backgroundColor,
-                        padding: elements.totalTTCLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalTTCLabel', e)}
-                    >
-                      {elements.totalTTCLabel.text}
-                    </div>
-                  )}
-                  {elements.totalTTC && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'totalTTC' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.totalTTC.x,
-                        top: elements.totalTTC.y,
-                        fontSize: elements.totalTTC.fontSize,
-                        fontFamily: elements.totalTTC.fontFamily,
-                        color: elements.totalTTC.color,
-                        fontWeight: elements.totalTTC.fontWeight,
-                        fontStyle: elements.totalTTC.fontStyle,
-                        textDecoration: elements.totalTTC.textDecoration,
-                        textAlign: elements.totalTTC.textAlign,
-                        backgroundColor: elements.totalTTC.backgroundColor,
-                        padding: elements.totalTTC.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('totalTTC', e)}
-                    >
-                      {elements.totalTTC.text}
-                    </div>
-                  )}
-                  {elements.numberOfVehiclesLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'numberOfVehiclesLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.numberOfVehiclesLabel.x,
-                        top: elements.numberOfVehiclesLabel.y,
-                        fontSize: elements.numberOfVehiclesLabel.fontSize,
-                        fontFamily: elements.numberOfVehiclesLabel.fontFamily,
-                        color: elements.numberOfVehiclesLabel.color,
-                        fontWeight: elements.numberOfVehiclesLabel.fontWeight,
-                        fontStyle: elements.numberOfVehiclesLabel.fontStyle,
-                        textDecoration: elements.numberOfVehiclesLabel.textDecoration,
-                        textAlign: elements.numberOfVehiclesLabel.textAlign,
-                        backgroundColor: elements.numberOfVehiclesLabel.backgroundColor,
-                        padding: elements.numberOfVehiclesLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('numberOfVehiclesLabel', e)}
-                    >
-                      {elements.numberOfVehiclesLabel.text}
-                    </div>
-                  )}
-                  {elements.numberOfVehicles && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'numberOfVehicles' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.numberOfVehicles.x,
-                        top: elements.numberOfVehicles.y,
-                        fontSize: elements.numberOfVehicles.fontSize,
-                        fontFamily: elements.numberOfVehicles.fontFamily,
-                        color: elements.numberOfVehicles.color,
-                        fontWeight: elements.numberOfVehicles.fontWeight,
-                        fontStyle: elements.numberOfVehicles.fontStyle,
-                        textDecoration: elements.numberOfVehicles.textDecoration,
-                        textAlign: elements.numberOfVehicles.textAlign,
-                        backgroundColor: elements.numberOfVehicles.backgroundColor,
-                        padding: elements.numberOfVehicles.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('numberOfVehicles', e)}
-                    >
-                      {elements.numberOfVehicles.text}
-                    </div>
-                  )}
-
-                  {/* Equipment and Accessories Checklist */}
-                  {elements.checklistTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'checklistTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.checklistTitle.x,
-                        top: elements.checklistTitle.y,
-                        fontSize: elements.checklistTitle.fontSize,
-                        fontFamily: elements.checklistTitle.fontFamily,
-                        color: elements.checklistTitle.color,
-                        fontWeight: elements.checklistTitle.fontWeight,
-                        fontStyle: elements.checklistTitle.fontStyle,
-                        textDecoration: elements.checklistTitle.textDecoration,
-                        textAlign: elements.checklistTitle.textAlign,
-                        backgroundColor: elements.checklistTitle.backgroundColor,
-                        padding: elements.checklistTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('checklistTitle', e)}
-                    >
-                      {elements.checklistTitle.text}
-                    </div>
-                  )}
-                  {elements.checklistItems && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'checklistItems' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.checklistItems.x,
-                        top: elements.checklistItems.y,
-                        fontSize: elements.checklistItems.fontSize,
-                        fontFamily: elements.checklistItems.fontFamily,
-                        color: elements.checklistItems.color,
-                        fontWeight: elements.checklistItems.fontWeight,
-                        fontStyle: elements.checklistItems.fontStyle,
-                        textDecoration: elements.checklistItems.textDecoration,
-                        textAlign: elements.checklistItems.textAlign,
-                        backgroundColor: elements.checklistItems.backgroundColor,
-                        padding: elements.checklistItems.backgroundColor !== 'transparent' ? '4px 8px' : '0',
-                        whiteSpace: 'pre-line'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('checklistItems', e)}
-                    >
-                      {elements.checklistItems.text}
-                    </div>
-                  )}
-
-                  {/* Signatures */}
-                  {elements.agencySignatureText && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'agencySignatureText' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.agencySignatureText.x,
-                        top: elements.agencySignatureText.y,
-                        fontSize: elements.agencySignatureText.fontSize,
-                        fontFamily: elements.agencySignatureText.fontFamily,
-                        color: elements.agencySignatureText.color,
-                        fontWeight: elements.agencySignatureText.fontWeight,
-                        fontStyle: elements.agencySignatureText.fontStyle,
-                        textDecoration: elements.agencySignatureText.textDecoration,
-                        textAlign: elements.agencySignatureText.textAlign,
-                        backgroundColor: elements.agencySignatureText.backgroundColor,
-                        padding: elements.agencySignatureText.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('agencySignatureText', e)}
-                    >
-                      {elements.agencySignatureText.text}
-                    </div>
-                  )}
-                  {elements.clientSignatureText && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientSignatureText' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientSignatureText.x,
-                        top: elements.clientSignatureText.y,
-                        fontSize: elements.clientSignatureText.fontSize,
-                        fontFamily: elements.clientSignatureText.fontFamily,
-                        color: elements.clientSignatureText.color,
-                        fontWeight: elements.clientSignatureText.fontWeight,
-                        fontStyle: elements.clientSignatureText.fontStyle,
-                        textDecoration: elements.clientSignatureText.textDecoration,
-                        textAlign: elements.clientSignatureText.textAlign,
-                        backgroundColor: elements.clientSignatureText.backgroundColor,
-                        padding: elements.clientSignatureText.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientSignatureText', e)}
-                    >
-                      {elements.clientSignatureText.text}
-                    </div>
-                  )}
-                </>
-              ) : null}
-
-              {/* Contract-specific elements - rendering helper */}
-              {type === 'contract' && (
-                <>
-                  {/* Helper function to render a contract element */}
-                  {(() => {
-                    const renderElement = (key: string, element: any) => {
-                      if (!element) return null;
-                      return (
-                        <div
-                          key={key}
-                          className={`absolute cursor-move ${selectedElement === key ? 'ring-2 ring-blue-500' : ''}`}
-                          style={{
-                            left: element.x,
-                            top: element.y,
-                            fontSize: element.fontSize,
-                            fontFamily: element.fontFamily,
-                            color: element.color,
-                            fontWeight: element.fontWeight,
-                            fontStyle: element.fontStyle,
-                            textDecoration: element.textDecoration,
-                            textAlign: element.textAlign,
-                            backgroundColor: element.backgroundColor,
-                            padding: element.backgroundColor !== 'transparent' ? '4px 8px' : '0',
-                            whiteSpace: 'pre-line',
-                            maxWidth: key === 'termsContent' ? '500px' : 'auto'
-                          }}
-                          onMouseDown={(e) => handleMouseDown(key, e)}
-                        >
-                          {element.text}
-                        </div>
-                      );
-                    };
-
-                    return (
-                      <>
-                        {/* Page 1 elements */}
-                        {renderElement('title', elements.title)}
-                        {renderElement('contractNumber', elements.contractNumber)}
-                        {renderElement('contractDate', elements.contractDate)}
-                        
-                        {/* Client Information */}
-                        {renderElement('clientSectionTitle', elements.clientSectionTitle)}
-                        {renderElement('clientNameLabel', elements.clientNameLabel)}
-                        {renderElement('clientName', elements.clientName)}
-                        {renderElement('clientPhoneLabel', elements.clientPhoneLabel)}
-                        {renderElement('clientPhone', elements.clientPhone)}
-                        {renderElement('clientIdLabel', elements.clientIdLabel)}
-                        {renderElement('clientId', elements.clientId)}
-                        {renderElement('clientAddressLabel', elements.clientAddressLabel)}
-                        {renderElement('clientAddress', elements.clientAddress)}
-                        {renderElement('driverLicenseLabel', elements.driverLicenseLabel)}
-                        {renderElement('driverLicense', elements.driverLicense)}
-                        
-                        {/* Vehicle Information */}
-                        {renderElement('vehicleSectionTitle', elements.vehicleSectionTitle)}
-                        {renderElement('vehicleBrandLabel', elements.vehicleBrandLabel)}
-                        {renderElement('vehicleBrand', elements.vehicleBrand)}
-                        {renderElement('vehicleModelLabel', elements.vehicleModelLabel)}
-                        {renderElement('vehicleModel', elements.vehicleModel)}
-                        {renderElement('vehicleRegistrationLabel', elements.vehicleRegistrationLabel)}
-                        {renderElement('vehicleRegistration', elements.vehicleRegistration)}
-                        {renderElement('vehicleYearLabel', elements.vehicleYearLabel)}
-                        {renderElement('vehicleYear', elements.vehicleYear)}
-                        {renderElement('vehicleColorLabel', elements.vehicleColorLabel)}
-                        {renderElement('vehicleColor', elements.vehicleColor)}
-                        
-                        {/* Reservation Details */}
-                        {renderElement('reservationSectionTitle', elements.reservationSectionTitle)}
-                        {renderElement('periodLabel', elements.periodLabel)}
-                        {renderElement('reservationPeriod', elements.reservationPeriod)}
-                        {renderElement('durationLabel', elements.durationLabel)}
-                        {renderElement('reservationDuration', elements.reservationDuration)}
-                        {renderElement('priceLabel', elements.priceLabel)}
-                        {renderElement('reservationPrice', elements.reservationPrice)}
-                        
-                        {/* Inspection Information */}
-                        {renderElement('inspectionSectionTitle', elements.inspectionSectionTitle)}
-                        {renderElement('departureMileageLabel', elements.departureMileageLabel)}
-                        {renderElement('departureMileage', elements.departureMileage)}
-                        {renderElement('departureFuelLabel', elements.departureFuelLabel)}
-                        {renderElement('departureFuel', elements.departureFuel)}
-                        
-                        {/* Signatures - Page 1 */}
-                        {renderElement('agencySignatureText', elements.agencySignatureText)}
-                        {renderElement('clientSignatureText', elements.clientSignatureText)}
-                        
-                        {/* Page 2 elements */}
-                        {renderElement('termsPageTitle', elements.termsPageTitle)}
-                        {renderElement('termsTitle', elements.termsTitle)}
-                        {renderElement('termsContent', elements.termsContent)}
-                        {renderElement('termsAgencySignatureText', elements.termsAgencySignatureText)}
-                        {renderElement('termsClientSignatureText', elements.termsClientSignatureText)}
-                      </>
-                    );
-                  })()}
-
-                  {/* Original contract number and date - keeping for reference, can be removed */}
-                  {elements.contractNumber && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'contractNumber' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.contractNumber.x,
-                        top: elements.contractNumber.y,
-                        fontSize: elements.contractNumber.fontSize,
-                        fontFamily: elements.contractNumber.fontFamily,
-                        color: elements.contractNumber.color,
-                        fontWeight: elements.contractNumber.fontWeight,
-                        fontStyle: elements.contractNumber.fontStyle,
-                        textDecoration: elements.contractNumber.textDecoration,
-                        textAlign: elements.contractNumber.textAlign,
-                        backgroundColor: elements.contractNumber.backgroundColor,
-                        padding: elements.contractNumber.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('contractNumber', e)}
-                    >
-                      {elements.contractNumber.text}
-                    </div>
-                  )}
-                  {elements.contractDate && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'contractDate' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.contractDate.x,
-                        top: elements.contractDate.y,
-                        fontSize: elements.contractDate.fontSize,
-                        fontFamily: elements.contractDate.fontFamily,
-                        color: elements.contractDate.color,
-                        fontWeight: elements.contractDate.fontWeight,
-                        fontStyle: elements.contractDate.fontStyle,
-                        textDecoration: elements.contractDate.textDecoration,
-                        textAlign: elements.contractDate.textAlign,
-                        backgroundColor: elements.contractDate.backgroundColor,
-                        padding: elements.contractDate.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('contractDate', e)}
-                    >
-                      {elements.contractDate.text}
-                    </div>
-                  )}
-
-                  {/* Client Information */}
-                  {elements.clientSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientSectionTitle.x,
-                        top: elements.clientSectionTitle.y,
-                        fontSize: elements.clientSectionTitle.fontSize,
-                        fontFamily: elements.clientSectionTitle.fontFamily,
-                        color: elements.clientSectionTitle.color,
-                        fontWeight: elements.clientSectionTitle.fontWeight,
-                        fontStyle: elements.clientSectionTitle.fontStyle,
-                        textDecoration: elements.clientSectionTitle.textDecoration,
-                        textAlign: elements.clientSectionTitle.textAlign,
-                        backgroundColor: elements.clientSectionTitle.backgroundColor,
-                        padding: elements.clientSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientSectionTitle', e)}
-                    >
-                      {elements.clientSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.clientNameLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientNameLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientNameLabel.x,
-                        top: elements.clientNameLabel.y,
-                        fontSize: elements.clientNameLabel.fontSize,
-                        fontFamily: elements.clientNameLabel.fontFamily,
-                        color: elements.clientNameLabel.color,
-                        fontWeight: elements.clientNameLabel.fontWeight,
-                        fontStyle: elements.clientNameLabel.fontStyle,
-                        textDecoration: elements.clientNameLabel.textDecoration,
-                        textAlign: elements.clientNameLabel.textAlign,
-                        backgroundColor: elements.clientNameLabel.backgroundColor,
-                        padding: elements.clientNameLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientNameLabel', e)}
-                    >
-                      {elements.clientNameLabel.text}
-                    </div>
-                  )}
-                  {elements.clientName && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientName' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientName.x,
-                        top: elements.clientName.y,
-                        fontSize: elements.clientName.fontSize,
-                        fontFamily: elements.clientName.fontFamily,
-                        color: elements.clientName.color,
-                        fontWeight: elements.clientName.fontWeight,
-                        fontStyle: elements.clientName.fontStyle,
-                        textDecoration: elements.clientName.textDecoration,
-                        textAlign: elements.clientName.textAlign,
-                        backgroundColor: elements.clientName.backgroundColor,
-                        padding: elements.clientName.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientName', e)}
-                    >
-                      {elements.clientName.text}
-                    </div>
-                  )}
-                  {elements.clientPhoneLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientPhoneLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientPhoneLabel.x,
-                        top: elements.clientPhoneLabel.y,
-                        fontSize: elements.clientPhoneLabel.fontSize,
-                        fontFamily: elements.clientPhoneLabel.fontFamily,
-                        color: elements.clientPhoneLabel.color,
-                        fontWeight: elements.clientPhoneLabel.fontWeight,
-                        fontStyle: elements.clientPhoneLabel.fontStyle,
-                        textDecoration: elements.clientPhoneLabel.textDecoration,
-                        textAlign: elements.clientPhoneLabel.textAlign,
-                        backgroundColor: elements.clientPhoneLabel.backgroundColor,
-                        padding: elements.clientPhoneLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientPhoneLabel', e)}
-                    >
-                      {elements.clientPhoneLabel.text}
-                    </div>
-                  )}
-                  {elements.clientPhone && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientPhone' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientPhone.x,
-                        top: elements.clientPhone.y,
-                        fontSize: elements.clientPhone.fontSize,
-                        fontFamily: elements.clientPhone.fontFamily,
-                        color: elements.clientPhone.color,
-                        fontWeight: elements.clientPhone.fontWeight,
-                        fontStyle: elements.clientPhone.fontStyle,
-                        textDecoration: elements.clientPhone.textDecoration,
-                        textAlign: elements.clientPhone.textAlign,
-                        backgroundColor: elements.clientPhone.backgroundColor,
-                        padding: elements.clientPhone.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientPhone', e)}
-                    >
-                      {elements.clientPhone.text}
-                    </div>
-                  )}
-                  {elements.clientIdLabel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientIdLabel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientIdLabel.x,
-                        top: elements.clientIdLabel.y,
-                        fontSize: elements.clientIdLabel.fontSize,
-                        fontFamily: elements.clientIdLabel.fontFamily,
-                        color: elements.clientIdLabel.color,
-                        fontWeight: elements.clientIdLabel.fontWeight,
-                        fontStyle: elements.clientIdLabel.fontStyle,
-                        textDecoration: elements.clientIdLabel.textDecoration,
-                        textAlign: elements.clientIdLabel.textAlign,
-                        backgroundColor: elements.clientIdLabel.backgroundColor,
-                        padding: elements.clientIdLabel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientIdLabel', e)}
-                    >
-                      {elements.clientIdLabel.text}
-                    </div>
-                  )}
-                  {elements.clientId && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'clientId' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.clientId.x,
-                        top: elements.clientId.y,
-                        fontSize: elements.clientId.fontSize,
-                        fontFamily: elements.clientId.fontFamily,
-                        color: elements.clientId.color,
-                        fontWeight: elements.clientId.fontWeight,
-                        fontStyle: elements.clientId.fontStyle,
-                        textDecoration: elements.clientId.textDecoration,
-                        textAlign: elements.clientId.textAlign,
-                        backgroundColor: elements.clientId.backgroundColor,
-                        padding: elements.clientId.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('clientId', e)}
-                    >
-                      {elements.clientId.text}
-                    </div>
-                  )}
-
-                  {/* Driver Information */}
-                  {elements.driverSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'driverSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.driverSectionTitle.x,
-                        top: elements.driverSectionTitle.y,
-                        fontSize: elements.driverSectionTitle.fontSize,
-                        fontFamily: elements.driverSectionTitle.fontFamily,
-                        color: elements.driverSectionTitle.color,
-                        fontWeight: elements.driverSectionTitle.fontWeight,
-                        fontStyle: elements.driverSectionTitle.fontStyle,
-                        textDecoration: elements.driverSectionTitle.textDecoration,
-                        textAlign: elements.driverSectionTitle.textAlign,
-                        backgroundColor: elements.driverSectionTitle.backgroundColor,
-                        padding: elements.driverSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('driverSectionTitle', e)}
-                    >
-                      {elements.driverSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.driverName && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'driverName' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.driverName.x,
-                        top: elements.driverName.y,
-                        fontSize: elements.driverName.fontSize,
-                        fontFamily: elements.driverName.fontFamily,
-                        color: elements.driverName.color,
-                        fontWeight: elements.driverName.fontWeight,
-                        fontStyle: elements.driverName.fontStyle,
-                        textDecoration: elements.driverName.textDecoration,
-                        textAlign: elements.driverName.textAlign,
-                        backgroundColor: elements.driverName.backgroundColor,
-                        padding: elements.driverName.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('driverName', e)}
-                    >
-                      {elements.driverName.text}
-                    </div>
-                  )}
-                  {elements.driverLicense && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'driverLicense' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.driverLicense.x,
-                        top: elements.driverLicense.y,
-                        fontSize: elements.driverLicense.fontSize,
-                        fontFamily: elements.driverLicense.fontFamily,
-                        color: elements.driverLicense.color,
-                        fontWeight: elements.driverLicense.fontWeight,
-                        fontStyle: elements.driverLicense.fontStyle,
-                        textDecoration: elements.driverLicense.textDecoration,
-                        textAlign: elements.driverLicense.textAlign,
-                        backgroundColor: elements.driverLicense.backgroundColor,
-                        padding: elements.driverLicense.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('driverLicense', e)}
-                    >
-                      {elements.driverLicense.text}
-                    </div>
-                  )}
-
-                  {/* Vehicle Information */}
-                  {elements.vehicleSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleSectionTitle.x,
-                        top: elements.vehicleSectionTitle.y,
-                        fontSize: elements.vehicleSectionTitle.fontSize,
-                        fontFamily: elements.vehicleSectionTitle.fontFamily,
-                        color: elements.vehicleSectionTitle.color,
-                        fontWeight: elements.vehicleSectionTitle.fontWeight,
-                        fontStyle: elements.vehicleSectionTitle.fontStyle,
-                        textDecoration: elements.vehicleSectionTitle.textDecoration,
-                        textAlign: elements.vehicleSectionTitle.textAlign,
-                        backgroundColor: elements.vehicleSectionTitle.backgroundColor,
-                        padding: elements.vehicleSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleSectionTitle', e)}
-                    >
-                      {elements.vehicleSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.vehicleBrand && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleBrand' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleBrand.x,
-                        top: elements.vehicleBrand.y,
-                        fontSize: elements.vehicleBrand.fontSize,
-                        fontFamily: elements.vehicleBrand.fontFamily,
-                        color: elements.vehicleBrand.color,
-                        fontWeight: elements.vehicleBrand.fontWeight,
-                        fontStyle: elements.vehicleBrand.fontStyle,
-                        textDecoration: elements.vehicleBrand.textDecoration,
-                        textAlign: elements.vehicleBrand.textAlign,
-                        backgroundColor: elements.vehicleBrand.backgroundColor,
-                        padding: elements.vehicleBrand.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleBrand', e)}
-                    >
-                      {elements.vehicleBrand.text}
-                    </div>
-                  )}
-                  {elements.vehicleModel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleModel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleModel.x,
-                        top: elements.vehicleModel.y,
-                        fontSize: elements.vehicleModel.fontSize,
-                        fontFamily: elements.vehicleModel.fontFamily,
-                        color: elements.vehicleModel.color,
-                        fontWeight: elements.vehicleModel.fontWeight,
-                        fontStyle: elements.vehicleModel.fontStyle,
-                        textDecoration: elements.vehicleModel.textDecoration,
-                        textAlign: elements.vehicleModel.textAlign,
-                        backgroundColor: elements.vehicleModel.backgroundColor,
-                        padding: elements.vehicleModel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleModel', e)}
-                    >
-                      {elements.vehicleModel.text}
-                    </div>
-                  )}
-                  {elements.vehicleRegistration && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleRegistration' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleRegistration.x,
-                        top: elements.vehicleRegistration.y,
-                        fontSize: elements.vehicleRegistration.fontSize,
-                        fontFamily: elements.vehicleRegistration.fontFamily,
-                        color: elements.vehicleRegistration.color,
-                        fontWeight: elements.vehicleRegistration.fontWeight,
-                        fontStyle: elements.vehicleRegistration.fontStyle,
-                        textDecoration: elements.vehicleRegistration.textDecoration,
-                        textAlign: elements.vehicleRegistration.textAlign,
-                        backgroundColor: elements.vehicleRegistration.backgroundColor,
-                        padding: elements.vehicleRegistration.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleRegistration', e)}
-                    >
-                      {elements.vehicleRegistration.text}
-                    </div>
-                  )}
-                  {elements.vehicleYear && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleYear' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleYear.x,
-                        top: elements.vehicleYear.y,
-                        fontSize: elements.vehicleYear.fontSize,
-                        fontFamily: elements.vehicleYear.fontFamily,
-                        color: elements.vehicleYear.color,
-                        fontWeight: elements.vehicleYear.fontWeight,
-                        fontStyle: elements.vehicleYear.fontStyle,
-                        textDecoration: elements.vehicleYear.textDecoration,
-                        textAlign: elements.vehicleYear.textAlign,
-                        backgroundColor: elements.vehicleYear.backgroundColor,
-                        padding: elements.vehicleYear.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleYear', e)}
-                    >
-                      {elements.vehicleYear.text}
-                    </div>
-                  )}
-                  {elements.vehicleColor && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'vehicleColor' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.vehicleColor.x,
-                        top: elements.vehicleColor.y,
-                        fontSize: elements.vehicleColor.fontSize,
-                        fontFamily: elements.vehicleColor.fontFamily,
-                        color: elements.vehicleColor.color,
-                        fontWeight: elements.vehicleColor.fontWeight,
-                        fontStyle: elements.vehicleColor.fontStyle,
-                        textDecoration: elements.vehicleColor.textDecoration,
-                        textAlign: elements.vehicleColor.textAlign,
-                        backgroundColor: elements.vehicleColor.backgroundColor,
-                        padding: elements.vehicleColor.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('vehicleColor', e)}
-                    >
-                      {elements.vehicleColor.text}
-                    </div>
-                  )}
-
-                  {/* Reservation Information */}
-                  {elements.reservationSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'reservationSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.reservationSectionTitle.x,
-                        top: elements.reservationSectionTitle.y,
-                        fontSize: elements.reservationSectionTitle.fontSize,
-                        fontFamily: elements.reservationSectionTitle.fontFamily,
-                        color: elements.reservationSectionTitle.color,
-                        fontWeight: elements.reservationSectionTitle.fontWeight,
-                        fontStyle: elements.reservationSectionTitle.fontStyle,
-                        textDecoration: elements.reservationSectionTitle.textDecoration,
-                        textAlign: elements.reservationSectionTitle.textAlign,
-                        backgroundColor: elements.reservationSectionTitle.backgroundColor,
-                        padding: elements.reservationSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('reservationSectionTitle', e)}
-                    >
-                      {elements.reservationSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.reservationPeriod && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'reservationPeriod' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.reservationPeriod.x,
-                        top: elements.reservationPeriod.y,
-                        fontSize: elements.reservationPeriod.fontSize,
-                        fontFamily: elements.reservationPeriod.fontFamily,
-                        color: elements.reservationPeriod.color,
-                        fontWeight: elements.reservationPeriod.fontWeight,
-                        fontStyle: elements.reservationPeriod.fontStyle,
-                        textDecoration: elements.reservationPeriod.textDecoration,
-                        textAlign: elements.reservationPeriod.textAlign,
-                        backgroundColor: elements.reservationPeriod.backgroundColor,
-                        padding: elements.reservationPeriod.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('reservationPeriod', e)}
-                    >
-                      {elements.reservationPeriod.text}
-                    </div>
-                  )}
-                  {elements.reservationDuration && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'reservationDuration' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.reservationDuration.x,
-                        top: elements.reservationDuration.y,
-                        fontSize: elements.reservationDuration.fontSize,
-                        fontFamily: elements.reservationDuration.fontFamily,
-                        color: elements.reservationDuration.color,
-                        fontWeight: elements.reservationDuration.fontWeight,
-                        fontStyle: elements.reservationDuration.fontStyle,
-                        textDecoration: elements.reservationDuration.textDecoration,
-                        textAlign: elements.reservationDuration.textAlign,
-                        backgroundColor: elements.reservationDuration.backgroundColor,
-                        padding: elements.reservationDuration.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('reservationDuration', e)}
-                    >
-                      {elements.reservationDuration.text}
-                    </div>
-                  )}
-                  {elements.reservationPrice && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'reservationPrice' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.reservationPrice.x,
-                        top: elements.reservationPrice.y,
-                        fontSize: elements.reservationPrice.fontSize,
-                        fontFamily: elements.reservationPrice.fontFamily,
-                        color: elements.reservationPrice.color,
-                        fontWeight: elements.reservationPrice.fontWeight,
-                        fontStyle: elements.reservationPrice.fontStyle,
-                        textDecoration: elements.reservationPrice.textDecoration,
-                        textAlign: elements.reservationPrice.textAlign,
-                        backgroundColor: elements.reservationPrice.backgroundColor,
-                        padding: elements.reservationPrice.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('reservationPrice', e)}
-                    >
-                      {elements.reservationPrice.text}
-                    </div>
-                  )}
-
-                  {/* Inspection Information */}
-                  {elements.inspectionSectionTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'inspectionSectionTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.inspectionSectionTitle.x,
-                        top: elements.inspectionSectionTitle.y,
-                        fontSize: elements.inspectionSectionTitle.fontSize,
-                        fontFamily: elements.inspectionSectionTitle.fontFamily,
-                        color: elements.inspectionSectionTitle.color,
-                        fontWeight: elements.inspectionSectionTitle.fontWeight,
-                        fontStyle: elements.inspectionSectionTitle.fontStyle,
-                        textDecoration: elements.inspectionSectionTitle.textDecoration,
-                        textAlign: elements.inspectionSectionTitle.textAlign,
-                        backgroundColor: elements.inspectionSectionTitle.backgroundColor,
-                        padding: elements.inspectionSectionTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('inspectionSectionTitle', e)}
-                    >
-                      {elements.inspectionSectionTitle.text}
-                    </div>
-                  )}
-                  {elements.departureMileage && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'departureMileage' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.departureMileage.x,
-                        top: elements.departureMileage.y,
-                        fontSize: elements.departureMileage.fontSize,
-                        fontFamily: elements.departureMileage.fontFamily,
-                        color: elements.departureMileage.color,
-                        fontWeight: elements.departureMileage.fontWeight,
-                        fontStyle: elements.departureMileage.fontStyle,
-                        textDecoration: elements.departureMileage.textDecoration,
-                        textAlign: elements.departureMileage.textAlign,
-                        backgroundColor: elements.departureMileage.backgroundColor,
-                        padding: elements.departureMileage.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('departureMileage', e)}
-                    >
-                      {elements.departureMileage.text}
-                    </div>
-                  )}
-                  {elements.departureFuel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'departureFuel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.departureFuel.x,
-                        top: elements.departureFuel.y,
-                        fontSize: elements.departureFuel.fontSize,
-                        fontFamily: elements.departureFuel.fontFamily,
-                        color: elements.departureFuel.color,
-                        fontWeight: elements.departureFuel.fontWeight,
-                        fontStyle: elements.departureFuel.fontStyle,
-                        textDecoration: elements.departureFuel.textDecoration,
-                        textAlign: elements.departureFuel.textAlign,
-                        backgroundColor: elements.departureFuel.backgroundColor,
-                        padding: elements.departureFuel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('departureFuel', e)}
-                    >
-                      {elements.departureFuel.text}
-                    </div>
-                  )}
-                  {elements.returnMileage && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'returnMileage' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.returnMileage.x,
-                        top: elements.returnMileage.y,
-                        fontSize: elements.returnMileage.fontSize,
-                        fontFamily: elements.returnMileage.fontFamily,
-                        color: elements.returnMileage.color,
-                        fontWeight: elements.returnMileage.fontWeight,
-                        fontStyle: elements.returnMileage.fontStyle,
-                        textDecoration: elements.returnMileage.textDecoration,
-                        textAlign: elements.returnMileage.textAlign,
-                        backgroundColor: elements.returnMileage.backgroundColor,
-                        padding: elements.returnMileage.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('returnMileage', e)}
-                    >
-                      {elements.returnMileage.text}
-                    </div>
-                  )}
-                  {elements.returnFuel && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'returnFuel' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.returnFuel.x,
-                        top: elements.returnFuel.y,
-                        fontSize: elements.returnFuel.fontSize,
-                        fontFamily: elements.returnFuel.fontFamily,
-                        color: elements.returnFuel.color,
-                        fontWeight: elements.returnFuel.fontWeight,
-                        fontStyle: elements.returnFuel.fontStyle,
-                        textDecoration: elements.returnFuel.textDecoration,
-                        textAlign: elements.returnFuel.textAlign,
-                        backgroundColor: elements.returnFuel.backgroundColor,
-                        padding: elements.returnFuel.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('returnFuel', e)}
-                    >
-                      {elements.returnFuel.text}
-                    </div>
-                  )}
-                  {elements.inspectionItemsTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'inspectionItemsTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.inspectionItemsTitle.x,
-                        top: elements.inspectionItemsTitle.y,
-                        fontSize: elements.inspectionItemsTitle.fontSize,
-                        fontFamily: elements.inspectionItemsTitle.fontFamily,
-                        color: elements.inspectionItemsTitle.color,
-                        fontWeight: elements.inspectionItemsTitle.fontWeight,
-                        fontStyle: elements.inspectionItemsTitle.fontStyle,
-                        textDecoration: elements.inspectionItemsTitle.textDecoration,
-                        textAlign: elements.inspectionItemsTitle.textAlign,
-                        backgroundColor: elements.inspectionItemsTitle.backgroundColor,
-                        padding: elements.inspectionItemsTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('inspectionItemsTitle', e)}
-                    >
-                      {elements.inspectionItemsTitle.text}
-                    </div>
-                  )}
-                  {elements.inspectionItems && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'inspectionItems' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.inspectionItems.x,
-                        top: elements.inspectionItems.y,
-                        fontSize: elements.inspectionItems.fontSize,
-                        fontFamily: elements.inspectionItems.fontFamily,
-                        color: elements.inspectionItems.color,
-                        fontWeight: elements.inspectionItems.fontWeight,
-                        fontStyle: elements.inspectionItems.fontStyle,
-                        textDecoration: elements.inspectionItems.textDecoration,
-                        textAlign: elements.inspectionItems.textAlign,
-                        backgroundColor: elements.inspectionItems.backgroundColor,
-                        padding: elements.inspectionItems.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('inspectionItems', e)}
-                    >
-                      {elements.inspectionItems.text}
-                    </div>
-                  )}
-
-                  {/* Second page - Terms */}
-                  {elements.termsTitle && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'termsTitle' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.termsTitle.x,
-                        top: elements.termsTitle.y,
-                        fontSize: elements.termsTitle.fontSize,
-                        fontFamily: elements.termsTitle.fontFamily,
-                        color: elements.termsTitle.color,
-                        fontWeight: elements.termsTitle.fontWeight,
-                        fontStyle: elements.termsTitle.fontStyle,
-                        textDecoration: elements.termsTitle.textDecoration,
-                        textAlign: elements.termsTitle.textAlign,
-                        backgroundColor: elements.termsTitle.backgroundColor,
-                        padding: elements.termsTitle.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('termsTitle', e)}
-                    >
-                      {elements.termsTitle.text}
-                    </div>
-                  )}
-                  {elements.termsContent && (
-                    <div
-                      className={`absolute cursor-move ${selectedElement === 'termsContent' ? 'ring-2 ring-blue-500' : ''}`}
-                      style={{
-                        left: elements.termsContent.x,
-                        top: elements.termsContent.y,
-                        fontSize: elements.termsContent.fontSize,
-                        fontFamily: elements.termsContent.fontFamily,
-                        color: elements.termsContent.color,
-                        fontWeight: elements.termsContent.fontWeight,
-                        fontStyle: elements.termsContent.fontStyle,
-                        textDecoration: elements.termsContent.textDecoration,
-                        textAlign: elements.termsContent.textAlign,
-                        backgroundColor: elements.termsContent.backgroundColor,
-                        padding: elements.termsContent.backgroundColor !== 'transparent' ? '4px 8px' : '0',
-                        whiteSpace: 'pre-line',
-                        maxWidth: '500px'
-                      }}
-                      onMouseDown={(e) => handleMouseDown('termsContent', e)}
-                    >
-                      {elements.termsContent.text}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Signatures */}
-              {elements.signatureText1 && (
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'signatureText1' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.signatureText1.x || 50,
-                    top: elements.signatureText1.y || 600,
-                    fontSize: elements.signatureText1.fontSize || 14,
-                    fontFamily: elements.signatureText1.fontFamily || 'Arial',
-                    color: elements.signatureText1.color || '#666666',
-                    fontWeight: elements.signatureText1.fontWeight || 'normal',
-                    fontStyle: elements.signatureText1.fontStyle || 'normal',
-                    textDecoration: elements.signatureText1.textDecoration || 'none',
-                    textAlign: elements.signatureText1.textAlign || 'left',
-                    backgroundColor: elements.signatureText1.backgroundColor || 'transparent',
-                    padding: elements.signatureText1.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                  }}
-                  onMouseDown={(e) => handleMouseDown('signatureText1', e)}
-                >
-                  {elements.signatureText1.text || 'Signature et cachet de l\'Agence'}
-                </div>
-              )}
-
-              {elements.signatureText2 && (
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'signatureText2' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.signatureText2.x || 300,
-                    top: elements.signatureText2.y || 600,
-                    fontSize: elements.signatureText2.fontSize || 14,
-                    fontFamily: elements.signatureText2.fontFamily || 'Arial',
-                    color: elements.signatureText2.color || '#666666',
-                    fontWeight: elements.signatureText2.fontWeight || 'normal',
-                    fontStyle: elements.signatureText2.fontStyle || 'normal',
-                    textDecoration: elements.signatureText2.textDecoration || 'none',
-                    textAlign: elements.signatureText2.textAlign || 'left',
-                    backgroundColor: elements.signatureText2.backgroundColor || 'transparent',
-                    padding: elements.signatureText2.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                  }}
-                  onMouseDown={(e) => handleMouseDown('signatureText2', e)}
-                >
-                  {elements.signatureText2.text || 'Signature de client'}
-                </div>
-              )}
-
-              {/* New Text Elements */}
-              {newTextElements.map((element) => (
-                <div
-                  key={element.id}
-                  className={`absolute cursor-move ${selectedElement === element.id ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: element.x,
-                    top: element.y,
-                    fontSize: element.fontSize,
-                    fontFamily: element.fontFamily,
-                    color: element.color,
-                    fontWeight: element.fontWeight,
-                    fontStyle: element.fontStyle,
-                    textDecoration: element.textDecoration,
-                    textAlign: element.textAlign,
-                    backgroundColor: element.backgroundColor,
-                    padding: element.backgroundColor !== 'transparent' ? '4px 8px' : '0'
-                  }}
-                  onMouseDown={(e) => handleMouseDown(element.id, e)}
-                >
-                  {element.text}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Properties Panel */}
-          <div className="w-96 bg-gradient-to-b from-gray-50 to-gray-100 p-6 border-l border-saas-border overflow-y-auto">
-            <h4 className="text-lg font-bold text-saas-text-main mb-4">
-              {lang === 'fr' ? 'Propriétés' : 'الخصائص'}
-            </h4>
-
-            {selectedElement && (
-              <div className="space-y-4">
-                {/* Text Content */}
-                <div className="bg-white p-4 rounded-lg border border-saas-border">
-                  <label className="block text-sm font-bold text-saas-text-main mb-2">
-                    📝 {lang === 'fr' ? 'Texte' : 'النص'}
-                  </label>
-                  <textarea
-                    value={elements[selectedElement]?.text || newTextElements.find(el => el.id === selectedElement)?.text || ''}
-                    onChange={(e) => {
-                      if (selectedElement.startsWith('newText_')) {
-                        setNewTextElements(prev => prev.map(el =>
-                          el.id === selectedElement ? { ...el, text: e.target.value } : el
-                        ));
-                      } else {
-                        updateElement(selectedElement, { text: e.target.value });
-                      }
-                    }}
-                    className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                    rows={3}
-                  />
-                </div>
-
-                {/* Font Size */}
-                <div className="bg-white p-4 rounded-lg border border-saas-border">
-                  <label className="block text-sm font-bold text-saas-text-main mb-2">
-                    📏 {lang === 'fr' ? 'Taille (px)' : 'الحجم (بكسل)'}
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="range"
-                      value={elements[selectedElement]?.fontSize || newTextElements.find(el => el.id === selectedElement)?.fontSize || 16}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, fontSize: value } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { fontSize: value });
-                        }
-                      }}
-                      className="flex-1"
-                      min="8"
-                      max="72"
-                    />
-                    <span className="text-sm font-bold w-12 text-right">{elements[selectedElement]?.fontSize || newTextElements.find(el => el.id === selectedElement)?.fontSize || 16}</span>
-                  </div>
-                </div>
-
-                {/* Font Family */}
-                <div className="bg-white p-4 rounded-lg border border-saas-border">
-                  <label className="block text-sm font-bold text-saas-text-main mb-2">
-                    🔤 {lang === 'fr' ? 'Police' : 'الخط'}
-                  </label>
-                  <select
-                    value={elements[selectedElement]?.fontFamily || newTextElements.find(el => el.id === selectedElement)?.fontFamily || 'Arial'}
-                    onChange={(e) => {
-                      if (selectedElement.startsWith('newText_')) {
-                        setNewTextElements(prev => prev.map(el =>
-                          el.id === selectedElement ? { ...el, fontFamily: e.target.value } : el
-                        ));
-                      } else {
-                        updateElement(selectedElement, { fontFamily: e.target.value });
-                      }
-                    }}
-                    className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Arial">Arial</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                    <option value="Courier New">Courier New</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Verdana">Verdana</option>
-                  </select>
-                </div>
-
-                {/* Font Weight & Style */}
-                <div className="bg-white p-4 rounded-lg border border-saas-border">
-                  <label className="block text-sm font-bold text-saas-text-main mb-2">
-                    ✨ {lang === 'fr' ? 'Style de texte' : 'نمط النص'}
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* Bold */}
-                    <button
-                      onClick={() => {
-                        const currentWeight = elements[selectedElement]?.fontWeight || newTextElements.find(el => el.id === selectedElement)?.fontWeight || 'normal';
-                        const newWeight = currentWeight === 'bold' ? 'normal' : 'bold';
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, fontWeight: newWeight } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { fontWeight: newWeight });
-                        }
-                      }}
-                      className={`p-2 rounded font-bold transition-colors ${
-                        (elements[selectedElement]?.fontWeight || newTextElements.find(el => el.id === selectedElement)?.fontWeight) === 'bold'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      B
-                    </button>
-                    {/* Italic */}
-                    <button
-                      onClick={() => {
-                        const currentStyle = elements[selectedElement]?.fontStyle || newTextElements.find(el => el.id === selectedElement)?.fontStyle || 'normal';
-                        const newStyle = currentStyle === 'italic' ? 'normal' : 'italic';
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, fontStyle: newStyle } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { fontStyle: newStyle });
-                        }
-                      }}
-                      className={`p-2 rounded font-italic italic transition-colors ${
-                        (elements[selectedElement]?.fontStyle || newTextElements.find(el => el.id === selectedElement)?.fontStyle) === 'italic'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      I
-                    </button>
-                  </div>
-                  {/* Underline */}
-                  <button
-                    onClick={() => {
-                      const currentDecoration = elements[selectedElement]?.textDecoration || newTextElements.find(el => el.id === selectedElement)?.textDecoration || 'none';
-                      const newDecoration = currentDecoration === 'underline' ? 'none' : 'underline';
-                      if (selectedElement.startsWith('newText_')) {
-                        setNewTextElements(prev => prev.map(el =>
-                          el.id === selectedElement ? { ...el, textDecoration: newDecoration } : el
-                        ));
-                      } else {
-                        updateElement(selectedElement, { textDecoration: newDecoration });
-                      }
-                    }}
-                    className={`w-full mt-2 p-2 rounded font-bold underline transition-colors ${
-                      (elements[selectedElement]?.textDecoration || newTextElements.find(el => el.id === selectedElement)?.textDecoration) === 'underline'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    U
-                  </button>
-                </div>
-
-                {/* Text Alignment */}
-                <div className="bg-white p-4 rounded-lg border border-saas-border">
-                  <label className="block text-sm font-bold text-saas-text-main mb-2">
-                    ➡️ {lang === 'fr' ? 'Alignement' : 'المحاذاة'}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['left', 'center', 'right'].map((align) => (
-                      <button
-                        key={align}
-                        onClick={() => {
-                          if (selectedElement.startsWith('newText_')) {
-                            setNewTextElements(prev => prev.map(el =>
-                              el.id === selectedElement ? { ...el, textAlign: align } : el
-                            ));
-                          } else {
-                            updateElement(selectedElement, { textAlign: align });
-                          }
-                        }}
-                        className={`p-2 rounded transition-colors ${
-                          (elements[selectedElement]?.textAlign || newTextElements.find(el => el.id === selectedElement)?.textAlign || 'left') === align
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                      >
-                        {align === 'left' && '⬅️'}
-                        {align === 'center' && '↔️'}
-                        {align === 'right' && '➡️'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Text Color */}
-                <div className="bg-white p-4 rounded-lg border border-saas-border">
-                  <label className="block text-sm font-bold text-saas-text-main mb-2">
-                    🎨 {lang === 'fr' ? 'Couleur du texte' : 'لون النص'}
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      value={elements[selectedElement]?.color || newTextElements.find(el => el.id === selectedElement)?.color || '#000000'}
-                      onChange={(e) => {
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, color: e.target.value } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { color: e.target.value });
-                        }
-                      }}
-                      className="w-16 h-10 border border-gray-300 rounded cursor-pointer"
-                    />
-                    <span className="text-sm font-mono text-gray-600">
-                      {elements[selectedElement]?.color || newTextElements.find(el => el.id === selectedElement)?.color || '#000000'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Background Color */}
-                <div className="bg-white p-4 rounded-lg border border-saas-border">
-                  <label className="block text-sm font-bold text-saas-text-main mb-2">
-                    🎭 {lang === 'fr' ? 'Couleur de fond' : 'لون الخلفية'}
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      value={elements[selectedElement]?.backgroundColor || newTextElements.find(el => el.id === selectedElement)?.backgroundColor || '#ffffff'}
-                      onChange={(e) => {
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, backgroundColor: e.target.value } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { backgroundColor: e.target.value });
-                        }
-                      }}
-                      className="w-16 h-10 border border-gray-300 rounded cursor-pointer"
-                    />
-                    <span className="text-sm font-mono text-gray-600">
-                      {elements[selectedElement]?.backgroundColor || newTextElements.find(el => el.id === selectedElement)?.backgroundColor || '#ffffff'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!selectedElement && (
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                  <p className="text-saas-text-muted text-center text-sm">
-                    {lang === 'fr' ? 'Cliquez sur un élément pour le modifier' : 'انقر على عنصر لتعديله'}
-                  </p>
-                </div>
-                <button
-                  onClick={addNewText}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-saas-primary-start to-saas-primary-end hover:from-saas-primary-end hover:to-saas-secondary-start text-white font-bold rounded-lg transition-all"
-                >
-                  ➕ {lang === 'fr' ? 'Ajouter du texte' : 'إضافة نص'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="p-6 border-t border-saas-border flex justify-between">
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
-            >
-              {lang === 'fr' ? 'Annuler' : 'إلغاء'}
-            </button>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={saveTemplate}
-              className="px-6 py-2 bg-saas-primary-start hover:bg-saas-primary-end text-white font-bold rounded-lg transition-colors"
-            >
-              💾 {lang === 'fr' ? 'Sauvegarder' : 'حفظ'}
-            </button>
-            <button
-              onClick={() => {
-                const printContent = getPersonalizedContent();
-                const printWindow = window.open('', '', 'height=600,width=800');
-                if (printWindow) {
-                  printWindow.document.write(printContent);
-                  printWindow.document.close();
-                  setTimeout(() => {
-                    printWindow.print();
-                    printWindow.close();
-                  }, 250);
-                }
-              }}
-              className="px-6 py-2 bg-saas-success hover:bg-green-600 text-white font-bold rounded-lg transition-colors"
-            >
-              🖨️ {lang === 'fr' ? 'Imprimer' : 'طباعة'}
-            </button>
-          </div>
-        </div>
-
-        {/* Template Info Section */}
-        {(() => {
-          const loadedTemplate = savedTemplates.find(template => template.type === type);
-          return loadedTemplate ? (
-            <div className="border-t border-saas-border bg-gray-50 p-6">
-              <h4 className="font-bold text-saas-text-main mb-4">
-                📄 {lang === 'fr' ? 'Modèle chargé' : 'القالب المحمل'}
-              </h4>
-              <div className="bg-white border border-saas-border rounded-lg p-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h5 className="font-bold text-saas-text-main">{loadedTemplate.name}</h5>
-                    <p className="text-sm text-saas-text-muted">
-                      {lang === 'fr' ? 'Type:' : 'النوع:'} {type} • {lang === 'fr' ? 'Créé le:' : 'تم الإنشاء:'} {new Date(loadedTemplate.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => deleteTemplate(loadedTemplate.id)}
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded transition-colors font-bold"
-                  >
-                    🗑️ {lang === 'fr' ? 'Supprimer' : 'حذف'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null;
-        })()}
-      </motion.div>
-    </motion.div>
-  );
 
   return (
     <>
-      {/* Personalization Modal */}
       <motion.div
+        key="backdrop"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        className="fixed inset-0 backdrop-blur-sm z-40"
         onClick={onClose}
+      />
+      <motion.div
+        key="modal"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white rounded-lg shadow-2xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="p-6 border-b border-saas-border">
-            <h3 className="text-xl font-bold text-saas-text-main">
-              🎨 {lang === 'fr' ? 'Personnalisation du Document' : 'تخصيص المستند'}
-            </h3>
-          </div>
-
-          <div className="flex h-[70vh]">
-            {/* Preview Area */}
-            <div className="flex-1 bg-gray-50 p-6 border-r border-saas-border relative overflow-hidden">
-              <div
-                className="bg-white border border-gray-300 rounded-lg shadow-inner w-full h-full relative"
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-              >
-                {/* Logo */}
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'logo' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{ left: elements.logo.x, top: elements.logo.y }}
-                  onMouseDown={(e) => handleMouseDown('logo', e)}
-                >
-                  <img
-                    src="https://via.placeholder.com/100x100/007bff/ffffff?text=LUXDRIVE"
-                    alt="Logo"
-                    className="w-24 h-24 object-contain border border-gray-300 rounded"
-                  />
-                </div>
-
-                {/* Title */}
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'title' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.title.x,
-                    top: elements.title.y,
-                    fontSize: elements.title.fontSize,
-                    fontFamily: elements.title.fontFamily,
-                    color: elements.title.color,
-                    fontWeight: elements.title.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('title', e)}
-                >
-                  {elements.title.text}
-                </div>
-
-                {/* Agence Name */}
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'agenceName' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.agenceName.x,
-                    top: elements.agenceName.y,
-                    fontSize: elements.agenceName.fontSize,
-                    fontFamily: elements.agenceName.fontFamily,
-                    color: elements.agenceName.color,
-                    fontWeight: elements.agenceName.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('agenceName', e)}
-                >
-                  {elements.agenceName.text}
-                </div>
-
-                {/* Client Info */}
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'introText' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.introText.x,
-                    top: elements.introText.y,
-                    fontSize: elements.introText.fontSize,
-                    fontFamily: elements.introText.fontFamily,
-                    color: elements.introText.color,
-                    fontWeight: elements.introText.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('introText', e)}
-                >
-                  {elements.introText.text}
-                </div>
-
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'clientName' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.clientName.x,
-                    top: elements.clientName.y,
-                    fontSize: elements.clientName.fontSize,
-                    fontFamily: elements.clientName.fontFamily,
-                    color: elements.clientName.color,
-                    fontWeight: elements.clientName.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('clientName', e)}
-                >
-                  {elements.clientName.text}
-                </div>
-
-                {/* Passport Info */}
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'passportText' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.passportText.x,
-                    top: elements.passportText.y,
-                    fontSize: elements.passportText.fontSize,
-                    fontFamily: elements.passportText.fontFamily,
-                    color: elements.passportText.color,
-                    fontWeight: elements.passportText.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('passportText', e)}
-                >
-                  {elements.passportText.text}
-                </div>
-
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'passportNumber' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.passportNumber.x,
-                    top: elements.passportNumber.y,
-                    fontSize: elements.passportNumber.fontSize,
-                    fontFamily: elements.passportNumber.fontFamily,
-                    color: elements.passportNumber.color,
-                    fontWeight: elements.passportNumber.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('passportNumber', e)}
-                >
-                  {elements.passportNumber.text}
-                </div>
-
-                {/* Contract Info */}
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'agenceText' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.agenceText.x,
-                    top: elements.agenceText.y,
-                    fontSize: elements.agenceText.fontSize,
-                    fontFamily: elements.agenceText.fontFamily,
-                    color: elements.agenceText.color,
-                    fontWeight: elements.agenceText.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('agenceText', e)}
-                >
-                  {elements.agenceText.text}
-                </div>
-
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'currentDate' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.currentDate.x,
-                    top: elements.currentDate.y,
-                    fontSize: elements.currentDate.fontSize,
-                    fontFamily: elements.currentDate.fontFamily,
-                    color: elements.currentDate.color,
-                    fontWeight: elements.currentDate.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('currentDate', e)}
-                >
-                  {elements.currentDate.text}
-                </div>
-
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'contractText' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.contractText.x,
-                    top: elements.contractText.y,
-                    fontSize: elements.contractText.fontSize,
-                    fontFamily: elements.contractText.fontFamily,
-                    color: elements.contractText.color,
-                    fontWeight: elements.contractText.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('contractText', e)}
-                >
-                  {elements.contractText.text}
-                </div>
-
-                {/* Car Info */}
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'cautionText' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.cautionText.x,
-                    top: elements.cautionText.y,
-                    fontSize: elements.cautionText.fontSize,
-                    fontFamily: elements.cautionText.fontFamily,
-                    color: elements.cautionText.color,
-                    fontWeight: elements.cautionText.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('cautionText', e)}
-                >
-                  {elements.cautionText.text}
-                </div>
-
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'carInfo' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.carInfo.x,
-                    top: elements.carInfo.y,
-                    fontSize: elements.carInfo.fontSize,
-                    fontFamily: elements.carInfo.fontFamily,
-                    color: elements.carInfo.color,
-                    fontWeight: elements.carInfo.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('carInfo', e)}
-                >
-                  {elements.carInfo.text}
-                </div>
-
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'datesText' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.datesText.x,
-                    top: elements.datesText.y,
-                    fontSize: elements.datesText.fontSize,
-                    fontFamily: elements.datesText.fontFamily,
-                    color: elements.datesText.color,
-                    fontWeight: elements.datesText.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('datesText', e)}
-                >
-                  {elements.datesText.text}
-                </div>
-
-                {/* Signatures */}
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'signatureText1' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.signatureText1.x,
-                    top: elements.signatureText1.y,
-                    fontSize: elements.signatureText1.fontSize,
-                    fontFamily: elements.signatureText1.fontFamily,
-                    color: elements.signatureText1.color,
-                    fontWeight: elements.signatureText1.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('signatureText1', e)}
-                >
-                  {elements.signatureText1.text}
-                </div>
-
-                <div
-                  className={`absolute cursor-move ${selectedElement === 'signatureText2' ? 'ring-2 ring-blue-500' : ''}`}
-                  style={{
-                    left: elements.signatureText2.x,
-                    top: elements.signatureText2.y,
-                    fontSize: elements.signatureText2.fontSize,
-                    fontFamily: elements.signatureText2.fontFamily,
-                    color: elements.signatureText2.color,
-                    fontWeight: elements.signatureText2.fontWeight
-                  }}
-                  onMouseDown={(e) => handleMouseDown('signatureText2', e)}
-                >
-                  {elements.signatureText2.text}
-                </div>
-
-                {/* New Text Elements */}
-                {newTextElements.map((element) => (
-                  <div
-                    key={element.id}
-                    className={`absolute cursor-move ${selectedElement === element.id ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{
-                      left: element.x,
-                      top: element.y,
-                      fontSize: element.fontSize,
-                      fontFamily: element.fontFamily,
-                      color: element.color,
-                      fontWeight: element.fontWeight
-                    }}
-                    onMouseDown={(e) => handleMouseDown(element.id, e)}
-                  >
-                    {element.text}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Properties Panel */}
-            <div className="w-80 bg-gray-100 p-6 border-l border-saas-border">
-              <h4 className="text-lg font-bold text-saas-text-main mb-4">
-                {lang === 'fr' ? 'Propriétés' : 'الخصائص'}
-              </h4>
-
-              {selectedElement && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-bold text-saas-text-main mb-2">
-                      {lang === 'fr' ? 'Texte' : 'النص'}
-                    </label>
-                    <textarea
-                      value={elements[selectedElement]?.text || newTextElements.find(el => el.id === selectedElement)?.text || ''}
-                      onChange={(e) => {
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, text: e.target.value } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { text: e.target.value });
-                        }
-                      }}
-                      className="w-full p-2 border border-saas-border rounded-lg"
-                      rows={3}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-saas-text-main mb-2">
-                      {lang === 'fr' ? 'Taille' : 'الحجم'}
-                    </label>
-                    <input
-                      type="number"
-                      value={elements[selectedElement]?.fontSize || newTextElements.find(el => el.id === selectedElement)?.fontSize || 16}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, fontSize: value } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { fontSize: value });
-                        }
-                      }}
-                      className="w-full p-2 border border-saas-border rounded-lg"
-                      min="8"
-                      max="72"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-saas-text-main mb-2">
-                      {lang === 'fr' ? 'Police' : 'الخط'}
-                    </label>
-                    <select
-                      value={elements[selectedElement]?.fontFamily || newTextElements.find(el => el.id === selectedElement)?.fontFamily || 'Arial'}
-                      onChange={(e) => {
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, fontFamily: e.target.value } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { fontFamily: e.target.value });
-                        }
-                      }}
-                      className="w-full p-2 border border-saas-border rounded-lg"
-                    >
-                      <option value="Arial">Arial</option>
-                      <option value="Times New Roman">Times New Roman</option>
-                      <option value="Courier New">Courier New</option>
-                      <option value="Georgia">Georgia</option>
-                      <option value="Verdana">Verdana</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-saas-text-main mb-2">
-                      {lang === 'fr' ? 'Style' : 'النمط'}
-                    </label>
-                    <select
-                      value={elements[selectedElement]?.fontWeight || newTextElements.find(el => el.id === selectedElement)?.fontWeight || 'normal'}
-                      onChange={(e) => {
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, fontWeight: e.target.value } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { fontWeight: e.target.value });
-                        }
-                      }}
-                      className="w-full p-2 border border-saas-border rounded-lg"
-                    >
-                      <option value="normal">{lang === 'fr' ? 'Normal' : 'عادي'}</option>
-                      <option value="bold">{lang === 'fr' ? 'Gras' : 'عريض'}</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-saas-text-main mb-2">
-                      {lang === 'fr' ? 'Couleur' : 'اللون'}
-                    </label>
-                    <input
-                      type="color"
-                      value={elements[selectedElement]?.color || newTextElements.find(el => el.id === selectedElement)?.color || '#000000'}
-                      onChange={(e) => {
-                        if (selectedElement.startsWith('newText_')) {
-                          setNewTextElements(prev => prev.map(el =>
-                            el.id === selectedElement ? { ...el, color: e.target.value } : el
-                          ));
-                        } else {
-                          updateElement(selectedElement, { color: e.target.value });
-                        }
-                      }}
-                      className="w-full p-2 border border-saas-border rounded-lg h-10"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {!selectedElement && (
-                <div className="space-y-4">
-                  <p className="text-saas-text-muted text-center">
-                    {lang === 'fr' ? 'Cliquez sur un élément pour le modifier' : 'انقر على عنصر لتعديله'}
-                  </p>
-                  <button
-                    onClick={addNewText}
-                    className="w-full px-4 py-2 bg-saas-primary-start hover:bg-saas-primary-end text-white font-bold rounded-lg transition-colors"
-                  >
-                    ➕ {lang === 'fr' ? 'Ajouter du texte' : 'إضافة نص'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="p-6 border-t border-saas-border flex justify-between items-center">
-            <div className="flex gap-3 flex-1">
-              <button
-                onClick={onClose}
-                className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
-              >
-                {lang === 'fr' ? 'Annuler' : 'إلغاء'}
-              </button>
-              
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h2 className="text-2xl font-bold text-white">
+                {lang === 'fr' ? 'Contrat de Location' : 'عقد التأجير'}
+              </h2>
               {/* Template Selector */}
-              {allDatabaseTemplates.length > 0 && (
-                <select
-                  value={selectedTemplateId || ''}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      loadSpecificTemplate(e.target.value);
-                    }
-                  }}
-                  className="px-4 py-2 border border-saas-border rounded-lg text-sm font-medium focus:ring-2 focus:ring-saas-primary-start outline-none"
+              <div className="flex gap-2 ml-8">
+                <button
+                  onClick={() => setSelectedTemplate('fr')}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                    selectedTemplate === 'fr'
+                      ? 'bg-white text-blue-600'
+                      : 'bg-blue-500 text-white hover:bg-blue-400'
+                  }`}
                 >
-                  <option value="">
-                    {lang === 'fr' ? 'Choisir un modèle' : 'اختر قالبًا'}
-                  </option>
-                  {allDatabaseTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name || (lang === 'fr' ? 'Modèle du' : 'قالب من')} {new Date(template.created_at).toLocaleDateString()}
-                    </option>
-                  ))}
-                </select>
-              )}
+                  🇫🇷 Français
+                </button>
+                <button
+                  onClick={() => setSelectedTemplate('ar')}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                    selectedTemplate === 'ar'
+                      ? 'bg-white text-blue-600'
+                      : 'bg-blue-500 text-white hover:bg-blue-400'
+                  }`}
+                >
+                  🇸🇦 العربية
+                </button>
+              </div>
             </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowSaveDialog(true)}
-                className="px-6 py-2 bg-saas-primary-start hover:bg-saas-primary-end text-white font-bold rounded-lg transition-colors"
-              >
-                💾 {lang === 'fr' ? 'Sauvegarder' : 'حفظ'}
-              </button>
-              <button
-                onClick={() => {
-                  const printContent = getPersonalizedContent();
-                  const printWindow = window.open('', '', 'height=600,width=800');
-                  if (printWindow) {
-                    printWindow.document.write(printContent);
-                    printWindow.document.close();
-                    setTimeout(() => {
-                      printWindow.print();
-                      printWindow.close();
-                    }, 250);
-                  }
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          {/* Content Area with Preview */}
+          <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-50 to-white p-8">
+            <div className="bg-white rounded-lg shadow-lg p-0 mx-auto" style={{ width: '210mm' }}>
+              <iframe
+                srcDoc={generateContractHTML(selectedTemplate)}
+                style={{ 
+                  width: '100%', 
+                  height: '600px', 
+                  border: 'none',
+                  borderRadius: '0.5rem'
                 }}
-                className="px-6 py-2 bg-saas-success hover:bg-green-600 text-white font-bold rounded-lg transition-colors"
-              >
-                🖨️ {lang === 'fr' ? 'Imprimer' : 'طباعة'}
-              </button>
+                title="Contract Preview"
+              />
             </div>
           </div>
 
-{/* Save Dialog Modal Overlay */}
-          {showSaveDialog && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
-              onClick={() => {
-                setShowSaveDialog(false);
-                setTemplateName('');
-              }}
+          {/* Footer with Actions */}
+          <div className="bg-gray-100 px-8 py-4 flex items-center justify-between border-t border-gray-200">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold rounded-lg transition-all"
             >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h3 className="text-2xl font-black text-saas-text-main mb-6">
-                  💾 {lang === 'fr' ? 'Sauvegarder le modèle' : 'حفظ القالب'}
-                </h3>
-                
-                <div className="space-y-6">
-                  {/* Template Name Input */}
-                  <div>
-                    <label className="block text-sm font-bold text-saas-text-main mb-3">
-                      📄 {lang === 'fr' ? 'Nom du modèle' : 'اسم القالب'}
-                    </label>
-                    <input
-                      type="text"
-                      value={templateName}
-                      onChange={(e) => setTemplateName(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && templateName.trim()) {
-                          saveTemplate();
-                        }
-                      }}
-                      placeholder={lang === 'fr' ? 'Ex: Contrat Standard' : 'مثال: عقد قياسي'}
-                      autoFocus
-                      className="w-full px-4 py-3 border-2 border-saas-border rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-saas-primary-start outline-none transition-all text-base"
-                    />
-                    <p className="text-xs text-saas-text-muted mt-2">
-                      {lang === 'fr' ? 'Donnez un nom descriptif à votre modèle' : 'أعط اسماً واضحاً لقالبك'}
-                    </p>
-                  </div>
-
-                  {/* Document Type Selector */}
-                  <div>
-                    <label className="block text-sm font-bold text-saas-text-main mb-3">
-                      📋 {lang === 'fr' ? 'Type de document' : 'نوع المستند'}
-                    </label>
-                    <select
-                      value={selectedTemplateType}
-                      onChange={(e) => setSelectedTemplateType(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-saas-border rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-saas-primary-start outline-none transition-all text-base"
-                    >
-                      <option value="contrat">{lang === 'fr' ? 'Contrat de Location' : 'عقد التأجير'}</option>
-                      <option value="devis">{lang === 'fr' ? 'Devis/Offre' : 'عرض الأسعار'}</option>
-                      <option value="facture">{lang === 'fr' ? 'Facture' : 'الفاتورة'}</option>
-                      <option value="engagement">{lang === 'fr' ? 'Lettre d\'Engagement' : 'رسالة الالتزام'}</option>
-                      <option value="recu">{lang === 'fr' ? 'Reçu de Paiement' : 'إيصال الدفع'}</option>
-                    </select>
-                  </div>
-
-                  {/* Warning for updates */}
-                  {selectedTemplateId && (
-                    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded">
-                      <p className="text-sm text-amber-700 font-medium">
-                        ⚠️ {lang === 'fr' 
-                          ? 'Vous mettez à jour un modèle existant' 
-                          : 'أنت تحدث قالبًا موجودًا'}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4 border-t border-saas-border">
-                    <button
-                      onClick={() => {
-                        setShowSaveDialog(false);
-                        setTemplateName('');
-                      }}
-                      className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition-colors"
-                    >
-                      {lang === 'fr' ? 'Annuler' : 'إلغاء'}
-                    </button>
-                    <button
-                      onClick={saveTemplate}
-                      disabled={savingTemplate || !templateName.trim()}
-                      className="flex-1 px-4 py-3 bg-gradient-to-r from-saas-primary-start to-saas-primary-end hover:from-saas-primary-end hover:to-saas-secondary-start text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {savingTemplate 
-                        ? (lang === 'fr' ? '⏳ Sauvegarde...' : '⏳ جاري الحفظ...')
-                        : (lang === 'fr' ? '💾 Sauvegarder' : '💾 حفظ')}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-
-          {/* Database Templates Section */}
-          {allDatabaseTemplates.length > 0 && !showSaveDialog && (
-            <div className="border-t border-saas-border bg-gray-50 p-6">
-              <h4 className="font-bold text-saas-text-main mb-4">
-                📁 {lang === 'fr' ? 'Modèles disponibles' : 'القوالب المتاحة'}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-48 overflow-y-auto">
-                {allDatabaseTemplates.map((template) => (
-                  <div 
-                    key={template.id} 
-                    onClick={() => loadSpecificTemplate(template.id)}
-                    className={`bg-white border-2 rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
-                      selectedTemplateId === template.id 
-                        ? 'border-saas-primary-start shadow-md' 
-                        : 'border-saas-border'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <h5 className="font-bold text-saas-text-main text-sm">
-                          {template.name || (lang === 'fr' ? 'Modèle' : 'قالب')}
-                        </h5>
-                        <p className="text-xs text-saas-text-muted">
-                          {new Date(template.created_at).toLocaleDateString()}
-                        </p>
-                        {selectedTemplateId === template.id && (
-                          <span className="text-xs text-saas-primary-start font-bold mt-1">
-                            ✓ {lang === 'fr' ? 'Actif' : 'نشط'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </motion.div>
+              {lang === 'fr' ? 'Fermer' : 'إغلاق'}
+            </button>
+            <button
+              onClick={handlePrint}
+              disabled={isPrinting}
+              className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              <Printer size={18} />
+              {isPrinting ? (lang === 'fr' ? 'Impression...' : 'جاري الطباعة...') : (lang === 'fr' ? 'Imprimer' : 'طباعة')}
+            </button>
+          </div>
+        </div>
       </motion.div>
     </>
   );

@@ -54,11 +54,20 @@ class SessionService {
         name
       };
 
+      // Ensure it's saved synchronously
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      
+      // Verify it was saved
+      const verified = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!verified) {
+        throw new Error('Failed to save session to localStorage');
+      }
+      
       console.log('[SessionService] Session saved to localStorage:', {
         userId,
         email,
-        expiresAt
+        expiresAt,
+        storageKey: SESSION_STORAGE_KEY
       });
 
       // Try to save to database (optional - for audit trail)
@@ -107,12 +116,20 @@ class SessionService {
   async getCurrentSession(): Promise<SessionData | null> {
     try {
       const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+      
       if (!stored) {
-        console.log('[SessionService] No session found in localStorage');
+        console.log('[SessionService] No session found in localStorage. Available keys:', Object.keys(localStorage));
         return null;
       }
 
+      console.log('[SessionService] Session data found in localStorage, parsing...');
       const session: SessionData = JSON.parse(stored);
+      
+      console.log('[SessionService] Parsed session:', {
+        email: session.email,
+        role: session.role,
+        userId: session.userId
+      });
       
       // Check if expired - DON'T call invalidateSession here to avoid infinite recursion
       const now = Math.floor(Date.now() / 1000);
@@ -326,7 +343,26 @@ class SessionService {
       return null;
     }
 
-    console.log('[SessionService] Session found, validating...');
+    console.log('[SessionService] Session found:', { email: session.email, role: session.role });
+    
+    // For worker sessions (identified by worker_token_ prefix), skip validation
+    // Workers don't use Supabase auth tokens, so validation would fail
+    if (session.accessToken.startsWith('worker_token_')) {
+      console.log('[SessionService] Worker session detected, skipping token validation');
+      // Just check if it's expired
+      const now = Math.floor(Date.now() / 1000);
+      if (session.expiresAt <= now) {
+        console.log('[SessionService] Worker session has expired');
+        await this.invalidateSession();
+        return null;
+      }
+      console.log('[SessionService] Worker session is valid');
+      this.startSessionValidation();
+      return session;
+    }
+    
+    // For Supabase sessions, validate the token
+    console.log('[SessionService] Validating Supabase session...');
     const isValid = await this.validateSession(session.accessToken);
 
     if (!isValid) {

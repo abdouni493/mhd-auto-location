@@ -269,6 +269,27 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
           console.log('[Login] Worker login user:', { name: worker.full_name, email: worker.email, role: workerRole });
           console.log('[Login] Worker profile photo:', !!worker.profile_photo);
           
+          // Save worker session to localStorage for persistence on page refresh
+          console.log('[Login] Saving worker session to localStorage...');
+          const sessionResult = await sessionService.createSession(
+            `worker_token_${Date.now()}`, // Generate a token identifier
+            undefined, // Workers don't use refresh tokens
+            Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24-hour expiry
+            worker.id || `worker_${Date.now()}`, // Worker ID
+            worker.email || '', // Email for session persistence
+            workerRole,
+            worker.full_name
+          );
+          
+          console.log('[Login] Session save result:', sessionResult);
+          
+          // Verify session was saved
+          const savedSession = await sessionService.getCurrentSession();
+          console.log('[Login] Verified saved session:', savedSession ? {
+            email: savedSession.email,
+            role: savedSession.role
+          } : 'NOT FOUND');
+          
           // Clear form
           setEmail('');
           setPassword('');

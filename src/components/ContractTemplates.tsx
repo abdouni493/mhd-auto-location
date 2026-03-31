@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Printer, Download, Edit2, Copy, ChevronRight } from 'lucide-react';
+import { X, Printer, Download, Edit2, Copy, ChevronRight, Save } from 'lucide-react';
 import { supabase } from '../supabase';
 
 interface ContractTemplate {
@@ -315,7 +315,22 @@ const ARABIC_CONTRACT_TEMPLATE = `
 export const ContractTemplates: React.FC<ContractTemplatesProps> = ({
   onClose,
   onSave,
-  contractData = {}
+  contractData = {
+    agencyName: '',
+    driverName: '',
+    driverLicense: '',
+    driverBirthDate: '',
+    carBrand: '',
+    carModel: '',
+    carColor: '',
+    carRegistration: '',
+    carMileage: 0,
+    departureDate: '',
+    returnDate: '',
+    rentAmount: 0,
+    insurance: 0,
+    deposit: 0
+  } as ContractData
 }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<'fr' | 'ar' | null>(null);
   const [editContent, setEditContent] = useState('');
