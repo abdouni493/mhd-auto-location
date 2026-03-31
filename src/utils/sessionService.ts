@@ -1,0 +1,365 @@
+import { supabase } from '../supabase';
+
+/**
+ * Session Service - Database-backed session management
+ * 
+ * This replaces the Supabase SDK's auto-refresh mechanism with a database-backed
+ * solution that prevents 429 rate limit errors and ensures proper session persistence.
+ */
+
+interface SessionData {
+  sessionId: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number;
+  userId: string;
+  email: string;
+  role: string;
+  name: string;
+}
+
+const SESSION_STORAGE_KEY = 'admin_session_v2';
+const SESSION_VALIDATION_INTERVAL = 5 * 60 * 1000; // Validate every 5 minutes
+const REFRESH_THRESHOLD = 5 * 60; // Refresh if within 5 minutes of expiry
+
+class SessionService {
+  private validationTimer: NodeJS.Timeout | null = null;
+  private lastRefreshTime = 0;
+  private minRefreshInterval = 60 * 1000; // Don't refresh more than once per minute
+
+  /**
+   * Create a new session after successful login
+   */
+  async createSession(
+    accessToken: string,
+    refreshToken: string | undefined,
+    expiresAt: number,
+    userId: string,
+    email: string,
+    role: string,
+    name: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('[SessionService] Creating new session...');
+
+      // Save to localStorage (primary storage)
+      const sessionData: SessionData = {
+        sessionId: `session_${Date.now()}`,
+        accessToken,
+        refreshToken,
+        expiresAt,
+        userId,
+        email,
+        role,
+        name
+      };
+
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      console.log('[SessionService] Session saved to localStorage:', {
+        userId,
+        email,
+        expiresAt
+      });
+
+      // Try to save to database (optional - for audit trail)
+      this.saveSessionToDatabase(sessionData).catch(err => {
+        console.warn('[SessionService] Could not save to database (non-blocking):', err);
+      });
+
+      // Start validation loop
+      this.startSessionValidation();
+
+      return { success: true };
+    } catch (error) {
+      console.error('[SessionService] Error creating session:', error);
+      return { success: false, error: String(error) };
+    }
+  }
+
+  /**
+   * Save session to database for audit trail (non-blocking)
+   * This is optional - localStorage is the primary storage
+   */
+  private async saveSessionToDatabase(session: SessionData): Promise<void> {
+    try {
+      const { error } = await supabase.rpc('create_admin_session', {
+        p_access_token: session.accessToken,
+        p_refresh_token: session.refreshToken,
+        p_expires_at: session.expiresAt,
+        p_user_agent: navigator.userAgent,
+        p_ip_address: null
+      });
+
+      if (error) {
+        // Silently fail - database save is optional, localStorage is primary
+        return;
+      }
+
+      console.log('[SessionService] Session also saved to database (audit trail)');
+    } catch (error) {
+      // Silently fail - localStorage persistence is sufficient
+    }
+  }
+
+  /**
+   * Get current session from localStorage (with optional database validation)
+   */
+  async getCurrentSession(): Promise<SessionData | null> {
+    try {
+      const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!stored) {
+        console.log('[SessionService] No session found in localStorage');
+        return null;
+      }
+
+      const session: SessionData = JSON.parse(stored);
+      
+      // Check if expired - DON'T call invalidateSession here to avoid infinite recursion
+      const now = Math.floor(Date.now() / 1000);
+      const secondsUntilExpiry = session.expiresAt - now;
+      
+      if (secondsUntilExpiry <= 0) {
+        console.log('[SessionService] Session has expired (expires in', secondsUntilExpiry, 'seconds)');
+        // Just return null, don't call invalidateSession
+        return null;
+      }
+
+      console.log('[SessionService] Session retrieved from localStorage (expires in', secondsUntilExpiry, 'seconds)');
+      return session;
+    } catch (error) {
+      console.error('[SessionService] Error getting current session:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Validate session with database
+   */
+  async validateSession(token: string): Promise<boolean> {
+    try {
+      console.log('[SessionService] Validating session with database...');
+
+      const { data, error } = await supabase.rpc('validate_session', {
+        p_token: token
+      });
+
+      if (error) {
+        console.error('[SessionService] Validation error:', error);
+        return false;
+      }
+
+      if (!data || data.length === 0) {
+        console.log('[SessionService] Session not found in database');
+        return false;
+      }
+
+      const result = data[0];
+      console.log('[SessionService] Validation result:', {
+        isValid: result.is_valid,
+        isExpired: result.is_expired,
+        secondsUntilExpiry: result.seconds_until_expiry
+      });
+
+      if (!result.is_valid || result.is_expired) {
+        console.log('[SessionService] Session invalid or expired');
+        await this.invalidateSession();
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[SessionService] Validation error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Invalidate current session (on logout or expiry)
+   */
+  async invalidateSession(): Promise<void> {
+    try {
+      // Get stored session without calling getCurrentSession (to avoid recursion)
+      const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!stored) {
+        console.log('[SessionService] No session to invalidate');
+        this.stopSessionValidation();
+        return;
+      }
+
+      const session: SessionData = JSON.parse(stored);
+      console.log('[SessionService] Invalidating session for user:', session.email);
+
+      // Try to invalidate in database
+      await supabase.rpc('invalidate_session', {
+        p_token: session.accessToken
+      }).catch(err => {
+        console.warn('[SessionService] Could not invalidate in database:', err);
+      });
+
+      // Clear localStorage
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      console.log('[SessionService] Session cleared from localStorage');
+
+      // Stop validation loop
+      this.stopSessionValidation();
+    } catch (error) {
+      console.error('[SessionService] Error invalidating session:', error);
+      // Force clear localStorage anyway
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      this.stopSessionValidation();
+    }
+  }
+
+  /**
+   * Refresh session token (only if close to expiry)
+   */
+  async refreshSessionToken(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const session = await this.getCurrentSession();
+      if (!session || !session.refreshToken) {
+        return { success: false, error: 'No session or refresh token' };
+      }
+
+      // Don't refresh more than once per minute
+      const now = Date.now();
+      if (now - this.lastRefreshTime < this.minRefreshInterval) {
+        console.log('[SessionService] Refresh blocked - too soon since last refresh');
+        return { success: false, error: 'Refresh rate limited' };
+      }
+
+      const secondsUntilExpiry = session.expiresAt - Math.floor(Date.now() / 1000);
+      console.log(`[SessionService] Token expires in ${secondsUntilExpiry} seconds`);
+
+      // Only refresh if within threshold
+      if (secondsUntilExpiry > REFRESH_THRESHOLD) {
+        console.log('[SessionService] Token still valid, no refresh needed');
+        return { success: true };
+      }
+
+      console.log('[SessionService] Token close to expiry, attempting refresh...');
+      this.lastRefreshTime = now;
+
+      // Use Supabase SDK to refresh (now with controlled rate)
+      const { data, error } = await supabase.auth.refreshSession({
+        refresh_token: session.refreshToken
+      });
+
+      if (error || !data.session) {
+        console.error('[SessionService] Refresh failed:', error);
+        await this.invalidateSession();
+        return { success: false, error: String(error) };
+      }
+
+      // Update session with new token
+      const newSession = data.session;
+      await this.createSession(
+        newSession.access_token,
+        newSession.refresh_token || session.refreshToken,
+        newSession.expires_at || session.expiresAt,
+        session.userId,
+        session.email,
+        session.role,
+        session.name
+      );
+
+      console.log('[SessionService] Token refreshed successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('[SessionService] Refresh error:', error);
+      return { success: false, error: String(error) };
+    }
+  }
+
+  /**
+   * Start periodic session validation
+   */
+  private startSessionValidation(): void {
+    if (this.validationTimer) {
+      clearInterval(this.validationTimer);
+    }
+
+    console.log('[SessionService] Starting session validation loop (5-minute interval)');
+
+    this.validationTimer = setInterval(async () => {
+      const session = await this.getCurrentSession();
+      
+      // If no session, stop the loop
+      if (!session) {
+        console.log('[SessionService] No session found, stopping validation loop');
+        this.stopSessionValidation();
+        return;
+      }
+
+      // Validate and potentially refresh
+      const isValid = await this.validateSession(session.accessToken);
+      if (!isValid) {
+        console.log('[SessionService] Session validation failed, stopping loop');
+        this.stopSessionValidation();
+        return;
+      }
+      
+      // Try to refresh if needed
+      await this.refreshSessionToken();
+    }, SESSION_VALIDATION_INTERVAL);
+  }
+
+  /**
+   * Stop session validation
+   */
+  private stopSessionValidation(): void {
+    if (this.validationTimer) {
+      clearInterval(this.validationTimer);
+      this.validationTimer = null;
+      console.log('[SessionService] Session validation stopped');
+    }
+  }
+
+  /**
+   * Initialize session on app load
+   */
+  async initializeSession(): Promise<SessionData | null> {
+    console.log('[SessionService] Initializing session...');
+
+    const session = await this.getCurrentSession();
+    if (!session) {
+      console.log('[SessionService] No valid session found');
+      return null;
+    }
+
+    console.log('[SessionService] Session found, validating...');
+    const isValid = await this.validateSession(session.accessToken);
+
+    if (!isValid) {
+      console.log('[SessionService] Session validation failed');
+      return null;
+    }
+
+    // Start validation loop
+    this.startSessionValidation();
+
+    console.log('[SessionService] Session initialized successfully');
+    return session;
+  }
+
+  /**
+   * Get auth headers for requests
+   */
+  getAuthHeaders(): Record<string, string> {
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!stored) {
+      return {};
+    }
+
+    try {
+      const session: SessionData = JSON.parse(stored);
+      return {
+        'Authorization': `Bearer ${session.accessToken}`,
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqeXFteGlxZWVnY252b3BpYnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4OTg1MjIsImV4cCI6MjA4ODQ3NDUyMn0.7-6qvX4F3oebYm-W1bBl6SsKQf-A79bc1PP7PhpQYcQ'
+      };
+    } catch {
+      return {};
+    }
+  }
+}
+
+export const sessionService = new SessionService();

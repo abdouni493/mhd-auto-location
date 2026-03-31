@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, Edit2, Save, Printer } from 'lucide-react';
+import { X, Plus, Trash2, Edit2, Save, Printer, FileText } from 'lucide-react';
 import { supabase } from '../supabase';
+import { ContractTemplates } from './ContractTemplates';
 
 interface ConditionsPersonalizerProps {
   lang: 'fr' | 'ar';
@@ -37,6 +38,7 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
   const [backgroundColor, setBackgroundColor] = useState('#ffffff');
   const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [showContractTemplates, setShowContractTemplates] = useState(false);
 
   // Load saved conditions from database
   useEffect(() => {
@@ -435,12 +437,23 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
             <h2 className="text-2xl font-bold flex items-center gap-2">
               📋 {lang === 'fr' ? 'Personnaliser les Conditions' : 'تخصيص الشروط والأحكام'}
             </h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-blue-500 rounded-lg transition"
-            >
-              <X size={24} />
-            </button>
+            <div className="flex items-center gap-3">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowContractTemplates(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition"
+              >
+                <FileText size={18} />
+                {lang === 'fr' ? 'Modèles de Contrat' : 'نماذج العقد'}
+              </motion.button>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-blue-500 rounded-lg transition"
+              >
+                <X size={24} />
+              </button>
+            </div>
           </div>
 
           {/* Main Content */}
@@ -746,6 +759,20 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showContractTemplates && (
+        <ContractTemplates
+          onClose={() => setShowContractTemplates(false)}
+          onSave={(contract) => {
+            setConditions([contract]);
+            setShowContractTemplates(false);
+          }}
+          contractData={{
+            agencyName: 'SARL OUKKAL LISAYA',
+            language: lang
+          }}
+        />
+      )}
     </>
   );
 };

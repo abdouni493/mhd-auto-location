@@ -59,7 +59,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
   _supabase = mockSupabase
 } else {
-  _supabase = createClient(supabaseUrl, supabaseAnonKey)
+  console.log('[Supabase] === CLIENT INITIALIZATION ===');
+  console.log('[Supabase] URL:', supabaseUrl.substring(0, 50) + '...');
+  console.log('[Supabase] Disabling SDK session management to prevent 429 rate limits');
+  
+  _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,  // Disable SDK session persistence - we manage it manually
+      autoRefreshToken: false, // Prevent automatic refresh to avoid 429 rate limits
+      detectSessionInUrl: false, // Don't auto-detect sessions
+      flowType: 'pkce',
+      storage: localStorage
+    }
+  })
+  
+  console.log('[Supabase] === CLIENT READY ===\n');
 }
 
 export const supabase = _supabase

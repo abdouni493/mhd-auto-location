@@ -5,6 +5,7 @@ import { supabase } from '../supabase';
 import { Language, UserRole, User } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { DatabaseService } from '../services/DatabaseService';
+import { sessionService } from '../utils/sessionService';
 
 interface LoginProps {
   lang: Language;
@@ -45,16 +46,30 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
   }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`\n[Login] ======= LOGIN/SIGNUP ATTEMPT STARTED at ${timestamp} =======`);
+    
+    // Prevent double submissions
+    if (isSubmitting) {
+      console.log('[Login] Form already submitting, ignoring duplicate submission');
+      return;
+    }
+    
     setErrorMessage('');
     setIsSubmitting(true);
 
     try {
+      // SIGNUP FLOW - Always use Supabase Auth
       if (isSigningUp) {
+        console.log('[Login] === SIGNUP MODE ===');
+        console.log('[Login] Attempting Supabase signup...');
         // create new admin user and profile
         const { data: signData, error: signError } = await supabase.auth.signUp(
           { email, password }
         );
         if (signError) {
+          console.log('[Login] Signup error:', signError.message);
           setErrorMessage(signError.message);
           setIsSubmitting(false);
           return;
@@ -79,6 +94,7 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
           { email, password }
         );
         if (loginError) {
+          console.log('[Login] Auto-signin after signup error:', loginError.message);
           setErrorMessage(loginError.message);
           setIsSubmitting(false);
           return;
@@ -87,156 +103,190 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
           const u = loginData.user;
           const role = (u.user_metadata?.role as UserRole) || 'admin';
           const name = (u.user_metadata?.username as string) || u.email || '';
+          
+          console.log('[Login] === SIGNUP SUCCESSFUL ===');
+          console.log('[Login] Signup user:', { name, email: u.email, role });
+          console.log('[Login] Session token length:', loginData.session.access_token.length);
+          console.log('[Login] localStorage after signup:', {
+            has_token: !!localStorage.getItem('supabase.auth.token'),
+            has_signup_done: !!localStorage.getItem('signupDone')
+          });
+          
+          // Save session
+          await sessionService.createSession(
+            loginData.session.access_token,
+            loginData.session.refresh_token,
+            loginData.session.expires_at || Math.floor(Date.now() / 1000) + 3600,
+            u.id,
+            u.email || '',
+            role,
+            name
+          );
+          
+          // CRITICAL: Clear all SDK session data to prevent auto-refresh
+          console.log('[Login] Clearing SDK session data to prevent auto-refresh...');
+          localStorage.removeItem('supabase.auth.token');
+          sessionStorage.clear();
+          
+          // Clear form
+          setEmail('');
+          setPassword('');
+          setUsername('');
+          
+          console.log('[Login] Calling onLogin callback...');
           onLogin({ name, email: u.email || '', role, avatar: '' });
         }
         setIsSubmitting(false);
         return;
       }
 
-      // Step 1: Try to authenticate as a worker using database function
-      const credential = email; // The input field accepts both email and username
-      
-      if (credential && password) {
-        try {
-          console.log('Attempting worker login with credential:', credential);
-          
-          // Call the database function for worker authentication
-          const { data: loginResult, error: loginError } = await supabase
-            .rpc('login_worker', {
-              p_email_or_username: credential,
-              p_password: password
-            });
+      // LOGIN FLOW - Determine auth method based on input format
+      const credential = email.trim();
+      const isEmailInput = credential.includes('@');
 
-          console.log('Login result:', loginResult);
-
-          if (loginError) {
-            console.error('RPC error:', loginError);
-          }
-
-          if (loginResult?.success && loginResult?.worker) {
-            const worker = loginResult.worker;
-            console.log('Worker authenticated:', worker);
-            
-            // Create Supabase session for worker to enable database access
-            try {
-              // Check if worker already has a Supabase account
-              const { data: existingUser } = await supabase.auth.signInWithPassword({
-                email: worker.email,
-                password: worker.password // Use the password from database
-              });
-
-              if (existingUser?.user) {
-                console.log('Worker signed in with existing Supabase account');
-              } else {
-                // Create new Supabase account for worker
-                console.log('Creating Supabase account for worker');
-                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                  email: worker.email,
-                  password: worker.password,
-                  options: {
-                    data: {
-                      username: worker.username,
-                      role: worker.type
-                    }
-                  }
-                });
-
-                if (signUpError && !signUpError.message.includes('already registered')) {
-                  console.error('Error creating Supabase account for worker:', signUpError);
-                } else {
-                  // Sign in the worker
-                  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-                    email: worker.email,
-                    password: worker.password
-                  });
-
-                  if (signInError) {
-                    console.error('Error signing in worker:', signInError);
-                  } else {
-                    console.log('Worker signed in successfully');
-                  }
-                }
-              }
-            } catch (authError) {
-              console.error('Error setting up Supabase auth for worker:', authError);
-              // Continue anyway - the app-level authentication will work
-            }
-            
-            // Login successful - worker is authenticated with their type role
-            const workerRole = (worker.type as UserRole) || 'worker';
-            console.log('Worker authenticated with role:', workerRole);
-            
-            onLogin({ 
-              name: worker.full_name, 
-              email: worker.email || '', 
-              role: workerRole,
-              avatar: worker.profile_photo || '' 
-            });
-            setIsSubmitting(false);
-            return;
-          }
-        } catch (workerError) {
-          console.error('Worker login error:', workerError);
-        }
-      }
-
-      // Step 2: Fallback to Supabase Auth for admin/users not in workers table
-      let loginData = null;
-      let loginError = null;
-
-      if (email) {
-        const result = await supabase.auth.signInWithPassword(
-          { email, password }
-        );
-        loginData = result.data;
-        loginError = result.error;
-      } else if (username) {
-        // If only username is provided, search for user by username
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('username', username)
-          .single();
-
-        if (profileData) {
-          // Try to get the user's email from auth
-          try {
-            const { data: userData } = await supabase.auth.admin.getUserById(profileData.id);
-            if (userData?.user?.email) {
-              const result = await supabase.auth.signInWithPassword(
-                { email: userData.user.email, password }
-              );
-              loginData = result.data;
-              loginError = result.error;
-            }
-          } catch (err) {
-            console.error('Auth lookup error:', err);
-          }
-        }
-      }
-
-      if (loginData?.session) {
-        const u = loginData.user;
-        const role = (u.user_metadata?.role as UserRole) || 'admin';
-        const name = (u.user_metadata?.username as string) || u.email || '';
-        onLogin({ name, email: u.email || '', role, avatar: '' });
+      if (!credential || !password) {
+        console.log('[Login] Missing credentials - email:', !!credential, 'password:', !!password);
+        setErrorMessage(lang === 'fr' 
+          ? 'Veuillez entrer vos identifiants.' 
+          : 'الرجاء إدخال بيانات الدخول.');
         setIsSubmitting(false);
         return;
       }
 
-      // If we reach here, authentication failed
-      setErrorMessage(lang === 'fr' 
-        ? 'Identifiants invalides. Vérifiez votre email/nom d\'utilisateur et mot de passe.' 
-        : 'بيانات اعتماد غير صحيحة. تحقق من بريدك الإلكتروني واسم المستخدم وكلمة المرور.');
+      // SEPARATED FLOW 1: EMAIL INPUT → SUPABASE AUTH ONLY
+      if (isEmailInput) {
+        console.log('[Login] === EMAIL LOGIN ===');
+        console.log('[Login] Email detected, attempting Supabase auth only for:', credential);
+        try {
+          const result = await supabase.auth.signInWithPassword({
+            email: credential,
+            password
+          });
+          
+          if (result.error) {
+            console.log('[Login] Email auth failed:', result.error.message, 'Status:', result.error.status);
+            setErrorMessage(lang === 'fr' 
+              ? 'Email ou mot de passe incorrect.' 
+              : 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+            setIsSubmitting(false);
+            return;
+          }
+
+          if (result.data?.session) {
+            const u = result.data.user;
+            const role = (u.user_metadata?.role as UserRole) || 'admin';
+            const name = (u.user_metadata?.username as string) || u.email || '';
+            
+            console.log('[Login] === EMAIL AUTH SUCCESSFUL ===');
+            console.log('[Login] Email login user:', { name, email: u.email, role });
+            console.log('[Login] Session token length:', result.data.session.access_token.length);
+            console.log('[Login] Session expires at:', result.data.session.expires_at);
+            console.log('[Login] localStorage after login:', {
+              has_token: !!localStorage.getItem('supabase.auth.token'),
+              token_preview: localStorage.getItem('supabase.auth.token')?.substring(0, 50) + '...'
+            });
+            
+            // Save session to database and localStorage using new session service
+            console.log('[Login] Saving session to database via sessionService...');
+            await sessionService.createSession(
+              result.data.session.access_token,
+              result.data.session.refresh_token,
+              result.data.session.expires_at || Math.floor(Date.now() / 1000) + 3600,
+              u.id,
+              u.email || '',
+              role,
+              name
+            );
+            
+            // CRITICAL: Clear all SDK session data to prevent auto-refresh
+            console.log('[Login] Clearing SDK session data to prevent auto-refresh...');
+            localStorage.removeItem('supabase.auth.token');
+            sessionStorage.clear();
+            
+            // Clear form
+            setEmail('');
+            setPassword('');
+            setUsername('');
+            
+            console.log('[Login] Calling onLogin callback...');
+            onLogin({ name, email: u.email || '', role, avatar: '' });
+            return;
+          }
+        } catch (error) {
+          console.log('[Login] Email auth exception:', error);
+          setErrorMessage(lang === 'fr' 
+            ? 'Une erreur est survenue lors de la connexion.' 
+            : 'حدث خطأ أثناء تسجيل الدخول.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // SEPARATED FLOW 2: NON-EMAIL INPUT → WORKER RPC AUTH ONLY
+      console.log('[Login] === WORKER LOGIN ===');
+      console.log('[Login] Username detected, attempting worker login via RPC for:', credential);
+      try {
+        const { data: loginResult, error: loginError } = await supabase.rpc('login_worker', {
+          p_email_or_username: credential,
+          p_password: password
+        });
+
+        if (loginError) {
+          console.log('[Login] Worker RPC error:', loginError);
+          setErrorMessage(lang === 'fr' 
+            ? 'Identifiants invalides.' 
+            : 'بيانات اعتماد غير صحيحة.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (loginResult?.success && loginResult?.worker) {
+          const worker = loginResult.worker;
+          const workerRole = (worker.type as UserRole) || 'worker';
+          
+          console.log('[Login] === WORKER AUTH SUCCESSFUL ===');
+          console.log('[Login] Worker login user:', { name: worker.full_name, email: worker.email, role: workerRole });
+          console.log('[Login] Worker profile photo:', !!worker.profile_photo);
+          
+          // Clear form
+          setEmail('');
+          setPassword('');
+          setUsername('');
+          
+          console.log('[Login] Calling onLogin callback...');
+          onLogin({
+            name: worker.full_name,
+            email: worker.email || '',
+            role: workerRole,
+            avatar: worker.profile_photo || ''
+          });
+          return;
+        } else {
+          console.log('[Login] Worker login failed - no success or worker in response');
+          setErrorMessage(lang === 'fr' 
+            ? 'Identifiants invalides.' 
+            : 'بيانات اعتماد غير صحيحة.');
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (workerError) {
+        console.log('[Login] Worker login exception:', workerError);
+        setErrorMessage(lang === 'fr' 
+          ? 'Une erreur est survenue lors de la connexion.' 
+          : 'حدث خطأ أثناء تسجيل الدخول.');
+        setIsSubmitting(false);
+        return;
+      }
     } catch (error) {
-      console.error('Login error:', error);
+      console.log('[Login] === UNEXPECTED ERROR ===');
+      console.log('[Login] Error:', error);
       setErrorMessage(lang === 'fr' 
         ? 'Une erreur est survenue lors de la connexion.' 
         : 'حدث خطأ أثناء تسجيل الدخول.');
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-saas-bg">
       <motion.div 

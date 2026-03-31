@@ -189,7 +189,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, car
             {/* Rentals History */}
             <div className="space-y-6">
               <h3 className="text-xs font-black text-saas-primary-via flex items-center gap-3 uppercase tracking-[0.2em]">
-                <span className="p-2 bg-saas-primary-via/10 rounded-lg">📍</span>
+                <span className="p-2 bg-saas-primary-via/10 rounded-lg">�</span>
                 Historique des Locations
               </h3>
               <div className="space-y-4">
@@ -290,7 +290,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, car
             {/* Expenses History */}
             <div className="space-y-6">
               <h3 className="text-xs font-black text-saas-secondary-via flex items-center gap-3 uppercase tracking-[0.2em]">
-                <span className="p-2 bg-saas-secondary-via/10 rounded-lg">📉</span>
+                <span className="p-2 bg-saas-secondary-via/10 rounded-lg">�</span>
                 Dépenses
               </h3>
               <div className="space-y-4">

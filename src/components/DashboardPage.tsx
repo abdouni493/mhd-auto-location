@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardStats, MaintenanceAlert, Language, Car, ReservationDetails, VehicleExpense } from '../types';
 import { motion } from 'motion/react';
 import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, DollarSign, Wrench, Shield, FileCheck, Loader2, AlertCircle } from 'lucide-react';
@@ -281,6 +282,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
 };
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     monthlyRevenue: 0,
@@ -632,12 +634,134 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
                       </p>
                       <div className="text-xs text-gray-600 border-t pt-2 space-y-1">
                         <p>
-                          {lang === 'fr' ? 'Expiration:' : 'الانتهاء:'} {alert.dueDate ? new Date(alert.dueDate).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-SA') : 'N/A'}
+                          {lang === 'fr' ? 'Expiration:' : 'الانتهاء:'} {alert.expirationDate ? new Date(alert.expirationDate).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-SA') : 'N/A'}
                         </p>
                         <p>
-                          {(alert.daysUntilDue ?? 0) >= 0
-                            ? `${lang === 'fr' ? 'Jours restants:' : 'الأيام المتبقية:'} ${alert.daysUntilDue}`
-                            : `${lang === 'fr' ? 'Jours expirés:' : 'الأيام المنتهية:'} ${Math.abs(alert.daysUntilDue ?? 0)}`
+                          {(alert.daysRemaining ?? 0) >= 0
+                            ? `${lang === 'fr' ? 'Jours restants:' : 'الأيام المتبقية:'} ${alert.daysRemaining}`
+                            : `${lang === 'fr' ? 'Jours expirés:' : 'الأيام المنتهية:'} ${Math.abs(alert.daysRemaining ?? 0)}`
+                          }
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
+      </motion.div>
+
+      {/* Controle Technique Alerts Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="relative"
+      >
+        {(() => {
+          const controleAlerts = cars
+            .map(car => ({
+              car,
+              alert: getControleAlert(car, vehicleExpenses)
+            }))
+            .filter(item => item.alert !== null && item.alert.status !== 'ok');
+
+          if (controleAlerts.length === 0) return null;
+
+          const expiredAlerts = controleAlerts.filter(item => item.alert?.status === 'overdue');
+          const warningAlerts = controleAlerts.filter(item => item.alert?.status === 'warning');
+          const okAlerts = controleAlerts.filter(item => item.alert?.status === 'ok');
+
+          return (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="relative"
+                  >
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                      expiredAlerts.length > 0
+                        ? 'bg-gradient-to-br from-red-500 to-red-600'
+                        : 'bg-gradient-to-br from-purple-500 to-purple-600'
+                    }`}>
+                      <span className="text-2xl">🔍</span>
+                    </div>
+                    {(expiredAlerts.length > 0 || warningAlerts.length > 0) && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
+                    )}
+                  </motion.div>
+                  <div>
+                    <h2 className="text-2xl font-black text-saas-text-main uppercase tracking-tighter">
+                      {lang === 'fr' ? 'Alertes Contrôle Technique' : 'تنبيهات الفحص الفني'}
+                    </h2>
+                    <p className="text-saas-text-muted font-medium">
+                      {expiredAlerts.length} {lang === 'fr' ? 'expirées' : 'منتهية الصلاحية'}, {warningAlerts.length} {lang === 'fr' ? 'avertissements' : 'تحذيرات'}, {okAlerts.length} {lang === 'fr' ? 'valides' : 'صحيحة'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {controleAlerts.map((item, index) => {
+                  const { car, alert } = item;
+                  if (!alert) return null;
+
+                  return (
+                    <motion.div
+                      key={car.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 ${
+                        alert.status === 'overdue'
+                          ? 'bg-red-50 border-red-300'
+                          : alert.status === 'warning'
+                          ? 'bg-amber-50 border-amber-300'
+                          : 'bg-green-50 border-green-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className={`font-black text-sm uppercase tracking-tight ${
+                            alert.status === 'overdue'
+                              ? 'text-red-700'
+                              : alert.status === 'warning'
+                              ? 'text-amber-700'
+                              : 'text-green-700'
+                          }`}>
+                            {car.brand} {car.model}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">{car.registration}</p>
+                        </div>
+                        <FileCheck className={`flex-shrink-0 ${
+                          alert.status === 'overdue'
+                            ? 'text-red-600'
+                            : alert.status === 'warning'
+                            ? 'text-amber-600'
+                            : 'text-green-600'
+                        }`} size={20} />
+                      </div>
+                      <p className={`text-xs font-bold ${
+                        alert.status === 'overdue'
+                          ? 'text-red-600'
+                          : alert.status === 'warning'
+                          ? 'text-amber-600'
+                          : 'text-green-600'
+                      }`}>
+                        {alert.message}
+                      </p>
+                      <div className="text-xs text-gray-600 border-t pt-2 space-y-1">
+                        <p>
+                          {lang === 'fr' ? 'Expiration:' : 'الانتهاء:'} {alert.expirationDate ? new Date(alert.expirationDate).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-SA') : 'N/A'}
+                        </p>
+                        <p>
+                          {(alert.daysRemaining ?? 0) >= 0
+                            ? `${lang === 'fr' ? 'Jours restants:' : 'الأيام المتبقية:'} ${alert.daysRemaining}`
+                            : `${lang === 'fr' ? 'Jours expirés:' : 'الأيام المنتهية:'} ${Math.abs(alert.daysRemaining ?? 0)}`
                           }
                         </p>
                       </div>
@@ -1184,6 +1308,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={() => navigate('/planificateur')}
               className="w-full py-3 bg-white/20 backdrop-blur-sm text-white rounded-2xl hover:bg-white/30 transition-all font-bold uppercase tracking-widest text-sm border border-white/30"
             >
               🚀 {lang === 'fr' ? 'Créer' : 'إنشاء'}
@@ -1214,6 +1339,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={() => navigate('/vehicules')}
               className="w-full py-3 bg-white/20 backdrop-blur-sm text-white rounded-2xl hover:bg-white/30 transition-all font-bold uppercase tracking-widest text-sm border border-white/30"
             >
               ➕ {lang === 'fr' ? 'Ajouter' : 'إضافة'}
@@ -1244,6 +1370,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={() => navigate('/rapports')}
               className="w-full py-3 bg-white/20 backdrop-blur-sm text-white rounded-2xl hover:bg-white/30 transition-all font-bold uppercase tracking-widest text-sm border border-white/30"
             >
               📈 {lang === 'fr' ? 'Voir' : 'عرض'}

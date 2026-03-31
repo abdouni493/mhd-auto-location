@@ -273,11 +273,8 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
       await DatabaseService.updateWebsiteSettings(settingsToSave);
       
       // Reload settings after save to confirm
-      const { data: { session } } = await import('../supabase').then(m => m.supabase.auth.getSession());
-      if (session) {
-        const updatedSettings = await DatabaseService.getWebsiteSettings();
-        setSettings(updatedSettings);
-      }
+      const updatedSettings = await DatabaseService.getWebsiteSettings();
+      setSettings(updatedSettings);
       
       setNotification({ type: 'success', message: lang === 'fr' ? 'Paramètres enregistrés avec succès!' : 'تم حفظ الإعدادات بنجاح!' });
       setTimeout(() => setNotification(null), 4000);

@@ -75,8 +75,8 @@ export const getVidangeAlert = (car: Car, expenses: VehicleExpense[]): VidangeAl
  * @returns AssuranceAlert object or null if no assurance records found
  */
 export const getAssuranceAlert = (car: Car, expenses: VehicleExpense[]): AssuranceAlert | null => {
-  // Find the latest assurance expense with expiration date
-  const assuranceExpenses = expenses.filter(e => e.type === 'assurance' && e.expirationDate);
+  // Find the latest assurance expense for THIS CAR with expiration date
+  const assuranceExpenses = expenses.filter(e => e.type === 'assurance' && e.expirationDate && e.carId === car.id);
 
   if (assuranceExpenses.length === 0) {
     return null;
@@ -129,8 +129,8 @@ export const getAssuranceAlert = (car: Car, expenses: VehicleExpense[]): Assuran
  * @returns AssuranceAlert object or null if no controle_technique records found
  */
 export const getControleAlert = (car: Car, expenses: VehicleExpense[]): AssuranceAlert | null => {
-  // Find the latest controle expense with expiration date
-  const controleExpenses = expenses.filter(e => e.type === 'controle' && e.expirationDate);
+  // Find the latest controle expense for THIS CAR with expiration date
+  const controleExpenses = expenses.filter(e => e.type === 'controle' && e.expirationDate && e.carId === car.id);
 
   if (controleExpenses.length === 0) {
     return null;

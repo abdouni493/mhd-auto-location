@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
@@ -20,11 +20,24 @@ import { Language, User, UserRole, Car, Agency } from './types';
 import { supabase, supabaseConfigured } from './supabase';
 import { SIDEBAR_ITEMS } from './constants';
 import { DatabaseService } from './services/DatabaseService';
+import { setupErrorInterceptor } from './utils/errorInterceptor';
+import { DebugAuth } from './utils/debugAuth';
+import { sessionService } from './utils/sessionService';
+
+// Initialize global error interceptor on load
+setupErrorInterceptor();
+
+// Make Supabase available globally for console debugging
+if (typeof window !== 'undefined') {
+  (window as any).__supabase__ = supabase;
+}
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [lang, setLang] = useState<Language>('fr');
   const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true); // Add loading state
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [cars, setCars] = useState<Car[]>([]);
@@ -34,7 +47,59 @@ export default function App() {
   const [websiteSettings, setWebsiteSettings] = useState<any>(null);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [isLoadingAgenciesForWebsite, setIsLoadingAgenciesForWebsite] = useState(true);
+  
+  // Refs to prevent multiple listener initialization (especially important in StrictMode dev environment)
+  const authListenerInitialized = useRef(false);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isWebsiteMode = location.pathname === '/website';
+
+  // Sync URL with active tab - extract tab from URL on mount and when URL changes
+  useEffect(() => {
+    const pathname = location.pathname;
+    
+    // Map URL paths to tab IDs
+    const pathMap: Record<string, string> = {
+      '/dashboard': 'dashboard',
+      '/planificateur': 'planner',
+      '/vehicules': 'vehicles',
+      '/clients': 'clients',
+      '/agences': 'agencies',
+      '/equipe': 'team',
+      '/personalisation': 'personalization',
+      '/depenses': 'expenses',
+      '/website-management': 'web-mgmt',
+      '/website-commandes': 'web-orders',
+      '/rapports': 'reports',
+      '/configuration': 'config',
+      '/': 'dashboard', // Default to dashboard
+    };
+
+    const tabId = pathMap[pathname] || 'dashboard';
+    setActiveTab(tabId);
+  }, [location.pathname]);
+
+  // Update URL when active tab changes
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    
+    const urlMap: Record<string, string> = {
+      'dashboard': '/dashboard',
+      'planner': '/planificateur',
+      'vehicles': '/vehicules',
+      'clients': '/clients',
+      'agencies': '/agences',
+      'team': '/equipe',
+      'personalization': '/personalisation',
+      'expenses': '/depenses',
+      'web-mgmt': '/website-management',
+      'web-orders': '/website-commandes',
+      'reports': '/rapports',
+      'config': '/configuration',
+    };
+    
+    navigate(urlMap[tabId] || '/dashboard');
+  };
 
   useEffect(() => {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
@@ -232,227 +297,330 @@ export default function App() {
   };
 
   const handleLogin = (userObj: User) => {
+    console.log('[Auth] ======= LOGIN HANDLER STARTED =======');
+    console.log('[Auth] User logged in:', { name: userObj.name, role: userObj.role, email: userObj.email });
+    console.log('[Auth] Current localStorage state:', {
+      has_token: !!localStorage.getItem('supabase.auth.token'),
+      token_preview: localStorage.getItem('supabase.auth.token')?.substring(0, 50) + '...'
+    });
     setUser(userObj);
+    // Add a delay before rendering dashboard to let Supabase settle
+    setTimeout(() => {
+      console.log('[Auth] 500ms delay complete, setting isAuthLoading to false');
+      setIsAuthLoading(false);
+    }, 500);
   };
 
-  // try to restore session on mount
+  // Session restoration on app mount - use new session service
   useEffect(() => {
-    const restore = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        const u = data.session.user;
-        const role = (u.user_metadata?.role as UserRole) || 'worker';
-
-        // Try to get worker data first
-        try {
-          const { data: workerData } = await supabase
-            .from('workers')
-            .select('full_name, profile_photo, type')
-            .eq('email', u.email)
-            .single();
-
-          if (workerData) {
-            setUser({
-              name: workerData.full_name,
-              email: u.email || '',
-              role: workerData.type as UserRole,
-              avatar: workerData.profile_photo || ''
-            });
-            return;
-          }
-        } catch (error) {
-          console.log('User not found in workers table, checking profiles table');
+    if (authListenerInitialized.current) {
+      console.log('[Auth] Session restoration already initialized, skipping');
+      return;
+    }
+    
+    authListenerInitialized.current = true;
+    
+    const restoreSession = async () => {
+      console.log('\n[Auth] ======= SESSION RESTORATION STARTED =======');
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(`[Auth] Timestamp: ${timestamp}`);
+      
+      try {
+        // Initialize session using new session service
+        const session = await sessionService.initializeSession();
+        
+        if (!session) {
+          console.log('[Auth] === No session found ===');
+          setIsAuthLoading(false);
+          return;
         }
-
-        // Fallback to profiles table for admin users
-        try {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('username, role')
-            .eq('id', u.id)
-            .single();
-
-          if (profileData) {
-            setUser({
-              name: profileData.username || u.email || '',
-              email: u.email || '',
-              role: profileData.role as UserRole,
-              avatar: ''
-            });
-            return;
-          }
-        } catch (error) {
-          console.log('User not found in profiles table');
-        }
-
-        // Final fallback
-        const name = (u.user_metadata?.username as string) || u.email || '';
-        setUser({ name, email: u.email || '', role, avatar: '' });
+        
+        // Session restored from database/localStorage
+        console.log('[Auth] === Session restored from database ===');
+        console.log('[Auth] User:', session.name, 'Role:', session.role);
+        
+        const userObj: User = {
+          name: session.name,
+          email: session.email,
+          role: session.role as UserRole
+        };
+        
+        setUser(userObj);
+        setTimeout(() => {
+          console.log('[Auth] 500ms delay complete, setting isAuthLoading to false');
+          setIsAuthLoading(false);
+        }, 500);
+        
+      } catch (error) {
+        console.error('[Auth] Session restoration error:', error);
+        setIsAuthLoading(false);
       }
     };
-    restore();
-
-    // listen for auth changes (optional)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const u = session.user;
-        const role = (u.user_metadata?.role as UserRole) || 'worker';
-        const name = (u.user_metadata?.username as string) || u.email || '';
-        setUser({ name, email: u.email || '', role, avatar: '' });
-      } else {
-        setUser(null);
-      }
-    });
+    
+    restoreSession();
 
     return () => {
-      listener?.subscription.unsubscribe();
+      // No cleanup needed
     };
   }, []);
 
   const handleLogout = async () => {
+    console.log('[Auth] Logout handler called');
+    await sessionService.invalidateSession();
     await supabase.auth.signOut();
     setUser(null);
+    navigate('/login');
   };
 
-  // Show website directly without login
-  if (isWebsiteMode) {
-    return (
-      <Website 
-        lang={lang} 
-        onLangChange={setLang}
-        cars={cars.length > 0 ? cars : mockCars}
-        agencies={agencies.length > 0 ? agencies : mockAgencies}
-        isLoadingAgencies={isLoadingAgenciesForWebsite}
-        offers={offers}
-        specialOffers={specialOffers}
-        contactInfo={contactInfo}
-        websiteSettings={websiteSettings}
-      />
-    );
-  }
+  // Component for Dashboard Layout (with Sidebar and Navbar)
+  const DashboardLayout = () => {
+    // Ensure we're using the current activeTab from parent scope
+    const currentLocation = useLocation();
+    
+    // Sync URL path to activeTab when route changes
+    useEffect(() => {
+      const pathname = currentLocation.pathname;
+      const pathMap: Record<string, string> = {
+        '/dashboard': 'dashboard',
+        '/planificateur': 'planner',
+        '/vehicules': 'vehicles',
+        '/clients': 'clients',
+        '/agences': 'agencies',
+        '/equipe': 'team',
+        '/personalisation': 'personalization',
+        '/depenses': 'expenses',
+        '/website-management': 'web-mgmt',
+        '/website-commandes': 'web-orders',
+        '/rapports': 'reports',
+        '/configuration': 'config',
+      };
+      const tabId = pathMap[pathname] || 'dashboard';
+      setActiveTab(tabId);
+    }, [currentLocation.pathname]);
 
-  if (!user) {
-    return <Login lang={lang} onLogin={handleLogin} />;
-  }
+    const activeItem = SIDEBAR_ITEMS.find(item => item.id === activeTab) || SIDEBAR_ITEMS[0];
 
-  const activeItem = SIDEBAR_ITEMS.find(item => item.id === activeTab) || SIDEBAR_ITEMS[0];
+    const renderContent = () => {
+      switch (activeTab) {
+        case 'dashboard':
+          return <DashboardPage lang={lang} />;
+        case 'planner':
+          return <PlannerPage lang={lang} />;
+        case 'vehicles':
+          return <CarsPage lang={lang} />;
+        case 'agencies':
+          return <AgenciesPage lang={lang} />;
+        case 'clients':
+          return <ClientsPage lang={lang} />;
+        case 'team':
+          return <EquipePage lang={lang} />;
+        case 'expenses':
+          return <ExpensesPage lang={lang} cars={cars} />;
+        case 'web-mgmt':
+          return <WebsiteManagementPage lang={lang} cars={cars.length > 0 ? cars : mockCars} />;
+        case 'web-orders':
+          return <WebsiteOrders lang={lang} />;
+        case 'reports':
+          return <ReportsPage lang={lang} />;
+        case 'config':
+          return user ? <ConfigPage lang={lang} user={user} /> : null;
+        default:
+          return (
+            <div className="space-y-8">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-3xl font-black text-saas-text-main uppercase tracking-tighter">
+                  {activeItem.icon} {activeItem.label[lang]}
+                </h2>
+                <p className="text-saas-text-muted font-bold uppercase text-[10px] tracking-widest">
+                  {lang === 'fr' 
+                    ? `Interface pour ${activeItem.label.fr}` 
+                    : `واجهة لـ ${activeItem.label.ar}`}
+                </p>
+              </div>
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <DashboardPage lang={lang} />;
-      case 'planner':
-        return <PlannerPage lang={lang} />;
-      case 'vehicles':
-        return <CarsPage lang={lang} />;
-      case 'agencies':
-        return <AgenciesPage lang={lang} />;
-      case 'clients':
-        return <ClientsPage lang={lang} />;
-      case 'team':
-        return <EquipePage lang={lang} />;
-      case 'expenses':
-        return <ExpensesPage lang={lang} cars={cars} />;
-      case 'web-mgmt':
-        return <WebsiteManagementPage lang={lang} cars={cars.length > 0 ? cars : mockCars} />;
-      case 'web-orders':
-        return <WebsiteOrders lang={lang} />;
-      case 'reports':
-        return <ReportsPage lang={lang} />;
-      case 'config':
-        return user ? <ConfigPage lang={lang} user={user} /> : null;
-      default:
-        return (
-          <div className="space-y-8">
-            <div className="flex flex-col gap-2">
-              <h2 className="text-3xl font-black text-saas-text-main uppercase tracking-tighter">
-                {activeItem.icon} {activeItem.label[lang]}
-              </h2>
-              <p className="text-saas-text-muted font-bold uppercase text-[10px] tracking-widest">
-                {lang === 'fr' 
-                  ? `Interface pour ${activeItem.label.fr}` 
-                  : `واجهة لـ ${activeItem.label.ar}`}
-              </p>
-            </div>
-
-            <div className="glass-card p-12 min-h-[500px] flex items-center justify-center border-dashed border-saas-border bg-white group">
-              <div className="text-center space-y-6">
-                <div className="text-8xl opacity-10 grayscale group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700 transform group-hover:scale-110">
-                  {activeItem.icon}
+              <div className="glass-card p-12 min-h-[500px] flex items-center justify-center border-dashed border-saas-border bg-white group">
+                <div className="text-center space-y-6">
+                  <div className="text-8xl opacity-10 grayscale group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700 transform group-hover:scale-110">
+                    {activeItem.icon}
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-saas-text-main font-black text-2xl uppercase tracking-tighter">
+                      {lang === 'fr' ? 'Contenu en développement' : 'المحتوى قيد التطوير'}
+                    </p>
+                    <p className="text-saas-text-muted text-sm font-medium max-w-md mx-auto">
+                      {lang === 'fr' 
+                        ? 'Cette section est en cours de modernisation pour correspondre à votre nouveau standard SaaS.' 
+                        : 'هذا القسم قيد التحديث ليتناسب مع معايير SaaS الجديدة الخاصة بك.'}
+                    </p>
+                  </div>
+                  <button className="btn-saas-primary px-8 py-3">
+                    {lang === 'fr' ? 'En savoir plus' : 'معرفة المزيد'}
+                  </button>
                 </div>
-                <div className="space-y-3">
-                  <p className="text-saas-text-main font-black text-2xl uppercase tracking-tighter">
-                    {lang === 'fr' ? 'Contenu en développement' : 'المحتوى قيد التطوير'}
-                  </p>
-                  <p className="text-saas-text-muted text-sm font-medium max-w-md mx-auto">
-                    {lang === 'fr' 
-                      ? 'Cette section est en cours de modernisation pour correspondre à votre nouveau standard SaaS.' 
-                      : 'هذا القسم قيد التحديث ليتناسب مع معايير SaaS الجديدة الخاصة بك.'}
-                  </p>
-                </div>
-                <button className="btn-saas-primary px-8 py-3">
-                  {lang === 'fr' ? 'En savoir plus' : 'معرفة المزيد'}
-                </button>
               </div>
             </div>
-          </div>
-        );
-    }
-  };
+          );
+      }
+    };
 
-  return (
-    <div className={`flex min-h-screen bg-saas-bg ${lang === 'ar' ? 'font-arabic' : ''}`}>
-      {!supabaseConfigured && (
-        <div className="fixed inset-0 bg-yellow-100 text-yellow-900 flex items-center justify-center z-50 p-4 text-center">
-          <strong>Warning:</strong> Supabase variables are missing. Set
-          <code className="mx-1">VITE_SUPABASE_URL</code> and
-          <code className="mx-1">VITE_SUPABASE_ANON_KEY</code> in your environment.
-        </div>
-      )}
-      <Sidebar 
-        lang={lang} 
-        isVisible={isSidebarVisible} 
-        setIsVisible={setIsSidebarVisible}
-        onLogout={handleLogout}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
-      
-      <div className="flex-1 flex flex-col min-w-0">
-        <Navbar 
-          user={user} 
+    return (
+      <div className={`flex min-h-screen bg-saas-bg ${lang === 'ar' ? 'font-arabic' : ''}`}>
+        {!supabaseConfigured && (
+          <div className="fixed inset-0 bg-yellow-100 text-yellow-900 flex items-center justify-center z-50 p-4 text-center">
+            <strong>Warning:</strong> Supabase variables are missing. Set
+            <code className="mx-1">VITE_SUPABASE_URL</code> and
+            <code className="mx-1">VITE_SUPABASE_ANON_KEY</code> in your environment.
+          </div>
+        )}
+        <Sidebar 
           lang={lang} 
-          setLang={setLang} 
-          toggleSidebar={() => setIsSidebarVisible(!isSidebarVisible)} 
+          isVisible={isSidebarVisible} 
+          setIsVisible={setIsSidebarVisible}
+          onLogout={handleLogout}
+          activeTab={activeTab}
+          setActiveTab={handleTabChange}
         />
         
-        <main className="flex-1 p-8 overflow-y-auto">
-          <AnimatePresence mode="wait">
+        <div className="flex-1 flex flex-col min-w-0">
+          <Navbar 
+            user={user} 
+            lang={lang} 
+            setLang={setLang} 
+            toggleSidebar={() => setIsSidebarVisible(!isSidebarVisible)} 
+          />
+          
+          <main className="flex-1 p-8 overflow-y-auto">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                {renderContent()}
+              </motion.div>
+            </AnimatePresence>
+          </main>
+        </div>
+
+        {/* Mobile Overlay */}
+        <AnimatePresence>
+          {isSidebarVisible && (
             <motion.div
-              key={activeTab}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              {renderContent()}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+              onClick={() => setIsSidebarVisible(false)}
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
+            />
+          )}
+        </AnimatePresence>
       </div>
+    );
+  };
 
-      {/* Mobile Overlay */}
-      <AnimatePresence>
-        {isSidebarVisible && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsSidebarVisible(false)}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
-          />
-        )}
-      </AnimatePresence>
-    </div>
+  // Helper component for protected routes that handles loading state
+  const ProtectedRoute = () => {
+    if (isAuthLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-saas-bg">
+          <div className="text-center">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              className="w-12 h-12 border-4 border-saas-primary-via border-t-saas-primary-start rounded-full mx-auto mb-4"
+            />
+            <p className="text-saas-text-muted">Loading...</p>
+          </div>
+        </div>
+      );
+    }
+    return user ? <DashboardLayout /> : <Navigate to="/login" replace />;
+  };
+
+  return (
+    <Routes>
+      {/* Website route */}
+      <Route path="/website" element={
+        <Website 
+          lang={lang} 
+          onLangChange={setLang}
+          cars={cars.length > 0 ? cars : mockCars}
+          agencies={agencies.length > 0 ? agencies : mockAgencies}
+          isLoadingAgencies={isLoadingAgenciesForWebsite}
+          offers={offers}
+          specialOffers={specialOffers}
+          contactInfo={contactInfo}
+          websiteSettings={websiteSettings}
+        />
+      } />
+
+      {/* Login route */}
+      <Route path="/login" element={
+        isAuthLoading ? (
+          <div className="min-h-screen flex items-center justify-center bg-saas-bg">
+            <div className="text-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                className="w-12 h-12 border-4 border-saas-primary-via border-t-saas-primary-start rounded-full mx-auto mb-4"
+              />
+              <p className="text-saas-text-muted">Loading...</p>
+            </div>
+          </div>
+        ) : user ? (
+          <Navigate to="/dashboard" replace />
+        ) : (
+          <Login lang={lang} onLogin={handleLogin} />
+        )
+      } />
+
+      {/* Dashboard and all interface routes - all protected */}
+      <Route path="/dashboard" element={<ProtectedRoute />} />
+      <Route path="/planificateur" element={<ProtectedRoute />} />
+      <Route path="/vehicules" element={<ProtectedRoute />} />
+      <Route path="/clients" element={<ProtectedRoute />} />
+      <Route path="/agences" element={<ProtectedRoute />} />
+      <Route path="/equipe" element={<ProtectedRoute />} />
+      <Route path="/personalisation" element={<ProtectedRoute />} />
+      <Route path="/depenses" element={<ProtectedRoute />} />
+      <Route path="/website-management" element={<ProtectedRoute />} />
+      <Route path="/website-commandes" element={<ProtectedRoute />} />
+      <Route path="/rapports" element={<ProtectedRoute />} />
+      <Route path="/configuration" element={<ProtectedRoute />} />
+
+      {/* Default redirect */}
+      <Route path="/" element={
+        isAuthLoading ? (
+          <div className="min-h-screen flex items-center justify-center bg-saas-bg">
+            <div className="text-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                className="w-12 h-12 border-4 border-saas-primary-via border-t-saas-primary-start rounded-full mx-auto mb-4"
+              />
+              <p className="text-saas-text-muted">Loading...</p>
+            </div>
+          </div>
+        ) : <Navigate to={user ? "/dashboard" : "/login"} replace />
+      } />
+
+      {/* Fallback for unknown routes */}
+      <Route path="*" element={
+        isAuthLoading ? (
+          <div className="min-h-screen flex items-center justify-center bg-saas-bg">
+            <div className="text-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                className="w-12 h-12 border-4 border-saas-primary-via border-t-saas-primary-start rounded-full mx-auto mb-4"
+              />
+              <p className="text-saas-text-muted">Loading...</p>
+            </div>
+          </div>
+        ) : <Navigate to={user ? "/dashboard" : "/login"} replace />
+      } />
+    </Routes>
   );
 }

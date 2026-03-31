@@ -159,40 +159,67 @@ export class DatabaseService {
 
   // Clients
   static async getClients(): Promise<Client[]> {
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Add retry logic for rate limiting
+    const maxRetries = 2;
+    let lastError;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabase
+          .from('clients')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-    if (error) throw error;
+        if (error) throw error;
 
-    // Map snake_case to camelCase
-    return (data || []).map(client => ({
-      id: client.id,
-      firstName: client.first_name,
-      lastName: client.last_name,
-      phone: client.phone,
-      email: client.email,
-      dateOfBirth: client.date_of_birth,
-      placeOfBirth: client.place_of_birth,
-      idCardNumber: client.id_card_number,
-      licenseNumber: client.license_number,
-      licenseExpirationDate: client.license_expiration_date,
-      licenseDeliveryDate: client.license_delivery_date,
-      licenseDeliveryPlace: client.license_delivery_place,
-      documentType: client.document_type,
-      documentNumber: client.document_number,
-      documentDeliveryDate: client.document_delivery_date,
-      documentExpirationDate: client.document_expiration_date,
-      documentDeliveryAddress: client.document_delivery_address,
-      wilaya: client.wilaya,
-      completeAddress: client.complete_address,
-      profilePhoto: client.profile_photo,
-      scannedDocuments: client.scanned_documents,
-      createdAt: client.created_at,
-      agencyId: client.agency_id,
-    }));
+        // Map snake_case to camelCase
+        return (data || []).map(client => ({
+          id: client.id,
+          firstName: client.first_name,
+          lastName: client.last_name,
+          phone: client.phone,
+          email: client.email,
+          dateOfBirth: client.date_of_birth,
+          placeOfBirth: client.place_of_birth,
+          idCardNumber: client.id_card_number,
+          licenseNumber: client.license_number,
+          licenseExpirationDate: client.license_expiration_date,
+          licenseDeliveryDate: client.license_delivery_date,
+          licenseDeliveryPlace: client.license_delivery_place,
+          documentType: client.document_type,
+          documentNumber: client.document_number,
+          documentDeliveryDate: client.document_delivery_date,
+          documentExpirationDate: client.document_expiration_date,
+          documentDeliveryAddress: client.document_delivery_address,
+          wilaya: client.wilaya,
+          completeAddress: client.complete_address,
+          profilePhoto: client.profile_photo,
+          scannedDocuments: client.scanned_documents,
+          createdAt: client.created_at,
+          agencyId: client.agency_id,
+        }));
+      } catch (error: any) {
+        lastError = error;
+        const message = error.message || '';
+        
+        // Check if it's a rate limit error
+        if (message.includes('429') || message.includes('Too Many Requests')) {
+          if (attempt < maxRetries) {
+            const delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[DatabaseService] Rate limited on getClients, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+        
+        // For other errors, throw immediately
+        throw error;
+      }
+    }
+    
+    throw lastError;
   }
+
 
   static async createClient(client: Omit<Client, 'id' | 'createdAt'>): Promise<Client> {
     // Map camelCase to snake_case for database
@@ -872,81 +899,87 @@ export class DatabaseService {
 
   // Dashboard Statistics
   static async getDashboardStats() {
-    // Run all queries in parallel for faster loading
-    const [
-      revenueResult,
-      monthlyRevenueResult,
-      storeExpensesResult,
-      vehicleExpensesResult,
-      clientsResult,
-      carsResult,
-      activeReservationsForCarsResult,
-      totalReservationsResult,
-      activeReservationsResult,
-      overduePaymentsResult,
-      recentReservationsResult,
-      alertsResult
-    ] = await Promise.all([
-      supabase.from('reservations').select('total_price').eq('status', 'completed'),
-      supabase.from('reservations').select('total_price, completed_at').eq('status', 'completed').gte('completed_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-      supabase.from('store_expenses').select('cost'),
-      supabase.from('vehicle_expenses').select('cost'),
-      supabase.from('clients').select('id', { count: 'exact' }),
-      supabase.from('cars').select('id', { count: 'exact' }),
-      supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active']),
-      supabase.from('reservations').select('id', { count: 'exact' }),
-      supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active']),
-      supabase.from('payments').select('id', { count: 'exact' }).eq('status', 'pending'),
-      supabase.from('reservations').select('*, client:clients(*), car:cars(*)').order('created_at', { ascending: false }).limit(5),
-      supabase.from('maintenance_alerts').select('id', { count: 'exact' })
-    ]);
+    // Add retry logic for rate limiting
+    const maxRetries = 2;
+    let lastError;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Run all queries in parallel for faster loading
+        const [
+          revenueResult,
+          monthlyRevenueResult,
+          storeExpensesResult,
+          vehicleExpensesResult,
+          clientsResult,
+          carsResult,
+          activeReservationsForCarsResult,
+          totalReservationsResult,
+          activeReservationsResult,
+          overduePaymentsResult,
+          recentReservationsResult,
+          alertsResult
+        ] = await Promise.all([
+          supabase.from('reservations').select('total_price').eq('status', 'completed'),
+          supabase.from('reservations').select('total_price, completed_at').eq('status', 'completed').gte('completed_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+          supabase.from('store_expenses').select('cost'),
+          supabase.from('vehicle_expenses').select('cost'),
+          supabase.from('clients').select('id', { count: 'exact' }),
+          supabase.from('cars').select('id', { count: 'exact' }),
+          supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active']),
+          supabase.from('reservations').select('id', { count: 'exact' }),
+          supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active']),
+          supabase.from('payments').select('id', { count: 'exact' }).eq('status', 'pending'),
+          supabase.from('reservations').select('*, client:clients(*), car:cars(*)').order('created_at', { ascending: false }).limit(5),
+          supabase.from('maintenance_alerts').select('id', { count: 'exact' })
+        ]);
 
-    // Extract data and errors
-    const { data: revenueData, error: revenueError } = revenueResult;
-    const { data: monthlyRevenueData, error: monthlyRevenueError } = monthlyRevenueResult;
-    const { data: storeExpenses, error: storeError } = storeExpensesResult;
-    const { data: vehicleExpenses, error: vehicleError } = vehicleExpensesResult;
-    const { data: clients, error: clientsError } = clientsResult;
-    const { data: cars, error: carsError } = carsResult;
-    const { data: activeReservationsForCars, error: activeReservationsForCarsError } = activeReservationsForCarsResult;
-    const { data: totalReservations, error: totalReservationsError } = totalReservationsResult;
-    const { data: activeReservations, error: activeResError } = activeReservationsResult;
-    const { data: overduePayments, error: overduePaymentsError } = overduePaymentsResult;
-    const { data: recentReservations, error: recentReservationsError } = recentReservationsResult;
-    const { data: alerts, error: alertsError } = alertsResult;
+        // Extract data and errors
+        const { data: revenueData, error: revenueError } = revenueResult;
+        const { data: monthlyRevenueData, error: monthlyRevenueError } = monthlyRevenueResult;
+        const { data: storeExpenses, error: storeError } = storeExpensesResult;
+        const { data: vehicleExpenses, error: vehicleError } = vehicleExpensesResult;
+        const { data: clients, error: clientsError } = clientsResult;
+        const { data: cars, error: carsError } = carsResult;
+        const { data: activeReservationsForCars, error: activeReservationsForCarsError } = activeReservationsForCarsResult;
+        const { data: totalReservations, error: totalReservationsError } = totalReservationsResult;
+        const { data: activeReservations, error: activeResError } = activeReservationsResult;
+        const { data: overduePayments, error: overduePaymentsError } = overduePaymentsResult;
+        const { data: recentReservations, error: recentReservationsError } = recentReservationsResult;
+        const { data: alerts, error: alertsError } = alertsResult;
 
-    // Throw on critical errors
-    if (revenueError || storeError || vehicleError || clientsError || carsError || activeResError) {
-      throw revenueError || storeError || vehicleError || clientsError || carsError || activeResError;
-    }
+        // Throw on critical errors
+        if (revenueError || storeError || vehicleError || clientsError || carsError || activeResError) {
+          throw revenueError || storeError || vehicleError || clientsError || carsError || activeResError;
+        }
 
-    // Calculate available cars: total cars minus those with active/pending reservations
-    const rentedCarIds = new Set(activeReservationsForCars?.map((r: any) => r.car_id) || []);
-    const availableCarsCount = (cars?.length || 0) - rentedCarIds.size;
+        // Calculate available cars: total cars minus those with active/pending reservations
+        const rentedCarIds = new Set(activeReservationsForCars?.map((r: any) => r.car_id) || []);
+        const availableCarsCount = (cars?.length || 0) - rentedCarIds.size;
 
-    // Calculate totals
-    const totalRevenue = revenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
-    const monthlyRevenue = monthlyRevenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
-    const totalExpenses = (storeExpenses?.reduce((sum, e) => sum + e.cost, 0) || 0) +
-                         (vehicleExpenses?.reduce((sum, e) => sum + e.cost, 0) || 0);
-    const maintenanceAlertsCount = alertsError ? 0 : (alerts?.length || 0);
+        // Calculate totals
+        const totalRevenue = revenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
+        const monthlyRevenue = monthlyRevenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
+        const totalExpenses = (storeExpenses?.reduce((sum, e) => sum + e.cost, 0) || 0) +
+                             (vehicleExpenses?.reduce((sum, e) => sum + e.cost, 0) || 0);
+        const maintenanceAlertsCount = alertsError ? 0 : (alerts?.length || 0);
 
-    // Calculate revenue by month (last 6 months)
-    const revenueByMonth = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const monthRevenue = revenueData?.filter(r => {
-        const completedDate = new Date(r.completed_at || r.created_at);
-        return completedDate >= month && completedDate < nextMonth;
-      }).reduce((sum, r) => sum + r.total_price, 0) || 0;
+        // Calculate revenue by month (last 6 months)
+        const revenueByMonth = [];
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+          const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+          const monthRevenue = revenueData?.filter(r => {
+            const completedDate = new Date(r.completed_at || r.created_at);
+            return completedDate >= month && completedDate < nextMonth;
+          }).reduce((sum, r) => sum + r.total_price, 0) || 0;
 
-      revenueByMonth.push({
-        month: month.toLocaleDateString('fr-FR', { month: 'short' }),
-        revenue: monthRevenue
-      });
-    }
+          revenueByMonth.push({
+            month: month.toLocaleDateString('fr-FR', { month: 'short' }),
+            revenue: monthRevenue
+          });
+        }
 
     // Calculate car utilization (simplified - based on active reservations)
     const carUtilization = cars?.slice(0, 5).map(car => ({
@@ -971,6 +1004,28 @@ export class DatabaseService {
       revenueByMonth,
       carUtilization
     };
+      } catch (error: any) {
+        lastError = error;
+        const message = error.message || '';
+        
+        // Check if it's a rate limit error
+        if (message.includes('429') || message.includes('Too Many Requests')) {
+          if (attempt < maxRetries) {
+            // Exponential backoff: 1s, 2s, etc.
+            const delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[DatabaseService] Rate limited on dashboard stats, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue; // Retry
+          }
+        }
+        
+        // For other errors, throw immediately
+        throw error;
+      }
+    }
+    
+    // After all retries exhausted
+    throw lastError;
   }
 
   // Website Management - Offers
