@@ -448,15 +448,35 @@ export class EmailService {
   }
 
   /**
-   * Generate HTML for any document type
+   * Generate HTML for any document type - using contract template as base with different titles
    */
   static async generateDocumentHTML(
     reservation: ReservationDetails,
     templateLang: 'fr' | 'ar',
     documentType: 'contract' | 'devis' | 'recu' | 'engagement' | 'facture' | 'inspection'
   ): Promise<string> {
-    // For now, all document types will use the same contract template
-    // This ensures consistent content across all document types
-    return this.generateContractHTML(reservation, templateLang);
+    // Get the base contract HTML
+    let htmlContent = await this.generateContractHTML(reservation, templateLang);
+    
+    // Replace the title based on document type
+    const titles = {
+      contract: templateLang === 'fr' ? 'CONTRAT DE LOCATION DE VÉHICULE' : 'عقد تأجير السيارة',
+      devis: templateLang === 'fr' ? 'DEVIS DE LOCATION' : 'عرض الأسعار',
+      recu: templateLang === 'fr' ? 'REÇU DE PAIEMENT' : 'إيصال الدفع',
+      engagement: templateLang === 'fr' ? 'LETTRE D\'ENGAGEMENT' : 'رسالة الالتزام',
+      facture: templateLang === 'fr' ? 'FACTURE' : 'الفاتورة',
+      inspection: templateLang === 'fr' ? 'RAPPORT D\'INSPECTION' : 'تقرير فحص المركبة'
+    };
+    
+    const currentTitle = titles.contract;
+    const newTitle = titles[documentType];
+    
+    // Replace the contract title with the appropriate document title
+    htmlContent = htmlContent.replace(currentTitle, newTitle);
+    
+    // Also update the main heading if it exists
+    htmlContent = htmlContent.replace('CONTRAT DE LOCATION', newTitle);
+    
+    return htmlContent;
   }
 }
