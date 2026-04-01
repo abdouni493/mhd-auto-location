@@ -510,12 +510,22 @@ export class EmailService {
     // Replace in title tags if present
     htmlContent = htmlContent.replace(/<title>.*?<\/title>/i, `<title>${newTitle}</title>`);
     
-    // If it's an inspection document, generate the inspection template instead
-    if (documentType === 'inspection') {
-      return this.generateInspectionEmailHTML(reservation, templateLang);
+    // Route to appropriate template generator based on document type
+    switch(documentType) {
+      case 'inspection':
+        return this.generateInspectionEmailHTML(reservation, templateLang);
+      case 'engagement':
+        return this.generateEngagementEmailHTML(reservation, templateLang);
+      case 'recu':
+        return this.generateRecuEmailHTML(reservation, templateLang);
+      case 'facture':
+        return this.generateFactureEmailHTML(reservation, templateLang);
+      case 'devis':
+        return this.generateDevisEmailHTML(reservation, templateLang);
+      case 'contract':
+      default:
+        return this.generateContractEmailHTMLForEmail(reservation, templateLang);
     }
-    
-    return htmlContent;
   }
 
   /**
@@ -814,5 +824,465 @@ export class EmailService {
       // Fallback to contract template if inspection generation fails
       return this.generateContractHTML(reservation, templateLang);
     }
+  }
+
+  /**
+   * Generate engagement (personal commitment) email template
+   */
+  private static generateEngagementEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): string {
+    const client = reservation.client;
+    const depDateStr = new Date(reservation.step1.departureDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const retDateStr = new Date(reservation.step1.returnDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const clientName = `${client.firstName} ${client.lastName}`;
+    
+    return `<!DOCTYPE html>
+<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<head>
+    <meta charset="UTF-8">
+    <title>${templateLang === 'ar' ? 'التزام' : 'Engagement'}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+      .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; }
+      .header { text-align: center; border-bottom: 3px solid #007bff; padding-bottom: 20px; margin-bottom: 30px; }
+      .title { font-size: 24px; color: #007bff; margin: 10px 0; }
+      .section-title { font-size: 14px; font-weight: bold; color: #007bff; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+      .info-row { display: flex; justify-content: space-between; padding: 8px 0; }
+      .label { font-weight: bold; }
+      .commitment-box { background: #f9f9f9; padding: 15px; margin: 20px 0; border-left: 4px solid #007bff; }
+      .sig-section { margin-top: 40px; display: flex; justify-content: space-between; }
+      .sig-box { text-align: center; }
+      .sig-line { border-top: 2px solid #333; width: 150px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">${templateLang === 'ar' ? 'التزام شخصي' : 'Engagement Personnel'}</div>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'بيانات الراكب' : 'Données du Conducteur'}</div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'الاسم:' : 'Nom:'}</span>
+            <span>${clientName}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'رقم الهاتف:' : 'Téléphone:'}</span>
+            <span>${client.phone}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'رقم الترخيص:' : 'Numéro de Permis:'}</span>
+            <span>${client.licenseNumber}</span>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'بيانات المركبة' : 'Données du Véhicule'}</div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'الموديل:' : 'Modèle:'}</span>
+            <span>${reservation.car.brand} ${reservation.car.model}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'لوحة التسجيل:' : 'Plaque:'}</span>
+            <span>${reservation.car.registration}</span>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'فترة الإيجار' : 'Période de Location'}</div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'من:' : 'De:'}</span>
+            <span>${depDateStr}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'إلى:' : 'À:'}</span>
+            <span>${retDateStr}</span>
+        </div>
+
+        <div class="commitment-box">
+            <p>${templateLang === 'ar' 
+                ? 'أتعهد بالالتزام بجميع شروط وأحكام عقد الإيجار والعناية الكاملة بالمركبة المؤجرة.' 
+                : 'Je m\'engage à respecter toutes les conditions du contrat de location et à prendre soin du véhicule loué.'}</p>
+        </div>
+
+        <div class="sig-section">
+            <div class="sig-box">
+                <div>${templateLang === 'ar' ? 'توقيع الراكب' : 'Signature du Conducteur'}</div>
+                <div class="sig-line"></div>
+            </div>
+            <div class="sig-box">
+                <div>${templateLang === 'ar' ? 'توقيع الوكالة' : 'Signature de l\'Agence'}</div>
+                <div class="sig-line"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+  }
+
+  /**
+   * Generate receipt (reçu) email template
+   */
+  private static generateRecuEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): string {
+    const dateStr = new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const client = reservation.client;
+    const totalPrice = reservation.totalPrice;
+    const paidAmount = reservation.advancePayment;
+    const balance = totalPrice - paidAmount;
+    
+    return `<!DOCTYPE html>
+<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<head>
+    <meta charset="UTF-8">
+    <title>${templateLang === 'ar' ? 'إيصال الدفع' : 'Reçu'}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+      .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; }
+      .header { text-align: center; border-bottom: 3px solid #28a745; padding-bottom: 20px; margin-bottom: 30px; }
+      .title { font-size: 24px; color: #28a745; margin: 10px 0; }
+      .badge { display: inline-block; background: #28a745; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-top: 10px; }
+      .section-title { font-size: 14px; font-weight: bold; color: #333; margin-top: 20px; margin-bottom: 10px; }
+      .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+      .amount-section { background: #f9f9f9; padding: 15px; margin: 20px 0; border-left: 4px solid #28a745; }
+      .amount-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }
+      .total { font-size: 18px; font-weight: bold; color: #28a745; margin-top: 10px; border-top: 2px solid #ddd; padding-top: 10px; }
+      .thank-you { text-align: center; font-size: 16px; font-weight: bold; color: #28a745; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">${templateLang === 'ar' ? 'إيصال الدفع' : 'Reçu de Paiement'}</div>
+            <div class="badge">${templateLang === 'ar' ? '✓ مقبول' : '✓ Accepté'}</div>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'تفاصيل الدفع' : 'Détails du Paiement'}</div>
+        <div class="info-row">
+            <span>${templateLang === 'ar' ? 'التاريخ:' : 'Date:'}</span>
+            <span>${dateStr}</span>
+        </div>
+        <div class="info-row">
+            <span>${templateLang === 'ar' ? 'العميل:' : 'Client:'}</span>
+            <span>${client.firstName} ${client.lastName}</span>
+        </div>
+        <div class="info-row">
+            <span>${templateLang === 'ar' ? 'رقم الهاتف:' : 'Téléphone:'}</span>
+            <span>${client.phone}</span>
+        </div>
+        <div class="info-row">
+            <span>${templateLang === 'ar' ? 'رقم الحجز:' : 'Réservation:'}</span>
+            <span>${reservation.id.substring(0, 8)}</span>
+        </div>
+
+        <div class="amount-section">
+            <div class="amount-row">
+                <span>${templateLang === 'ar' ? 'المبلغ الكلي:' : 'Montant Total:'}</span>
+                <span>${totalPrice.toFixed(2)} DA</span>
+            </div>
+            <div class="amount-row">
+                <span>${templateLang === 'ar' ? 'المبلغ المدفوع:' : 'Montant Payé:'}</span>
+                <span>${paidAmount.toFixed(2)} DA</span>
+            </div>
+            <div class="amount-row">
+                <span>${templateLang === 'ar' ? 'الرصيد المتبقي:' : 'Solde:'}</span>
+                <span style="color: ${balance > 0 ? '#ff6b6b' : '#28a745'}">${balance.toFixed(2)} DA</span>
+            </div>
+            <div class="total">
+                ${templateLang === 'ar' ? 'المستحصل:' : 'Reçu:'} ${paidAmount.toFixed(2)} DA
+            </div>
+        </div>
+
+        <div class="thank-you">
+            ${templateLang === 'ar' ? '🙏 شكراً على دفعتك 🙏' : '🙏 Merci pour votre paiement 🙏'}
+        </div>
+    </div>
+</body>
+</html>`;
+  }
+
+  /**
+   * Generate invoice (facture) email template
+   */
+  private static generateFactureEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): string {
+    const dateStr = new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const client = reservation.client;
+    const depDate = new Date(reservation.step1.departureDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const retDate = new Date(reservation.step1.returnDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const subTotal = reservation.totalPrice / 1.19;
+    const tax = reservation.totalPrice - subTotal;
+    
+    return `<!DOCTYPE html>
+<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<head>
+    <meta charset="UTF-8">
+    <title>${templateLang === 'ar' ? 'الفاتورة' : 'Facture'}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+      .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; }
+      .header { text-align: center; border-bottom: 3px solid #007bff; padding-bottom: 20px; margin-bottom: 30px; }
+      .title { font-size: 24px; color: #007bff; margin: 10px 0; }
+      .invoice-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; }
+      .section-title { font-size: 14px; font-weight: bold; color: #333; margin-top: 20px; margin-bottom: 10px; }
+      .details-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+      .details-table th { background: #f0f0f0; padding: 10px; text-align: ${templateLang === 'ar' ? 'right' : 'left'}; font-weight: bold; border-bottom: 2px solid #ddd; }
+      .details-table td { padding: 10px; border-bottom: 1px solid #ddd; }
+      .totals-box { margin-top: 20px; padding: 15px; background: #f9f9f9; border-left: 4px solid #007bff; }
+      .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }
+      .final-total { font-size: 18px; font-weight: bold; color: #007bff; margin-top: 10px; border-top: 2px solid #ddd; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">${templateLang === 'ar' ? 'الفاتورة' : 'Facture'}</div>
+        </div>
+
+        <div class="invoice-header">
+            <div><strong>${templateLang === 'ar' ? 'التاريخ:' : 'Date:'}</strong> ${dateStr}</div>
+            <div><strong>${templateLang === 'ar' ? 'الرقم:' : 'N°:'}</strong> ${reservation.id.substring(0, 8)}</div>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'العميل' : 'Client'}</div>
+        <p>${client.firstName} ${client.lastName} - ${client.phone}</p>
+
+        <table class="details-table">
+            <thead>
+                <tr>
+                    <th>${templateLang === 'ar' ? 'الوصف' : 'Description'}</th>
+                    <th>${templateLang === 'ar' ? 'المبلغ' : 'Montant'}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>${reservation.car.brand} ${reservation.car.model} (${depDate} - ${retDate})</td>
+                    <td>${subTotal.toFixed(2)} DA</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="totals-box">
+            <div class="total-row">
+                <span>${templateLang === 'ar' ? 'الإجمالي الفرعي:' : 'Sous-Total:'}</span>
+                <span>${subTotal.toFixed(2)} DA</span>
+            </div>
+            <div class="total-row">
+                <span>${templateLang === 'ar' ? 'الضريبة (19%):' : 'TVA (19%):'}</span>
+                <span>${tax.toFixed(2)} DA</span>
+            </div>
+            <div class="final-total">
+                ${templateLang === 'ar' ? 'الإجمالي الكلي:' : 'Total TTC:'} ${reservation.totalPrice.toFixed(2)} DA
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+  }
+
+  /**
+   * Generate quote (devis) email template
+   */
+  private static generateDevisEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): string {
+    const dateStr = new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const client = reservation.client;
+    const depDate = new Date(reservation.step1.departureDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const retDate = new Date(reservation.step1.returnDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const days = reservation.totalDays;
+    const subTotal = (reservation.totalPrice / 1.19);
+    const tax = reservation.totalPrice - subTotal;
+    
+    return `<!DOCTYPE html>
+<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<head>
+    <meta charset="UTF-8">
+    <title>${templateLang === 'ar' ? 'عرض أسعار' : 'Devis'}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+      .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; }
+      .header { text-align: center; border-bottom: 3px solid #ff9800; padding-bottom: 20px; margin-bottom: 30px; }
+      .title { font-size: 24px; color: #ff9800; margin: 10px 0; }
+      .quote-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; }
+      .section-title { font-size: 14px; font-weight: bold; color: #ff9800; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #ff9800; padding-bottom: 5px; }
+      .info-row { display: flex; justify-content: space-between; padding: 8px 0; }
+      .pricing-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+      .pricing-table th { background: #ff9800; color: white; padding: 10px; text-align: ${templateLang === 'ar' ? 'right' : 'left'}; }
+      .pricing-table td { padding: 10px; border-bottom: 1px solid #ddd; }
+      .totals-box { margin-top: 20px; padding: 15px; background: #fff3e0; border-left: 4px solid #ff9800; }
+      .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }
+      .final-total { font-size: 18px; font-weight: bold; color: #ff9800; margin-top: 10px; border-top: 2px solid #ff9800; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">${templateLang === 'ar' ? 'عرض أسعار' : 'Devis'}</div>
+        </div>
+
+        <div class="quote-header">
+            <div><strong>${templateLang === 'ar' ? 'التاريخ:' : 'Date:'}</strong> ${dateStr}</div>
+            <div><strong>${templateLang === 'ar' ? 'العميل:' : 'Client:'}</strong> ${client.firstName} ${client.lastName}</div>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'مواصفات المركبة' : 'Spécifications'}</div>
+        <div class="info-row">
+            <span>${templateLang === 'ar' ? 'الماركة والموديل:' : 'Marque/Modèle:'}</span>
+            <span>${reservation.car.brand} ${reservation.car.model}</span>
+        </div>
+        <div class="info-row">
+            <span>${templateLang === 'ar' ? 'اللوحة:' : 'Plaque:'}</span>
+            <span>${reservation.car.registration}</span>
+        </div>
+        <div class="info-row">
+            <span>${templateLang === 'ar' ? 'الفترة:' : 'Période:'}</span>
+            <span>${depDate} - ${retDate} (${days} ${templateLang === 'ar' ? 'أيام' : 'jours'})</span>
+        </div>
+
+        <table class="pricing-table">
+            <thead>
+                <tr>
+                    <th>${templateLang === 'ar' ? 'البيان' : 'Description'}</th>
+                    <th>${templateLang === 'ar' ? 'المبلغ' : 'Montant'}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>${days} ${templateLang === 'ar' ? 'يوم × سعر اليوم' : 'jour × tarif/jour'}</td>
+                    <td>${subTotal.toFixed(2)} DA</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="totals-box">
+            <div class="total-row">
+                <span>${templateLang === 'ar' ? 'الإجمالي الفرعي:' : 'Sous-Total:'}</span>
+                <span>${subTotal.toFixed(2)} DA</span>
+            </div>
+            <div class="total-row">
+                <span>${templateLang === 'ar' ? 'الضريبة (19%):' : 'TVA (19%):'}</span>
+                <span>${tax.toFixed(2)} DA</span>
+            </div>
+            <div class="final-total">
+                ${templateLang === 'ar' ? 'الإجمالي الكلي:' : 'Total TTC:'} ${reservation.totalPrice.toFixed(2)} DA
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+  }
+
+  /**
+   * Generate contract email template
+   */
+  private static generateContractEmailHTMLForEmail(reservation: ReservationDetails, templateLang: string = 'ar'): string {
+    // For email, create a simplified contract template
+    const client = reservation.client;
+    const depDate = new Date(reservation.step1.departureDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const retDate = new Date(reservation.step1.returnDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const dateStr = new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
+    const subTotal = (reservation.totalPrice / 1.19);
+    const tax = reservation.totalPrice - subTotal;
+    
+    return `<!DOCTYPE html>
+<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<head>
+    <meta charset="UTF-8">
+    <title>${templateLang === 'ar' ? 'عقد التأجير' : 'Contrat'}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+      .container { max-width: 900px; margin: 0 auto; background: white; padding: 40px; }
+      .header { text-align: center; border-bottom: 3px solid #17a2b8; padding-bottom: 20px; margin-bottom: 30px; }
+      .title { font-size: 24px; color: #17a2b8; margin: 10px 0; }
+      .section-title { font-size: 14px; font-weight: bold; color: #17a2b8; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #17a2b8; padding-bottom: 5px; }
+      .info-row { display: flex; justify-content: space-between; padding: 8px 0; }
+      .label { font-weight: bold; min-width: 120px; }
+      .checkbox-item { margin: 8px 0; }
+      .pricing-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+      .pricing-table th { background: #17a2b8; color: white; padding: 10px; text-align: ${templateLang === 'ar' ? 'right' : 'left'}; }
+      .pricing-table td { padding: 10px; border-bottom: 1px solid #ddd; }
+      .totals-box { margin-top: 20px; padding: 15px; background: #e8f4f8; border-left: 4px solid #17a2b8; }
+      .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }
+      .final-total { font-size: 18px; font-weight: bold; color: #17a2b8; margin-top: 10px; border-top: 2px solid #ddd; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">${templateLang === 'ar' ? 'عقد التأجير' : 'Contrat de Location'}</div>
+            <div style="font-size: 12px; color: #666;">${templateLang === 'ar' ? 'التاريخ:' : 'Date:'} ${dateStr}</div>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'بيانات السائق' : 'Données du Conducteur'}</div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'الاسم:' : 'Nom:'}</span>
+            <span>${client.firstName} ${client.lastName}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'الهاتف:' : 'Tél:'}</span>
+            <span>${client.phone}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'الرخصة:' : 'Permis:'}</span>
+            <span>${client.licenseNumber}</span>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'بيانات المركبة' : 'Données du Véhicule'}</div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'الموديل:' : 'Modèle:'}</span>
+            <span>${reservation.car.brand} ${reservation.car.model}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'اللوحة:' : 'Plaque:'}</span>
+            <span>${reservation.car.registration}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'الوقود:' : 'Carburant:'}</span>
+            <span>${reservation.car.energy}</span>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'فترة الإيجار' : 'Période de Location'}</div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'المغادرة:' : 'Départ:'}</span>
+            <span>${depDate}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'العودة:' : 'Retour:'}</span>
+            <span>${retDate}</span>
+        </div>
+        <div class="info-row">
+            <span class="label">${templateLang === 'ar' ? 'المدة:' : 'Durée:'}</span>
+            <span>${reservation.totalDays} ${templateLang === 'ar' ? 'يوم' : 'jours'}</span>
+        </div>
+
+        <table class="pricing-table">
+            <thead>
+                <tr>
+                    <th>${templateLang === 'ar' ? 'البيان' : 'Description'}</th>
+                    <th>${templateLang === 'ar' ? 'المبلغ' : 'Montant'}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>${reservation.car.brand} ${reservation.car.model}</td>
+                    <td>${subTotal.toFixed(2)} DA</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="totals-box">
+            <div class="total-row">
+                <span>${templateLang === 'ar' ? 'الفرعي:' : 'S/Total:'}</span>
+                <span>${subTotal.toFixed(2)} DA</span>
+            </div>
+            <div class="total-row">
+                <span>${templateLang === 'ar' ? 'الضريبة:' : 'TVA 19%:'}</span>
+                <span>${tax.toFixed(2)} DA</span>
+            </div>
+            <div class="final-total">
+                ${templateLang === 'ar' ? 'الإجمالي:' : 'Total TTC:'} ${reservation.totalPrice.toFixed(2)} DA
+            </div>
+        </div>
+
+        <div class="section-title">${templateLang === 'ar' ? 'الشروط المقبولة' : 'Conditions'}</div>
+        <div class="checkbox-item">✓ ${templateLang === 'ar' ? 'الرخصة سارية' : 'Permis valide'}</div>
+        <div class="checkbox-item">✓ ${templateLang === 'ar' ? 'التأمين الشامل' : 'Assurance complète'}</div>
+        <div class="checkbox-item">✓ ${templateLang === 'ar' ? 'الإيداع مقبول' : 'Caution acceptée'}</div>
+        <div class="checkbox-item">✓ ${templateLang === 'ar' ? 'الخزان ممتلئ' : 'Réservoir plein'}</div>
+    </div>
+</body>
+</html>`;
   }
 }
