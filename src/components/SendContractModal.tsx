@@ -69,8 +69,11 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
   }, [notification]);
 
   const handleSendEmail = async () => {
-    // Validate email
-    if (!clientEmail || !clientEmail.includes('@')) {
+    // Validate and sanitize email
+    const trimmedEmail = clientEmail.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
       setNotification({
         type: 'error',
         message: lang === 'fr' ? 'Veuillez entrer une adresse email valide' : 'يرجى إدخال عنوان بريد إلكتروني صحيح',
@@ -107,9 +110,9 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
       // Generate document HTML based on selected document type
       const htmlContent = await EmailService.generateDocumentHTML(reservation, templateLang, documentType);
 
-      // Send email via Edge Function
+      // Send email via Edge Function with trimmed email
       const result = await EmailService.sendContractEmail({
-        clientEmail,
+        clientEmail: trimmedEmail,
         clientName: `${reservation.client.firstName} ${reservation.client.lastName}`,
         reservationId: reservation.id,
         senderEmail,
@@ -119,10 +122,10 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
 
       if (result.success) {
         // If requested, save email to client record
-        if (saveEmailToClient && clientEmail !== reservation.client.email) {
+        if (saveEmailToClient && trimmedEmail !== reservation.client.email) {
           try {
             await DatabaseService.updateClient(reservation.client.id, {
-              email: clientEmail,
+              email: trimmedEmail,
             });
           } catch (updateError) {
             console.error('Error updating client email:', updateError);

@@ -376,6 +376,19 @@ export class EmailService {
     templateLang: 'fr' | 'ar';
   }): Promise<{ success: boolean; message: string }> {
     try {
+      // Validate and sanitize email addresses
+      const clientEmail = params.clientEmail.trim().toLowerCase();
+      const senderEmail = params.senderEmail.trim().toLowerCase();
+      
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(clientEmail)) {
+        throw new Error(`Invalid client email: ${clientEmail}`);
+      }
+      if (!emailRegex.test(senderEmail)) {
+        throw new Error(`Invalid sender email: ${senderEmail}`);
+      }
+
       // Convert HTML to base64
       const htmlBlob = new Blob([params.htmlContent], { type: 'text/html' });
       const base64Content = await this.blobToBase64(htmlBlob);
@@ -401,11 +414,11 @@ export class EmailService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: params.clientEmail,
+          email: clientEmail,
           clientName: params.clientName,
           reservationId: params.reservationId,
           htmlBase64: base64Content,
-          sender: params.senderEmail,
+          sender: senderEmail,
           language: params.templateLang,
         }),
       });
