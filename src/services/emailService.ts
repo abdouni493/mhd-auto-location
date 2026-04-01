@@ -510,6 +510,309 @@ export class EmailService {
     // Replace in title tags if present
     htmlContent = htmlContent.replace(/<title>.*?<\/title>/i, `<title>${newTitle}</title>`);
     
+    // If it's an inspection document, generate the inspection template instead
+    if (documentType === 'inspection') {
+      return this.generateInspectionEmailHTML(reservation, templateLang);
+    }
+    
     return htmlContent;
+  }
+
+  /**
+   * Generate inspection-specific email template
+   */
+  static async generateInspectionEmailHTML(
+    reservation: ReservationDetails,
+    templateLang: 'fr' | 'ar'
+  ): Promise<string> {
+    try {
+      const { data: settingsData } = await supabase
+        .from('website_settings')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      const agencyName = settingsData?.[0]?.name || 'AUTO LOCATION';
+      const logoUrl = settingsData?.[0]?.logo || '';
+
+      const isRTL = templateLang === 'ar';
+      const dirAttr = isRTL ? 'rtl' : 'ltr';
+
+      const inspectionData = reservation.departureInspection;
+      
+      const labels = {
+        title: templateLang === 'fr' ? 'RAPPORT D\'INSPECTION' : 'تقرير فحص المركبة',
+        date: templateLang === 'fr' ? 'التاريخ' : 'التاريخ',
+        reservationNo: templateLang === 'fr' ? 'رقم الحجز' : 'رقم الحجز',
+        registration: templateLang === 'fr' ? 'التسجيل' : 'التسجيل',
+        clientInfo: templateLang === 'fr' ? 'معلومات العميل' : 'معلومات العميل',
+        fullName: templateLang === 'fr' ? 'الاسم الكامل' : 'الاسم الكامل',
+        phone: templateLang === 'fr' ? 'الهاتف' : 'الهاتف',
+        email: templateLang === 'fr' ? 'البريد الإلكتروني' : 'البريد الإلكتروني',
+        license: templateLang === 'fr' ? 'رقم الرخصة' : 'رقم الرخصة',
+        vehicleInfo: templateLang === 'fr' ? 'معلومات المركبة' : 'معلومات المركبة',
+        model: templateLang === 'fr' ? 'الطراز' : 'الطراز',
+        vin: templateLang === 'fr' ? 'رقم الهيكل' : 'رقم الهيكل',
+        color: templateLang === 'fr' ? 'اللون' : 'اللون',
+        mileage: templateLang === 'fr' ? 'الكيلومترات' : 'الكيلومترات',
+        inspectionDetails: templateLang === 'fr' ? 'تفاصيل الفحص' : 'تفاصيل الفحص',
+        notes: templateLang === 'fr' ? 'ملاحظات' : 'ملاحظات',
+      };
+
+      const html = `
+<!DOCTYPE html>
+<html dir="${dirAttr}" lang="${templateLang}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${labels.title}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: white;
+      color: #333;
+      line-height: 1.6;
+    }
+    
+    .container {
+      width: 210mm;
+      height: 297mm;
+      margin: 0 auto;
+      padding: 20px;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 3px solid #2d7a4d;
+    }
+    
+    .logo {
+      font-weight: bold;
+      font-size: 18px;
+      color: #2d7a4d;
+    }
+    
+    .agency-name {
+      text-align: center;
+      font-weight: bold;
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      color: #2d7a4d;
+      margin: 20px 0;
+      text-decoration: underline;
+    }
+    
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin: 15px 0;
+    }
+    
+    .info-item {
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 5px;
+    }
+    
+    .info-label {
+      font-weight: bold;
+      color: #2d7a4d;
+      font-size: 12px;
+      margin-bottom: 3px;
+    }
+    
+    .info-value {
+      font-size: 13px;
+      color: #333;
+    }
+    
+    .section-title {
+      font-weight: bold;
+      color: white;
+      background-color: #2d7a4d;
+      padding: 8px 12px;
+      margin: 15px 0 10px 0;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    .category-title {
+      font-weight: bold;
+      color: #2d7a4d;
+      margin: 12px 0 8px 0;
+      padding-left: 10px;
+      border-left: 4px solid #2d7a4d;
+      font-size: 13px;
+    }
+    
+    .checklist-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    }
+    
+    .item-name {
+      flex: 1;
+    }
+    
+    .item-status {
+      font-size: 16px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    
+    .notes-section {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 15px 0;
+      border-left: 4px solid #2d7a4d;
+    }
+    
+    .footer {
+      margin-top: 20px;
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+      padding-top: 15px;
+      border-top: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">MHD-AUTO</div>
+    <div class="agency-name">${agencyName}</div>
+    <div class="title">🔍 ${labels.title}</div>
+    
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">📅 ${labels.date}</div>
+        <div class="info-value">${new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">🗂️ ${labels.reservationNo}</div>
+        <div class="info-value">#${reservation.id}</div>
+      </div>
+    </div>
+    
+    <div class="section-title">👤 ${labels.clientInfo}</div>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">${labels.fullName}</div>
+        <div class="info-value">${reservation.client.firstName} ${reservation.client.lastName}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">${labels.phone}</div>
+        <div class="info-value">${reservation.client.phone}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">${labels.email}</div>
+        <div class="info-value">${reservation.client.email}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">${labels.license}</div>
+        <div class="info-value">${reservation.client.licenseNumber || 'N/A'}</div>
+      </div>
+    </div>
+    
+    <div class="section-title">🚗 ${labels.vehicleInfo}</div>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">${labels.model}</div>
+        <div class="info-value">${reservation.car.brand} ${reservation.car.model}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">${labels.registration}</div>
+        <div class="info-value">${reservation.car.registration}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">${labels.vin}</div>
+        <div class="info-value">${reservation.car.vin || 'N/A'}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">${labels.color}</div>
+        <div class="info-value">${reservation.car.color || 'N/A'}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">${labels.mileage}</div>
+        <div class="info-value">${reservation.car.mileage || 0} km</div>
+      </div>
+    </div>
+    
+    <div class="section-title">✅ ${labels.inspectionDetails}</div>
+    ${(() => {
+      const categoryLabels = {
+        security: templateLang === 'fr' ? '🛡️ Sécurité' : '🛡️ الأمان',
+        equipment: templateLang === 'fr' ? '🔧 Équipements' : '🔧 المعدات',
+        comfort: templateLang === 'fr' ? '✨ Confort & Propreté' : '✨ الراحة والنظافة',
+        cleanliness: templateLang === 'fr' ? '🧹 Nettoyage' : '🧹 التنظيف'
+      };
+      
+      const groupedItems: any = {};
+      (inspectionData?.inspectionItems || []).forEach((item: any) => {
+        if (!groupedItems[item.category]) {
+          groupedItems[item.category] = [];
+        }
+        groupedItems[item.category].push(item);
+      });
+      
+      return Object.entries(groupedItems).map(([category, items]: any) => {
+        const categoryHeader = categoryLabels[category as keyof typeof categoryLabels];
+        const itemsHtml = (items as any[]).map((item: any) => `
+          <div class="checklist-item">
+            <span class="item-name">${item.name}</span>
+            <span class="item-status">${item.checked ? '✅' : '❌'}</span>
+          </div>
+        `).join('');
+        return `
+          <div class="category-title">${categoryHeader}</div>
+          ${itemsHtml}
+        `;
+      }).join('');
+    })()}
+    
+    <div class="notes-section">
+      <div style="font-weight: bold; color: #2d7a4d; margin-bottom: 8px;">📝 ${labels.notes}</div>
+      <div style="font-size: 13px; color: #333; white-space: pre-wrap;">${inspectionData?.notes || ''}</div>
+    </div>
+    
+    <div class="footer">
+      ${templateLang === 'fr' ? 'Rapport généré automatiquement' : 'تم إنشاء التقرير تلقائيًا'} - ${new Date().toLocaleString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}
+    </div>
+  </div>
+</body>
+</html>
+      `;
+
+      return html;
+    } catch (error) {
+      console.error('Error generating inspection HTML:', error);
+      // Fallback to contract template if inspection generation fails
+      return this.generateContractHTML(reservation, templateLang);
+    }
   }
 }
