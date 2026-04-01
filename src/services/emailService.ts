@@ -458,24 +458,57 @@ export class EmailService {
     // Get the base contract HTML
     let htmlContent = await this.generateContractHTML(reservation, templateLang);
     
-    // Replace the title based on document type
+    // Define titles for each document type
     const titles = {
-      contract: templateLang === 'fr' ? 'CONTRAT DE LOCATION DE VÉHICULE' : 'عقد تأجير السيارة',
-      devis: templateLang === 'fr' ? 'DEVIS DE LOCATION' : 'عرض الأسعار',
-      recu: templateLang === 'fr' ? 'REÇU DE PAIEMENT' : 'إيصال الدفع',
-      engagement: templateLang === 'fr' ? 'LETTRE D\'ENGAGEMENT' : 'رسالة الالتزام',
-      facture: templateLang === 'fr' ? 'FACTURE' : 'الفاتورة',
-      inspection: templateLang === 'fr' ? 'RAPPORT D\'INSPECTION' : 'تقرير فحص المركبة'
+      contract: {
+        fr: 'CONTRAT DE LOCATION DE VÉHICULE',
+        ar: 'عقد تأجير السيارة'
+      },
+      devis: {
+        fr: 'DEVIS DE LOCATION',
+        ar: 'عرض الأسعار'
+      },
+      recu: {
+        fr: 'REÇU DE PAIEMENT',
+        ar: 'إيصال الدفع'
+      },
+      engagement: {
+        fr: 'LETTRE D\'ENGAGEMENT',
+        ar: 'رسالة الالتزام'
+      },
+      facture: {
+        fr: 'FACTURE',
+        ar: 'الفاتورة'
+      },
+      inspection: {
+        fr: 'RAPPORT D\'INSPECTION',
+        ar: 'تقرير فحص المركبة'
+      }
     };
     
-    const currentTitle = titles.contract;
-    const newTitle = titles[documentType];
+    // Get current and target titles
+    const currentTitle = titles.contract[templateLang];
+    const newTitle = titles[documentType][templateLang];
     
-    // Replace the contract title with the appropriate document title
-    htmlContent = htmlContent.replace(currentTitle, newTitle);
+    // Replace all occurrences of the contract title with the new title
+    // Use global regex to replace all occurrences
+    const titleRegex = new RegExp(currentTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    htmlContent = htmlContent.replace(titleRegex, newTitle);
     
-    // Also update the main heading if it exists
-    htmlContent = htmlContent.replace('CONTRAT DE LOCATION', newTitle);
+    // Also replace common title variations
+    const contractTitleArabicShort = 'عقد تأجير السيارة';
+    const contractTitleFrenchShort = 'CONTRAT DE LOCATION';
+    
+    if (templateLang === 'ar') {
+      const arabicRegex = new RegExp(contractTitleArabicShort.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      htmlContent = htmlContent.replace(arabicRegex, newTitle);
+    } else {
+      const frenchRegex = new RegExp(contractTitleFrenchShort.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      htmlContent = htmlContent.replace(frenchRegex, newTitle);
+    }
+    
+    // Replace in title tags if present
+    htmlContent = htmlContent.replace(/<title>.*?<\/title>/i, `<title>${newTitle}</title>`);
     
     return htmlContent;
   }
