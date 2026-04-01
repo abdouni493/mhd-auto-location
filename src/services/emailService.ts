@@ -345,21 +345,6 @@ export class EmailService {
   }
 
   /**
-   * Convert HTML to PDF and return as Blob
-   */
-  static async htmlToPDF(html: string): Promise<Blob> {
-    try {
-      // For now, we'll use a simple approach - in production you might use html2pdf or similar
-      // This creates a blob of the HTML that can be sent as attachment
-      const blob = new Blob([html], { type: 'text/html' });
-      return blob;
-    } catch (error) {
-      console.error('Error converting HTML to PDF:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Convert Blob to Base64 string
    */
   static async blobToBase64(blob: Blob): Promise<string> {
