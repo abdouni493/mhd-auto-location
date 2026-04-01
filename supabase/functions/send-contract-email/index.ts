@@ -13,9 +13,10 @@ interface SendContractEmailPayload {
   email: string;
   clientName: string;
   reservationId: string;
-  htmlBase64: string;
+  pdfBase64: string;
   sender: string;
   language: "fr" | "ar";
+  documentType?: string;
 }
 
 serve(async (req: Request) => {
@@ -31,11 +32,11 @@ serve(async (req: Request) => {
     const payload: SendContractEmailPayload = await req.json();
 
     // Validate required fields
-    if (!payload.email || !payload.sender || !payload.htmlBase64) {
+    if (!payload.email || !payload.sender || !payload.pdfBase64) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Missing required fields: email, sender, or htmlBase64",
+          error: "Missing required fields: email, sender, or pdfBase64",
         }),
         {
           status: 400,
@@ -44,16 +45,116 @@ serve(async (req: Request) => {
       );
     }
 
-    // Placeholder response (replace with actual email service response)
+    // Get Brevo API key from environment
+    const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY");
+    if (!BREVO_API_KEY) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "BREVO_API_KEY not configured",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Build document type label
+    const documentTypeLabels: Record<string, Record<string, string>> = {
+      contract: { fr: "Contrat de Location", ar: "عقد التأجير" },
+      inspection: { fr: "Rapport d'Inspection", ar: "تقرير فحص المركبة" },
+      engagement: { fr: "Lettre d'Engagement", ar: "رسالة الالتزام" },
+      recu: { fr: "Reçu de Paiement", ar: "إيصال الدفع" },
+      facture: { fr: "Facture", ar: "الفاتورة" },
+      devis: { fr: "Devis", ar: "عرض الأسعار" },
+    };
+
+    const docType = payload.documentType || "contract";
+    const docLabel =
+      documentTypeLabels[docType]?.[payload.language || "fr"] ||
+      documentTypeLabels["contract"][payload.language || "fr"];
+
+    // Send email via Brevo with PDF attachment
+    const emailResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": BREVO_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: {
+          name: "AUTO LOCATION",
+          email: payload.sender || "noreply@autolocation.com",
+        },
+        to: [
+          {
+            email: payload.email,
+          },
+        ],
+        subject:
+          payload.language === "fr"
+            ? `${docLabel} - AUTO LOCATION`
+            : `${docLabel} - AUTO LOCATION`,
+        htmlContent: `
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <h2 style="color: #2d7a4d; margin: 0;">AUTO LOCATION</h2>
+    </div>
+    <p style="font-size: 14px;">
+      ${
+        payload.language === "fr"
+          ? `Bonjour ${payload.clientName},<br><br>Veuillez trouver ci-joint votre ${docLabel.toLowerCase()} en format PDF.<br><br>Cordialement,<br>AUTO LOCATION`
+          : `مرحبا ${payload.clientName},<br><br>يرجى العثور على ${docLabel} الخاص بك في المرفق بصيغة PDF.<br><br>مع أطيب التحيات,<br>أوتو لوكيشن`
+      }
+    </p>
+  </div>
+</body>
+</html>
+        `,
+        attachment: [
+          {
+            content: payload.pdfBase64,
+            name: `${docType}_${payload.reservationId}.pdf`,
+          },
+        ],
+      }),
+    });
+
+    if (!emailResponse.ok) {
+      const errorText = await emailResponse.text();
+      console.error("Brevo API error:", emailResponse.status, errorText);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Brevo API error: ${emailResponse.status}`,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const emailData = await emailResponse.json();
+
+    // Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Contract email sent successfully",
+        message: `${docLabel} PDF sent successfully`,
         details: {
           to: payload.email,
-          from: payload.sender,
-          subject: payload.language === "fr" ? "Votre Contrat de Location" : "عقد التأجير الخاص بك",
+          from: payload.sender || "noreply@autolocation.com",
+          subject:
+            payload.language === "fr"
+              ? `${docLabel} - AUTO LOCATION`
+              : `${docLabel} - AUTO LOCATION`,
+          documentType: docType,
           language: payload.language,
+          messageId: emailData.messageId,
         },
       }),
       {
@@ -62,6 +163,7 @@ serve(async (req: Request) => {
       }
     );
   } catch (error) {
+    console.error("Error:", error);
     return new Response(
       JSON.stringify({
         success: false,
