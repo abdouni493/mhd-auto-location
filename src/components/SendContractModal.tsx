@@ -18,7 +18,8 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
 }) => {
   const [clientEmail, setClientEmail] = useState(reservation.client.email || '');
   const [senderEmail, setSenderEmail] = useState('');
-  const [templateLang, setTemplateLang] = useState<'fr' | 'ar'>('fr');
+  const [templateLang, setTemplateLang] = useState<'fr' | 'ar'>('ar');
+  const [documentType, setDocumentType] = useState<'contract' | 'devis' | 'recu' | 'engagement' | 'facture' | 'inspection'>('contract');
   const [loading, setLoading] = useState(false);
   const [loadingSender, setLoadingSender] = useState(true);
   const [notification, setNotification] = useState<{
@@ -89,9 +90,18 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
 
     try {
       setLoading(true);
+      const documentNames = {
+        contract: lang === 'fr' ? 'Contrat' : 'العقد',
+        devis: lang === 'fr' ? 'Devis' : 'عرض أسعار',
+        recu: lang === 'fr' ? 'Reçu' : 'إيصال',
+        engagement: lang === 'fr' ? 'Engagement' : 'التزام',
+        facture: lang === 'fr' ? 'Facture' : 'الفاتورة',
+        inspection: lang === 'fr' ? 'Inspection' : 'فحص المركبة'
+      };
+
       setNotification({
         type: 'info',
-        message: lang === 'fr' ? 'Envoi du contrat...' : 'جاري إرسال العقد...',
+        message: lang === 'fr' ? `Envoi du ${documentNames[documentType]}...` : `جاري إرسال ${documentNames[documentType]}...`,
       });
 
       // Generate contract HTML
@@ -123,8 +133,8 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
         setNotification({
           type: 'success',
           message: lang === 'fr' 
-            ? 'Contrat envoyé avec succès! ✅'
-            : 'تم إرسال العقد بنجاح! ✅',
+            ? `${documentNames[documentType]} envoyé avec succès! ✅`
+            : `تم إرسال ${documentNames[documentType]} بنجاح! ✅`,
         });
 
         // Close modal after success
@@ -142,8 +152,8 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
       setNotification({
         type: 'error',
         message: error.message || (lang === 'fr' 
-          ? 'Erreur lors de l\'envoi du contrat'
-          : 'خطأ في إرسال العقد'),
+          ? 'Erreur lors de l\'envoi du document'
+          : 'خطأ في إرسال المستند'),
       });
     } finally {
       setLoading(false);
@@ -172,26 +182,28 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-saas-border flex flex-col max-h-[90vh]">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Mail className="w-6 h-6" />
-              <h2 className="text-2xl font-black">
-                {lang === 'fr' ? '📧 Envoyer le Contrat' : '📧 إرسال العقد'}
+          <div className="bg-linear-to-r from-blue-600 via-purple-600 to-pink-600 text-white p-8 flex items-center justify-between border-b border-white/10">
+            <div>
+              <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+                📧 {lang === 'fr' ? 'Envoyer un Document' : 'إرسال مستند'}
               </h2>
+              <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mt-1">
+                {lang === 'fr' ? 'Envoi par email au client' : 'إرسال بريد إلكتروني للعميل'}
+              </p>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              className="p-2.5 hover:bg-white/20 rounded-lg transition-colors"
               disabled={loading}
             >
-              <X className="w-5 h-5" />
+              <X className="w-6 h-6" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="p-6 space-y-6">
+          <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar bg-white">
             {/* Client Info */}
             <div className="space-y-3">
               <h3 className="font-bold text-saas-text-main">
@@ -225,7 +237,7 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
             {/* Template Language Selection */}
             <div className="space-y-2">
               <label className="block font-bold text-saas-text-main">
-                🌐 {lang === 'fr' ? 'Langue du Contrat' : 'لغة العقد'}
+                🌐 {lang === 'fr' ? 'Langue du Document' : 'لغة المستند'}
               </label>
               <div className="flex gap-3">
                 <button
@@ -250,6 +262,36 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
                 >
                   🇸🇦 العربية
                 </button>
+              </div>
+            </div>
+
+            {/* Document Type Selection */}
+            <div className="space-y-2">
+              <label className="block font-bold text-saas-text-main">
+                📄 {lang === 'fr' ? 'Type de Document' : 'نوع المستند'}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'contract', label: lang === 'fr' ? 'Contrat' : 'عقد', icon: '📄' },
+                  { id: 'devis', label: lang === 'fr' ? 'Devis' : 'عرض أسعار', icon: '📋' },
+                  { id: 'recu', label: lang === 'fr' ? 'Reçu' : 'إيصال', icon: '💳' },
+                  { id: 'engagement', label: lang === 'fr' ? 'Engagement' : 'التزام', icon: '🤝' },
+                  { id: 'facture', label: lang === 'fr' ? 'Facture' : 'الفاتورة', icon: '🧾' },
+                  { id: 'inspection', label: lang === 'fr' ? 'Inspection' : 'فحص', icon: '🔍' }
+                ].map((doc) => (
+                  <button
+                    key={doc.id}
+                    onClick={() => setDocumentType(doc.id as typeof documentType)}
+                    disabled={loading}
+                    className={`py-3 px-3 rounded-lg font-bold text-sm transition-all ${
+                      documentType === doc.id
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                        : 'bg-slate-100 text-saas-text-main hover:bg-slate-200'
+                    } disabled:opacity-50`}
+                  >
+                    {doc.icon} {doc.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -307,18 +349,18 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
           </div>
 
           {/* Footer Buttons */}
-          <div className="bg-slate-50 p-6 border-t border-slate-200 flex gap-3">
+          <div className="bg-saas-bg p-8 border-t border-saas-border flex gap-3">
             <button
               onClick={onClose}
               disabled={loading}
-              className="flex-1 py-3 px-4 rounded-lg font-bold bg-slate-200 hover:bg-slate-300 text-saas-text-main transition-colors disabled:opacity-50"
+              className="flex-1 py-3 px-4 rounded-lg font-bold bg-saas-bg hover:bg-saas-secondary-start/10 text-saas-text-muted border border-saas-border hover:border-saas-secondary-start/20 transition-all disabled:opacity-50"
             >
               {lang === 'fr' ? 'Annuler' : 'إلغاء'}
             </button>
             <button
               onClick={handleSendEmail}
               disabled={loading || !clientEmail || !senderEmail}
-              className="flex-1 py-3 px-4 rounded-lg font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 py-3 px-4 rounded-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>

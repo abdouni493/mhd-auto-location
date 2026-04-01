@@ -178,7 +178,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
     }
   };
 
-  const handlePrint = (reservation: ReservationDetails, type: 'quote' | 'contract' | 'invoice' | 'payment' | 'engagement' | 'versement') => {
+  const handlePrint = (reservation: ReservationDetails, type: 'quote' | 'contract' | 'invoice' | 'payment' | 'engagement' | 'versement' | 'inspection') => {
     setOpenPrintMenu(null);
     setShowPrintModal({reservation, type});
   };
@@ -749,6 +749,12 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
                           className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
                         >
                           🤝 {lang === 'fr' ? 'Engagement' : 'التزام'}
+                        </button>
+                        <button
+                          onClick={() => handlePrint(reservation, 'inspection')}
+                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                        >
+                          🔍 {lang === 'fr' ? 'Inspection' : 'فحص المركبة'}
                         </button>
                         <button
                           onClick={() => {
@@ -1373,9 +1379,9 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
 
   let bodyContent = '';
   
-  // Logo and Agency Name - use actual settings for engagement, payment, invoice, facture, quote, devis, contract types, always display logo
-  if (type === 'engagement' || type === 'payment' || type === 'receipt' || type === 'invoice' || type === 'facture' || type === 'quote' || type === 'devis' || type === 'contract') {
-    // For engagement, payment, invoice, facture, contract and devis documents, use actual logo and agency name from settings
+  // Logo and Agency Name - use actual settings for engagement, payment, invoice, facture, quote, devis, contract, inspection types, always display logo
+  if (type === 'engagement' || type === 'payment' || type === 'receipt' || type === 'invoice' || type === 'facture' || type === 'quote' || type === 'devis' || type === 'contract' || type === 'inspection') {
+    // For engagement, payment, invoice, facture, contract, devis and inspection documents, use actual logo and agency name from settings
     if (elements.logo) {
       if (agencySettings?.logo) {
         bodyContent += `<div class="draggable logo" style="position: absolute; left: ${elements.logo.x || 50}px; top: ${elements.logo.y || 50}px; width: ${elements.logo.width || 100}px; height: ${elements.logo.height || 100}px;">
@@ -1743,11 +1749,122 @@ const PersonalizationModal: React.FC<{
 }> = ({ lang, reservation, type, onClose, onPrint }) => {
   const [agencySettings, setAgencySettings] = useState<any>(null);
   const [isPrinting, setIsPrinting] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<'fr' | 'ar'>(lang === 'fr' ? 'fr' : 'ar');
+  const [selectedTemplate, setSelectedTemplate] = useState<'fr' | 'ar'>('ar');
+  const [secondConductor, setSecondConductor] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   useEffect(() => {
     loadAgencySettings();
   }, []);
+
+  const searchClients = async (query: string) => {
+    console.log('🔍 Searching for:', query);
+    
+    if (!query || query.trim().length === 0) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    
+    try {
+      // Fetch all clients with correct snake_case column names
+      const { data: allClients, error } = await supabase
+        .from('clients')
+        .select('id, first_name, last_name, phone, email, license_number, date_of_birth, place_of_birth')
+        .limit(200);
+      
+      if (error) {
+        console.error('❌ Error fetching clients:', error);
+        // Try with wildcard select as fallback
+        try {
+          const { data: fallbackClients, error: fallbackError } = await supabase
+            .from('clients')
+            .select('*')
+            .limit(200);
+          
+          if (fallbackError) {
+            console.error('❌ Fallback error:', fallbackError);
+            setSearchResults([]);
+            setShowSearchResults(true);
+            return;
+          }
+          
+          // Process fallback results
+          const searchLower = query.toLowerCase().trim();
+          const filtered = (fallbackClients || []).filter(client => {
+            const firstName = client.first_name ? client.first_name.toLowerCase() : (client.firstName ? client.firstName.toLowerCase() : '');
+            const lastName = client.last_name ? client.last_name.toLowerCase() : (client.lastName ? client.lastName.toLowerCase() : '');
+            const phone = client.phone ? client.phone.toLowerCase() : '';
+            
+            const matchesFirstName = firstName.includes(searchLower);
+            const matchesLastName = lastName.includes(searchLower);
+            const matchesPhone = phone.includes(searchLower);
+            
+            const notCurrentClient = client.id !== reservation?.client?.id;
+            const matches = (matchesFirstName || matchesLastName || matchesPhone) && notCurrentClient;
+            
+            if (matches) {
+              console.log('✅ Found match:', `${firstName} ${lastName}`);
+            }
+            
+            return matches;
+          });
+          
+          console.log('🎯 Filtered results (fallback):', filtered.length);
+          setSearchResults(filtered.slice(0, 15));
+          setShowSearchResults(true);
+        } catch (fallbackException) {
+          console.error('❌ Fallback exception:', fallbackException);
+          setSearchResults([]);
+          setShowSearchResults(true);
+        }
+        return;
+      }
+
+      console.log('📋 Total clients fetched:', allClients?.length);
+
+      // Filter clients by matching first_name, last_name, or phone
+      const searchLower = query.toLowerCase().trim();
+      const filtered = (allClients || []).filter(client => {
+        // Handle both snake_case and camelCase (in case DB has mixed naming)
+        const firstName = client.first_name ? client.first_name.toLowerCase() : (client.firstName ? client.firstName.toLowerCase() : '');
+        const lastName = client.last_name ? client.last_name.toLowerCase() : (client.lastName ? client.lastName.toLowerCase() : '');
+        const phone = client.phone ? client.phone.toLowerCase() : '';
+        
+        const matchesFirstName = firstName.includes(searchLower);
+        const matchesLastName = lastName.includes(searchLower);
+        const matchesPhone = phone.includes(searchLower);
+        
+        // Exclude the current client
+        const notCurrentClient = client.id !== reservation?.client?.id;
+        
+        const matches = (matchesFirstName || matchesLastName || matchesPhone) && notCurrentClient;
+        
+        if (matches) {
+          console.log('✅ Found match:', `${firstName} ${lastName}`);
+        }
+        
+        return matches;
+      });
+
+      console.log('🎯 Filtered results:', filtered.length);
+      setSearchResults(filtered.slice(0, 15)); // Limit to 15 results
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error('❌ Exception during search:', error);
+      setSearchResults([]);
+      setShowSearchResults(true);
+    }
+  };
+
+  const selectSecondConductor = (client: any) => {
+    setSecondConductor(client);
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+  };
 
   const loadAgencySettings = async () => {
     try {
@@ -1778,7 +1895,8 @@ const PersonalizationModal: React.FC<{
       return: isFrench ? 'Retour' : 'العودة',
       duration: isFrench ? 'Durée' : 'المدة',
       days: isFrench ? 'jours' : 'أيام',
-      driverInfo: isFrench ? 'Informations du Conducteur' : 'معلومات السائق',
+      driverInfo: isFrench ? 'Conducteur Principal' : 'السائق الرئيسي',
+      secondDriver: isFrench ? 'Conducteur Secondaire' : 'السائق الثانوي',
       fullName: isFrench ? 'Nom Complet' : 'الاسم الكامل',
       birthDate: isFrench ? 'Date de Naissance' : 'تاريخ الميلاد',
       birthPlace: isFrench ? 'Lieu de Naissance' : 'مكان الميلاد',
@@ -1794,6 +1912,7 @@ const PersonalizationModal: React.FC<{
       pricePerDay: isFrench ? 'Prix par Jour' : 'السعر في اليوم',
       numberOfDays: isFrench ? 'Nombre de Jours' : 'عدد الأيام',
       totalHT: isFrench ? 'Montant HT' : 'المبلغ غير ضريبي',
+      tva: isFrench ? 'TVA 19%' : 'الضريبة 19%',
       totalTTC: isFrench ? 'TOTAL TTC' : 'الإجمالي',
       conditions: isFrench ? 'Conditions Acceptées' : 'الشروط المقبولة',
       signatures: isFrench ? 'Signatures' : 'التوقيعات',
@@ -1806,6 +1925,10 @@ const PersonalizationModal: React.FC<{
       ? ['Permis de conduire valide', 'Assurance tous risques', 'Caution dépôt', 'Carburant plein', 'État du véhicule accepté', 'Pas de dégâts supplémentaires']
       : ['رخصة قيادة سارية', 'تأمين شامل', 'ضمان الإيداع', 'خزان ممتلئ', 'حالة المركبة مقبولة', 'لا توجد أضرار إضافية'];
 
+    const hasSecondConductor = !!secondConductor;
+    const baseFontSize = hasSecondConductor ? 19 : 20;
+    const scaleFactor = hasSecondConductor ? 0.95 : 1;
+
     const html = `
     <!DOCTYPE html>
     <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
@@ -1816,16 +1939,18 @@ const PersonalizationModal: React.FC<{
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
           font-family: 'Segoe UI', Arial, sans-serif;
-          line-height: 1.45;
+          line-height: ${hasSecondConductor ? '1.4' : '1.45'};
           color: #222;
           background: white;
           direction: ${textDir};
-          font-size: 20px;
+          font-size: ${baseFontSize}px;
+          transform: scale(${scaleFactor});
+          transform-origin: top center;
         }
         .page {
           width: 210mm;
           height: 297mm;
-          padding: 5mm;
+          padding: ${hasSecondConductor ? '3mm' : '5mm'};
           margin: 0 auto;
           background: white;
           display: flex;
@@ -1833,15 +1958,15 @@ const PersonalizationModal: React.FC<{
         }
         .header {
           border-bottom: 3px solid #1a3a8a;
-          padding-bottom: 7px;
-          margin-bottom: 10px;
+          padding-bottom: ${hasSecondConductor ? '5px' : '7px'};
+          margin-bottom: ${hasSecondConductor ? '8px' : '10px'};
           display: flex;
           align-items: center;
           gap: 12px;
         }
         .logo {
-          width: 55px;
-          height: 55px;
+          width: ${hasSecondConductor ? '45px' : '55px'};
+          height: ${hasSecondConductor ? '45px' : '55px'};
           object-fit: contain;
           flex-shrink: 0;
         }
@@ -1849,14 +1974,14 @@ const PersonalizationModal: React.FC<{
           flex: 1;
         }
         .agency-name {
-          font-size: 36px;
+          font-size: ${hasSecondConductor ? '28px' : '36px'};
           font-weight: bold;
           color: #1a3a8a;
           text-align: center;
           margin: 0;
         }
         .contract-title {
-          font-size: 23px;
+          font-size: ${hasSecondConductor ? '18px' : '23px'};
           color: #555;
           text-align: center;
           margin-top: 2px;
@@ -1864,13 +1989,13 @@ const PersonalizationModal: React.FC<{
         .header-info {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
-          gap: 8px;
-          margin-bottom: 10px;
+          gap: ${hasSecondConductor ? '5px' : '8px'};
+          margin-bottom: ${hasSecondConductor ? '8px' : '10px'};
         }
         .info-box {
-          padding: 8px 9px;
+          padding: ${hasSecondConductor ? '6px 7px' : '8px 9px'};
           border-radius: 3px;
-          font-size: 19px;
+          font-size: ${hasSecondConductor ? '17px' : '19px'};
           line-height: 1.4;
         }
         .info-box.blue {
@@ -1889,48 +2014,48 @@ const PersonalizationModal: React.FC<{
           font-weight: 600;
           color: #222;
           margin-bottom: 2px;
-          font-size: 18px;
+          font-size: ${hasSecondConductor ? '16px' : '18px'};
         }
         .info-value {
           color: #333;
-          font-size: 19px;
+          font-size: ${hasSecondConductor ? '17px' : '19px'};
         }
         .section {
-          margin-bottom: 8px;
+          margin-bottom: ${hasSecondConductor ? '7px' : '8px'};
           page-break-inside: avoid;
         }
         .section-title {
-          font-size: 20px;
+          font-size: ${hasSecondConductor ? '18px' : '20px'};
           font-weight: 700;
           background-color: #f0f1f3;
-          padding: 6px 7px;
+          padding: ${hasSecondConductor ? '4px 5px' : '6px 7px'};
           border-radius: 2px;
-          margin-bottom: 6px;
+          margin-bottom: ${hasSecondConductor ? '4px' : '6px'};
           border-left: 4px solid #2563eb;
           color: #1a3a8a;
         }
         .section-content {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 15px 12px;
-          font-size: 19px;
+          gap: ${hasSecondConductor ? '10px 8px' : '15px 12px'};
+          font-size: ${hasSecondConductor ? '17px' : '19px'};
         }
         .section-content.full {
           grid-template-columns: 1fr 1fr 1fr;
         }
         .field {
-          padding: 5px 0;
+          padding: ${hasSecondConductor ? '3px 0' : '5px 0'};
           border-bottom: 0.5px solid #ddd;
         }
         .field-label {
           font-weight: 600;
           color: #1a3a8a;
-          font-size: 18px;
+          font-size: ${hasSecondConductor ? '16px' : '18px'};
         }
         .field-value {
           color: #444;
           margin-top: 1px;
-          font-size: 19px;
+          font-size: ${hasSecondConductor ? '17px' : '19px'};
         }
         .pricing-table {
           width: 100%;
@@ -1941,34 +2066,34 @@ const PersonalizationModal: React.FC<{
         .pricing-row {
           display: flex;
           justify-content: space-between;
-          padding: 5px 0;
+          padding: ${hasSecondConductor ? '3px 0' : '5px 0'};
           border-bottom: 0.5px solid #ddd;
         }
         .pricing-row.total {
           border-top: 1px solid #222;
           font-weight: 600;
           margin-top: 3px;
-          padding-top: 5px;
+          padding-top: ${hasSecondConductor ? '3px' : '5px'};
         }
         .pricing-row.grand-total {
-          font-size: 20px;
+          font-size: ${hasSecondConductor ? '18px' : '20px'};
           font-weight: 700;
           color: #1a3a8a;
           border-top: 2px solid #1a3a8a;
-          padding-top: 5px;
+          padding-top: ${hasSecondConductor ? '3px' : '5px'};
         }
         .conditions-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 10px 12px;
-          font-size: 19px;
-          margin-bottom: 10px;
+          gap: ${hasSecondConductor ? '6px 8px' : '10px 12px'};
+          font-size: ${hasSecondConductor ? '17px' : '19px'};
+          margin-bottom: ${hasSecondConductor ? '8px' : '10px'};
         }
         .condition-item {
           display: flex;
           align-items: center;
           gap: 7px;
-          line-height: 1.3;
+          line-height: ${hasSecondConductor ? '1.28' : '1.3'};
         }
         .checkbox {
           width: 16px;
@@ -1983,31 +2108,36 @@ const PersonalizationModal: React.FC<{
         .signatures {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 32px;
+          gap: ${hasSecondConductor ? '20px' : '32px'};
           margin-top: auto;
-          font-size: 19px;
-          padding-top: 12px;
+          font-size: ${hasSecondConductor ? '17px' : '19px'};
+          padding-top: ${hasSecondConductor ? '8px' : '12px'};
         }
         .signature-block {
           text-align: center;
         }
         .signature-line {
           border-top: 1px solid #333;
-          margin-bottom: 5px;
-          height: 45px;
+          margin-bottom: ${hasSecondConductor ? '3px' : '5px'};
+          height: ${hasSecondConductor ? '35px' : '45px'};
         }
         .signature-label {
           font-weight: 600;
-          font-size: 19px;
+          font-size: ${hasSecondConductor ? '17px' : '19px'};
         }
         .date-sig {
-          font-size: 18px;
+          font-size: ${hasSecondConductor ? '16px' : '18px'};
           color: #666;
           margin-top: 2px;
         }
         @media print {
-          body { margin: 0; padding: 0; }
-          .page { margin: 0; padding: 5mm; height: auto; }
+          body { 
+            margin: 0; 
+            padding: 0; 
+            transform: scale(${scaleFactor});
+            transform-origin: top center;
+          }
+          .page { margin: 0; padding: ${hasSecondConductor ? '3mm' : '5mm'}; height: auto; }
         }
       </style>
     </head>
@@ -2026,7 +2156,7 @@ const PersonalizationModal: React.FC<{
         <div class="header-info">
           <div class="info-box blue">
             <div class="info-label">📅 ${labels.contractDate}</div>
-            <div class="info-value">${new Date().toLocaleDateString(isFrench ? 'fr-FR' : 'ar-SA')}</div>
+            <div class="info-value">${new Date().toLocaleDateString('en-US')}</div>
           </div>
           <div class="info-box green">
             <div class="info-label">🔢 ${labels.contractNumber}</div>
@@ -2044,11 +2174,11 @@ const PersonalizationModal: React.FC<{
           <div class="section-content full">
             <div class="field">
               <div class="field-label">${labels.departure}</div>
-              <div class="field-value">${new Date(reservation?.step1?.departureDate).toLocaleDateString(isFrench ? 'fr-FR' : 'ar-SA')}</div>
+              <div class="field-value">${new Date(reservation?.step1?.departureDate).toLocaleDateString('en-US')}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.return}</div>
-              <div class="field-value">${new Date(reservation?.step1?.returnDate).toLocaleDateString(isFrench ? 'fr-FR' : 'ar-SA')}</div>
+              <div class="field-value">${new Date(reservation?.step1?.returnDate).toLocaleDateString('en-US')}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.duration}</div>
@@ -2073,7 +2203,7 @@ const PersonalizationModal: React.FC<{
               </div>
               <div class="field">
                 <div class="field-label">${labels.birthDate}</div>
-                <div class="field-value">${new Date(reservation?.client?.dateOfBirth).toLocaleDateString(isFrench ? 'fr-FR' : 'ar-SA')}</div>
+                <div class="field-value">${new Date(reservation?.client?.dateOfBirth).toLocaleDateString('en-US')}</div>
               </div>
               <div class="field">
                 <div class="field-label">${labels.birthPlace}</div>
@@ -2114,6 +2244,35 @@ const PersonalizationModal: React.FC<{
           </div>
         </div>
 
+        <!-- Second Driver Section (if exists) -->
+        ${secondConductor ? `
+        <div class="section">
+          <div class="section-title">👥 ${labels.secondDriver}</div>
+          <div class="section-content full">
+            <div class="field">
+              <div class="field-label">${labels.fullName}</div>
+              <div class="field-value">${(secondConductor?.first_name || secondConductor?.firstName)} ${(secondConductor?.last_name || secondConductor?.lastName)}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">${labels.licenseNumber}</div>
+              <div class="field-value">${(secondConductor?.license_number || secondConductor?.licenseNumber) || 'N/A'}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">${isFrench ? 'Téléphone' : 'الهاتف'}</div>
+              <div class="field-value">${secondConductor?.phone || 'N/A'}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">${labels.birthDate}</div>
+              <div class="field-value">${(secondConductor?.date_of_birth || secondConductor?.dateOfBirth) ? new Date(secondConductor?.date_of_birth || secondConductor?.dateOfBirth).toLocaleDateString('en-US') : 'N/A'}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">${labels.birthPlace}</div>
+              <div class="field-value">${(secondConductor?.place_of_birth || secondConductor?.placeOfBirth) || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+        ` : ''}
+
         <!-- Pricing & Conditions (2 columns) -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <!-- Pricing -->
@@ -2122,7 +2281,7 @@ const PersonalizationModal: React.FC<{
             <div class="pricing-table">
               <div class="pricing-row">
                 <span>${labels.pricePerDay}:</span>
-                <span>${reservation?.car?.priceDay || 0} DH</span>
+                <span>${reservation?.car?.priceDay || 0} DA</span>
               </div>
               <div class="pricing-row">
                 <span>${labels.numberOfDays}:</span>
@@ -2130,11 +2289,17 @@ const PersonalizationModal: React.FC<{
               </div>
               <div class="pricing-row total">
                 <span>${labels.totalHT}:</span>
-                <span>${(reservation?.totalPrice || 0).toFixed(2)} DH</span>
+                <span>${(reservation?.totalPrice || 0).toFixed(2)} DA</span>
               </div>
+              ${reservation?.tvaApplied ? `
+              <div class="pricing-row">
+                <span>${labels.tva}:</span>
+                <span>${((reservation?.totalPrice || 0) * 0.19).toFixed(2)} DA</span>
+              </div>
+              ` : ''}
               <div class="pricing-row grand-total">
                 <span>${labels.totalTTC}:</span>
-                <span>${(reservation?.totalPrice || 0).toFixed(2)} DH</span>
+                <span>${(reservation?.tvaApplied ? ((reservation?.totalPrice || 0) * 1.19) : (reservation?.totalPrice || 0)).toFixed(2)} DA</span>
               </div>
             </div>
           </div>
@@ -2173,9 +2338,1765 @@ const PersonalizationModal: React.FC<{
     return html;
   };
 
+  const generateDevisHTML = (templateLang: 'fr' | 'ar'): string => {
+    const isFrench = templateLang === 'fr';
+    const textDir = isFrench ? 'ltr' : 'rtl';
+    
+    const labels = {
+      devisTitle: isFrench ? 'DEVIS' : 'عرض أسعار',
+      devisNumber: isFrench ? 'N° Devis' : 'رقم عرض السعر',
+      date: isFrench ? 'Date' : 'التاريخ',
+      client: isFrench ? 'Client' : 'العميل',
+      vehicle: isFrench ? 'Véhicule' : 'المركبة',
+      brand: isFrench ? 'Marques' : 'العلامات',
+      registration: isFrench ? 'Immatriculation' : 'التسجيل',
+      color: isFrench ? 'Couleur' : 'اللون',
+      vehicleClass: isFrench ? 'Classe' : 'فئة',
+      fuel: isFrench ? 'Carburant' : 'وقود',
+      mileage: isFrench ? 'Kilométrage' : 'المسافة',
+      vin: isFrench ? 'VIN' : 'VIN',
+      inspection: isFrench ? 'Inspection' : 'الفحص',
+      mats: isFrench ? 'Housses' : 'المقاعد',
+      spareTire: isFrench ? 'Pneu Secours' : 'الإطار الاحتياطي',
+      lights: isFrench ? 'Éclairage' : 'الأضواء',
+      windshield: isFrench ? 'Pare-brise' : 'الزجاج',
+      wheels: isFrench ? 'Jantes' : 'العجلات',
+      suspension: isFrench ? 'Suspension' : 'التعليق',
+      rentalPeriod: isFrench ? 'Période de Location' : 'فترة الإيجار',
+      from: isFrench ? 'Du' : 'من',
+      to: isFrench ? 'Au' : 'إلى',
+      days: isFrench ? 'Jours' : 'أيام',
+      amount: isFrench ? 'Montant HT' : 'المبلغ',
+      tva: isFrench ? 'TVA 19%' : 'الضريبة 19%',
+      total: isFrench ? 'Total TTC' : 'الإجمالي',
+      validity: isFrench ? 'Validité 30 jours' : 'صلاحية 30 يوم',
+    };
+
+    const subtotal = reservation.totalPrice || 0;
+    const tvaAmount = reservation.tvaApplied ? subtotal * 0.19 : 0;
+    const total = subtotal + tvaAmount;
+
+    const html = `
+    <!DOCTYPE html>
+    <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
+    <head>
+      <meta charset="UTF-8">
+      <title>Devis</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.5;
+          color: #1a1a1a;
+          background: #f5f5f5;
+          direction: ${textDir};
+        }
+        .page {
+          width: 210mm;
+          height: 297mm;
+          padding: 10mm;
+          margin: 10px auto;
+          background: white;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          border-bottom: 3px solid #2d7a4d;
+          padding-bottom: 8px;
+        }
+        .logo {
+          width: 50px;
+          height: 50px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
+        .header-text {
+          flex: 1;
+        }
+        .agency-name {
+          font-size: 24px;
+          font-weight: 700;
+          color: #2d7a4d;
+          text-align: center;
+          margin: 0 0 3px 0;
+          letter-spacing: 0.3px;
+        }
+        .devis-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #2d7a4d;
+          text-align: center;
+          margin: 0;
+          letter-spacing: 0.5px;
+          text-decoration: underline;
+        }
+        .header-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 6px;
+          margin-bottom: 10px;
+        }
+        .info-box {
+          padding: 8px;
+          border-radius: 4px;
+          font-size: 14px;
+          line-height: 1.3;
+        }
+        .info-box.green {
+          background-color: #dcfce7;
+          border-left: 4px solid #16a34a;
+        }
+        .info-label {
+          font-weight: 600;
+          color: #1a1a1a;
+          margin-bottom: 1px;
+          font-size: 12px;
+        }
+        .info-value {
+          color: #1a1a1a;
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .section {
+          margin-bottom: 10px;
+          page-break-inside: avoid;
+        }
+        .section-title {
+          font-size: 14px;
+          font-weight: 700;
+          background-color: #dcfce7;
+          padding: 6px 8px;
+          border-radius: 3px;
+          margin-bottom: 6px;
+          border-left: 4px solid #2d7a4d;
+          color: #2d7a4d;
+        }
+        .vehicle-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 10px;
+          font-size: 12px;
+          border: 1px solid #2d7a4d;
+        }
+        .vehicle-table th {
+          background-color: #dcfce7;
+          border: 1px solid #2d7a4d;
+          padding: 6px 4px;
+          text-align: left;
+          font-weight: 600;
+          color: #2d7a4d;
+        }
+        .vehicle-table td {
+          border: 1px solid #ddd;
+          padding: 5px 4px;
+          text-align: left;
+          background-color: #fafafa;
+        }
+        .inspection-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 10px;
+          font-size: 12px;
+          border: 1px solid #2d7a4d;
+        }
+        .inspection-table th {
+          background-color: #dcfce7;
+          border: 1px solid #2d7a4d;
+          padding: 6px 4px;
+          text-align: left;
+          font-weight: 600;
+          color: #2d7a4d;
+        }
+        .inspection-table td {
+          border: 1px solid #ddd;
+          padding: 5px 4px;
+          text-align: left;
+          background-color: #fafafa;
+        }
+        .rental-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .info-field {
+          padding: 8px;
+          background-color: #f9fdf7;
+          border-left: 3px solid #2d7a4d;
+          border-radius: 3px;
+        }
+        .info-field-label {
+          font-weight: 600;
+          color: #2d7a4d;
+          font-size: 12px;
+          margin-bottom: 2px;
+        }
+        .info-field-value {
+          color: #1a1a1a;
+          font-size: 13px;
+        }
+        .pricing-summary {
+          background: white;
+          border: 2px solid #2d7a4d;
+          border-radius: 6px;
+          padding: 12px;
+          margin-bottom: 10px;
+        }
+        .pricing-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 0.5px solid #ddd;
+          font-size: 13px;
+        }
+        .pricing-row.total {
+          border-top: 2px solid #2d7a4d;
+          font-weight: 600;
+          margin-top: 3px;
+          padding-top: 8px;
+          border-bottom: none;
+          color: #2d7a4d;
+          font-size: 14px;
+        }
+        .pricing-label {
+          font-weight: 500;
+          color: #1a1a1a;
+        }
+        .pricing-value {
+          font-weight: 600;
+          color: #2d7a4d;
+        }
+        .validity-note {
+          text-align: center;
+          color: #2d7a4d;
+          font-size: 12px;
+          font-weight: 600;
+          margin-top: 8px;
+          padding-top: 8px;
+          border-top: 1px solid #ddd;
+        }
+        @media print {
+          body { margin: 0; padding: 0; }
+          .page { margin: 0; padding: 5mm; height: auto; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <!-- Header -->
+        <div class="header">
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
+          <div class="header-text">
+            <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
+            <p class="devis-title">${labels.devisTitle}</p>
+          </div>
+        </div>
+
+        <!-- Header Info Boxes -->
+        <div class="header-info">
+          <div class="info-box green">
+            <div class="info-label">🔢 ${labels.devisNumber}</div>
+            <div class="info-value">#${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'}</div>
+          </div>
+          <div class="info-box green">
+            <div class="info-label">📅 ${labels.date}</div>
+            <div class="info-value">${new Date().toLocaleDateString('en-US')}</div>
+          </div>
+          <div class="info-box green">
+            <div class="info-label">👤 ${labels.client}</div>
+            <div class="info-value">${reservation?.client?.lastName || 'N/A'}</div>
+          </div>
+        </div>
+
+        <!-- Vehicle Information Table -->
+        <div class="section">
+          <div class="section-title">🚗 ${labels.vehicle}</div>
+          <table class="vehicle-table">
+            <thead>
+              <tr>
+                <th>${labels.brand}</th>
+                <th>${labels.registration}</th>
+                <th>${labels.color}</th>
+                <th>${labels.vehicleClass}</th>
+                <th>${labels.fuel}</th>
+                <th>${labels.mileage}</th>
+                <th>${labels.vin}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${reservation?.car?.brand || 'N/A'} ${reservation?.car?.model || ''}</td>
+                <td>${reservation?.car?.registration || 'N/A'}</td>
+                <td>${reservation?.car?.color || 'N/A'}</td>
+                <td>${reservation?.car?.model || 'N/A'}</td>
+                <td>${reservation?.car?.energy || 'N/A'}</td>
+                <td>${reservation?.departureInspection?.mileage || reservation?.car?.mileage || '0'} km</td>
+                <td>${reservation?.car?.vin || 'N/A'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Inspection Information Table -->
+        <div class="section">
+          <div class="section-title">✓ ${labels.inspection}</div>
+          <table class="inspection-table">
+            <thead>
+              <tr>
+                <th>${labels.mats}</th>
+                <th>${labels.spareTire}</th>
+                <th>${labels.lights}</th>
+                <th>${labels.windshield}</th>
+                <th>${labels.wheels}</th>
+                <th>${labels.suspension}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${reservation?.departureInspection?.mats ? '✓ Bon' : '✗ Mauvais'}</td>
+                <td>${reservation?.departureInspection?.spareTire ? '✓ Présent' : '✗ Absent'}</td>
+                <td>${reservation?.departureInspection?.lights ? '✓ Bon' : '✗ Mauvais'}</td>
+                <td>${reservation?.departureInspection?.windshield ? '✓ Bon' : '✗ Mauvais'}</td>
+                <td>${reservation?.departureInspection?.wheels ? '✓ Bon' : '✗ Mauvais'}</td>
+                <td>${reservation?.departureInspection?.suspension ? '✓ Bon' : '✗ Mauvais'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Rental Period Info -->
+        <div class="section">
+          <div class="section-title">📅 ${labels.rentalPeriod}</div>
+          <div class="rental-info">
+            <div class="info-field">
+              <div class="info-field-label">${labels.from}</div>
+              <div class="info-field-value">${reservation?.step1?.departureDate || 'N/A'}</div>
+            </div>
+            <div class="info-field">
+              <div class="info-field-label">${labels.to}</div>
+              <div class="info-field-value">${reservation?.step1?.returnDate || 'N/A'}</div>
+            </div>
+            <div class="info-field">
+              <div class="info-field-label">${labels.days}</div>
+              <div class="info-field-value">${reservation?.totalDays || '1'} ${isFrench ? 'jour(s)' : 'يوم'}</div>
+            </div>
+            <div class="info-field">
+              <div class="info-field-label">${isFrench ? 'Prix Jour' : 'السعر اليومي'}</div>
+              <div class="info-field-value">${reservation?.car?.priceDay?.toLocaleString() || '0'} DA</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing Section -->
+        <div class="pricing-summary">
+          <div class="pricing-row">
+            <span class="pricing-label">${labels.amount}</span>
+            <span class="pricing-value">${subtotal.toLocaleString()} DA</span>
+          </div>
+          ${reservation.tvaApplied ? `
+          <div class="pricing-row">
+            <span class="pricing-label">${labels.tva}</span>
+            <span class="pricing-value">${tvaAmount.toLocaleString()} DA</span>
+          </div>
+          ` : ''}
+          <div class="pricing-row total">
+            <span>${labels.total}</span>
+            <span>${total.toLocaleString()} DA</span>
+          </div>
+          <div class="validity-note">✓ ${labels.validity}</div>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+    return html;
+  };
+
+  const generateFactureHTML = (templateLang: 'fr' | 'ar'): string => {
+    const isFrench = templateLang === 'fr';
+    const textDir = isFrench ? 'ltr' : 'rtl';
+    
+    const labels = {
+      factureTitle: isFrench ? 'FACTURE' : 'الفاتورة',
+      factureNumber: isFrench ? 'N° Facture' : 'رقم الفاتورة',
+      date: isFrench ? 'Date' : 'التاريخ',
+      client: isFrench ? 'Client' : 'العميل',
+      vehicle: isFrench ? 'Véhicule' : 'المركبة',
+      period: isFrench ? 'Période' : 'الفترة',
+      amount: isFrench ? 'Montant HT' : 'المبلغ بدون ضريبة',
+      tva: isFrench ? 'TVA 19%' : 'الضريبة 19%',
+      total: isFrench ? 'Total TTC' : 'الإجمالي',
+      amountPaid: isFrench ? 'Montant Payé' : 'المبلغ المدفوع',
+      remaining: isFrench ? 'Reste à Payer' : 'المتبقي',
+      paymentTerms: isFrench ? 'Conditions de Paiement' : 'شروط الدفع',
+      bank: isFrench ? 'Virement Bancaire' : 'تحويل بنكي',
+      paymentDetails: isFrench ? 'Détails de Paiement' : 'تفاصيل الدفع',
+    };
+
+    const subtotal = reservation.totalPrice || 0;
+    const tvaAmount = reservation.tvaApplied ? subtotal * 0.19 : 0;
+    const total = subtotal + tvaAmount;
+    const totalPaid = reservation.payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || reservation.advancePayment || 0;
+    const remaining = total - totalPaid;
+
+    const html = `
+    <!DOCTYPE html>
+    <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
+    <head>
+      <meta charset="UTF-8">
+      <title>Facture</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.5;
+          color: #1a1a1a;
+          background: #f5f5f5;
+          direction: ${textDir};
+        }
+        .page {
+          width: 210mm;
+          height: 297mm;
+          padding: 10mm;
+          margin: 10px auto;
+          background: white;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          border-bottom: 3px solid #1a3a52;
+          padding-bottom: 8px;
+        }
+        .logo {
+          width: 50px;
+          height: 50px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
+        .header-text {
+          flex: 1;
+        }
+        .agency-name {
+          font-size: 24px;
+          font-weight: 700;
+          color: #1a3a52;
+          text-align: center;
+          margin: 0 0 3px 0;
+          letter-spacing: 0.3px;
+        }
+        .facture-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1a3a52;
+          text-align: center;
+          margin: 0;
+          letter-spacing: 0.5px;
+          text-decoration: underline;
+        }
+        .header-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 6px;
+          margin-bottom: 10px;
+        }
+        .info-box {
+          padding: 8px;
+          border-radius: 4px;
+          font-size: 14px;
+          line-height: 1.3;
+        }
+        .info-box.blue {
+          background-color: #dbeafe;
+          border-left: 4px solid #2563eb;
+        }
+        .info-label {
+          font-weight: 600;
+          color: #1a1a1a;
+          margin-bottom: 1px;
+          font-size: 12px;
+        }
+        .info-value {
+          color: #1a1a1a;
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .section {
+          margin-bottom: 10px;
+          page-break-inside: avoid;
+        }
+        .section-title {
+          font-size: 14px;
+          font-weight: 700;
+          background-color: #f0f1f3;
+          padding: 6px 8px;
+          border-radius: 3px;
+          margin-bottom: 6px;
+          border-left: 4px solid #1a3a52;
+          color: #1a3a52;
+        }
+        .section-content {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px 10px;
+          font-size: 14px;
+        }
+        .field {
+          padding: 5px 0;
+          border-bottom: 0.5px solid #ddd;
+        }
+        .field-label {
+          font-weight: 600;
+          color: #1a3a52;
+          font-size: 12px;
+        }
+        .field-value {
+          color: #444;
+          margin-top: 2px;
+          font-size: 14px;
+        }
+        .pricing-section {
+          background: white;
+          border: 2px solid #1a3a52;
+          border-radius: 6px;
+          padding: 12px;
+          margin: 10px 0;
+        }
+        .pricing-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 0.5px solid #ddd;
+          font-size: 14px;
+        }
+        .pricing-row.total {
+          border-top: 2px solid #1a3a52;
+          font-weight: 600;
+          margin-top: 3px;
+          padding-top: 8px;
+          border-bottom: none;
+          color: #1a3a52;
+          font-size: 16px;
+        }
+        .pricing-row.section-header {
+          font-weight: 600;
+          color: #1a3a52;
+          background-color: #f0f1f3;
+          margin-top: 8px;
+          padding: 6px;
+          border-bottom: 1px solid #1a3a52;
+        }
+        .pricing-value {
+          font-weight: 600;
+          color: #1a3a52;
+        }
+        .pricing-value.positive {
+          color: #10b981;
+        }
+        .pricing-value.negative {
+          color: #ef4444;
+        }
+        .payment-method {
+          margin-top: 12px;
+          padding: 10px;
+          background-color: #f3f4f6;
+          border-radius: 4px;
+          border-left: 4px solid #1a3a52;
+        }
+        .payment-method-title {
+          font-weight: 600;
+          color: #1a3a52;
+          margin-bottom: 4px;
+          font-size: 13px;
+        }
+        .payment-method-value {
+          color: #666;
+          font-size: 14px;
+        }
+        @media print {
+          body { margin: 0; padding: 0; }
+          .page { margin: 0; padding: 5mm; height: auto; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <!-- Header -->
+        <div class="header">
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
+          <div class="header-text">
+            <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
+            <p class="facture-title">${labels.factureTitle}</p>
+          </div>
+        </div>
+
+        <!-- Header Info Boxes -->
+        <div class="header-info">
+          <div class="info-box blue">
+            <div class="info-label">🔢 ${labels.factureNumber}</div>
+            <div class="info-value">#${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'}</div>
+          </div>
+          <div class="info-box blue">
+            <div class="info-label">📅 ${labels.date}</div>
+            <div class="info-value">${new Date().toLocaleDateString('en-US')}</div>
+          </div>
+          <div class="info-box blue">
+            <div class="info-label">👤 ${labels.client}</div>
+            <div class="info-value">${reservation?.client?.lastName || 'N/A'}</div>
+          </div>
+        </div>
+
+        <!-- Client Info -->
+        <div class="section">
+          <div class="section-title">👤 ${labels.client}</div>
+          <div class="section-content">
+            <div class="field">
+              <div class="field-label">${labels.client}</div>
+              <div class="field-value">${reservation?.client?.firstName} ${reservation?.client?.lastName}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">📍 ${isFrench ? 'Adresse' : 'العنوان'}</div>
+              <div class="field-value">${reservation?.client?.completeAddress || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vehicle Info -->
+        <div class="section">
+          <div class="section-title">🚗 ${labels.vehicle}</div>
+          <div class="section-content">
+            <div class="field">
+              <div class="field-label">${labels.vehicle}</div>
+              <div class="field-value">${reservation?.car?.brand} ${reservation?.car?.model}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">📋 ${isFrench ? 'Immatricule' : 'لوحة التسجيل'}</div>
+              <div class="field-value">${reservation?.car?.registration || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rental Period -->
+        <div class="section">
+          <div class="section-title">📅 ${labels.period}</div>
+          <div class="section-content">
+            <div class="field">
+              <div class="field-label">${labels.period}</div>
+              <div class="field-value">${reservation?.step1?.departureDate} ${isFrench ? 'au' : 'إلى'} ${reservation?.step1?.returnDate}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">📊 ${isFrench ? 'Durée' : 'المدة'}</div>
+              <div class="field-value">${reservation?.totalDays || '1'} ${isFrench ? 'jour(s)' : 'يوم'}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing Section -->
+        <div class="pricing-section">
+          <div class="pricing-row">
+            <span>${labels.amount}</span>
+            <span class="pricing-value">${subtotal.toLocaleString()} DA</span>
+          </div>
+          ${reservation.tvaApplied ? `
+          <div class="pricing-row">
+            <span>${labels.tva}</span>
+            <span class="pricing-value">${tvaAmount.toLocaleString()} DA</span>
+          </div>
+          ` : ''}
+          <div class="pricing-row total">
+            <span>${labels.total}</span>
+            <span>${total.toLocaleString()} DA</span>
+          </div>
+          <div class="pricing-row section-header">
+            <span>${labels.paymentDetails}</span>
+          </div>
+          <div class="pricing-row">
+            <span>${labels.amountPaid}</span>
+            <span class="pricing-value positive">${totalPaid.toLocaleString()} DA</span>
+          </div>
+          <div class="pricing-row">
+            <span>${labels.remaining}</span>
+            <span class="pricing-value ${remaining > 0 ? 'negative' : 'positive'}">${remaining.toLocaleString()} DA</span>
+          </div>
+        </div>
+
+        <!-- Payment Terms -->
+        <div class="payment-method">
+          <div class="payment-method-title">${labels.paymentTerms}</div>
+          <div class="payment-method-value">${labels.bank}</div>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+    return html;
+  };
+
+  const generateEngagementHTML = (templateLang: 'fr' | 'ar'): string => {
+    const isFrench = templateLang === 'fr';
+    const textDir = isFrench ? 'ltr' : 'rtl';
+    
+    // Determine if passport or ID
+    const isPassport = reservation.client.documentType === 'passport';
+    const documentLabel = isPassport ? (isFrench ? 'Passeport' : 'جواز سفر') : (isFrench ? 'Carte d\'Identité' : 'بطاقة هوية');
+    const depositLabel = isPassport ? (isFrench ? 'Avoir déposé mon passeport' : 'قمت بإيداع جواز سفري') : (isFrench ? 'Avoir déposé ma carte d\'identité' : 'قمت بإيداع بطاقتي الشخصية');
+    
+    const documentNumber = isPassport ? 
+      (reservation.client.documentNumber || 'N/A') : 
+      (reservation.client.idCardNumber || 'N/A');
+    const documentDeliveryDate = isPassport ?
+      (reservation.client.documentDeliveryDate || reservation.client.licenseDeliveryDate) :
+      (reservation.client.licenseDeliveryDate || reservation.client.documentDeliveryDate);
+    const documentDeliveryPlace = isPassport ?
+      (reservation.client.documentDeliveryAddress || reservation.client.wilaya) :
+      (reservation.client.licenseDeliveryPlace || reservation.client.wilaya);
+    
+    const labels = {
+      engagement: isFrench ? 'ENGAGEMENT' : 'التزام',
+      iAmSigning: isFrench ? 'Je soussigné(e) Mme/Mrs' : 'أنا الموقع أدناه السيدة/السيد',
+      haveDeposited: depositLabel,
+      documentNum: isFrench ? 'N°' : 'رقم',
+      issuedOn: isFrench ? 'Délivré le' : 'صادر في',
+      atLocation: isFrench ? 'À' : 'في',
+      atAgency: isFrench ? 'Au niveau de votre agence de location de voiture le' : 'لدى وكالة تأجير السيارات الخاصة بكم في',
+      contractNum: isFrench ? 'Contrat N°' : 'العقد رقم',
+      asCaution: isFrench ? 'Comme caution pour location du véhicule' : 'كضمان لاستئجار المركبة',
+      vehicleModel: isFrench ? 'Modèle Véhicule' : 'موديل المركبة',
+      registration: isFrench ? 'Immatriculation' : 'رقم التسجيل',
+      rentalPeriod: isFrench ? 'Période de Location' : 'فترة الإيجار',
+      from: isFrench ? 'Du' : 'من',
+      to: isFrench ? 'Au' : 'إلى',
+      agencySignature: isFrench ? 'Signature et cachet de l\'Agence' : 'توقيع وختم الوكالة',
+      clientSignature: isFrench ? 'Signature de client' : 'توقيع العميل',
+    };
+
+    const html = `
+    <!DOCTYPE html>
+    <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
+    <head>
+      <meta charset="UTF-8">
+      <title>Engagement</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.5;
+          color: #1a1a1a;
+          background: #f5f5f5;
+          direction: ${textDir};
+        }
+        .page {
+          width: 210mm;
+          height: 297mm;
+          padding: 10mm;
+          margin: 10px auto;
+          background: white;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          border-bottom: 3px solid #d97706;
+          padding-bottom: 8px;
+        }
+        .logo {
+          width: 50px;
+          height: 50px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
+        .header-text {
+          flex: 1;
+        }
+        .agency-name {
+          font-size: 24px;
+          font-weight: 700;
+          color: #d97706;
+          text-align: center;
+          margin: 0 0 3px 0;
+          letter-spacing: 0.3px;
+        }
+        .engagement-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #d97706;
+          text-align: center;
+          margin: 0;
+          letter-spacing: 0.5px;
+          text-decoration: underline;
+        }
+        .content {
+          line-height: 1.4;
+          font-size: 14px;
+        }
+        .intro-line {
+          margin: 8px 0;
+          font-size: 14px;
+          color: #1a1a1a;
+        }
+        .highlight {
+          font-weight: 600;
+          color: #d97706;
+        }
+        .document-info {
+          margin: 10px 0;
+          padding: 10px 0;
+          border-bottom: 1px solid #e5e5e5;
+        }
+        .info-line {
+          margin: 8px 0;
+          font-size: 15px;
+          display: flex;
+          justify-content: space-between;
+          gap: 20px;
+        }
+        .info-label {
+          font-weight: 600;
+          color: #444;
+          min-width: 120px;
+        }
+        .info-value {
+          color: #1a1a1a;
+          flex: 1;
+        }
+        .vehicle-section {
+          background: #f9f9f9;
+          padding: 12px;
+          border-radius: 4px;
+          margin: 12px 0;
+          border-left: 4px solid #d97706;
+        }
+        .vehicle-header {
+          font-weight: 700;
+          color: #d97706;
+          margin-bottom: 8px;
+          font-size: 15px;
+        }
+        .model-highlight {
+          background: #fff8dc;
+          padding: 6px 10px;
+          border-radius: 3px;
+          font-weight: 600;
+          color: #d97706;
+          display: inline-block;
+          margin: 5px 0;
+        }
+        .signature-section {
+          margin-top: 25px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 25px;
+        }
+        .signature-block {
+          text-align: center;
+        }
+        .signature-line {
+          border-top: 2px solid #1a1a1a;
+          margin: 45px 0 5px 0;
+          height: 2px;
+        }
+        .signature-label {
+          font-weight: 600;
+          font-size: 14px;
+          color: #1a1a1a;
+          margin-top: 3px;
+        }
+        @media print {
+          body { margin: 0; padding: 0; background: white; }
+          .page { margin: 0; box-shadow: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <!-- Header -->
+        <div class="header">
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
+          <div class="header-text">
+            <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
+            <p class="engagement-title">${labels.engagement}</p>
+          </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+          <!-- Introduction -->
+          <div class="intro-line">
+            ${labels.iAmSigning} <span class="highlight">${reservation?.client?.firstName} ${reservation?.client?.lastName}</span>
+          </div>
+
+          <!-- Document Section -->
+          <div class="intro-line" style="margin-top: 12px;">
+            ${labels.haveDeposited}
+          </div>
+
+          <!-- Document Details -->
+          <div class="document-info">
+            <div class="info-line">
+              <span class="info-label">${labels.documentNum}</span>
+              <span class="info-value">${documentNumber}</span>
+            </div>
+            <div class="info-line">
+              <span class="info-label">${labels.issuedOn}</span>
+              <span class="info-value">${documentDeliveryDate ? new Date(documentDeliveryDate).toLocaleDateString('en-US') : 'N/A'}</span>
+            </div>
+            <div class="info-line">
+              <span class="info-label">${labels.atLocation}</span>
+              <span class="info-value">${documentDeliveryPlace || 'N/A'}</span>
+            </div>
+          </div>
+
+          <!-- Agency Section -->
+          <div class="intro-line" style="margin-top: 15px;">
+            ${labels.atAgency} <span class="highlight">${new Date().toLocaleDateString('en-US')}</span>
+          </div>
+
+          <!-- Contract Number -->
+          <div class="intro-line" style="margin: 10px 0;">
+            ${labels.contractNum} <span class="highlight">${reservation?.id?.toString().substring(0, 8).toUpperCase() || 'N/A'}</span>
+          </div>
+
+          <!-- Caution Declaration -->
+          <div class="intro-line">
+            ${labels.asCaution}
+          </div>
+
+          <!-- Vehicle Information Section -->
+          <div class="vehicle-section">
+            <div class="vehicle-header">🚗 ${labels.vehicleModel}</div>
+            <div class="model-highlight">
+              ${reservation?.car?.brand || 'N/A'} ${reservation?.car?.model || 'N/A'}
+            </div>
+            <div class="info-line" style="margin-top: 8px;">
+              <span class="info-label">${labels.registration}</span>
+              <span class="info-value">${reservation?.car?.registration || 'N/A'}</span>
+            </div>
+            <div class="info-line">
+              <span class="info-label">${labels.rentalPeriod}</span>
+              <span class="info-value">${labels.from} ${reservation?.step1?.departureDate} ${labels.to} ${reservation?.step1?.returnDate}</span>
+            </div>
+          </div>
+
+          <!-- Signatures -->
+          <div class="signature-section">
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">${labels.agencySignature}</div>
+            </div>
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">${labels.clientSignature}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+    return html;
+  };
+
+  const generateRecuHTML = (templateLang: 'fr' | 'ar'): string => {
+    const isFrench = templateLang === 'fr';
+    const textDir = isFrench ? 'ltr' : 'rtl';
+    
+    const labels = {
+      recuTitle: isFrench ? 'REÇU DE VERSEMENT' : 'إيصال الدفع',
+      recuNumber: isFrench ? 'N° Reçu' : 'رقم الإيصال',
+      date: isFrench ? 'Date' : 'التاريخ',
+      client: isFrench ? 'Client' : 'العميل',
+      amountReceived: isFrench ? 'Montant Reçu' : 'المبلغ المستلم',
+      totalAmount: isFrench ? 'Montant Total' : 'المبلغ الإجمالي',
+      amountPaid: isFrench ? 'Montant Payé' : 'المبلغ المدفوع',
+      remainingBalance: isFrench ? 'Solde Restant' : 'الرصيد المتبقي',
+      method: isFrench ? 'Mode de Paiement' : 'طريقة الدفع',
+      reservation: isFrench ? 'N° Réservation' : 'رقم الحجز',
+      bank: isFrench ? 'Virement Bancaire' : 'تحويل بنكي',
+      cash: isFrench ? 'Espèces' : 'نقداً',
+      card: isFrench ? 'Carte Bancaire' : 'بطاقة بنكية',
+      thanks: isFrench ? 'Merci de votre paiement' : 'شكراً على دفعتك',
+    };
+
+    // Calculate payment information
+    const totalAmount = reservation.totalPrice || 0;
+    const totalPaid = reservation.payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || reservation.advancePayment || 0;
+    const remainingBalance = totalAmount - totalPaid;
+    const currentPayment = reservation.payments?.[0] || { amount: 0, method: 'bank' };
+
+    const html = `
+    <!DOCTYPE html>
+    <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
+    <head>
+      <meta charset="UTF-8">
+      <title>Reçu de Versement</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.5;
+          color: #1a1a1a;
+          background: #f5f5f5;
+          direction: ${textDir};
+        }
+        .page {
+          width: 210mm;
+          height: 297mm;
+          padding: 10mm;
+          margin: 10px auto;
+          background: white;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          border-bottom: 3px solid #7c3aed;
+          padding-bottom: 8px;
+        }
+        .logo {
+          width: 50px;
+          height: 50px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
+        .header-text {
+          flex: 1;
+        }
+        .agency-name {
+          font-size: 24px;
+          font-weight: 700;
+          color: #7c3aed;
+          text-align: center;
+          margin: 0 0 3px 0;
+          letter-spacing: 0.3px;
+        }
+        .recu-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #7c3aed;
+          text-align: center;
+          margin: 0;
+          letter-spacing: 0.5px;
+          text-decoration: underline;
+        }
+        .header-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 6px;
+          margin-bottom: 10px;
+        }
+        .info-box {
+          padding: 8px;
+          border-radius: 4px;
+          font-size: 14px;
+          line-height: 1.3;
+        }
+        .info-box.purple {
+          background-color: #f3e8ff;
+          border-left: 4px solid #7c3aed;
+        }
+        .info-label {
+          font-weight: 600;
+          color: #1a1a1a;
+          margin-bottom: 1px;
+          font-size: 12px;
+        }
+        .info-value {
+          color: #1a1a1a;
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .section {
+          margin-bottom: 10px;
+          page-break-inside: avoid;
+        }
+        .section-title {
+          font-size: 14px;
+          font-weight: 700;
+          background-color: #f3e8ff;
+          padding: 6px 8px;
+          border-radius: 3px;
+          margin-bottom: 6px;
+          border-left: 4px solid #7c3aed;
+          color: #7c3aed;
+        }
+        .details-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+        .detail-item {
+          padding: 8px;
+          background-color: #f9f5ff;
+          border-radius: 3px;
+        }
+        .detail-label {
+          font-weight: 600;
+          color: #7c3aed;
+          font-size: 11px;
+          margin-bottom: 2px;
+          text-transform: uppercase;
+        }
+        .detail-value {
+          color: #1a1a1a;
+          font-size: 14px;
+        }
+        .payment-section {
+          background: white;
+          border: 2px solid #7c3aed;
+          border-radius: 6px;
+          padding: 12px;
+          margin: 10px 0;
+        }
+        .payment-box {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .payment-item {
+          background: #f9f5ff;
+          padding: 10px;
+          border-radius: 4px;
+          border-left: 4px solid #7c3aed;
+        }
+        .payment-item.highlight {
+          background: #fff8f0;
+          border-left-color: #f97316;
+        }
+        .payment-label {
+          font-weight: 600;
+          color: #7c3aed;
+          font-size: 11px;
+          text-transform: uppercase;
+          margin-bottom: 3px;
+        }
+        .payment-label.highlight {
+          color: #f97316;
+        }
+        .payment-value {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1a1a1a;
+        }
+        .payment-value.highlight {
+          color: #f97316;
+        }
+        .payment-value.positive {
+          color: #10b981;
+        }
+        .payment-value.negative {
+          color: #ef4444;
+        }
+        .amount-large-box {
+          background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+          color: white;
+          padding: 15px;
+          border-radius: 6px;
+          text-align: center;
+          margin: 10px 0;
+        }
+        .amount-large-label {
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          margin-bottom: 4px;
+          opacity: 0.9;
+        }
+        .amount-large-value {
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+        .footer-note {
+          margin-top: 12px;
+          text-align: center;
+          color: #7c3aed;
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .signature-section {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px;
+        }
+        .signature-block {
+          text-align: center;
+        }
+        .signature-line {
+          border-top: 2px solid #1a1a1a;
+          margin: 40px 0 5px 0;
+          height: 2px;
+        }
+        .signature-label {
+          font-weight: 600;
+          font-size: 13px;
+          color: #1a1a1a;
+          margin-top: 3px;
+          text-transform: uppercase;
+        }
+        @media print {
+          body { margin: 0; padding: 0; background: white; }
+          .page { margin: 0; box-shadow: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <!-- Header -->
+        <div class="header">
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
+          <div class="header-text">
+            <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
+            <p class="recu-title">${labels.recuTitle}</p>
+          </div>
+        </div>
+
+        <!-- Header Info Boxes -->
+        <div class="header-info">
+          <div class="info-box purple">
+            <div class="info-label">🔢 ${labels.recuNumber}</div>
+            <div class="info-value">#${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'}</div>
+          </div>
+          <div class="info-box purple">
+            <div class="info-label">📅 ${labels.date}</div>
+            <div class="info-value">${new Date().toLocaleDateString('en-US')}</div>
+          </div>
+          <div class="info-box purple">
+            <div class="info-label">👤 ${labels.client}</div>
+            <div class="info-value">${reservation?.client?.lastName || 'N/A'}</div>
+          </div>
+        </div>
+
+        <!-- Client & Reservation Info -->
+        <div class="section">
+          <div class="section-title">📋 ${isFrench ? 'Informations du Client' : 'معلومات العميل'}</div>
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">${labels.client}</div>
+              <div class="detail-value">${reservation?.client?.firstName} ${reservation?.client?.lastName}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.reservation}</div>
+              <div class="detail-value">#${reservation?.id || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">📞 ${isFrench ? 'Téléphone' : 'الهاتف'}</div>
+              <div class="detail-value">${reservation?.client?.phone || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.method}</div>
+              <div class="detail-value">
+                ${currentPayment.method === 'bank' ? labels.bank : currentPayment.method === 'cash' ? labels.cash : labels.card}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment Summary Section -->
+        <div class="payment-section">
+          <div class="section-title" style="margin-bottom: 12px;">💰 ${isFrench ? 'Détails de Paiement' : 'تفاصيل الدفع'}</div>
+          
+          <div class="payment-box">
+            <div class="payment-item">
+              <div class="payment-label">${labels.totalAmount}</div>
+              <div class="payment-value">${totalAmount.toLocaleString()} DA</div>
+            </div>
+            <div class="payment-item">
+              <div class="payment-label">${labels.amountPaid}</div>
+              <div class="payment-value positive">${totalPaid.toLocaleString()} DA</div>
+            </div>
+          </div>
+
+          <div class="payment-box">
+            <div class="payment-item">
+              <div class="payment-label">${labels.amountReceived}</div>
+              <div class="payment-value">${(currentPayment.amount || totalPaid).toLocaleString()} DA</div>
+            </div>
+            <div class="payment-item highlight">
+              <div class="payment-label highlight">${labels.remainingBalance}</div>
+              <div class="payment-value ${remainingBalance > 0 ? 'negative' : 'positive'}">${Math.abs(remainingBalance).toLocaleString()} DA</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Large Amount Display -->
+        <div class="amount-large-box">
+          <div class="amount-large-label">${labels.amountReceived}</div>
+          <div class="amount-large-value">${(currentPayment.amount || totalPaid).toLocaleString()} DA</div>
+        </div>
+
+        <!-- Thank You Message -->
+        <div class="footer-note">
+          ✓ ${labels.thanks}
+        </div>
+
+        <!-- Signature Section -->
+        <div class="signature-section">
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">${isFrench ? 'Cachet et Signature' : 'الختم والتوقيع'}<br/>${isFrench ? 'de l\'Agence' : 'للوكالة'}</div>
+          </div>
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">${isFrench ? 'Signature du Client' : 'توقيع العميل'}</div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+    return html;
+  };
+
+  const generateInspectionHTML = (templateLang: 'fr' | 'ar'): string => {
+    const isFrench = templateLang === 'fr';
+    const textDir = isFrench ? 'ltr' : 'rtl';
+    
+    const labels = isFrench ? {
+      inspectionTitle: 'Inspection',
+      inspectionDate: 'Date',
+      clientInfo: 'Informations du Client',
+      vehicleInfo: 'Informations du Véhicule',
+      inspectionDetails: 'Détails de l\'Inspection',
+      fullName: 'Nom Complet',
+      phone: 'Téléphone',
+      email: 'Email',
+      licenseNumber: 'Numéro de Permis',
+      model: 'Modèle',
+      registration: 'Immatriculation',
+      vin: 'VIN',
+      color: 'Couleur',
+      mileage: 'Kilométrage',
+      inspection: 'Inspection de Départ',
+      departureInspection: 'État de Départ',
+      bodyCondition: 'État de la Carrosserie',
+      tires: 'Pneus',
+      lights: 'Éclairage',
+      windows: 'Vitres',
+      mirrors: 'Rétroviseurs',
+      doors: 'Portes',
+      interior: 'Intérieur',
+      upholstery: 'Rembourrage',
+      dashboard: 'Tableau de Bord',
+      equipment: 'Équipements',
+      engine: 'Moteur',
+      brakes: 'Freins',
+      suspension: 'Suspension',
+      condition: 'État',
+      good: 'Bon',
+      fair: 'Acceptable',
+      poor: 'Mauvais',
+      notes: 'Remarques',
+      approvedBy: 'Approuvé par',
+      signature: 'Signature',
+    } : {
+      inspectionTitle: 'فحص المركبة',
+      inspectionDate: 'التاريخ',
+      clientInfo: 'معلومات العميل',
+      vehicleInfo: 'معلومات المركبة',
+      inspectionDetails: 'تفاصيل الفحص',
+      fullName: 'الاسم الكامل',
+      phone: 'الهاتف',
+      email: 'البريد الإلكتروني',
+      licenseNumber: 'رقم الرخصة',
+      model: 'الطراز',
+      registration: 'التسجيل',
+      vin: 'رقم الهيكل',
+      color: 'اللون',
+      mileage: 'الكيلومترات',
+      inspection: 'فحص المغادرة',
+      departureInspection: 'حالة المغادرة',
+      bodyCondition: 'حالة الهيكل',
+      tires: 'الإطارات',
+      lights: 'الأضواء',
+      windows: 'الزجاج',
+      mirrors: 'المرايا',
+      doors: 'الأبواب',
+      interior: 'الداخلية',
+      upholstery: 'التنجيد',
+      dashboard: 'لوحة القيادة',
+      equipment: 'المعدات',
+      engine: 'المحرك',
+      brakes: 'الفرامل',
+      suspension: 'التعليق',
+      condition: 'الحالة',
+      good: 'جيد',
+      fair: 'مقبول',
+      poor: 'سيء',
+      notes: 'ملاحظات',
+      approvedBy: 'موافق عليه من قبل',
+      signature: 'التوقيع',
+    };
+
+    const inspectionData = reservation?.departureInspection || {};
+    
+    const html = `
+    <!DOCTYPE html>
+    <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
+    <head>
+      <meta charset="UTF-8">
+      <title>${labels.inspectionTitle}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Arial, sans-serif;
+          line-height: 1.5;
+          color: #222;
+          background: white;
+          direction: ${textDir};
+          font-size: 14px;
+        }
+        .page {
+          width: 210mm;
+          height: 297mm;
+          padding: 12mm;
+          margin: 0 auto;
+          background: white;
+        }
+        .header {
+          border-bottom: 3px solid #2d7a4d;
+          padding-bottom: 10px;
+          margin-bottom: 15px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .logo {
+          width: 50px;
+          height: 50px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
+        .header-text {
+          flex: 1;
+        }
+        .agency-name {
+          font-size: 32px;
+          font-weight: bold;
+          color: #2d7a4d;
+          margin: 0;
+        }
+        .inspection-title {
+          font-size: 20px;
+          color: #555;
+          margin-top: 3px;
+        }
+        .header-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+        .info-box {
+          padding: 10px 12px;
+          border-radius: 4px;
+          border-left: 4px solid #2d7a4d;
+          background-color: #e8f5e9;
+        }
+        .info-label {
+          font-weight: 600;
+          color: #2d7a4d;
+          font-size: 12px;
+          margin-bottom: 3px;
+          text-transform: uppercase;
+        }
+        .info-value {
+          color: #333;
+          font-size: 16px;
+          font-weight: 600;
+        }
+        .section {
+          margin-bottom: 12px;
+          page-break-inside: avoid;
+        }
+        .section-title {
+          font-size: 16px;
+          font-weight: 700;
+          background-color: #e8f5e9;
+          padding: 8px 10px;
+          border-radius: 3px;
+          margin-bottom: 8px;
+          border-left: 4px solid #2d7a4d;
+          color: #2d7a4d;
+        }
+        .details-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px 15px;
+          margin-bottom: 10px;
+        }
+        .detail-item {
+          padding: 10px;
+          background-color: #f1f8f6;
+          border-radius: 3px;
+          border-left: 3px solid #2d7a4d;
+        }
+        .detail-label {
+          font-weight: 600;
+          color: #2d7a4d;
+          font-size: 11px;
+          margin-bottom: 3px;
+          text-transform: uppercase;
+        }
+        .detail-value {
+          color: #333;
+          font-size: 14px;
+        }
+        .checklist {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin-bottom: 10px;
+        }
+        .checklist-item {
+          padding: 10px;
+          background-color: #f1f8f6;
+          border-radius: 3px;
+          border-left: 3px solid #2d7a4d;
+        }
+        .checklist-title {
+          font-weight: 600;
+          color: #2d7a4d;
+          font-size: 13px;
+          margin-bottom: 6px;
+        }
+        .checkbox {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 4px;
+          font-size: 13px;
+        }
+        .check-box {
+          width: 14px;
+          height: 14px;
+          border: 1px solid #2d7a4d;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .check-box.checked::before {
+          content: '✓';
+          color: #2d7a4d;
+          font-weight: bold;
+          font-size: 12px;
+        }
+        .notes-section {
+          margin-top: 12px;
+          padding: 10px;
+          background-color: #fff3e0;
+          border-left: 3px solid #ff9800;
+          border-radius: 3px;
+        }
+        .notes-title {
+          font-weight: 600;
+          color: #ff9800;
+          margin-bottom: 6px;
+          font-size: 12px;
+          text-transform: uppercase;
+        }
+        .notes-text {
+          color: #333;
+          font-size: 13px;
+          line-height: 1.4;
+          min-height: 60px;
+          border: 1px dashed #ff9800;
+          padding: 6px;
+          border-radius: 2px;
+        }
+        .signature-section {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 40px;
+          margin-top: 30px;
+        }
+        .signature-block {
+          text-align: center;
+        }
+        .signature-line {
+          border-top: 2px solid #333;
+          margin-bottom: 8px;
+          height: 60px;
+        }
+        .signature-label {
+          font-weight: 600;
+          font-size: 12px;
+          color: #333;
+          text-transform: uppercase;
+        }
+        @media print {
+          body { margin: 0; padding: 0; background: white; }
+          .page { margin: 0; padding: 12mm; height: auto; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <!-- Header -->
+        <div class="header">
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
+          <div class="header-text">
+            <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
+            <p class="inspection-title">🔍 ${labels.inspectionTitle}</p>
+          </div>
+        </div>
+
+        <!-- Header Info -->
+        <div class="header-info">
+          <div class="info-box">
+            <div class="info-label">📅 ${labels.inspectionDate}</div>
+            <div class="info-value">${new Date().toLocaleDateString('en-US')}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">🗂️ ${isFrench ? 'N° de Réservation' : 'رقم الحجز'}</div>
+            <div class="info-value">#${reservation?.id || 'N/A'}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">🚗 ${isFrench ? 'Immatriculation' : 'التسجيل'}</div>
+            <div class="info-value">${reservation?.car?.registration || 'N/A'}</div>
+          </div>
+        </div>
+
+        <!-- Client Information -->
+        <div class="section">
+          <div class="section-title">👤 ${labels.clientInfo}</div>
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">${labels.fullName}</div>
+              <div class="detail-value">${reservation?.client?.firstName || reservation?.client?.first_name} ${reservation?.client?.lastName || reservation?.client?.last_name}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.phone}</div>
+              <div class="detail-value">${reservation?.client?.phone || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.email}</div>
+              <div class="detail-value">${reservation?.client?.email || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.licenseNumber}</div>
+              <div class="detail-value">${reservation?.client?.licenseNumber || reservation?.client?.license_number || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vehicle Information -->
+        <div class="section">
+          <div class="section-title">🚗 ${labels.vehicleInfo}</div>
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">${labels.model}</div>
+              <div class="detail-value">${reservation?.car?.brand} ${reservation?.car?.model}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.registration}</div>
+              <div class="detail-value">${reservation?.car?.registration || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.vin}</div>
+              <div class="detail-value">${reservation?.car?.vin || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.color}</div>
+              <div class="detail-value">${reservation?.car?.color || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">${labels.mileage}</div>
+              <div class="detail-value">${inspectionData?.mileage || 'N/A'} km</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inspection Checklist -->
+        <div class="section">
+          <div class="section-title">✅ ${labels.inspectionDetails}</div>
+          ${(() => {
+            const categoryLabels = {
+              security: isFrench ? '🛡️ Sécurité' : '🛡️ الأمان',
+              equipment: isFrench ? '🔧 Équipements' : '🔧 المعدات',
+              comfort: isFrench ? '✨ Confort & Propreté' : '✨ الراحة والنظافة',
+              cleanliness: isFrench ? '🧹 Nettoyage' : '🧹 التنظيف'
+            };
+            
+            const categoryColors = {
+              security: '#e74c3c',
+              equipment: '#3498db',
+              comfort: '#f39c12',
+              cleanliness: '#27ae60'
+            };
+            
+            const groupedItems: any = {};
+            (inspectionData?.inspectionItems || []).forEach((item: any) => {
+              if (!groupedItems[item.category]) {
+                groupedItems[item.category] = [];
+              }
+              groupedItems[item.category].push(item);
+            });
+            
+            return Object.entries(groupedItems).map(([category, items]: any) => {
+              const categoryHeader = categoryLabels[category as keyof typeof categoryLabels];
+              const bgColor = categoryColors[category as keyof typeof categoryColors];
+              const itemsHtml = (items as any[]).map((item: any) => `<div class="inspection-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #ecf0f1;"><span class="item-name" style="flex: 1; font-size: 13px; color: #2c3e50;">${item.name}</span><span class="item-status" style="font-size: 18px;">${item.checked ? '✅' : '❌'}</span></div>`).join('');
+              return `<div style="margin-bottom: 16px; background: #f8f9fa; border-left: 4px solid ${bgColor}; border-radius: 4px; overflow: hidden;"><div style="background-color: ${bgColor}; color: white; padding: 10px 12px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">${categoryHeader}</div><div style="padding: 12px;">${itemsHtml}</div></div>`;
+            }).join('');
+          })()}
+        </div>
+
+        <!-- Notes Section -->
+        <div class="notes-section">
+          <div class="notes-title">📝 ${labels.notes}</div>
+          <div class="notes-text">${inspectionData?.notes || ''}</div>
+        </div>
+
+        <!-- Signature Section -->
+        <div class="signature-section">
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">${isFrench ? 'Client' : 'العميل'}</div>
+          </div>
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">${isFrench ? 'Agence' : 'الوكالة'}</div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+    return html;
+  };
+
   const handlePrint = () => {
     setIsPrinting(true);
-    const content = generateContractHTML(selectedTemplate);
+    let content = '';
+    
+    // Select the appropriate template function based on document type
+    if (type === 'engagement') {
+      content = generateEngagementHTML(selectedTemplate);
+    } else if (type === 'invoice' || type === 'facture') {
+      content = generateFactureHTML(selectedTemplate);
+    } else if (type === 'quote' || type === 'devis') {
+      content = generateDevisHTML(selectedTemplate);
+    } else if (type === 'payment' || type === 'versement' || type === 'receipt' || type === 'recu') {
+      content = generateRecuHTML(selectedTemplate);
+    } else if (type === 'inspection') {
+      content = generateInspectionHTML(selectedTemplate);
+    } else {
+      content = generateContractHTML(selectedTemplate);
+    }
+    
     setTimeout(() => {
       const printWindow = window.open('', '', 'height=600,width=800');
       if (printWindow) {
@@ -2186,6 +4107,51 @@ const PersonalizationModal: React.FC<{
         setTimeout(() => setIsPrinting(false), 100);
       }
     }, 300);
+  };
+
+  const getDocumentTitle = (): string => {
+    const titleMap: { [key: string]: { fr: string; ar: string } } = {
+      contract: { fr: 'Contrat de Location', ar: 'عقد التأجير' },
+      engagement: { fr: 'Lettre d\'Engagement', ar: 'رسالة التزام' },
+      invoice: { fr: 'Facture', ar: 'الفاتورة' },
+      facture: { fr: 'Facture', ar: 'الفاتورة' },
+      quote: { fr: 'Devis', ar: 'عرض أسعار' },
+      devis: { fr: 'Devis', ar: 'عرض أسعار' },
+      payment: { fr: 'Reçu de Versement', ar: 'إيصال الدفع' },
+      versement: { fr: 'Reçu de Versement', ar: 'إيصال الدفع' },
+      receipt: { fr: 'Reçu de Versement', ar: 'إيصال الدفع' },
+      recu: { fr: 'Reçu de Versement', ar: 'إيصال الدفع' },
+    };
+    
+    const typeKey = type.toLowerCase();
+    const titleObj = titleMap[typeKey] || { fr: 'Document', ar: 'وثيقة' };
+    return lang === 'fr' ? titleObj.fr : titleObj.ar;
+  };
+
+  const getHeaderColor = (): string => {
+    const typeKey = type.toLowerCase();
+    if (typeKey === 'engagement') return 'from-amber-600 to-amber-700';
+    if (typeKey === 'invoice' || typeKey === 'facture') return 'from-blue-600 to-blue-700';
+    if (typeKey === 'quote' || typeKey === 'devis') return 'from-green-600 to-green-700';
+    if (typeKey === 'payment' || typeKey === 'versement' || typeKey === 'receipt' || typeKey === 'recu') return 'from-purple-600 to-purple-700';
+    return 'from-blue-600 to-blue-700';
+  };
+
+  const getCurrentTemplate = (): string => {
+    const typeKey = type.toLowerCase();
+    if (typeKey === 'engagement') {
+      return generateEngagementHTML(selectedTemplate);
+    } else if (typeKey === 'invoice' || typeKey === 'facture') {
+      return generateFactureHTML(selectedTemplate);
+    } else if (typeKey === 'quote' || typeKey === 'devis') {
+      return generateDevisHTML(selectedTemplate);
+    } else if (typeKey === 'payment' || typeKey === 'versement' || typeKey === 'receipt' || typeKey === 'recu') {
+      return generateRecuHTML(selectedTemplate);
+    } else if (typeKey === 'inspection') {
+      return generateInspectionHTML(selectedTemplate);
+    } else {
+      return generateContractHTML(selectedTemplate);
+    }
   };
 
   return (
@@ -2207,10 +4173,10 @@ const PersonalizationModal: React.FC<{
       >
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 flex items-center justify-between">
+          <div className={`bg-gradient-to-r ${getHeaderColor()} px-8 py-6 flex items-center justify-between`}>
             <div className="flex items-center gap-4">
               <h2 className="text-2xl font-bold text-white">
-                {lang === 'fr' ? 'Contrat de Location' : 'عقد التأجير'}
+                {getDocumentTitle()}
               </h2>
               {/* Template Selector */}
               <div className="flex gap-2 ml-8">
@@ -2246,16 +4212,130 @@ const PersonalizationModal: React.FC<{
 
           {/* Content Area with Preview */}
           <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-50 to-white p-8">
+            {/* Second Conductor Search (only for contract) */}
+            {type === 'contract' && (
+              <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-5">
+                <h3 className="font-bold text-lg text-blue-900 mb-4 flex items-center gap-2">
+                  👥 {lang === 'fr' ? 'Ajouter un Conducteur Secondaire' : 'إضافة سائق ثانوي'}
+                </h3>
+                
+                {/* Search Input */}
+                <div className="relative mb-4">
+                  <input
+                    type="text"
+                    placeholder={lang === 'fr' 
+                      ? 'Tapez le nom, prénom ou numéro de téléphone...' 
+                      : 'اكتب الاسم أو رقم الهاتف...'}
+                    value={searchQuery}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSearchQuery(value);
+                      if (value.length > 0) {
+                        searchClients(value);
+                      } else {
+                        setSearchResults([]);
+                        setShowSearchResults(false);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (searchQuery.length > 0) {
+                        setShowSearchResults(true);
+                      }
+                    }}
+                    className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-base"
+                    autoComplete="off"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSearchResults([]);
+                        setShowSearchResults(false);
+                      }}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                
+                {/* Selected Conductor Display */}
+                {secondConductor && (
+                  <div className="bg-green-100 border-2 border-green-400 rounded-lg p-4 mb-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-green-900 text-lg">
+                          {(secondConductor.first_name || secondConductor.firstName)} {(secondConductor.last_name || secondConductor.lastName)}
+                        </p>
+                        <p className="text-sm text-green-700">📱 {secondConductor.phone || 'N/A'}</p>
+                        <p className="text-sm text-green-700">🎫 {(secondConductor.license_number || secondConductor.licenseNumber) || 'N/A'}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSecondConductor(null);
+                          setSearchQuery('');
+                          setSearchResults([]);
+                        }}
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors"
+                      >
+                        ✕ {lang === 'fr' ? 'Retirer' : 'إزالة'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Search Results Dropdown */}
+                {showSearchResults && searchQuery && (
+                  <div className="bg-white border-2 border-blue-300 rounded-lg overflow-hidden shadow-lg">
+                    {searchResults.length > 0 ? (
+                      <div className="max-h-64 overflow-y-auto">
+                        {searchResults.map((client) => (
+                          <button
+                            key={client.id}
+                            onClick={() => selectSecondConductor(client)}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-100 border-b border-gray-200 last:border-b-0 transition-colors flex items-center justify-between group"
+                          >
+                            <div>
+                              <p className="font-semibold text-gray-900 group-hover:text-blue-700">
+                                {(client.first_name || client.firstName)} {(client.last_name || client.lastName)}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                📱 {client.phone || 'N/A'} | 🎫 {(client.license_number || client.licenseNumber) || 'N/A'}
+                              </p>
+                            </div>
+                            <span className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-4 py-6 text-center">
+                        <p className="text-gray-500 font-medium">
+                          {lang === 'fr' 
+                            ? '❌ Aucun client trouvé avec cet terme' 
+                            : '❌ لم يتم العثور على عملاء بهذا المصطلح'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {lang === 'fr' 
+                            ? 'Vérifiez le nom, prénom ou numéro de téléphone' 
+                            : 'تحقق من الاسم أو رقم الهاتف'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            
             <div className="bg-white rounded-lg shadow-lg p-0 mx-auto" style={{ width: '210mm' }}>
               <iframe
-                srcDoc={generateContractHTML(selectedTemplate)}
+                srcDoc={getCurrentTemplate()}
                 style={{ 
                   width: '100%', 
                   height: '600px', 
                   border: 'none',
                   borderRadius: '0.5rem'
                 }}
-                title="Contract Preview"
+                title="Document Preview"
               />
             </div>
           </div>
