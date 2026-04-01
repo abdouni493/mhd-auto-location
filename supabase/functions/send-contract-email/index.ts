@@ -3,6 +3,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore - Deno runtime
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// @ts-ignore - Deno.env
+declare const Deno: any;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
