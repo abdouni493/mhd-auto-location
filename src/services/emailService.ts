@@ -99,63 +99,35 @@ export class EmailService {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${labels.contractTitle}</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: white; color: #333; line-height: 1.6; }
+    .container { width: 100%; max-width: 210mm; margin: 0 auto; padding: 15mm; background: white; }
     
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: white;
-      color: #333;
-      line-height: 1.6;
-    }
-    
-    .container {
-      width: 210mm;
-      height: 297mm;
-      margin: 0 auto;
-      padding: 20px;
-      background: white;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    
-    .header {
+    /* Header */
+    .header { 
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 20px;
       padding-bottom: 15px;
       border-bottom: 3px solid #3b82f6;
+      page-break-after: avoid;
     }
     
-    .logo {
-      width: 60px;
-      height: 60px;
-    }
+    .logo { width: 50px; height: 50px; }
+    .logo img { width: 100%; height: 100%; object-fit: contain; }
     
-    .logo img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    
-    .agency-info {
+    .agency-info { 
       text-align: ${isRTL ? 'right' : 'left'};
       flex: 1;
       ${isRTL ? 'margin-right: 15px;' : 'margin-left: 15px;'}
     }
     
-    .agency-name {
-      font-size: 24px;
-      font-weight: 900;
-      color: #1f2937;
-    }
+    .agency-name { font-size: 20px; font-weight: 900; color: #1f2937; }
     
-    .title {
+    .title { 
       text-align: center;
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 900;
       color: #1f2937;
       margin: 15px 0;
@@ -163,79 +135,92 @@ export class EmailService {
       letter-spacing: 1px;
     }
     
-    .info-row {
+    /* Info Rows */
+    .info-row { 
       display: flex;
-      margin-bottom: 12px;
-      font-size: 14px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      page-break-inside: avoid;
     }
     
-    .info-label {
+    .info-label { 
       font-weight: 700;
-      width: 120px;
+      width: 150px;
       color: #4b5563;
+      flex-shrink: 0;
     }
     
-    .info-value {
+    .info-value { 
       flex: 1;
       color: #1f2937;
       font-weight: 600;
     }
     
-    .section {
-      margin-bottom: 20px;
+    /* Sections */
+    .section { 
+      margin-bottom: 15px;
       padding: 12px;
-      border: 2px solid #e5e7eb;
-      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
       background: #f9fafb;
+      page-break-inside: avoid;
     }
     
-    .section-title {
-      font-size: 14px;
+    .section-title { 
+      font-size: 13px;
       font-weight: 900;
       color: #fff;
       background: #3b82f6;
       padding: 8px 12px;
       margin: -12px -12px 12px -12px;
-      border-radius: 4px 4px 0 0;
+      border-radius: 2px 2px 0 0;
     }
     
-    .two-column {
+    .two-column { 
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 15px;
-      margin-bottom: 15px;
+      margin-bottom: 10px;
     }
     
-    .column-item {
-      padding: 8px;
-    }
+    .column-item { padding: 5px; }
     
-    .signature-section {
+    /* Signatures */
+    .signature-section { 
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
-      margin-top: 30px;
+      margin-top: 25px;
+      page-break-inside: avoid;
     }
     
-    .signature-box {
+    .signature-box { 
       text-align: center;
-      padding-top: 50px;
+      padding-top: 45px;
       border-top: 1px solid #000;
     }
     
-    .signature-label {
+    .signature-label { 
       font-weight: 700;
       margin-top: 5px;
-      font-size: 12px;
+      font-size: 11px;
     }
     
-    .footer {
+    /* Footer */
+    .footer { 
       text-align: center;
       font-size: 10px;
       color: #9ca3af;
       margin-top: 20px;
       border-top: 1px solid #e5e7eb;
       padding-top: 10px;
+      page-break-inside: avoid;
+    }
+    
+    @media print {
+      body { margin: 0; padding: 0; }
+      .container { padding: 10mm; }
+      .section { page-break-inside: avoid; }
     }
   </style>
 </head>
@@ -243,7 +228,7 @@ export class EmailService {
   <div class="container">
     <!-- Header -->
     <div class="header">
-      ${logoUrl ? `<div class="logo"><img src="${logoUrl}" alt="Logo"></div>` : ''}
+      ${logoUrl ? `<div class="logo"><img src="${logoUrl}" alt="Logo" onerror="this.style.display='none'"></div>` : ''}
       <div class="agency-info">
         <div class="agency-name">${agencyName}</div>
       </div>
