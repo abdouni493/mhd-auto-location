@@ -433,4 +433,17 @@ export class EmailService {
       };
     }
   }
+
+  /**
+   * Generate HTML for any document type
+   */
+  static async generateDocumentHTML(
+    reservation: ReservationDetails,
+    templateLang: 'fr' | 'ar',
+    documentType: 'contract' | 'devis' | 'recu' | 'engagement' | 'facture' | 'inspection'
+  ): Promise<string> {
+    // For now, all document types will use the same contract template
+    // This ensures consistent content across all document types
+    return this.generateContractHTML(reservation, templateLang);
+  }
 }

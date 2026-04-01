@@ -104,8 +104,8 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
         message: lang === 'fr' ? `Envoi du ${documentNames[documentType]}...` : `جاري إرسال ${documentNames[documentType]}...`,
       });
 
-      // Generate contract HTML
-      const htmlContent = await EmailService.generateContractHTML(reservation, templateLang);
+      // Generate document HTML based on selected document type
+      const htmlContent = await EmailService.generateDocumentHTML(reservation, templateLang, documentType);
 
       // Send email via Edge Function
       const result = await EmailService.sendContractEmail({
