@@ -118,6 +118,7 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
         senderEmail,
         htmlContent,
         templateLang,
+        documentType,
       });
 
       if (result.success) {

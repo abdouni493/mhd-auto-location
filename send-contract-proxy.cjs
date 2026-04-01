@@ -56,15 +56,16 @@ app.all('/functions/v1/send-contract-email', async (req, res) => {
     const payload = req.body;
 
     // Validate required fields
-    if (!payload.email || !payload.sender || !payload.htmlBase64) {
+    if (!payload.email || !payload.sender || !payload.pdfBase64) {
       console.log('❌ Missing required fields');
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: email, sender, or htmlBase64',
+        error: 'Missing required fields: email, sender, or pdfBase64',
       });
     }
 
     console.log(`📧 Processing email for: ${payload.email}`);
+    console.log(`📄 Document Type: ${payload.documentType}`);
     console.log(`👤 Language: ${payload.language}`);
 
     // BREVO EMAIL SERVICE INTEGRATION
@@ -74,12 +75,25 @@ app.all('/functions/v1/send-contract-email', async (req, res) => {
       throw new Error('BREVO_API_KEY not configured in environment variables');
     }
 
-    // Decode base64 HTML content
-    const htmlContent = Buffer.from(payload.htmlBase64, 'base64').toString('utf-8');
+    // Decode base64 PDF content
+    const pdfBuffer = Buffer.from(payload.pdfBase64, 'base64');
 
-    console.log('📤 Sending email via Brevo API...');
+    console.log('📤 Sending email via Brevo API with PDF attachment...');
 
-    // Send email using Brevo SMTP Send API
+    // Build document type label for email
+    const documentTypeLabels = {
+      contract: { fr: 'Contrat de Location', ar: 'عقد التأجير' },
+      inspection: { fr: 'Rapport d\'Inspection', ar: 'تقرير فحص المركبة' },
+      engagement: { fr: 'Lettre d\'Engagement', ar: 'رسالة الالتزام' },
+      recu: { fr: 'Reçu de Paiement', ar: 'إيصال الدفع' },
+      facture: { fr: 'Facture', ar: 'الفاتورة' },
+      devis: { fr: 'Devis', ar: 'عرض الأسعار' }
+    };
+
+    const docType = payload.documentType || 'contract';
+    const docLabel = documentTypeLabels[docType]?.[payload.language || 'fr'] || 'Document';
+
+    // Send email using Brevo SMTP Send API with attachment
     const emailResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
@@ -98,9 +112,31 @@ app.all('/functions/v1/send-contract-email', async (req, res) => {
         ],
         subject:
           payload.language === 'fr'
-            ? 'Votre Contrat de Location - AUTO LOCATION'
-            : 'عقد التأجير الخاص بك - AUTO LOCATION',
-        htmlContent: htmlContent,
+            ? `${docLabel} - AUTO LOCATION`
+            : `${docLabel} - AUTO LOCATION`,
+        htmlContent: `
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <h2 style="color: #2d7a4d; margin: 0;">${payload.language === 'fr' ? 'AUTO LOCATION' : 'أوتو لوكيشن'}</h2>
+    </div>
+    <p style="font-size: 14px;">
+      ${payload.language === 'fr' 
+        ? `Bonjour ${payload.clientName},<br><br>Veuillez trouver ci-joint votre ${docLabel.toLowerCase()} en format PDF.<br><br>Cordialement,<br>AUTO LOCATION`
+        : `مرحبا ${payload.clientName},<br><br>يرجى العثور على ${docLabel} الخاص بك في المرفق بصيغة PDF.<br><br>مع أطيب التحيات,<br>أوتو لوكيشن`
+      }
+    </p>
+  </div>
+</body>
+</html>
+        `,
+        attachment: [
+          {
+            content: payload.pdfBase64,
+            name: `${docType}_${payload.reservationId}.pdf`,
+          }
+        ],
       }),
     });
 
@@ -112,19 +148,20 @@ app.all('/functions/v1/send-contract-email', async (req, res) => {
 
     const emailData = await emailResponse.json();
 
-    console.log('✅ Email sent successfully via Brevo!');
+    console.log('✅ Email with PDF attachment sent successfully via Brevo!');
     console.log('📧 Message ID:', emailData.messageId);
 
     const response = {
       success: true,
-      message: 'Contract email sent successfully',
+      message: `${docLabel} PDF sent successfully`,
       details: {
         to: payload.email,
         from: payload.sender || 'noreply@autolocation.com',
         subject:
           payload.language === 'fr'
-            ? 'Votre Contrat de Location - AUTO LOCATION'
-            : 'عقد التأجير الخاص بك - AUTO LOCATION',
+            ? `${docLabel} - AUTO LOCATION`
+            : `${docLabel} - AUTO LOCATION`,
+        documentType: docType,
         language: payload.language,
         messageId: emailData.messageId,
       },

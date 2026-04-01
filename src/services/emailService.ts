@@ -1,10 +1,40 @@
 import { supabase } from '../supabase';
 import { ReservationDetails } from '../types';
+import html2pdf from 'html2pdf.js';
 
 /**
  * Email Service for handling contract email operations
  */
 export class EmailService {
+  /**
+   * Convert HTML to PDF Buffer
+   */
+  static async htmlToPdf(htmlContent: string, fileName: string = 'document'): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      try {
+        const element = document.createElement('div');
+        element.innerHTML = htmlContent;
+        
+        const options = {
+          margin: 0,
+          filename: `${fileName}.pdf`,
+          image: { type: 'jpeg' as const, quality: 0.98 },
+          html2canvas: { scale: 2 },
+          jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        const promise = (html2pdf() as any).set(options).from(element).outputPdf('blob');
+        promise.then((pdf: Blob) => {
+          resolve(pdf);
+        }).catch((error: any) => {
+          reject(error);
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
   /**
    * Generate contract HTML for email
    */
@@ -362,10 +392,7 @@ export class EmailService {
 
   /**
    * Send contract email via Supabase Edge Function
-   * 
-   * NOTE: During development, this uses a local mock proxy server.
-   * In production, ensure the Edge Function is deployed to Supabase and
-   * use: supabase.functions.invoke('send-contract-email', ...)
+   * Converts HTML template to PDF and sends as attachment
    */
   static async sendContractEmail(params: {
     clientEmail: string;
@@ -374,6 +401,7 @@ export class EmailService {
     senderEmail: string;
     htmlContent: string;
     templateLang: 'fr' | 'ar';
+    documentType?: string;
   }): Promise<{ success: boolean; message: string }> {
     try {
       // Validate and sanitize email addresses
@@ -389,9 +417,10 @@ export class EmailService {
         throw new Error(`Invalid sender email: ${senderEmail}`);
       }
 
-      // Convert HTML to base64
-      const htmlBlob = new Blob([params.htmlContent], { type: 'text/html' });
-      const base64Content = await this.blobToBase64(htmlBlob);
+      // Convert HTML to PDF
+      console.log('Converting HTML template to PDF...');
+      const pdfBlob = await this.htmlToPdf(params.htmlContent, `${params.documentType || 'document'}-${params.reservationId}`);
+      const base64Content = await this.blobToBase64(pdfBlob);
 
       // DEVELOPMENT: Use local mock proxy server on port 3002
       // PRODUCTION: Use Vercel API route
@@ -417,9 +446,10 @@ export class EmailService {
           email: clientEmail,
           clientName: params.clientName,
           reservationId: params.reservationId,
-          htmlBase64: base64Content,
+          pdfBase64: base64Content,
           sender: senderEmail,
           language: params.templateLang,
+          documentType: params.documentType || 'contract',
         }),
       });
 
@@ -436,13 +466,13 @@ export class EmailService {
 
       return {
         success: true,
-        message: 'Contract email sent successfully',
+        message: `${params.documentType || 'Contract'} PDF sent successfully`,
       };
     } catch (error: any) {
       console.error('Error sending contract email:', error);
       return {
         success: false,
-        message: error.message || 'Failed to send contract email',
+        message: error.message || `Failed to send ${params.documentType || 'contract'} email`,
       };
     }
   }
@@ -574,206 +604,49 @@ export class EmailService {
 <html dir="${dirAttr}" lang="${templateLang}">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${labels.title}</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: white;
-      color: #333;
-      line-height: 1.6;
-    }
-    
-    .container {
-      width: 210mm;
-      height: 297mm;
-      margin: 0 auto;
-      padding: 20px;
-      background: white;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 3px solid #2d7a4d;
-    }
-    
-    .logo {
-      font-weight: bold;
-      font-size: 18px;
-      color: #2d7a4d;
-    }
-    
-    .agency-name {
-      text-align: center;
-      font-weight: bold;
-      font-size: 16px;
-      color: #333;
-      margin-bottom: 10px;
-    }
-    
-    .title {
-      text-align: center;
-      font-size: 18px;
-      font-weight: bold;
-      color: #2d7a4d;
-      margin: 20px 0;
-      text-decoration: underline;
-    }
-    
-    .info-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      margin: 15px 0;
-    }
-    
-    .info-item {
-      padding: 10px;
-      background: #f5f5f5;
-      border-radius: 5px;
-    }
-    
-    .info-label {
-      font-weight: bold;
-      color: #2d7a4d;
-      font-size: 12px;
-      margin-bottom: 3px;
-    }
-    
-    .info-value {
-      font-size: 13px;
-      color: #333;
-    }
-    
-    .section-title {
-      font-weight: bold;
-      color: white;
-      background-color: #2d7a4d;
-      padding: 8px 12px;
-      margin: 15px 0 10px 0;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    
-    .category-title {
-      font-weight: bold;
-      color: #2d7a4d;
-      margin: 12px 0 8px 0;
-      padding-left: 10px;
-      border-left: 4px solid #2d7a4d;
-      font-size: 13px;
-    }
-    
-    .checklist-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 10px;
-      border-bottom: 1px solid #eee;
-      font-size: 13px;
-    }
-    
-    .item-name {
-      flex: 1;
-    }
-    
-    .item-status {
-      font-size: 16px;
-      font-weight: bold;
-      margin-left: 10px;
-    }
-    
-    .notes-section {
-      background: #f9f9f9;
-      padding: 15px;
-      border-radius: 5px;
-      margin: 15px 0;
-      border-left: 4px solid #2d7a4d;
-    }
-    
-    .footer {
-      margin-top: 20px;
-      font-size: 11px;
-      color: #999;
-      text-align: center;
-      padding-top: 15px;
-      border-top: 1px solid #ddd;
-    }
+    body{margin:0;padding:10px;font-family:Arial,sans-serif;color:#333;background:#fff}
+    .c{max-width:600px;margin:0 auto;padding:15px;background:#fff}
+    .h{text-align:center;border-bottom:3px solid #2d7a4d;padding:10px 0;margin-bottom:15px}
+    .t{font-size:16px;font-weight:bold;color:#2d7a4d;margin:10px 0;text-align:center}
+    .st{background:#2d7a4d;color:#fff;padding:6px 10px;margin:10px 0 5px;font-weight:bold;font-size:13px;border-radius:3px}
+    .ct{color:#2d7a4d;font-weight:bold;margin:8px 0 4px;padding-left:8px;border-left:3px solid #2d7a4d;font-size:12px}
+    .i{padding:8px;background:#f5f5f5;margin:5px 0;border-radius:3px;font-size:12px}
+    .il{color:#2d7a4d;font-weight:bold}
+    .iv{color:#555}
+    .ci{display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #eee;font-size:12px}
+    .cs{font-size:14px;font-weight:bold}
+    .n{background:#f9f9f9;padding:12px;margin:10px 0;border-left:3px solid #2d7a4d;font-size:12px}
+    .f{text-align:center;font-size:10px;color:#999;margin-top:15px;padding-top:10px;border-top:1px solid #ddd}
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="logo">MHD-AUTO</div>
-    <div class="agency-name">${agencyName}</div>
-    <div class="title">🔍 ${labels.title}</div>
-    
-    <div class="info-grid">
-      <div class="info-item">
-        <div class="info-label">📅 ${labels.date}</div>
-        <div class="info-value">${new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">🗂️ ${labels.reservationNo}</div>
-        <div class="info-value">#${reservation.id}</div>
-      </div>
+  <div class="c">
+    <div class="h">
+      <div style="font-weight:bold;color:#2d7a4d;font-size:16px">${agencyName}</div>
+      <div class="t">🔍 ${labels.title}</div>
     </div>
     
-    <div class="section-title">👤 ${labels.clientInfo}</div>
-    <div class="info-grid">
-      <div class="info-item">
-        <div class="info-label">${labels.fullName}</div>
-        <div class="info-value">${reservation.client.firstName} ${reservation.client.lastName}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">${labels.phone}</div>
-        <div class="info-value">${reservation.client.phone}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">${labels.email}</div>
-        <div class="info-value">${reservation.client.email}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">${labels.license}</div>
-        <div class="info-value">${reservation.client.licenseNumber || 'N/A'}</div>
-      </div>
+    <div style="background:#f5f5f5;padding:10px;border-radius:3px;margin:10px 0">
+      <div class="i"><span class="il">📅 ${labels.date}:</span> <span class="iv">${new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</span></div>
+      <div class="i"><span class="il">🗂️ ${labels.reservationNo}:</span> <span class="iv">#${reservation.id.substring(0,8)}</span></div>
     </div>
     
-    <div class="section-title">🚗 ${labels.vehicleInfo}</div>
-    <div class="info-grid">
-      <div class="info-item">
-        <div class="info-label">${labels.model}</div>
-        <div class="info-value">${reservation.car.brand} ${reservation.car.model}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">${labels.registration}</div>
-        <div class="info-value">${reservation.car.registration}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">${labels.vin}</div>
-        <div class="info-value">${reservation.car.vin || 'N/A'}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">${labels.color}</div>
-        <div class="info-value">${reservation.car.color || 'N/A'}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">${labels.mileage}</div>
-        <div class="info-value">${reservation.car.mileage || 0} km</div>
-      </div>
-    </div>
+    <div class="st">👤 ${labels.clientInfo}</div>
+    <div class="i"><span class="il">${labels.fullName}:</span> <span class="iv">${reservation.client.firstName} ${reservation.client.lastName}</span></div>
+    <div class="i"><span class="il">${labels.phone}:</span> <span class="iv">${reservation.client.phone}</span></div>
+    <div class="i"><span class="il">${labels.email}:</span> <span class="iv">${reservation.client.email}</span></div>
+    <div class="i"><span class="il">${labels.license}:</span> <span class="iv">${reservation.client.licenseNumber || 'N/A'}</span></div>
     
-    <div class="section-title">✅ ${labels.inspectionDetails}</div>
+    <div class="st">🚗 ${labels.vehicleInfo}</div>
+    <div class="i"><span class="il">${labels.model}:</span> <span class="iv">${reservation.car.brand} ${reservation.car.model}</span></div>
+    <div class="i"><span class="il">${labels.registration}:</span> <span class="iv">${reservation.car.registration}</span></div>
+    <div class="i"><span class="il">${labels.vin}:</span> <span class="iv">${reservation.car.vin || 'N/A'}</span></div>
+    <div class="i"><span class="il">${labels.color}:</span> <span class="iv">${reservation.car.color || 'N/A'}</span></div>
+    <div class="i"><span class="il">${labels.mileage}:</span> <span class="iv">${reservation.car.mileage || 0} km</span></div>
+    
+    <div class="st">✅ ${labels.inspectionDetails}</div>
     ${(() => {
       const categoryLabels = {
         security: templateLang === 'fr' ? '🛡️ Sécurité' : '🛡️ الأمان',
@@ -792,25 +665,17 @@ export class EmailService {
       
       return Object.entries(groupedItems).map(([category, items]: any) => {
         const categoryHeader = categoryLabels[category as keyof typeof categoryLabels];
-        const itemsHtml = (items as any[]).map((item: any) => `
-          <div class="checklist-item">
-            <span class="item-name">${item.name}</span>
-            <span class="item-status">${item.checked ? '✅' : '❌'}</span>
-          </div>
-        `).join('');
-        return `
-          <div class="category-title">${categoryHeader}</div>
-          ${itemsHtml}
-        `;
+        const itemsHtml = (items as any[]).map((item: any) => `<div class="ci"><span>${item.name}</span><span class="cs">${item.checked ? '✅' : '❌'}</span></div>`).join('');
+        return `<div class="ct">${categoryHeader}</div>${itemsHtml}`;
       }).join('');
     })()}
     
-    <div class="notes-section">
-      <div style="font-weight: bold; color: #2d7a4d; margin-bottom: 8px;">📝 ${labels.notes}</div>
-      <div style="font-size: 13px; color: #333; white-space: pre-wrap;">${inspectionData?.notes || ''}</div>
+    <div class="n">
+      <div style="font-weight:bold;margin-bottom:5px">📝 ${labels.notes}</div>
+      <div>${inspectionData?.notes || 'N/A'}</div>
     </div>
     
-    <div class="footer">
+    <div class="f">
       ${templateLang === 'fr' ? 'Rapport généré automatiquement' : 'تم إنشاء التقرير تلقائيًا'} - ${new Date().toLocaleString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}
     </div>
   </div>
