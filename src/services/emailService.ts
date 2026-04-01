@@ -582,21 +582,21 @@ export class EmailService {
       
       const labels = {
         title: templateLang === 'fr' ? 'RAPPORT D\'INSPECTION' : 'تقرير فحص المركبة',
-        date: templateLang === 'fr' ? 'التاريخ' : 'التاريخ',
-        reservationNo: templateLang === 'fr' ? 'رقم الحجز' : 'رقم الحجز',
-        registration: templateLang === 'fr' ? 'التسجيل' : 'التسجيل',
-        clientInfo: templateLang === 'fr' ? 'معلومات العميل' : 'معلومات العميل',
-        fullName: templateLang === 'fr' ? 'الاسم الكامل' : 'الاسم الكامل',
-        phone: templateLang === 'fr' ? 'الهاتف' : 'الهاتف',
-        email: templateLang === 'fr' ? 'البريد الإلكتروني' : 'البريد الإلكتروني',
-        license: templateLang === 'fr' ? 'رقم الرخصة' : 'رقم الرخصة',
-        vehicleInfo: templateLang === 'fr' ? 'معلومات المركبة' : 'معلومات المركبة',
-        model: templateLang === 'fr' ? 'الطراز' : 'الطراز',
-        vin: templateLang === 'fr' ? 'رقم الهيكل' : 'رقم الهيكل',
-        color: templateLang === 'fr' ? 'اللون' : 'اللون',
-        mileage: templateLang === 'fr' ? 'الكيلومترات' : 'الكيلومترات',
-        inspectionDetails: templateLang === 'fr' ? 'تفاصيل الفحص' : 'تفاصيل الفحص',
-        notes: templateLang === 'fr' ? 'ملاحظات' : 'ملاحظات',
+        date: templateLang === 'fr' ? 'Date' : 'التاريخ',
+        reservationNo: templateLang === 'fr' ? 'N° de Réservation' : 'رقم الحجز',
+        registration: templateLang === 'fr' ? 'Immatriculation' : 'التسجيل',
+        clientInfo: templateLang === 'fr' ? 'Informations Client' : 'معلومات العميل',
+        fullName: templateLang === 'fr' ? 'Nom Complet' : 'الاسم الكامل',
+        phone: templateLang === 'fr' ? 'Téléphone' : 'الهاتف',
+        email: templateLang === 'fr' ? 'Email' : 'البريد الإلكتروني',
+        license: templateLang === 'fr' ? 'Permis de Conduire' : 'رقم الرخصة',
+        vehicleInfo: templateLang === 'fr' ? 'Informations Véhicule' : 'معلومات المركبة',
+        model: templateLang === 'fr' ? 'Modèle' : 'الطراز',
+        vin: templateLang === 'fr' ? 'VIN' : 'رقم الهيكل',
+        color: templateLang === 'fr' ? 'Couleur' : 'اللون',
+        mileage: templateLang === 'fr' ? 'Kilométrage' : 'الكيلومترات',
+        inspectionDetails: templateLang === 'fr' ? 'Détails Inspection' : 'تفاصيل الفحص',
+        notes: templateLang === 'fr' ? 'Notes' : 'ملاحظات',
       };
 
       const html = `
@@ -606,77 +606,223 @@ export class EmailService {
   <meta charset="UTF-8">
   <title>${labels.title}</title>
   <style>
-    body{margin:0;padding:10px;font-family:Arial,sans-serif;color:#333;background:#fff}
-    .c{max-width:600px;margin:0 auto;padding:15px;background:#fff}
-    .h{text-align:center;border-bottom:3px solid #2d7a4d;padding:10px 0;margin-bottom:15px}
-    .t{font-size:16px;font-weight:bold;color:#2d7a4d;margin:10px 0;text-align:center}
-    .st{background:#2d7a4d;color:#fff;padding:6px 10px;margin:10px 0 5px;font-weight:bold;font-size:13px;border-radius:3px}
-    .ct{color:#2d7a4d;font-weight:bold;margin:8px 0 4px;padding-left:8px;border-left:3px solid #2d7a4d;font-size:12px}
-    .i{padding:8px;background:#f5f5f5;margin:5px 0;border-radius:3px;font-size:12px}
-    .il{color:#2d7a4d;font-weight:bold}
-    .iv{color:#555}
-    .ci{display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #eee;font-size:12px}
-    .cs{font-size:14px;font-weight:bold}
-    .n{background:#f9f9f9;padding:12px;margin:10px 0;border-left:3px solid #2d7a4d;font-size:12px}
-    .f{text-align:center;font-size:10px;color:#999;margin-top:15px;padding-top:10px;border-top:1px solid #ddd}
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; background: white; line-height: 1.5; }
+    .page { page-break-after: always; }
+    .last-page { page-break-after: avoid; }
+    
+    .container { width: 100%; max-width: 210mm; margin: 0 auto; padding: 15mm; background: white; }
+    
+    /* Header Styles */
+    .header { 
+      text-align: center; 
+      border-bottom: 3px solid #2d7a4d;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+      page-break-after: avoid;
+    }
+    .agency-name { font-size: 16px; font-weight: bold; color: #2d7a4d; margin-bottom: 5px; }
+    .report-title { font-size: 18px; font-weight: bold; color: #2d7a4d; margin: 10px 0; }
+    .report-date { font-size: 11px; color: #666; }
+    
+    /* Section Styles */
+    .section { margin-bottom: 15px; page-break-inside: avoid; }
+    .section-header { 
+      background-color: #2d7a4d;
+      color: white;
+      padding: 10px 12px;
+      font-weight: bold;
+      font-size: 13px;
+      margin-bottom: 8px;
+      page-break-after: avoid;
+    }
+    
+    /* Info Grid */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .info-row { display: grid; grid-template-columns: 40% 60%; gap: 10px; padding: 6px 8px; background: #f9f9f9; border-radius: 3px; }
+    .info-label { font-weight: bold; color: #2d7a4d; font-size: 12px; }
+    .info-value { color: #555; font-size: 12px; }
+    
+    /* Checklist Styles */
+    .category-section { margin-bottom: 12px; page-break-inside: avoid; }
+    .category-title { 
+      font-weight: bold;
+      color: #2d7a4d;
+      padding: 8px 10px;
+      margin-bottom: 5px;
+      border-left: 3px solid #2d7a4d;
+      background: #f5f5f5;
+      font-size: 12px;
+    }
+    
+    .checklist-items { margin-left: 10px; }
+    .checklist-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+      font-size: 12px;
+    }
+    .item-name { flex: 1; color: #333; }
+    .item-status { 
+      font-weight: bold; 
+      font-size: 14px;
+      min-width: 20px;
+      text-align: right;
+    }
+    
+    /* Notes Section */
+    .notes-section {
+      background: #f9f9f9;
+      padding: 12px;
+      border-left: 3px solid #2d7a4d;
+      margin-top: 15px;
+      page-break-inside: avoid;
+    }
+    .notes-label { font-weight: bold; color: #2d7a4d; margin-bottom: 6px; font-size: 12px; }
+    .notes-content { color: #555; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; }
+    
+    /* Footer */
+    .footer { 
+      margin-top: 20px;
+      padding-top: 10px;
+      border-top: 1px solid #ddd;
+      text-align: center;
+      font-size: 10px;
+      color: #999;
+      page-break-inside: avoid;
+    }
+    
+    @media print {
+      body { margin: 0; padding: 0; }
+      .container { padding: 10mm; }
+      .page { page-break-after: always; }
+      .last-page { page-break-after: avoid; }
+    }
   </style>
 </head>
 <body>
-  <div class="c">
-    <div class="h">
-      <div style="font-weight:bold;color:#2d7a4d;font-size:16px">${agencyName}</div>
-      <div class="t">🔍 ${labels.title}</div>
+  <div class="container">
+    <div class="header">
+      <div class="agency-name">${agencyName}</div>
+      <div class="report-title">🔍 ${labels.title}</div>
+      <div class="report-date">${new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</div>
     </div>
     
-    <div style="background:#f5f5f5;padding:10px;border-radius:3px;margin:10px 0">
-      <div class="i"><span class="il">📅 ${labels.date}:</span> <span class="iv">${new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</span></div>
-      <div class="i"><span class="il">🗂️ ${labels.reservationNo}:</span> <span class="iv">#${reservation.id.substring(0,8)}</span></div>
+    <!-- Reservation Info Section -->
+    <div class="section">
+      <div class="section-header">📋 ${templateLang === 'fr' ? 'Informations Réservation' : 'معلومات الحجز'}</div>
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="info-label">${labels.date}</span>
+          <span class="info-value">${new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.reservationNo}</span>
+          <span class="info-value">#${reservation.id.substring(0, 8).toUpperCase()}</span>
+        </div>
+      </div>
     </div>
     
-    <div class="st">👤 ${labels.clientInfo}</div>
-    <div class="i"><span class="il">${labels.fullName}:</span> <span class="iv">${reservation.client.firstName} ${reservation.client.lastName}</span></div>
-    <div class="i"><span class="il">${labels.phone}:</span> <span class="iv">${reservation.client.phone}</span></div>
-    <div class="i"><span class="il">${labels.email}:</span> <span class="iv">${reservation.client.email}</span></div>
-    <div class="i"><span class="il">${labels.license}:</span> <span class="iv">${reservation.client.licenseNumber || 'N/A'}</span></div>
-    
-    <div class="st">🚗 ${labels.vehicleInfo}</div>
-    <div class="i"><span class="il">${labels.model}:</span> <span class="iv">${reservation.car.brand} ${reservation.car.model}</span></div>
-    <div class="i"><span class="il">${labels.registration}:</span> <span class="iv">${reservation.car.registration}</span></div>
-    <div class="i"><span class="il">${labels.vin}:</span> <span class="iv">${reservation.car.vin || 'N/A'}</span></div>
-    <div class="i"><span class="il">${labels.color}:</span> <span class="iv">${reservation.car.color || 'N/A'}</span></div>
-    <div class="i"><span class="il">${labels.mileage}:</span> <span class="iv">${reservation.car.mileage || 0} km</span></div>
-    
-    <div class="st">✅ ${labels.inspectionDetails}</div>
-    ${(() => {
-      const categoryLabels = {
-        security: templateLang === 'fr' ? '🛡️ Sécurité' : '🛡️ الأمان',
-        equipment: templateLang === 'fr' ? '🔧 Équipements' : '🔧 المعدات',
-        comfort: templateLang === 'fr' ? '✨ Confort & Propreté' : '✨ الراحة والنظافة',
-        cleanliness: templateLang === 'fr' ? '🧹 Nettoyage' : '🧹 التنظيف'
-      };
-      
-      const groupedItems: any = {};
-      (inspectionData?.inspectionItems || []).forEach((item: any) => {
-        if (!groupedItems[item.category]) {
-          groupedItems[item.category] = [];
-        }
-        groupedItems[item.category].push(item);
-      });
-      
-      return Object.entries(groupedItems).map(([category, items]: any) => {
-        const categoryHeader = categoryLabels[category as keyof typeof categoryLabels];
-        const itemsHtml = (items as any[]).map((item: any) => `<div class="ci"><span>${item.name}</span><span class="cs">${item.checked ? '✅' : '❌'}</span></div>`).join('');
-        return `<div class="ct">${categoryHeader}</div>${itemsHtml}`;
-      }).join('');
-    })()}
-    
-    <div class="n">
-      <div style="font-weight:bold;margin-bottom:5px">📝 ${labels.notes}</div>
-      <div>${inspectionData?.notes || 'N/A'}</div>
+    <!-- Client Info Section -->
+    <div class="section">
+      <div class="section-header">👤 ${labels.clientInfo}</div>
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="info-label">${labels.fullName}</span>
+          <span class="info-value">${reservation.client.firstName} ${reservation.client.lastName}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.phone}</span>
+          <span class="info-value">${reservation.client.phone}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.email}</span>
+          <span class="info-value">${reservation.client.email}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.license}</span>
+          <span class="info-value">${reservation.client.licenseNumber || 'N/A'}</span>
+        </div>
+      </div>
     </div>
     
-    <div class="f">
-      ${templateLang === 'fr' ? 'Rapport généré automatiquement' : 'تم إنشاء التقرير تلقائيًا'} - ${new Date().toLocaleString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}
+    <!-- Vehicle Info Section -->
+    <div class="section">
+      <div class="section-header">🚗 ${labels.vehicleInfo}</div>
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="info-label">${labels.model}</span>
+          <span class="info-value">${reservation.car.brand} ${reservation.car.model}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.registration}</span>
+          <span class="info-value">${reservation.car.registration}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.vin}</span>
+          <span class="info-value">${reservation.car.vin || 'N/A'}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.color}</span>
+          <span class="info-value">${reservation.car.color || 'N/A'}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">${labels.mileage}</span>
+          <span class="info-value">${reservation.car.mileage || 0} km</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Inspection Checklist Section -->
+    <div class="section">
+      <div class="section-header">✅ ${labels.inspectionDetails}</div>
+      ${(() => {
+        const categoryLabels = {
+          security: templateLang === 'fr' ? '🛡️ Sécurité' : '🛡️ الأمان',
+          equipment: templateLang === 'fr' ? '🔧 Équipements' : '🔧 المعدات',
+          comfort: templateLang === 'fr' ? '✨ Confort & Propreté' : '✨ الراحة والنظافة',
+          cleanliness: templateLang === 'fr' ? '🧹 Nettoyage' : '🧹 التنظيف'
+        };
+        
+        const groupedItems: any = {};
+        (inspectionData?.inspectionItems || []).forEach((item: any) => {
+          if (!groupedItems[item.category]) {
+            groupedItems[item.category] = [];
+          }
+          groupedItems[item.category].push(item);
+        });
+        
+        return Object.entries(groupedItems).map(([category, items]: any) => {
+          const categoryHeader = categoryLabels[category as keyof typeof categoryLabels];
+          const itemsHtml = (items as any[]).map((item: any) => `
+            <div class="checklist-item">
+              <span class="item-name">${item.name}</span>
+              <span class="item-status">${item.checked ? '✅' : '❌'}</span>
+            </div>
+          `).join('');
+          return `
+            <div class="category-section">
+              <div class="category-title">${categoryHeader}</div>
+              <div class="checklist-items">
+                ${itemsHtml}
+              </div>
+            </div>
+          `;
+        }).join('');
+      })()}
+    </div>
+    
+    <!-- Notes Section -->
+    <div class="notes-section last-page">
+      <div class="notes-label">📝 ${labels.notes}</div>
+      <div class="notes-content">${inspectionData?.notes || templateLang === 'fr' ? 'Aucune note' : 'بدون ملاحظات'}</div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+      <p>${templateLang === 'fr' ? 'Rapport généré automatiquement - ' : 'تم إنشاء التقرير تلقائيًا - '}${new Date().toLocaleString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</p>
+      <p style="margin-top: 5px;">${agencyName}</p>
     </div>
   </div>
 </body>
