@@ -15,9 +15,11 @@ import { supabase } from '../supabase';
 
 interface PlannerPageProps {
   lang: Language;
+  isAuthLoading?: boolean;
+  user?: any;
 }
 
-export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
+export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
   const [currentView, setCurrentView] = useState<'list' | 'calendar' | 'create' | 'details' | 'edit'>('list');
   const [displayMode, setDisplayMode] = useState<'grid' | 'calendar'>('grid');
   const [selectedReservation, setSelectedReservation] = useState<ReservationDetails | null>(null);
@@ -49,6 +51,10 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
 
   // Load reservations and agencies from database on component mount
   useEffect(() => {
+    // Skip loading if authentication is still in progress or user not available
+    if (isAuthLoading) return;
+    if (!user) return;
+
     const loadReservations = async () => {
       try {
         setIsLoading(true);
@@ -109,7 +115,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang }) => {
 
     loadReservations();
     loadAgencies();
-  }, []);
+  }, [user, isAuthLoading]);
 
   const updateReservation = async (updatedReservation: ReservationDetails) => {
     try {
@@ -1870,7 +1876,7 @@ const PersonalizationModal: React.FC<{
     try {
       const { data: settings } = await supabase
         .from('website_settings')
-        .select('logo, name')
+        .select('logo, name, address, phone, phone_number_2, bank_number')
         .limit(1)
         .single();
       if (settings) {
@@ -1886,7 +1892,7 @@ const PersonalizationModal: React.FC<{
     const textDir = isFrench ? 'ltr' : 'rtl';
     
     const labels = {
-      contractTitle: isFrench ? 'Contrat de Location' : 'عقد التأجير',
+      contractTitle: isFrench ? 'Contrat de Location' : 'عقد كراء السيارة',
       contractDate: isFrench ? 'Date du Contrat' : 'تاريخ العقد',
       contractNumber: isFrench ? 'N° de Contrat' : 'رقم العقد',
       client: isFrench ? 'Client' : 'العميل',
@@ -1901,6 +1907,9 @@ const PersonalizationModal: React.FC<{
       birthDate: isFrench ? 'Date de Naissance' : 'تاريخ الميلاد',
       birthPlace: isFrench ? 'Lieu de Naissance' : 'مكان الميلاد',
       licenseNumber: isFrench ? 'Numéro de Permis' : 'رقم الرخصة',
+      licenseDeliveryDate: isFrench ? 'Délivrance Permis' : 'تاريخ إصدار الرخصة',
+      licenseExpirationDate: isFrench ? 'Expiration Permis' : 'تاريخ انتهاء الرخصة',
+      licenseDeliveryPlace: isFrench ? 'Lieu Délivrance Permis' : 'مكان إصدار الرخصة',
       vehicleInfo: isFrench ? 'Informations du Véhicule' : 'معلومات المركبة',
       model: isFrench ? 'Modèle' : 'الموديل',
       registration: isFrench ? 'Immatriculation' : 'التسجيل',
@@ -1926,8 +1935,8 @@ const PersonalizationModal: React.FC<{
       : ['رخصة قيادة سارية', 'تأمين شامل', 'ضمان الإيداع', 'خزان ممتلئ', 'حالة المركبة مقبولة', 'لا توجد أضرار إضافية'];
 
     const hasSecondConductor = !!secondConductor;
-    const baseFontSize = hasSecondConductor ? 19 : 20;
-    const scaleFactor = hasSecondConductor ? 0.95 : 1;
+    const baseFontSize = hasSecondConductor ? 17 : 18;
+    const scaleFactor = 1;
 
     const html = `
     <!DOCTYPE html>
@@ -1950,23 +1959,26 @@ const PersonalizationModal: React.FC<{
         .page {
           width: 210mm;
           height: 297mm;
-          padding: ${hasSecondConductor ? '3mm' : '5mm'};
+          padding: ${hasSecondConductor ? '2mm' : '2.5mm'};
           margin: 0 auto;
           background: white;
           display: flex;
           flex-direction: column;
+          border: 2px solid #d1d5db;
+          border-radius: 4px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         .header {
           border-bottom: 3px solid #1a3a8a;
-          padding-bottom: ${hasSecondConductor ? '5px' : '7px'};
-          margin-bottom: ${hasSecondConductor ? '8px' : '10px'};
+          padding-bottom: ${hasSecondConductor ? '2px' : '3px'};
+          margin-bottom: ${hasSecondConductor ? '3px' : '4px'};
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 8px;
         }
         .logo {
-          width: ${hasSecondConductor ? '45px' : '55px'};
-          height: ${hasSecondConductor ? '45px' : '55px'};
+          width: ${hasSecondConductor ? '30px' : '35px'};
+          height: ${hasSecondConductor ? '30px' : '35px'};
           object-fit: contain;
           flex-shrink: 0;
         }
@@ -1974,29 +1986,50 @@ const PersonalizationModal: React.FC<{
           flex: 1;
         }
         .agency-name {
-          font-size: ${hasSecondConductor ? '28px' : '36px'};
+          font-size: ${hasSecondConductor ? '18px' : '20px'};
           font-weight: bold;
           color: #1a3a8a;
           text-align: center;
-          margin: 0;
+          margin: 0 0 2px 0;
         }
-        .contract-title {
-          font-size: ${hasSecondConductor ? '18px' : '23px'};
+        .agency-contact {
+          font-size: ${hasSecondConductor ? '7px' : '8px'};
           color: #555;
           text-align: center;
-          margin-top: 2px;
+          line-height: 1.2;
+          margin-bottom: 1px;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 6px;
+          align-items: center;
+        }
+        .agency-contact-item {
+          margin: 0;
+          white-space: nowrap;
+        }
+        .agency-contact-label {
+          font-weight: 600;
+          color: #1a3a8a;
+          display: none;
+        }
+        .contract-title {
+          font-size: ${hasSecondConductor ? '12px' : '14px'};
+          color: #555;
+          text-align: center;
+          margin-top: 1px;
         }
         .header-info {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
-          gap: ${hasSecondConductor ? '5px' : '8px'};
-          margin-bottom: ${hasSecondConductor ? '8px' : '10px'};
+          gap: ${hasSecondConductor ? '2px' : '3px'};
+          margin-bottom: ${hasSecondConductor ? '3px' : '4px'};
         }
         .info-box {
-          padding: ${hasSecondConductor ? '6px 7px' : '8px 9px'};
+          padding: ${hasSecondConductor ? '3px 4px' : '4px 5px'};
           border-radius: 3px;
-          font-size: ${hasSecondConductor ? '17px' : '19px'};
-          line-height: 1.4;
+          font-size: ${hasSecondConductor ? '11px' : '12px'};
+          line-height: 1.3;
         }
         .info-box.blue {
           background-color: #dbeafe;
@@ -2013,122 +2046,145 @@ const PersonalizationModal: React.FC<{
         .info-label {
           font-weight: 600;
           color: #222;
-          margin-bottom: 2px;
-          font-size: ${hasSecondConductor ? '16px' : '18px'};
+          margin-bottom: 1px;
+          font-size: ${hasSecondConductor ? '10px' : '11px'};
         }
         .info-value {
           color: #333;
-          font-size: ${hasSecondConductor ? '17px' : '19px'};
+          font-size: ${hasSecondConductor ? '11px' : '12px'};
         }
         .section {
-          margin-bottom: ${hasSecondConductor ? '7px' : '8px'};
+          margin-bottom: ${hasSecondConductor ? '3px' : '4px'};
           page-break-inside: avoid;
+          padding: ${hasSecondConductor ? '3px 4px' : '4px 5px'};
+          border-radius: 4px;
+          border: 1px solid #e5e7eb;
+        }
+        .section.driver-section {
+          background-color: #f0f9ff;
+          border: 1px solid #bfdbfe;
+        }
+        .section.vehicle-section {
+          background-color: #f0fdf4;
+          border: 1px solid #bbf7d0;
+        }
+        .section.pricing-section {
+          background-color: #fffbeb;
+          border: 1px solid #fde68a;
+        }
+        .section.conditions-section {
+          background-color: #faf5ff;
+          border: 1px solid #e9d5ff;
+        }
+        .section.inspection-section {
+          background-color: #faf5ff;
+          border: 1px solid #e9d5ff;
         }
         .section-title {
-          font-size: ${hasSecondConductor ? '18px' : '20px'};
+          font-size: ${hasSecondConductor ? '11px' : '12px'};
           font-weight: 700;
           background-color: #f0f1f3;
-          padding: ${hasSecondConductor ? '4px 5px' : '6px 7px'};
+          padding: ${hasSecondConductor ? '2px 3px' : '3px 4px'};
           border-radius: 2px;
-          margin-bottom: ${hasSecondConductor ? '4px' : '6px'};
+          margin-bottom: ${hasSecondConductor ? '2px' : '3px'};
           border-left: 4px solid #2563eb;
           color: #1a3a8a;
         }
         .section-content {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${hasSecondConductor ? '10px 8px' : '15px 12px'};
-          font-size: ${hasSecondConductor ? '17px' : '19px'};
+          gap: ${hasSecondConductor ? '6px 5px' : '9px 7px'};
+          font-size: ${hasSecondConductor ? '14px' : '15px'};
         }
         .section-content.full {
           grid-template-columns: 1fr 1fr 1fr;
         }
         .field {
-          padding: ${hasSecondConductor ? '3px 0' : '5px 0'};
+          padding: ${hasSecondConductor ? '1px 0' : '2px 0'};
           border-bottom: 0.5px solid #ddd;
         }
         .field-label {
           font-weight: 600;
           color: #1a3a8a;
-          font-size: ${hasSecondConductor ? '16px' : '18px'};
+          font-size: ${hasSecondConductor ? '13px' : '14px'};
         }
         .field-value {
           color: #444;
-          margin-top: 1px;
-          font-size: ${hasSecondConductor ? '17px' : '19px'};
+          margin-top: 0px;
+          font-size: ${hasSecondConductor ? '14px' : '15px'};
         }
         .pricing-table {
           width: 100%;
-          margin-bottom: 10px;
-          font-size: 19px;
+          margin-bottom: 4px;
+          font-size: 15px;
           border-collapse: collapse;
         }
         .pricing-row {
           display: flex;
           justify-content: space-between;
-          padding: ${hasSecondConductor ? '3px 0' : '5px 0'};
+          padding: ${hasSecondConductor ? '1px 0' : '2px 0'};
           border-bottom: 0.5px solid #ddd;
         }
         .pricing-row.total {
           border-top: 1px solid #222;
           font-weight: 600;
-          margin-top: 3px;
-          padding-top: ${hasSecondConductor ? '3px' : '5px'};
+          margin-top: 1px;
+          padding-top: ${hasSecondConductor ? '1px' : '2px'};
         }
         .pricing-row.grand-total {
-          font-size: ${hasSecondConductor ? '18px' : '20px'};
+          font-size: ${hasSecondConductor ? '13px' : '14px'};
           font-weight: 700;
           color: #1a3a8a;
           border-top: 2px solid #1a3a8a;
-          padding-top: ${hasSecondConductor ? '3px' : '5px'};
+          padding-top: ${hasSecondConductor ? '1px' : '2px'};
         }
         .conditions-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${hasSecondConductor ? '6px 8px' : '10px 12px'};
-          font-size: ${hasSecondConductor ? '17px' : '19px'};
-          margin-bottom: ${hasSecondConductor ? '8px' : '10px'};
+          gap: ${hasSecondConductor ? '4px 5px' : '5px 6px'};
+          font-size: ${hasSecondConductor ? '13px' : '14px'};
+          margin-bottom: ${hasSecondConductor ? '3px' : '4px'};
         }
         .condition-item {
           display: flex;
           align-items: center;
-          gap: 7px;
-          line-height: ${hasSecondConductor ? '1.28' : '1.3'};
+          gap: 3px;
+          line-height: ${hasSecondConductor ? '1.2' : '1.25'};
         }
         .checkbox {
-          width: 16px;
-          height: 16px;
+          width: 12px;
+          height: 12px;
           border: 1px solid #999;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 12px;
+          font-size: 8px;
           flex-shrink: 0;
         }
         .signatures {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${hasSecondConductor ? '20px' : '32px'};
+          gap: ${hasSecondConductor ? '13px' : '20px'};
           margin-top: auto;
-          font-size: ${hasSecondConductor ? '17px' : '19px'};
-          padding-top: ${hasSecondConductor ? '8px' : '12px'};
+          font-size: ${hasSecondConductor ? '13px' : '14px'};
+          padding-top: ${hasSecondConductor ? '3px' : '4px'};
         }
         .signature-block {
           text-align: center;
         }
         .signature-line {
           border-top: 1px solid #333;
-          margin-bottom: ${hasSecondConductor ? '3px' : '5px'};
-          height: ${hasSecondConductor ? '35px' : '45px'};
+          margin-bottom: ${hasSecondConductor ? '1px' : '2px'};
+          height: ${hasSecondConductor ? '20px' : '25px'};
         }
         .signature-label {
           font-weight: 600;
-          font-size: ${hasSecondConductor ? '17px' : '19px'};
+          font-size: ${hasSecondConductor ? '12px' : '13px'};
         }
         .date-sig {
-          font-size: ${hasSecondConductor ? '16px' : '18px'};
+          font-size: ${hasSecondConductor ? '9px' : '10px'};
           color: #666;
-          margin-top: 2px;
+          margin-top: 1px;
         }
         @media print {
           body { 
@@ -2148,6 +2204,12 @@ const PersonalizationModal: React.FC<{
           ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
           <div class="header-text">
             <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
+            <div class="agency-contact">
+              ${agencySettings?.address ? `<span class="agency-contact-item">${agencySettings.address}</span>` : ''}
+              ${agencySettings?.phone ? `<span class="agency-contact-item">📞 ${agencySettings.phone}</span>` : ''}
+              ${agencySettings?.phone_number_2 ? `<span class="agency-contact-item">📱 ${agencySettings.phone_number_2}</span>` : ''}
+              ${agencySettings?.bank_number ? `<span class="agency-contact-item">🏦 ${agencySettings.bank_number}</span>` : ''}
+            </div>
             <p class="contract-title">${labels.contractTitle}</p>
           </div>
         </div>
@@ -2190,7 +2252,7 @@ const PersonalizationModal: React.FC<{
         <!-- Driver & Vehicle Info (2 columns) -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <!-- Driver Info -->
-          <div class="section">
+          <div class="section driver-section">
             <div class="section-title">👤 ${labels.driverInfo}</div>
             <div class="section-content">
               <div class="field">
@@ -2200,6 +2262,18 @@ const PersonalizationModal: React.FC<{
               <div class="field">
                 <div class="field-label">${labels.licenseNumber}</div>
                 <div class="field-value">${reservation?.client?.licenseNumber || 'N/A'}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">📅 ${labels.licenseDeliveryDate}</div>
+                <div class="field-value">${reservation?.client?.licenseDeliveryDate ? new Date(reservation.client.licenseDeliveryDate).toLocaleDateString('en-US') : 'mm/dd/yyyy'}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">⏱️ ${labels.licenseExpirationDate}</div>
+                <div class="field-value">${reservation?.client?.licenseExpirationDate ? new Date(reservation.client.licenseExpirationDate).toLocaleDateString('en-US') : 'mm/dd/yyyy'}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">📍 ${labels.licenseDeliveryPlace}</div>
+                <div class="field-value">${reservation?.client?.licenseDeliveryPlace || ''}</div>
               </div>
               <div class="field">
                 <div class="field-label">${labels.birthDate}</div>
@@ -2213,7 +2287,7 @@ const PersonalizationModal: React.FC<{
           </div>
 
           <!-- Vehicle Info -->
-          <div class="section">
+          <div class="section vehicle-section">
             <div class="section-title">🚗 ${labels.vehicleInfo}</div>
             <div class="section-content">
               <div class="field">
@@ -2276,7 +2350,7 @@ const PersonalizationModal: React.FC<{
         <!-- Pricing & Conditions (2 columns) -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <!-- Pricing -->
-          <div class="section">
+          <div class="section pricing-section">
             <div class="section-title">💰 ${labels.pricing}</div>
             <div class="pricing-table">
               <div class="pricing-row">
@@ -2305,7 +2379,7 @@ const PersonalizationModal: React.FC<{
           </div>
 
           <!-- Conditions -->
-          <div class="section">
+          <div class="section conditions-section">
             <div class="section-title">✓ ${labels.conditions}</div>
             <div class="conditions-grid">
               ${conditionsList.map(condition => `
@@ -2318,8 +2392,63 @@ const PersonalizationModal: React.FC<{
           </div>
         </div>
 
+        <!-- Vehicle Inspection Info -->
+        <div class="section inspection-section">
+          <div class="section-title">🔍 ${isFrench ? 'État du Véhicule à la Prise en Charge' : 'حالة المركبة عند الاستلام'}</div>
+          <div class="section-content full">
+            <div class="field">
+              <div class="field-label">📏 ${isFrench ? 'Kilométrage de Départ' : 'كيلومتراج البداية'}</div>
+              <div class="field-value">${reservation?.departureInspection?.mileage || 0} km</div>
+            </div>
+            <div class="field">
+              <div class="field-label">⛽ ${isFrench ? 'Niveau de Carburant' : 'مستوى الوقود'}</div>
+              <div class="field-value">${
+                (() => {
+                  const fuelLevel = reservation?.departureInspection?.fuelLevel?.toLowerCase() || '';
+                  const fuelMap = {
+                    'empty': '0',
+                    'vide': '0',
+                    'quarter': '1/4',
+                    'quart': '1/4',
+                    '1/4': '1/4',
+                    'half': '1/2',
+                    'moitié': '1/2',
+                    'demi': '1/2',
+                    '1/2': '1/2',
+                    'three-quarter': '3/4',
+                    'trois-quarts': '3/4',
+                    '3/4': '3/4',
+                    'full': 'Plein',
+                    'plein': 'Plein',
+                    'complet': 'Plein'
+                  };
+                  return fuelMap[fuelLevel] || reservation?.departureInspection?.fuelLevel || 'Plein';
+                })()
+              }</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Special Conditions (Red Text) -->
+        <div style="background-color: #fef2f2; padding: 6px; border: 1px solid #fecaca; border-radius: 4px; margin-bottom: 0px; font-size: 11px; line-height: 1.45;">
+          <div style="color: #dc2626; font-weight: 600; margin-bottom: 2px;">${isFrench ? 'CONDITIONS SPÉCIALES' : 'الشروط الخاصة'}</div>
+          <div style="color: #dc2626; direction: ${textDir}; text-align: ${isFrench ? 'left' : 'right'};">
+            ${isFrench ? `
+              <div style="margin: 1px 0;">1- Tout renouvellement doit être confirmé par le client 48 heures avant la date d'expiration du contrat de location</div>
+              <div style="margin: 1px 0;">2- Interdiction de conduire le véhicule avec le carburant de réserve</div>
+              <div style="margin: 1px 0;">3- Le renouvellement du contrat de location est la responsabilité du client à partir de la date d'expiration du contrat</div>
+              <div style="margin: 1px 0;">4- La non-restitution du contrat de location à la date convenue entraîne une facturation complète du tarif quotidien</div>
+            ` : `
+              <div style="margin: 1px 0;">1- كل تمديد يجب على الزبون اطمئان قبل 48 ساعة من تاريخ انتهاء صلاحيات عقد الكراء</div>
+              <div style="margin: 1px 0;">2- عدم قيادة السيارة بوقود احتياطي (réserve)</div>
+              <div style="margin: 1px 0;">3- تجديد عقد الكراء يكون من تاريخ انتهاء العقد من مسؤولية الزبون</div>
+              <div style="margin: 1px 0;">4- عدم تسليم عقد الكراء على الزبون ينتج مبلغ اليومي كاملا</div>
+            `}
+          </div>
+        </div>
+
         <!-- Signatures -->
-        <div class="signatures">
+        <div class="signatures" style="margin-top: 0px; padding-top: 4px;">
           <div class="signature-block">
             <div class="signature-line"></div>
             <div class="signature-label">${labels.clientSignature}</div>
@@ -2751,31 +2880,36 @@ const PersonalizationModal: React.FC<{
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          font-family: 'Segoe UI', Arial, sans-serif;
           line-height: 1.5;
-          color: #1a1a1a;
-          background: #f5f5f5;
+          color: #222;
+          background: white;
           direction: ${textDir};
+          font-size: 16px;
         }
         .page {
           width: 210mm;
           height: 297mm;
-          padding: 10mm;
-          margin: 10px auto;
+          padding: 2.5mm;
+          margin: 0 auto;
           background: white;
-          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+          display: flex;
+          flex-direction: column;
+          border: 2px solid #d1d5db;
+          border-radius: 4px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         .header {
+          border-bottom: 3px solid #1a3a8a;
+          padding-bottom: 3px;
+          margin-bottom: 4px;
           display: flex;
           align-items: center;
-          gap: 10px;
-          margin-bottom: 12px;
-          border-bottom: 3px solid #1a3a52;
-          padding-bottom: 8px;
+          gap: 8px;
         }
         .logo {
-          width: 50px;
-          height: 50px;
+          width: 35px;
+          height: 35px;
           object-fit: contain;
           flex-shrink: 0;
         }
@@ -2783,144 +2917,169 @@ const PersonalizationModal: React.FC<{
           flex: 1;
         }
         .agency-name {
-          font-size: 24px;
-          font-weight: 700;
-          color: #1a3a52;
-          text-align: center;
-          margin: 0 0 3px 0;
-          letter-spacing: 0.3px;
-        }
-        .facture-title {
           font-size: 18px;
-          font-weight: 700;
-          color: #1a3a52;
+          font-weight: bold;
+          color: #1a3a8a;
           text-align: center;
+          margin: 0 0 2px 0;
+        }
+        .agency-contact {
+          font-size: 9px;
+          color: #555;
+          text-align: center;
+          line-height: 1.2;
+          margin-bottom: 1px;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 6px;
+          align-items: center;
+        }
+        .agency-contact-item {
           margin: 0;
-          letter-spacing: 0.5px;
-          text-decoration: underline;
+          white-space: nowrap;
+        }
+        .contract-title {
+          font-size: 17px;
+          color: #555;
+          text-align: center;
+          margin-top: 1px;
         }
         .header-info {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
-          gap: 6px;
-          margin-bottom: 10px;
+          gap: 3px;
+          margin-bottom: 4px;
         }
         .info-box {
-          padding: 8px;
-          border-radius: 4px;
-          font-size: 14px;
+          padding: 5px 6px;
+          border-radius: 3px;
+          font-size: 13px;
           line-height: 1.3;
         }
         .info-box.blue {
           background-color: #dbeafe;
           border-left: 4px solid #2563eb;
         }
+        .info-box.green {
+          background-color: #dcfce7;
+          border-left: 4px solid #16a34a;
+        }
+        .info-box.amber {
+          background-color: #fef3c7;
+          border-left: 4px solid #d97706;
+        }
         .info-label {
           font-weight: 600;
-          color: #1a1a1a;
+          color: #222;
           margin-bottom: 1px;
           font-size: 12px;
         }
         .info-value {
-          color: #1a1a1a;
-          font-size: 14px;
-          font-weight: 600;
+          color: #333;
+          font-size: 13px;
         }
         .section {
-          margin-bottom: 10px;
+          margin-bottom: 4px;
           page-break-inside: avoid;
+          padding: 4px 5px;
+          border-radius: 4px;
+          border: 1px solid #e5e7eb;
+        }
+        .section.client-section {
+          background-color: #f0f9ff;
+          border: 1px solid #bfdbfe;
+        }
+        .section.vehicle-section {
+          background-color: #f0fdf4;
+          border: 1px solid #bbf7d0;
+        }
+        .section.pricing-section {
+          background-color: #fffbeb;
+          border: 1px solid #fde68a;
         }
         .section-title {
-          font-size: 14px;
+          font-size: 15px;
           font-weight: 700;
           background-color: #f0f1f3;
-          padding: 6px 8px;
-          border-radius: 3px;
-          margin-bottom: 6px;
-          border-left: 4px solid #1a3a52;
-          color: #1a3a52;
+          padding: 3px 4px;
+          border-radius: 2px;
+          margin-bottom: 3px;
+          border-left: 4px solid #2563eb;
+          color: #1a3a8a;
         }
         .section-content {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 12px 10px;
+          gap: 7px 6px;
           font-size: 14px;
         }
+        .section-content.full {
+          grid-template-columns: 1fr 1fr 1fr;
+        }
+        .info-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+        .info-table tr {
+          border-bottom: 0.5px solid #ddd;
+        }
+        .info-table td {
+          padding: 3px 4px;
+          text-align: ${textDir === 'rtl' ? 'right' : 'left'};
+        }
+        .info-table td:first-child {
+          font-weight: 600;
+          color: #1a3a8a;
+          width: 40%;
+          padding-left: ${textDir === 'rtl' ? 'auto' : '4px'};
+          padding-right: ${textDir === 'rtl' ? '4px' : 'auto'};
+        }
+        .info-table td:last-child {
+          color: #444;
+          width: 60%;
+        }
         .field {
-          padding: 5px 0;
+          padding: 2px 0;
           border-bottom: 0.5px solid #ddd;
         }
         .field-label {
           font-weight: 600;
-          color: #1a3a52;
+          color: #1a3a8a;
           font-size: 12px;
         }
         .field-value {
           color: #444;
-          margin-top: 2px;
-          font-size: 14px;
-        }
-        .pricing-section {
-          background: white;
-          border: 2px solid #1a3a52;
-          border-radius: 6px;
-          padding: 12px;
-          margin: 10px 0;
+          margin-top: 0px;
+          font-size: 13px;
         }
         .pricing-row {
           display: flex;
           justify-content: space-between;
-          padding: 8px 0;
+          padding: 2px 0;
           border-bottom: 0.5px solid #ddd;
-          font-size: 14px;
-        }
-        .pricing-row.total {
-          border-top: 2px solid #1a3a52;
-          font-weight: 600;
-          margin-top: 3px;
-          padding-top: 8px;
-          border-bottom: none;
-          color: #1a3a52;
-          font-size: 16px;
-        }
-        .pricing-row.section-header {
-          font-weight: 600;
-          color: #1a3a52;
-          background-color: #f0f1f3;
-          margin-top: 8px;
-          padding: 6px;
-          border-bottom: 1px solid #1a3a52;
-        }
-        .pricing-value {
-          font-weight: 600;
-          color: #1a3a52;
-        }
-        .pricing-value.positive {
-          color: #10b981;
-        }
-        .pricing-value.negative {
-          color: #ef4444;
-        }
-        .payment-method {
-          margin-top: 12px;
-          padding: 10px;
-          background-color: #f3f4f6;
-          border-radius: 4px;
-          border-left: 4px solid #1a3a52;
-        }
-        .payment-method-title {
-          font-weight: 600;
-          color: #1a3a52;
-          margin-bottom: 4px;
           font-size: 13px;
         }
-        .payment-method-value {
-          color: #666;
+        .pricing-row.total {
+          border-top: 1px solid #222;
+          font-weight: 600;
+          margin-top: 1px;
+          padding-top: 2px;
+        }
+        .pricing-row.grand-total {
           font-size: 14px;
+          font-weight: 700;
+          color: #1a3a8a;
+          border-top: 2px solid #1a3a8a;
+          padding-top: 2px;
         }
         @media print {
-          body { margin: 0; padding: 0; }
-          .page { margin: 0; padding: 5mm; height: auto; }
+          body { 
+            margin: 0; 
+            padding: 0; 
+          }
+          .page { margin: 0; padding: 2.5mm; height: auto; }
         }
       </style>
     </head>
@@ -2931,105 +3090,94 @@ const PersonalizationModal: React.FC<{
           ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
           <div class="header-text">
             <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
-            <p class="facture-title">${labels.factureTitle}</p>
+            <div class="agency-contact">
+              ${agencySettings?.address ? `<span class="agency-contact-item">${agencySettings.address}</span>` : ''}
+              ${agencySettings?.phone ? `<span class="agency-contact-item">📞 ${agencySettings.phone}</span>` : ''}
+              ${agencySettings?.phone_number_2 ? `<span class="agency-contact-item">📱 ${agencySettings.phone_number_2}</span>` : ''}
+              ${agencySettings?.bank_number ? `<span class="agency-contact-item">🏦 ${agencySettings.bank_number}</span>` : ''}
+            </div>
+            <p class="contract-title">${labels.factureTitle}</p>
           </div>
         </div>
 
         <!-- Header Info Boxes -->
         <div class="header-info">
           <div class="info-box blue">
-            <div class="info-label">🔢 ${labels.factureNumber}</div>
-            <div class="info-value">#${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'}</div>
-          </div>
-          <div class="info-box blue">
             <div class="info-label">📅 ${labels.date}</div>
             <div class="info-value">${new Date().toLocaleDateString('en-US')}</div>
           </div>
-          <div class="info-box blue">
+          <div class="info-box green">
+            <div class="info-label">🔢 ${labels.factureNumber}</div>
+            <div class="info-value">#${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'}</div>
+          </div>
+          <div class="info-box amber">
             <div class="info-label">👤 ${labels.client}</div>
             <div class="info-value">${reservation?.client?.lastName || 'N/A'}</div>
           </div>
         </div>
 
-        <!-- Client Info -->
-        <div class="section">
-          <div class="section-title">👤 ${labels.client}</div>
-          <div class="section-content">
-            <div class="field">
-              <div class="field-label">${labels.client}</div>
-              <div class="field-value">${reservation?.client?.firstName} ${reservation?.client?.lastName}</div>
-            </div>
-            <div class="field">
-              <div class="field-label">📍 ${isFrench ? 'Adresse' : 'العنوان'}</div>
-              <div class="field-value">${reservation?.client?.completeAddress || 'N/A'}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Vehicle Info -->
-        <div class="section">
-          <div class="section-title">🚗 ${labels.vehicle}</div>
-          <div class="section-content">
-            <div class="field">
-              <div class="field-label">${labels.vehicle}</div>
-              <div class="field-value">${reservation?.car?.brand} ${reservation?.car?.model}</div>
-            </div>
-            <div class="field">
-              <div class="field-label">📋 ${isFrench ? 'Immatricule' : 'لوحة التسجيل'}</div>
-              <div class="field-value">${reservation?.car?.registration || 'N/A'}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Rental Period -->
-        <div class="section">
-          <div class="section-title">📅 ${labels.period}</div>
-          <div class="section-content">
-            <div class="field">
-              <div class="field-label">${labels.period}</div>
-              <div class="field-value">${reservation?.step1?.departureDate} ${isFrench ? 'au' : 'إلى'} ${reservation?.step1?.returnDate}</div>
-            </div>
-            <div class="field">
-              <div class="field-label">📊 ${isFrench ? 'Durée' : 'المدة'}</div>
-              <div class="field-value">${reservation?.totalDays || '1'} ${isFrench ? 'jour(s)' : 'يوم'}</div>
-            </div>
-          </div>
+        <!-- Invoice Details Table -->
+        <div class="section client-section">
+          <table class="info-table">
+            <tr>
+              <td>👤 ${labels.client}</td>
+              <td>${reservation?.client?.firstName} ${reservation?.client?.lastName}</td>
+            </tr>
+            <tr>
+              <td>📍 ${isFrench ? 'Adresse' : 'العنوان'}</td>
+              <td>${reservation?.client?.completeAddress || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td>🚗 ${labels.vehicle}</td>
+              <td>${reservation?.car?.brand} ${reservation?.car?.model}</td>
+            </tr>
+            <tr>
+              <td>📋 ${isFrench ? 'Immatricule' : 'لوحة التسجيل'}</td>
+              <td>${reservation?.car?.registration || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td>📅 ${labels.period}</td>
+              <td>${reservation?.step1?.departureDate} ${isFrench ? 'إلى' : 'إلى'} ${reservation?.step1?.returnDate}</td>
+            </tr>
+            <tr>
+              <td>📊 ${isFrench ? 'Durée' : 'المدة'}</td>
+              <td>${reservation?.totalDays || '1'} ${isFrench ? 'jour(s)' : 'يوم'}</td>
+            </tr>
+          </table>
         </div>
 
         <!-- Pricing Section -->
-        <div class="pricing-section">
-          <div class="pricing-row">
-            <span>${labels.amount}</span>
-            <span class="pricing-value">${subtotal.toLocaleString()} DA</span>
-          </div>
-          ${reservation.tvaApplied ? `
-          <div class="pricing-row">
-            <span>${labels.tva}</span>
-            <span class="pricing-value">${tvaAmount.toLocaleString()} DA</span>
-          </div>
-          ` : ''}
-          <div class="pricing-row total">
-            <span>${labels.total}</span>
-            <span>${total.toLocaleString()} DA</span>
-          </div>
-          <div class="pricing-row section-header">
-            <span>${labels.paymentDetails}</span>
-          </div>
-          <div class="pricing-row">
-            <span>${labels.amountPaid}</span>
-            <span class="pricing-value positive">${totalPaid.toLocaleString()} DA</span>
-          </div>
-          <div class="pricing-row">
-            <span>${labels.remaining}</span>
-            <span class="pricing-value ${remaining > 0 ? 'negative' : 'positive'}">${remaining.toLocaleString()} DA</span>
+        <div class="section pricing-section">
+          <div class="section-title">💰 ${isFrench ? 'Détails de Facturation' : 'تفاصيل الفاتورة'}</div>
+          <div class="section-content full" style="display: flex; flex-direction: column; gap: 0; grid-template-columns: auto;">
+            <div class="pricing-row">
+              <span>${labels.amount}</span>
+              <span class="pricing-value">${subtotal.toLocaleString()} DA</span>
+            </div>
+            ${reservation.tvaApplied ? `
+            <div class="pricing-row">
+              <span>${labels.tva}</span>
+              <span class="pricing-value">${tvaAmount.toLocaleString()} DA</span>
+            </div>
+            ` : ''}
+            <div class="pricing-row total">
+              <span>${labels.total}</span>
+              <span>${total.toLocaleString()} DA</span>
+            </div>
+            <div class="pricing-row" style="margin-top: 3px; border-bottom: 1px solid #1a3a8a; padding-bottom: 3px; font-weight: 600; color: #1a3a8a; border-top: 1px solid #1a3a8a; padding-top: 3px;">
+              <span>${isFrench ? 'Détails de Paiement' : 'تفاصيل الدفع'}</span>
+            </div>
+            <div class="pricing-row">
+              <span>${labels.amountPaid}</span>
+              <span class="pricing-value positive">${totalPaid.toLocaleString()} DA</span>
+            </div>
+            <div class="pricing-row">
+              <span>${labels.remaining}</span>
+              <span class="pricing-value ${remaining > 0 ? 'negative' : 'positive'}">${remaining.toLocaleString()} DA</span>
+            </div>
           </div>
         </div>
 
-        <!-- Payment Terms -->
-        <div class="payment-method">
-          <div class="payment-method-title">${labels.paymentTerms}</div>
-          <div class="payment-method-value">${labels.bank}</div>
-        </div>
       </div>
     </body>
     </html>

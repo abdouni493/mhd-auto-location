@@ -330,29 +330,48 @@ export default function App() {
         const session = await sessionService.initializeSession();
         
         if (!session) {
-          console.log('[Auth] === No session found ===');
+          console.log('[Auth] === No valid session found ===');
           setIsAuthLoading(false);
           return;
         }
         
+        // CRITICAL: Sync the restored session with Supabase Auth SDK
+        // This ensures Supabase queries work after page refresh
+        console.log('[Auth] === Syncing session with Supabase ===');
+        try {
+          await supabase.auth.setSession({
+            access_token: session.accessToken,
+            refresh_token: session.refreshToken || ''
+          });
+          console.log('[Auth] Supabase session synchronized');
+        } catch (syncError) {
+          console.warn('[Auth] Failed to sync with Supabase:', syncError);
+          // Continue anyway - local session is still valid
+        }
+        
         // Session restored from database/localStorage
-        console.log('[Auth] === Session restored from database ===');
+        console.log('[Auth] === Session restored successfully ===');
         console.log('[Auth] User:', session.name, 'Role:', session.role);
         
         const userObj: User = {
           name: session.name,
           email: session.email,
-          role: session.role as UserRole
+          role: session.role as UserRole,
+          avatar: '' // Add avatar property
         };
         
         setUser(userObj);
+        console.log('[Auth] User state updated, ready to render dashboard');
+        
+        // Give React time to process state update before marking loading complete
         setTimeout(() => {
-          console.log('[Auth] 500ms delay complete, setting isAuthLoading to false');
+          console.log('[Auth] Setting isAuthLoading to false');
           setIsAuthLoading(false);
-        }, 500);
+        }, 100);
         
       } catch (error) {
         console.error('[Auth] Session restoration error:', error);
+        setUser(null);
         setIsAuthLoading(false);
       }
     };
@@ -403,15 +422,15 @@ export default function App() {
     const renderContent = () => {
       switch (activeTab) {
         case 'dashboard':
-          return <DashboardPage lang={lang} />;
+          return <DashboardPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'planner':
-          return <PlannerPage lang={lang} />;
+          return <PlannerPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'vehicles':
-          return <CarsPage lang={lang} />;
+          return <CarsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'agencies':
           return <AgenciesPage lang={lang} />;
         case 'clients':
-          return <ClientsPage lang={lang} />;
+          return <ClientsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'team':
           return <EquipePage lang={lang} />;
         case 'expenses':
@@ -522,7 +541,11 @@ export default function App() {
 
   // Helper component for protected routes that handles loading state
   const ProtectedRoute = () => {
+    console.log('[ProtectedRoute] Rendering - isAuthLoading:', isAuthLoading, 'user:', user?.name || 'null');
+    
+    // Show loading state while auth is initializing
     if (isAuthLoading) {
+      console.log('[ProtectedRoute] Auth still loading, showing spinner');
       return (
         <div className="min-h-screen flex items-center justify-center bg-saas-bg">
           <div className="text-center">
@@ -531,12 +554,21 @@ export default function App() {
               transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
               className="w-12 h-12 border-4 border-saas-primary-via border-t-saas-primary-start rounded-full mx-auto mb-4"
             />
-            <p className="text-saas-text-muted">Loading...</p>
+            <p className="text-saas-text-muted">Chargement...</p>
           </div>
         </div>
       );
     }
-    return user ? <DashboardLayout /> : <Navigate to="/login" replace />;
+
+    // Redirect to login if not authenticated
+    if (!user) {
+      console.log('[ProtectedRoute] No user found, redirecting to login');
+      return <Navigate to="/login" replace />;
+    }
+
+    // User is authenticated, render dashboard
+    console.log('[ProtectedRoute] User authenticated, rendering dashboard');
+    return <DashboardLayout />;
   };
 
   return (

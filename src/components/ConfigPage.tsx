@@ -21,6 +21,8 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
     slogan: '',
     address: '',
     phone: '',
+    phoneNumber2: '',
+    bankNumber: '',
     logo: '',
   });
 
@@ -52,30 +54,36 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
         setGeneralData({
           agencyName: websiteSettings.name || 'Luxdrive Premium',
           slogan: websiteSettings.description || 'Votre partenaire de confiance en location de véhicules',
-          address: 'Alger, Algeria', // This could be stored in a separate table
-          phone: '+213 5 1234 5678', // This could be stored in a separate table
+          address: websiteSettings.address || 'Alger, Algeria',
+          phone: websiteSettings.phone || '+213 5 1234 5678',
+          phoneNumber2: websiteSettings.phone_number_2 || '',
+          bankNumber: websiteSettings.bank_number || '',
           logo: websiteSettings.logo || 'https://picsum.photos/seed/logo/200/200',
         });
 
         // Load worker data for profile and security
         if (user.email) {
-          const { data: workerData } = await supabase
-            .from('workers')
-            .select('*')
-            .eq('email', user.email)
-            .single();
+          try {
+            const { data: workerData, error } = await supabase
+              .from('workers')
+              .select('full_name, profile_photo, username, email')
+              .eq('email', user.email)
+              .maybeSingle();
 
-          if (workerData) {
-            setProfileData({
-              name: workerData.full_name,
-              profilePhoto: workerData.profile_photo || '',
-            });
+            if (!error && workerData) {
+              setProfileData({
+                name: workerData.full_name,
+                profilePhoto: workerData.profile_photo || '',
+              });
 
-            setSecurityData(prev => ({
-              ...prev,
-              username: workerData.username,
-              email: workerData.email,
-            }));
+              setSecurityData(prev => ({
+                ...prev,
+                username: workerData.username,
+                email: workerData.email,
+              }));
+            }
+          } catch (workerError) {
+            console.warn('Could not load worker data:', workerError);
           }
         }
 
@@ -102,6 +110,29 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
   const handleSecurityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setSecurityData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSaveAgencyInfo = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    try {
+      // Save to website settings
+      await DatabaseService.updateWebsiteSettings({
+        name: generalData.agencyName,
+        description: generalData.slogan,
+        logo: generalData.logo,
+        phone_number_2: generalData.phoneNumber2,
+        bank_number: generalData.bankNumber,
+        address: generalData.address,
+        phone: generalData.phone,
+      });
+
+      setNotification({ type: 'success', message: lang === 'fr' ? 'Informations de l\'agence mises à jour avec succès!' : 'تم تحديث معلومات الوكالة بنجاح!' });
+      setTimeout(() => setNotification(null), 4000);
+    } catch (error) {
+      console.error('Error updating agency info:', error);
+      setNotification({ type: 'error', message: lang === 'fr' ? 'Erreur lors de la mise à jour des informations' : 'خطأ في تحديث المعلومات' });
+      setTimeout(() => setNotification(null), 4000);
+    }
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -494,7 +525,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                 </h2>
               </div>
 
-              <form className="p-8 space-y-6">
+              <form className="p-8 space-y-6" onSubmit={handleSaveAgencyInfo}>
                 {/* Agency Name */}
                 <div className="space-y-2">
                   <label className="label-saas">{{fr: 'Nom de l\'enseigne *', ar: 'اسم الإشارة *'}[lang]}</label>
@@ -538,6 +569,30 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                     type="tel"
                     name="phone"
                     value={generalData.phone}
+                    onChange={handleGeneralChange}
+                    className="input-saas"
+                  />
+                </div>
+
+                {/* Second Phone Number */}
+                <div className="space-y-2">
+                  <label className="label-saas">📱 {{fr: 'Deuxième numéro de téléphone', ar: 'رقم الهاتف الثاني'}[lang]}</label>
+                  <input
+                    type="tel"
+                    name="phoneNumber2"
+                    value={generalData.phoneNumber2}
+                    onChange={handleGeneralChange}
+                    className="input-saas"
+                  />
+                </div>
+
+                {/* Bank Number */}
+                <div className="space-y-2">
+                  <label className="label-saas">🏦 {{fr: 'Numéro de compte bancaire', ar: 'رقم الحساب البنكي'}[lang]}</label>
+                  <input
+                    type="text"
+                    name="bankNumber"
+                    value={generalData.bankNumber}
                     onChange={handleGeneralChange}
                     className="input-saas"
                   />

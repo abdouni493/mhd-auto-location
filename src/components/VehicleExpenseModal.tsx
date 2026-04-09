@@ -92,7 +92,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
       note: formData.note || undefined,
     };
 
-    if (formData.type === 'vidange') {
+    if (formData.type === 'vidange' || formData.type === 'chaine') {
       submitData.currentMileage = formData.currentMileage;
       submitData.nextVidangeKm = formData.nextVidangeKm;
     } else if (formData.type === 'autre') {
@@ -150,7 +150,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
           <div className="space-y-2">
             <label className="label-saas">💰 {{fr: 'Type de dépense *', ar: 'نوع النفقة *'}[lang]}</label>
             <div className="grid grid-cols-2 gap-2">
-              {['vidange', 'assurance', 'controle', 'autre'].map(type => (
+              {['vidange', 'assurance', 'controle', 'chaine', 'autre'].map(type => (
                 <button
                   key={type}
                   type="button"
@@ -165,6 +165,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
                     vidange: { icon: '🛢️', label: lang === 'fr' ? 'Vidange' : 'تغيير الزيت' },
                     assurance: { icon: '🛡️', label: lang === 'fr' ? 'Assurance' : 'التأمين' },
                     controle: { icon: '🛠️', label: lang === 'fr' ? 'Contrôle' : 'الفحص' },
+                    chaine: { icon: '⛓️', label: lang === 'fr' ? 'Chaîne' : 'السلسلة' },
                     autre: { icon: '❓', label: lang === 'fr' ? 'Autre' : 'آخر' },
                   }[type] && (
                     <>
@@ -172,12 +173,14 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
                         vidange: '🛢️',
                         assurance: '🛡️',
                         controle: '🛠️',
+                        chaine: '⛓️',
                         autre: '❓',
                       }[type]}</span>
                       <span>{{
                         vidange: lang === 'fr' ? 'Vidange' : 'تغيير الزيت',
                         assurance: lang === 'fr' ? 'Assurance' : 'التأمين',
                         controle: lang === 'fr' ? 'Contrôle' : 'الفحص',
+                        chaine: lang === 'fr' ? 'Chaîne' : 'السلسلة',
                         autre: lang === 'fr' ? 'Autre' : 'آخر',
                       }[type]}</span>
                     </>
@@ -190,12 +193,19 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
           {/* VIDANGE SECTION */}
           {formData.type === 'vidange' && (
             <>
-              {/* Current Mileage */}
+              {/* Current Mileage - NOW EDITABLE */}
               <div className="space-y-2">
                 <label className="label-saas">🚗 {{fr: 'Kilométrage Actuel', ar: 'المسافة الحالية'}[lang]}</label>
-                <div className="bg-saas-bg p-4 rounded-lg border border-saas-border text-center">
-                  <p className="text-2xl font-black text-saas-primary-via">{formData.currentMileage.toLocaleString('fr-FR')} KM</p>
-                </div>
+                <input
+                  type="number"
+                  name="currentMileage"
+                  value={formData.currentMileage || ''}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className="input-saas text-lg font-bold text-center"
+                  min="0"
+                  required
+                />
               </div>
 
               {/* Cost */}
@@ -228,6 +238,77 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
               {/* Next Vidange KM */}
               <div className="space-y-2">
                 <label className="label-saas">↩️ {{fr: 'Km pour Prochaine Vidange', ar: 'كم للتغيير التالي'}[lang]}</label>
+                <input
+                  type="number"
+                  name="nextVidangeKm"
+                  value={formData.nextVidangeKm || ''}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className="input-saas"
+                  min="0"
+                />
+              </div>
+
+              {/* Next Service Display */}
+              <div className="space-y-2">
+                <label className="label-saas">🏁 {{fr: 'Prochain', ar: 'القادم'}[lang]}</label>
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
+                  <p className="text-2xl font-black text-green-600">
+                    {(formData.currentMileage + formData.nextVidangeKm).toLocaleString('fr-FR')} KM
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* CHAÎNE SECTION */}
+          {formData.type === 'chaine' && (
+            <>
+              {/* Current Mileage - EDITABLE */}
+              <div className="space-y-2">
+                <label className="label-saas">🚗 {{fr: 'Kilométrage Actuel', ar: 'المسافة الحالية'}[lang]}</label>
+                <input
+                  type="number"
+                  name="currentMileage"
+                  value={formData.currentMileage || ''}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className="input-saas text-lg font-bold text-center"
+                  min="0"
+                  required
+                />
+              </div>
+
+              {/* Cost */}
+              <div className="space-y-2">
+                <label className="label-saas">💵 {{fr: 'Coût (DZD)', ar: 'التكلفة (دينار)'}[lang]}</label>
+                <input
+                  type="number"
+                  name="cost"
+                  value={formData.cost || ''}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className="input-saas"
+                  min="0"
+                />
+              </div>
+
+              {/* Date */}
+              <div className="space-y-2">
+                <label className="label-saas">📅 {{fr: 'Date', ar: 'التاريخ'}[lang]}</label>
+                <input
+                  type="date"
+                  name="date"
+                  value={formData.date}
+                  onChange={handleChange}
+                  className="input-saas"
+                  required
+                />
+              </div>
+
+              {/* Next Chaîne KM */}
+              <div className="space-y-2">
+                <label className="label-saas">↩️ {{fr: 'Km pour Prochaine Chaîne', ar: 'كم للسلسلة التالية'}[lang]}</label>
                 <input
                   type="number"
                   name="nextVidangeKm"

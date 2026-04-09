@@ -265,6 +265,10 @@ export interface WebsiteSettings {
   name: string;
   description: string;
   logo?: string;
+  phone_number_2?: string;
+  bank_number?: string;
+  address?: string;
+  phone?: string;
 }
 
 // Planner Types

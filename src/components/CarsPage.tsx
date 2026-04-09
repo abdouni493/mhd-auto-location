@@ -15,9 +15,11 @@ import { ReservationsService } from '../services/ReservationsService';
 
 interface CarsPageProps {
   lang: Language;
+  isAuthLoading?: boolean;
+  user?: any;
 }
 
-export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
+export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
   const [cars, setCars] = useState<Car[]>([]);
   const [reservations, setReservations] = useState<ReservationDetails[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -81,10 +83,18 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
   };
 
   useEffect(() => {
+    // Skip loading if authentication is still in progress or user not available
+    if (isAuthLoading) return;
+    if (!user) return;
+
     loadCarsData();
-  }, []);
+  }, [user, isAuthLoading]);
 
   useEffect(() => {
+    // Skip loading if authentication is still in progress or user not available
+    if (isAuthLoading) return;
+    if (!user) return;
+
     const loadReservations = async () => {
       try {
         console.log('Loading reservations...');
@@ -97,7 +107,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang }) => {
     };
 
     loadReservations();
-  }, []);
+  }, [user, isAuthLoading]);
 
   const filteredCars = cars.filter(car => 
     car.brand.toLowerCase().includes(debouncedSearch.toLowerCase()) ||

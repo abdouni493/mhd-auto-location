@@ -91,6 +91,15 @@ class SessionService {
    */
   private async saveSessionToDatabase(session: SessionData): Promise<void> {
     try {
+      // Only attempt to save to database if we have valid auth context
+      // The RPC function uses auth.uid(), so we need to be authenticated
+      const { data: { session: authSession }, error: authError } = await supabase.auth.getSession();
+      
+      if (authError || !authSession) {
+        console.log('[SessionService] Skipping database save - no Supabase auth context');
+        return;
+      }
+
       const { error } = await supabase.rpc('create_admin_session', {
         p_access_token: session.accessToken,
         p_refresh_token: session.refreshToken,
@@ -101,12 +110,14 @@ class SessionService {
 
       if (error) {
         // Silently fail - database save is optional, localStorage is primary
+        console.warn('[SessionService] Failed to save to database:', error.message);
         return;
       }
 
       console.log('[SessionService] Session also saved to database (audit trail)');
     } catch (error) {
       // Silently fail - localStorage persistence is sufficient
+      console.warn('[SessionService] Error saving to database:', error);
     }
   }
 
@@ -118,7 +129,7 @@ class SessionService {
       const stored = localStorage.getItem(SESSION_STORAGE_KEY);
       
       if (!stored) {
-        console.log('[SessionService] No session found in localStorage. Available keys:', Object.keys(localStorage));
+        console.log('[SessionService] No session found in localStorage. Available keys:', Object.keys(localStorage).filter(k => k.includes('session') || k.includes('auth')));
         return null;
       }
 
@@ -128,7 +139,8 @@ class SessionService {
       console.log('[SessionService] Parsed session:', {
         email: session.email,
         role: session.role,
-        userId: session.userId
+        userId: session.userId,
+        expiresAt: session.expiresAt
       });
       
       // Check if expired - DON'T call invalidateSession here to avoid infinite recursion
@@ -137,7 +149,8 @@ class SessionService {
       
       if (secondsUntilExpiry <= 0) {
         console.log('[SessionService] Session has expired (expires in', secondsUntilExpiry, 'seconds)');
-        // Just return null, don't call invalidateSession
+        // Clear the expired session
+        localStorage.removeItem(SESSION_STORAGE_KEY);
         return null;
       }
 
@@ -145,12 +158,18 @@ class SessionService {
       return session;
     } catch (error) {
       console.error('[SessionService] Error getting current session:', error);
+      // If parsing fails, clear the corrupted session
+      try {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      } catch (e) {
+        console.error('[SessionService] Error clearing corrupted session:', e);
+      }
       return null;
     }
   }
 
   /**
-   * Validate session with database
+   * Validate session with database - with fallback to localStorage check
    */
   async validateSession(token: string): Promise<boolean> {
     try {
@@ -161,13 +180,15 @@ class SessionService {
       });
 
       if (error) {
-        console.error('[SessionService] Validation error:', error);
-        return false;
+        console.warn('[SessionService] Validation RPC error:', error.message);
+        // Fallback: if RPC fails, check expiration locally
+        return this.validateSessionLocally(token);
       }
 
       if (!data || data.length === 0) {
         console.log('[SessionService] Session not found in database');
-        return false;
+        // Fallback to local validation
+        return this.validateSessionLocally(token);
       }
 
       const result = data[0];
@@ -185,7 +206,42 @@ class SessionService {
 
       return true;
     } catch (error) {
-      console.error('[SessionService] Validation error:', error);
+      console.warn('[SessionService] Validation error, falling back to local check:', error);
+      // Fallback: check if session is expired locally
+      return this.validateSessionLocally(token);
+    }
+  }
+
+  /**
+   * Validate session locally by checking expiration
+   */
+  private validateSessionLocally(token: string): boolean {
+    try {
+      const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!stored) return false;
+
+      const session: SessionData = JSON.parse(stored);
+      const now = Math.floor(Date.now() / 1000);
+      const secondsUntilExpiry = session.expiresAt - now;
+
+      // Token is valid if not expired
+      const isValid = secondsUntilExpiry > 0;
+      console.log('[SessionService] Local validation:', {
+        isValid,
+        secondsUntilExpiry,
+        expiresAt: session.expiresAt,
+        now
+      });
+
+      if (!isValid) {
+        console.log('[SessionService] Session has expired locally');
+        this.invalidateSession();
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[SessionService] Local validation error:', error);
       return false;
     }
   }
@@ -206,12 +262,15 @@ class SessionService {
       const session: SessionData = JSON.parse(stored);
       console.log('[SessionService] Invalidating session for user:', session.email);
 
-      // Try to invalidate in database
-      await supabase.rpc('invalidate_session', {
-        p_token: session.accessToken
-      }).catch(err => {
-        console.warn('[SessionService] Could not invalidate in database:', err);
-      });
+      // Try to invalidate in database (non-blocking)
+      try {
+        await supabase.rpc('invalidate_session', {
+          p_token: session.accessToken
+        });
+      } catch (err) {
+        console.warn('[SessionService] Could not invalidate in database (non-blocking):', err);
+        // Continue anyway - localStorage clear is what matters
+      }
 
       // Clear localStorage
       localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -222,7 +281,11 @@ class SessionService {
     } catch (error) {
       console.error('[SessionService] Error invalidating session:', error);
       // Force clear localStorage anyway
-      localStorage.removeItem(SESSION_STORAGE_KEY);
+      try {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      } catch (e) {
+        console.error('[SessionService] Error clearing localStorage:', e);
+      }
       this.stopSessionValidation();
     }
   }
@@ -339,35 +402,48 @@ class SessionService {
 
     const session = await this.getCurrentSession();
     if (!session) {
-      console.log('[SessionService] No valid session found');
+      console.log('[SessionService] No valid session found in localStorage');
       return null;
     }
 
     console.log('[SessionService] Session found:', { email: session.email, role: session.role });
     
+    // Check if session is expired
+    const now = Math.floor(Date.now() / 1000);
+    if (session.expiresAt <= now) {
+      console.log('[SessionService] Session has expired');
+      await this.invalidateSession();
+      return null;
+    }
+    
     // For worker sessions (identified by worker_token_ prefix), skip validation
     // Workers don't use Supabase auth tokens, so validation would fail
     if (session.accessToken.startsWith('worker_token_')) {
       console.log('[SessionService] Worker session detected, skipping token validation');
-      // Just check if it's expired
-      const now = Math.floor(Date.now() / 1000);
-      if (session.expiresAt <= now) {
-        console.log('[SessionService] Worker session has expired');
-        await this.invalidateSession();
-        return null;
-      }
       console.log('[SessionService] Worker session is valid');
       this.startSessionValidation();
       return session;
     }
     
-    // For Supabase sessions, validate the token
+    // For Supabase sessions, validate the token (with fallback)
     console.log('[SessionService] Validating Supabase session...');
-    const isValid = await this.validateSession(session.accessToken);
-
-    if (!isValid) {
-      console.log('[SessionService] Session validation failed');
-      return null;
+    try {
+      const isValid = await this.validateSession(session.accessToken);
+      
+      if (!isValid) {
+        console.log('[SessionService] Session validation failed');
+        return null;
+      }
+    } catch (error) {
+      console.warn('[SessionService] Session validation threw error, checking expiration locally:', error);
+      // Even if validation fails, keep the session if it's not expired
+      const secondsUntilExpiry = session.expiresAt - now;
+      if (secondsUntilExpiry <= 0) {
+        console.log('[SessionService] Session has expired, invalidating');
+        await this.invalidateSession();
+        return null;
+      }
+      console.log('[SessionService] Session is still valid (not expired), continuing with session');
     }
 
     // Start validation loop

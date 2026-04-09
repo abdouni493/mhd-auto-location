@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </div>
               <span className="text-xl font-black tracking-tighter uppercase">
-                {agencyData.name.split(' ')[0]}<span className="text-saas-primary-via">{agencyData.name.split(' ').slice(1).join(' ')}</span>
+                {agencyData.name.split(' ').slice(0, 3).join(' ').split(' ')[0]}<span className="text-saas-primary-via">{agencyData.name.split(' ').slice(0, 3).join(' ').split(' ').slice(1).join(' ')}</span>
               </span>
             </div>
             <button

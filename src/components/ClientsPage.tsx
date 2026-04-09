@@ -11,6 +11,8 @@ import { DatabaseService } from '../services/DatabaseService';
 
 interface ClientsPageProps {
   lang: Language;
+  isAuthLoading?: boolean;
+  user?: any;
 }
 
 // Mock rentals for history
@@ -35,7 +37,7 @@ const MOCK_RENTALS: Rental[] = [
   },
 ];
 
-export const ClientsPage: React.FC<ClientsPageProps> = ({ lang }) => {
+export const ClientsPage: React.FC<ClientsPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -49,6 +51,10 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ lang }) => {
 
   // Load clients from database
   useEffect(() => {
+    // Skip loading if authentication is still in progress or user not available
+    if (isAuthLoading) return;
+    if (!user) return;
+
     const loadClients = async () => {
       setLoading(true);
       try {
@@ -67,7 +73,7 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ lang }) => {
       }
     };
     loadClients();
-  }, []);
+  }, [user, isAuthLoading]);
 
   const filteredClients = clients.filter(client =>
     `${client.firstName} ${client.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||

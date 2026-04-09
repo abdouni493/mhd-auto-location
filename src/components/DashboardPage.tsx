@@ -12,6 +12,8 @@ import { getVidangeAlert, getAssuranceAlert, getControleAlert } from '../utils/v
 
 interface DashboardPageProps {
   lang: Language;
+  isAuthLoading?: boolean;
+  user?: User | null;
 }
 
 interface AlertCardProps {
@@ -281,7 +283,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
   );
 };
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
@@ -305,6 +307,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Skip loading if authentication is still in progress or user not available
+    if (isAuthLoading) return;
+    if (!user) return;
+
     const loadDashboardData = async () => {
       try {
         setLoading(true);
@@ -380,7 +386,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang }) => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [user, isAuthLoading]);
 
   const criticalAlerts = alerts.filter(a => a.severity === 'critical');
   const highAlerts = alerts.filter(a => a.severity === 'high');

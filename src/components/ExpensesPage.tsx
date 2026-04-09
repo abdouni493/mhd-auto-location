@@ -17,7 +17,7 @@ interface ExpensesPageProps {
 }
 
 export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
-  const [expenseType, setExpenseType] = useState<'store' | 'vehicle'>('store');
+  const [expenseType, setExpenseType] = useState<'store' | 'vehicle'>('vehicle');
   const [storeExpenses, setStoreExpenses] = useState<StoreExpense[]>([]);
   const [vehicleExpenses, setVehicleExpenses] = useState<VehicleExpense[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);

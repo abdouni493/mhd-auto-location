@@ -1459,6 +1459,10 @@ export class DatabaseService {
           name: data[0].name,
           description: data[0].description,
           logo: data[0].logo,
+          phone_number_2: data[0].phone_number_2,
+          bank_number: data[0].bank_number,
+          address: data[0].address,
+          phone: data[0].phone,
         };
       }
     } catch (e: any) {
@@ -1469,7 +1473,11 @@ export class DatabaseService {
     return {
       name: '',
       description: '',
-      logo: ''
+      logo: '',
+      phone_number_2: '',
+      bank_number: '',
+      address: '',
+      phone: ''
     };
   }
 
@@ -1487,6 +1495,10 @@ export class DatabaseService {
         name: settings.name,
         description: settings.description,
         logo: settings.logo,
+        phone_number_2: settings.phone_number_2,
+        bank_number: settings.bank_number,
+        address: settings.address,
+        phone: settings.phone,
         updated_at: new Date().toISOString(),
       }])
       .select()
@@ -1498,6 +1510,10 @@ export class DatabaseService {
       name: data.name,
       description: data.description,
       logo: data.logo,
+      phone_number_2: data.phone_number_2,
+      bank_number: data.bank_number,
+      address: data.address,
+      phone: data.phone,
     };
   }
 

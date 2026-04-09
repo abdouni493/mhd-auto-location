@@ -15,6 +15,7 @@ const EXPENSE_TYPE_LABELS = {
   vidange: { fr: 'Vidange', ar: 'تغيير الزيت' },
   assurance: { fr: 'Assurance', ar: 'التأمين' },
   controle: { fr: 'Contrôle', ar: 'الفحص' },
+  chaine: { fr: 'Chaîne', ar: 'السلسلة' },
   autre: { fr: 'Autre', ar: 'آخر' },
 };
 
@@ -22,6 +23,7 @@ const EXPENSE_TYPE_ICONS = {
   vidange: '🛢️',
   assurance: '🛡️',
   controle: '🛠️',
+  chaine: '⛓️',
   autre: '❓',
 };
 
