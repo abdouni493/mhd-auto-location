@@ -3743,12 +3743,6 @@ const PersonalizationModal: React.FC<{
               <div class="detail-label">📞 ${isFrench ? 'Téléphone' : 'الهاتف'}</div>
               <div class="detail-value">${reservation?.client?.phone || 'N/A'}</div>
             </div>
-            <div class="detail-item">
-              <div class="detail-label">${labels.method}</div>
-              <div class="detail-value">
-                ${currentPayment.method === 'bank' ? labels.bank : currentPayment.method === 'cash' ? labels.cash : labels.card}
-              </div>
-            </div>
           </div>
         </div>
 

@@ -259,7 +259,6 @@ BEGIN
           <p><strong>Date:</strong> {{receipt_date}}</p>
           <hr />
           <p><strong>Montant Reçu:</strong> {{amount_paid}} DA</p>
-          <p><strong>Mode de Paiement:</strong> {{payment_method}}</p>
           <p><strong>Client:</strong> {{client_name}}</p>
           <hr />
           <p style="text-align: center; font-size: 11px; color: #666;">Merci pour votre confiance!</p>
