@@ -172,6 +172,47 @@ export const VehicleExpenseCard: React.FC<VehicleExpenseCardProps> = ({
           </div>
         )}
 
+        {/* Filter Tracking - for Vidange */}
+        {expense.type === 'vidange' && (
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
+            <p className="text-sm text-saas-text-muted font-bold uppercase tracking-wider">🔧 {{fr: 'Filtres changés', ar: 'الفلاتر المتغيرة'}[lang]}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2">
+                {(expense as any).oilFilterChanged ? (
+                  <span className="text-green-600 font-bold">✅</span>
+                ) : (
+                  <span className="text-gray-400">☐</span>
+                )}
+                <span className="text-xs font-semibold">🛢️ {{fr: 'Huile', ar: 'الزيت'}[lang]}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {(expense as any).airFilterChanged ? (
+                  <span className="text-green-600 font-bold">✅</span>
+                ) : (
+                  <span className="text-gray-400">☐</span>
+                )}
+                <span className="text-xs font-semibold">💨 {{fr: 'Air', ar: 'هواء'}[lang]}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {(expense as any).fuelFilterChanged ? (
+                  <span className="text-green-600 font-bold">✅</span>
+                ) : (
+                  <span className="text-gray-400">☐</span>
+                )}
+                <span className="text-xs font-semibold">⛽ {{fr: 'Carburant', ar: 'وقود'}[lang]}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {(expense as any).acFilterChanged ? (
+                  <span className="text-green-600 font-bold">✅</span>
+                ) : (
+                  <span className="text-gray-400">☐</span>
+                )}
+                <span className="text-xs font-semibold">❄️ {{fr: 'Clim', ar: 'تكييف'}[lang]}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Note */}
         {expense.note && (
           <div className="pt-2 border-t border-saas-border">

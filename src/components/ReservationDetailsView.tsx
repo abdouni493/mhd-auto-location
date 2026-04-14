@@ -644,7 +644,7 @@ const PaymentsTab: React.FC<{ lang: Language; reservation: ReservationDetails; o
       <h3 className="text-xl font-black text-saas-text-main mb-4">
         💰 {lang === 'fr' ? 'Détails Financiers' : 'التفاصيل المالية'}
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg p-4 text-center border border-saas-border">
           <p className="text-sm text-saas-text-muted">{lang === 'fr' ? 'Montant Total' : 'المبلغ الإجمالي'}</p>
           <p className="text-2xl font-black text-saas-text-main">{reservation.totalPrice.toLocaleString()} DA</p>
@@ -661,10 +661,36 @@ const PaymentsTab: React.FC<{ lang: Language; reservation: ReservationDetails; o
           {typeof reservation.cautionEnabled === 'undefined' || reservation.cautionEnabled ? (
             <>
               <p className="text-sm text-blue-700">{lang === 'fr' ? 'Caution' : 'الضمان'}</p>
-              <p className="text-2xl font-black text-blue-700">{reservation.deposit.toLocaleString()} DA</p>
+              {/* Display caution in DZD */}
+              <p className="text-2xl font-black text-blue-700">
+                {((reservation as any).cautionAmountDzd || reservation.deposit).toLocaleString()} DA
+              </p>
+              {/* Display caution in EUR if currency is EUR */}
+              {(reservation as any).cautionCurrency === 'EUR' && (reservation as any).euroRate && (
+                <div className="mt-2 pt-2 border-t border-blue-200">
+                  <p className="text-xs text-blue-600 mb-1">
+                    {lang === 'fr' ? '= ' : '= '} 
+                    <span className="font-bold">
+                      {(Math.round(((reservation as any).cautionAmountDzd || reservation.deposit) / (reservation as any).euroRate * 100) / 100).toFixed(2)}
+                    </span> EUR
+                  </p>
+                  <p className="text-xs text-blue-500">
+                    ({lang === 'fr' ? 'Taux' : 'السعر'}: {(reservation as any).euroRate} DA/€)
+                  </p>
+                </div>
+              )}
             </>
           ) : null}
         </div>
+        {(reservation as any).assuranceEnabled && (
+          <div className="bg-purple-50 rounded-lg p-4 text-center border border-purple-200">
+            <p className="text-sm text-purple-700">{lang === 'fr' ? 'Assurance' : 'التأمين'}</p>
+            <p className="text-2xl font-black text-purple-700">
+              {Math.round((reservation.totalPrice) * ((reservation as any).assurancePercentage || 0) / 100).toLocaleString()} DA
+            </p>
+            <p className="text-xs text-purple-600 mt-1">({(reservation as any).assurancePercentage}%)</p>
+          </div>
+        )}
       </div>
     </div>
 
@@ -805,6 +831,53 @@ const FinancialTab: React.FC<{ lang: Language; reservation: ReservationDetails }
           <span>{(reservation.totalPrice + reservation.additionalFees).toLocaleString()} DA</span>
         </div>
       </div>
+    </div>
+
+    {/* Caution & Assurance Information */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Caution */}
+      {typeof reservation.cautionEnabled === 'undefined' || reservation.cautionEnabled ? (
+        <div className="bg-blue-50 rounded-2xl shadow-lg p-6 border border-blue-200">
+          <h3 className="text-lg font-black text-blue-900 mb-4">🔐 {lang === 'fr' ? 'Caution' : 'الضمان'}</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center py-2 border-b border-blue-200">
+              <span className="text-blue-700 font-bold">{lang === 'fr' ? 'Montant (DA):' : 'المبلغ (DA):'}</span>
+              <span className="font-black text-blue-900">{((reservation as any).cautionAmountDzd || reservation.deposit).toLocaleString()} DA</span>
+            </div>
+            {(reservation as any).cautionCurrency === 'EUR' && (reservation as any).euroRate && (
+              <>
+                <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                  <span className="text-blue-700 font-bold">{lang === 'fr' ? 'Montant (EUR):' : 'المبلغ (EUR):'}</span>
+                  <span className="font-black text-blue-900">
+                    {(Math.round(((reservation as any).cautionAmountDzd || reservation.deposit) / (reservation as any).euroRate * 100) / 100).toFixed(2)} €
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-blue-700 text-sm">{lang === 'fr' ? 'Taux de change:' : 'سعر الصرف:'}</span>
+                  <span className="text-blue-900 text-sm font-bold">{(reservation as any).euroRate} DA/€</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Assurance Serenity */}
+      {(reservation as any).assuranceEnabled && (
+        <div className="bg-purple-50 rounded-2xl shadow-lg p-6 border border-purple-200">
+          <h3 className="text-lg font-black text-purple-900 mb-4">🛡️ {lang === 'fr' ? 'Assurance Serenity' : 'تأمين Serenity'}</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center py-2 border-b border-purple-200">
+              <span className="text-purple-700 font-bold">{lang === 'fr' ? 'Pourcentage:' : 'النسبة:'}</span>
+              <span className="font-black text-purple-900">{(reservation as any).assurancePercentage || 0}%</span>
+            </div>
+            <div className="flex justify-between items-center py-2">
+              <span className="text-purple-700 font-bold">{lang === 'fr' ? 'Montant:' : 'المبلغ:'}</span>
+              <span className="font-black text-purple-900">{Math.round((reservation.totalPrice) * ((reservation as any).assurancePercentage || 0) / 100).toLocaleString()} DA</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </div>
 );

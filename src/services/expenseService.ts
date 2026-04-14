@@ -29,6 +29,10 @@ export async function getVehicleExpenses(): Promise<{ success: boolean; expenses
       expirationDate: exp.expiration_date,
       expenseName: exp.expense_name,
       createdAt: exp.created_at,
+      oilFilterChanged: exp.oil_filter_changed || false,
+      airFilterChanged: exp.air_filter_changed || false,
+      fuelFilterChanged: exp.fuel_filter_changed || false,
+      acFilterChanged: exp.ac_filter_changed || false,
     }))
 
     return { success: true, expenses }
@@ -52,6 +56,10 @@ export async function addVehicleExpense(expense: Omit<VehicleExpense, 'id' | 'cr
         next_vidange_km: expense.nextVidangeKm || null,
         expiration_date: expense.expirationDate || null,
         expense_name: expense.expenseName || null,
+        oil_filter_changed: (expense as any).oilFilterChanged || false,
+        air_filter_changed: (expense as any).airFilterChanged || false,
+        fuel_filter_changed: (expense as any).fuelFilterChanged || false,
+        ac_filter_changed: (expense as any).acFilterChanged || false,
       })
       .select()
       .single()
@@ -73,6 +81,10 @@ export async function addVehicleExpense(expense: Omit<VehicleExpense, 'id' | 'cr
       expirationDate: data.expiration_date,
       expenseName: data.expense_name,
       createdAt: data.created_at,
+      oilFilterChanged: data.oil_filter_changed || false,
+      airFilterChanged: data.air_filter_changed || false,
+      fuelFilterChanged: data.fuel_filter_changed || false,
+      acFilterChanged: data.ac_filter_changed || false,
     }
 
     return { success: true, expense: newExpense }
@@ -98,6 +110,10 @@ export async function updateVehicleExpense(
     if (updates.nextVidangeKm !== undefined) updateData.next_vidange_km = updates.nextVidangeKm
     if (updates.expirationDate !== undefined) updateData.expiration_date = updates.expirationDate
     if (updates.expenseName !== undefined) updateData.expense_name = updates.expenseName
+    if ((updates as any).oilFilterChanged !== undefined) updateData.oil_filter_changed = (updates as any).oilFilterChanged
+    if ((updates as any).airFilterChanged !== undefined) updateData.air_filter_changed = (updates as any).airFilterChanged
+    if ((updates as any).fuelFilterChanged !== undefined) updateData.fuel_filter_changed = (updates as any).fuelFilterChanged
+    if ((updates as any).acFilterChanged !== undefined) updateData.ac_filter_changed = (updates as any).acFilterChanged
 
     const { data, error } = await supabase
       .from('vehicle_expenses')
@@ -123,6 +139,10 @@ export async function updateVehicleExpense(
       expirationDate: data.expiration_date,
       expenseName: data.expense_name,
       createdAt: data.created_at,
+      oilFilterChanged: data.oil_filter_changed || false,
+      airFilterChanged: data.air_filter_changed || false,
+      fuelFilterChanged: data.fuel_filter_changed || false,
+      acFilterChanged: data.ac_filter_changed || false,
     }
 
     return { success: true, expense: updatedExpense }

@@ -236,7 +236,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           </div>
           <div class="detail">
             <span class="label">${lang === 'fr' ? 'Date:' : 'التاريخ:'}</span>
-            <span>${new Date().toLocaleDateString()}</span>
+            <span>${new Date().toLocaleDateString('fr-FR')}</span>
           </div>
         </div>
         
@@ -1187,7 +1187,7 @@ const getInitialElements = (type: string, reservation: ReservationDetails, lang:
       ...baseElements,
       title: { x: 200, y: 50, text: lang === 'fr' ? 'payement' : 'إيصال الدفع', fontSize: 24, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
       receiptNumber: { x: 50, y: 150, text: `N° ${reservation.id}`, fontSize: 14, fontFamily: 'Arial', color: '#333333', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      receiptDate: { x: 50, y: 180, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString()}`, fontSize: 14, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      receiptDate: { x: 50, y: 180, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString('fr-FR')}`, fontSize: 14, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       clientLabel: { x: 50, y: 220, text: lang === 'fr' ? 'Client:' : 'العميل:', fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       clientName: { x: 150, y: 220, text: `${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 14, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       clientPhone: { x: 50, y: 245, text: `${lang === 'fr' ? 'Téléphone:' : 'الهاتف:'} ${reservation.client.phone}`, fontSize: 12, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
@@ -1214,7 +1214,7 @@ const getInitialElements = (type: string, reservation: ReservationDetails, lang:
       ...baseElements,
       title: { x: 200, y: 70, text: lang === 'fr' ? 'FACTURE' : 'الفاتورة', fontSize: 26, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center', backgroundColor: 'transparent' },
       invoiceNumber: { x: 50, y: 165, text: `${lang === 'fr' ? 'N° Facture:' : 'رقم الفاتورة:'} ${reservation.id}`, fontSize: 13, fontFamily: 'Arial', color: '#333333', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      invoiceDate: { x: 300, y: 165, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString()}`, fontSize: 13, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
+      invoiceDate: { x: 300, y: 165, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString('fr-FR')}`, fontSize: 13, fontFamily: 'Arial', color: '#333333', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'right', backgroundColor: 'transparent' },
       clientSectionTitle: { x: 50, y: 205, text: lang === 'fr' ? '👤 INFORMATIONS CLIENT' : '👤 معلومات العميل', fontSize: 14, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'underline', textAlign: 'left', backgroundColor: 'transparent' },
       clientNameLabel: { x: 50, y: 240, text: lang === 'fr' ? 'Nom:' : 'الاسم:', fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       clientName: { x: 130, y: 240, text: `${reservation.client.firstName} ${reservation.client.lastName}`, fontSize: 12, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
@@ -1252,7 +1252,7 @@ const getInitialElements = (type: string, reservation: ReservationDetails, lang:
 
       // Quote header with better styling - positioned below logo
       quoteNumber: { x: 50, y: 165, text: `${lang === 'fr' ? 'N° Devis:' : 'رقم عرض السعر:'} ${reservation.id}`, fontSize: 14, fontFamily: 'Arial', color: '#1a3a52', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      quoteDate: { x: 300, y: 165, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString()}`, fontSize: 13, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      quoteDate: { x: 300, y: 165, text: `${lang === 'fr' ? 'Date:' : 'التاريخ:'} ${new Date().toLocaleDateString('fr-FR')}`, fontSize: 13, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
 
       // Vehicle Specifications Section - Blue theme
       vehicleSpecsTitle: { x: 50, y: 210, text: lang === 'fr' ? '🚗 SPÉCIFICATIONS DU VÉHICULE' : '🚗 مواصفات المركبة', fontSize: 13, fontFamily: 'Arial', color: '#FFFFFF', fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: '#1a3a52', padding: '6px 8px' },
@@ -1350,11 +1350,11 @@ const getInitialElements = (type: string, reservation: ReservationDetails, lang:
       passportText: { x: 50, y: 200, text: documentText, fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       passportNumber: { x: 50, y: 250, text: `N° ${documentNumber} Délivré le ${documentDeliveryDate ? new Date(documentDeliveryDate).toLocaleDateString('fr-FR') : 'N/A'} A ${documentDeliveryPlace || 'N/A'}`, fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       agenceText: { x: 50, y: 300, text: 'Au niveau de votre agence de location de voiture le', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      currentDate: { x: 50, y: 350, text: new Date().toLocaleDateString(), fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      currentDate: { x: 50, y: 350, text: new Date().toLocaleDateString('fr-FR'), fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       contractText: { x: 50, y: 400, text: `Contrat N° ${reservation.id}`, fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       cautionText: { x: 50, y: 450, text: 'Comme caution pour location du véhicule', fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       carInfo: { x: 50, y: 500, text: `Marque ${reservation.car.brand} ${reservation.car.model} Immatric ${reservation.car.registration}`, fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
-      datesText: { x: 50, y: 550, text: `Du ${reservation.step1.departureDate} Au ${reservation.step1.returnDate}`, fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
+      datesText: { x: 50, y: 550, text: `Du ${new Date(reservation.step1.departureDate).toLocaleDateString('fr-FR')} Au ${new Date(reservation.step1.returnDate).toLocaleDateString('fr-FR')}`, fontSize: 16, fontFamily: 'Arial', color: '#000000', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       signatureText1: { x: 50, y: 600, text: 'Signature et cachet de l\'Agence', fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' },
       signatureText2: { x: 300, y: 600, text: 'Signature de client', fontSize: 14, fontFamily: 'Arial', color: '#666666', fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', textAlign: 'left', backgroundColor: 'transparent' }
     };
@@ -2186,14 +2186,68 @@ const PersonalizationModal: React.FC<{
           color: #666;
           margin-top: 1px;
         }
+        /* =============================================================
+           PRINT STYLES - FIXES FOR A4 CENTERED LAYOUT
+           Issues fixed:
+           - Contract was shifted to the left
+           - Not properly centered on page
+           - Inconsistent margins
+           - Frame did not align properly
+           ============================================================= */
         @media print {
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          
+          /* Reset for print */
+          html, body {
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 0;
+            background: white;
+            overflow: hidden;
+          }
+          
+          /* Center container on page */
           body { 
             margin: 0; 
-            padding: 0; 
-            transform: scale(${scaleFactor});
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+          }
+          
+          /* Perfect centering with margins */
+          .page { 
+            margin: 0 auto;
+            padding: 10mm;
+            width: 190mm;
+            min-height: 277mm;
+            height: auto;
+            box-sizing: border-box;
+            border: 2px solid black;
+            left: 0;
+            right: 0;
+            transform: scale(1.15);
             transform-origin: top center;
           }
-          .page { margin: 0; padding: ${hasSecondConductor ? '3mm' : '5mm'}; height: auto; }
+          
+          /* Ensure proper box sizing */
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
+          
+          /* Hide non-contract elements */
+          body > * {
+            visibility: hidden;
+          }
+          
+          .page, .page * {
+            visibility: visible;
+          }
         }
       </style>
     </head>
@@ -2236,11 +2290,11 @@ const PersonalizationModal: React.FC<{
           <div class="section-content full">
             <div class="field">
               <div class="field-label">${labels.departure}</div>
-              <div class="field-value">${new Date(reservation?.step1?.departureDate).toLocaleDateString('en-US')}</div>
+              <div class="field-value">${new Date(reservation?.step1?.departureDate).toLocaleDateString('fr-FR')}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.return}</div>
-              <div class="field-value">${new Date(reservation?.step1?.returnDate).toLocaleDateString('en-US')}</div>
+              <div class="field-value">${new Date(reservation?.step1?.returnDate).toLocaleDateString('fr-FR')}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.duration}</div>
@@ -2265,11 +2319,11 @@ const PersonalizationModal: React.FC<{
               </div>
               <div class="field">
                 <div class="field-label">📅 ${labels.licenseDeliveryDate}</div>
-                <div class="field-value">${reservation?.client?.licenseDeliveryDate ? new Date(reservation.client.licenseDeliveryDate).toLocaleDateString('en-US') : 'mm/dd/yyyy'}</div>
+                <div class="field-value">${reservation?.client?.licenseDeliveryDate ? new Date(reservation.client.licenseDeliveryDate).toLocaleDateString('fr-FR') : 'dd/mm/yyyy'}</div>
               </div>
               <div class="field">
                 <div class="field-label">⏱️ ${labels.licenseExpirationDate}</div>
-                <div class="field-value">${reservation?.client?.licenseExpirationDate ? new Date(reservation.client.licenseExpirationDate).toLocaleDateString('en-US') : 'mm/dd/yyyy'}</div>
+                <div class="field-value">${reservation?.client?.licenseExpirationDate ? new Date(reservation.client.licenseExpirationDate).toLocaleDateString('fr-FR') : 'dd/mm/yyyy'}</div>
               </div>
               <div class="field">
                 <div class="field-label">📍 ${labels.licenseDeliveryPlace}</div>
@@ -2277,7 +2331,7 @@ const PersonalizationModal: React.FC<{
               </div>
               <div class="field">
                 <div class="field-label">${labels.birthDate}</div>
-                <div class="field-value">${new Date(reservation?.client?.dateOfBirth).toLocaleDateString('en-US')}</div>
+                <div class="field-value">${new Date(reservation?.client?.dateOfBirth).toLocaleDateString('fr-FR')}</div>
               </div>
               <div class="field">
                 <div class="field-label">${labels.birthPlace}</div>
@@ -2707,9 +2761,48 @@ const PersonalizationModal: React.FC<{
           padding-top: 8px;
           border-top: 1px solid #ddd;
         }
+        /* Print styles for A4 centering */
         @media print {
-          body { margin: 0; padding: 0; }
-          .page { margin: 0; padding: 5mm; height: auto; }
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          html, body {
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 0;
+            background: white;
+            overflow: hidden;
+          }
+          body { 
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+          }
+          .page { 
+            margin: 0 auto;
+            padding: 10mm;
+            width: 190mm;
+            min-height: 277mm;
+            height: auto;
+            box-sizing: border-box;
+            border: 2px solid black;
+            transform: scale(1.15);
+            transform-origin: top center;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
+          body > * {
+            visibility: hidden;
+          }
+          .page, .page * {
+            visibility: visible;
+          }
         }
       </style>
     </head>
@@ -3075,11 +3168,46 @@ const PersonalizationModal: React.FC<{
           padding-top: 2px;
         }
         @media print {
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          html, body {
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 0;
+            background: white;
+            overflow: hidden;
+          }
           body { 
             margin: 0; 
-            padding: 0; 
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
           }
-          .page { margin: 0; padding: 2.5mm; height: auto; }
+          .page { 
+            margin: 0 auto;
+            padding: 10mm;
+            width: 190mm;
+            min-height: 277mm;
+            height: auto;
+            box-sizing: border-box;
+            border: 2px solid black;
+            transform: scale(1.15);
+            transform-origin: top center;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
+          body > * {
+            visibility: hidden;
+          }
+          .page, .page * {
+            visibility: visible;
+          }
         }
       </style>
     </head>
@@ -3357,8 +3485,48 @@ const PersonalizationModal: React.FC<{
           margin-top: 3px;
         }
         @media print {
-          body { margin: 0; padding: 0; background: white; }
-          .page { margin: 0; box-shadow: none; }
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          html, body {
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 0;
+            background: white;
+            overflow: hidden;
+          }
+          body { 
+            margin: 0;
+            padding: 0;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+          }
+          .page { 
+            margin: 0 auto;
+            padding: 10mm;
+            width: 190mm;
+            min-height: 277mm;
+            height: auto;
+            box-sizing: border-box;
+            border: 2px solid black;
+            box-shadow: none;
+            transform: scale(1.15);
+            transform-origin: top center;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
+          body > * {
+            visibility: hidden;
+          }
+          .page, .page * {
+            visibility: visible;
+          }
         }
       </style>
     </head>
@@ -3695,8 +3863,48 @@ const PersonalizationModal: React.FC<{
           text-transform: uppercase;
         }
         @media print {
-          body { margin: 0; padding: 0; background: white; }
-          .page { margin: 0; box-shadow: none; }
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          html, body {
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 0;
+            background: white;
+            overflow: hidden;
+          }
+          body { 
+            margin: 0;
+            padding: 0;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+          }
+          .page { 
+            margin: 0 auto;
+            padding: 10mm;
+            width: 190mm;
+            min-height: 277mm;
+            height: auto;
+            box-sizing: border-box;
+            border: 2px solid black;
+            box-shadow: none;
+            transform: scale(1.15);
+            transform-origin: top center;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
+          body > * {
+            visibility: hidden;
+          }
+          .page, .page * {
+            visibility: visible;
+          }
         }
       </style>
     </head>
@@ -4079,8 +4287,47 @@ const PersonalizationModal: React.FC<{
           text-transform: uppercase;
         }
         @media print {
-          body { margin: 0; padding: 0; background: white; }
-          .page { margin: 0; padding: 12mm; height: auto; }
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          html, body {
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 0;
+            background: white;
+            overflow: hidden;
+          }
+          body { 
+            margin: 0;
+            padding: 0;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+          }
+          .page { 
+            margin: 0 auto;
+            padding: 10mm;
+            width: 190mm;
+            min-height: 277mm;
+            height: auto;
+            box-sizing: border-box;
+            border: 2px solid black;
+            transform: scale(1.15);
+            transform-origin: top center;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
+          body > * {
+            visibility: hidden;
+          }
+          .page, .page * {
+            visibility: visible;
+          }
         }
       </style>
     </head>

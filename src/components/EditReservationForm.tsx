@@ -77,7 +77,16 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       paymentNotes: reservation.notes,
       advancePayment: reservation.advancePayment,
       remainingPayment: reservation.remainingPayment,
-      cautionEnabled: typeof reservation.cautionEnabled === 'boolean' ? reservation.cautionEnabled : true
+      cautionEnabled: typeof reservation.cautionEnabled === 'boolean' ? reservation.cautionEnabled : true,
+      cautionCurrency: (reservation as any).cautionCurrency || 'DZD',
+      // Calculate euroAmount if caution was in EUR mode
+      euroAmount: (reservation as any).cautionCurrency === 'EUR' && (reservation as any).euro_rate
+        ? Math.round(((reservation as any).cautionAmountDzd || reservation.deposit) / (reservation as any).euro_rate * 100) / 100
+        : '',
+      euroRate: (reservation as any).euro_rate || 145,
+      assuranceEnabled: (reservation as any).assuranceEnabled || false,
+      assurancePercentage: (reservation as any).assurancePercentage || '',
+      caution_amount_dzd: (reservation as any).cautionAmountDzd || reservation.deposit
     },
     additionalServices: reservation.additionalServices,
     deposit: reservation.deposit,
@@ -102,6 +111,17 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
   });
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Log caution and assurance values when component loads
+  useEffect(() => {
+    console.log('🔐 CAUTION & ASSURANCE VALUES LOADED:');
+    console.log('   ├─ cautionCurrency:', (formData.step6 as any)?.cautionCurrency || 'DZD');
+    console.log('   ├─ caution_amount_dzd:', (formData.step6 as any)?.caution_amount_dzd);
+    console.log('   ├─ euroAmount:', (formData.step6 as any)?.euroAmount);
+    console.log('   ├─ euroRate:', (formData.step6 as any)?.euroRate);
+    console.log('   ├─ assuranceEnabled:', (formData.step6 as any)?.assuranceEnabled);
+    console.log('   └─ assurancePercentage:', (formData.step6 as any)?.assurancePercentage);
+  }, [formData.id]); // Log when editing a different reservation
+
   // whenever parent passes updated agencies list, ensure our step1 text fields are populated
   useEffect(() => {
     const departureAgency = agencies?.find(a => a.id === reservation.step1.departureAgency);
@@ -115,6 +135,61 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       }
     }));
   }, [agencies, reservation.step1.departureAgency, reservation.step1.returnAgency]);
+
+  // Sync carId with selected car when car selection changes
+  useEffect(() => {
+    if (formData.step2?.selectedCar) {
+      const newCarId = formData.step2.selectedCar.id;
+      const currentCarId = formData.carId;
+      
+      // Only update if the selected car is different
+      if (newCarId && newCarId !== currentCarId) {
+        console.log('🔄 Car selection changed:', currentCarId, '→', newCarId);
+        console.log('   Selected car:', formData.step2.selectedCar.brand, formData.step2.selectedCar.model);
+        
+        setFormData(prev => ({
+          ...prev,
+          carId: newCarId,
+          car: formData.step2.selectedCar,
+        }));
+      }
+    }
+  }, [formData.step2?.selectedCar?.id]);
+
+  // Detect if price was manually edited by comparing stored price with calculated price
+  useEffect(() => {
+    const calculateExpectedPrice = () => {
+      const pricePerDay = reservation.car?.priceDay || 0;
+      const servicesTotal = (reservation.additionalServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
+      const additionalFees = reservation.additionalFees || 0;
+      const tvaAmount = reservation.tvaApplied ? (reservation.totalPrice ? Math.ceil(reservation.totalPrice * 0.19) : 0) : 0;
+      
+      const expectedPrice = (pricePerDay * reservation.totalDays) + servicesTotal + additionalFees + tvaAmount;
+      return expectedPrice;
+    };
+    
+    const expectedPrice = calculateExpectedPrice();
+    const storedPrice = reservation.totalPrice || 0;
+    const priceDifference = Math.abs(expectedPrice - storedPrice);
+    
+    // If price differs by more than 1 DA (accounting for rounding), it was manually edited
+    if (priceDifference > 1) {
+      console.log('💡 Manual price detected!');
+      console.log('   ├─ Expected calculated: ' + expectedPrice.toLocaleString() + ' DA');
+      console.log('   ├─ Stored (actual):     ' + storedPrice.toLocaleString() + ' DA');
+      console.log('   └─ Difference:          ' + priceDifference.toLocaleString() + ' DA');
+      
+      setFormData(prev => ({
+        ...prev,
+        step6: {
+          ...prev.step6!,
+          isManualTotal: true,
+          totalPrice: storedPrice,
+          manualTotal: storedPrice.toString(),
+        }
+      }));
+    }
+  }, []); // Only run once on mount
 
   const steps = isInspectionMode
     ? [
@@ -262,9 +337,12 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
 
       // Prepare the update data
       const updateData: any = {
-        // Dates & Duration
+        // Car & Booking Details
+        carId: formData.carId,
         departureDate: newDepartureDate,
         returnDate: newReturnDate,
+        departureTime: formData.step1?.departureTime,
+        returnTime: formData.step1?.returnTime,
         totalDays: newTotalDays,
         
         // Pricing
@@ -281,6 +359,16 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
         // Deposit & Status
         deposit: newDeposit,
         cautionEnabled: formData.step6?.cautionEnabled,
+        // Caution and Assurance fields
+        cautionAmountDzd: (formData.step6 as any)?.caution_amount_dzd || newDeposit,
+        cautionCurrency: (formData.step6 as any)?.cautionCurrency || 'DZD',
+        euroRate: (formData.step6 as any)?.euroRate || 145,
+        assuranceEnabled: (formData.step6 as any)?.assuranceEnabled || false,
+        assurancePercentage: (formData.step6 as any)?.assuranceEnabled 
+          ? (formData.step6 as any)?.assurancePercentage !== '' 
+            ? Number((formData.step6 as any)?.assurancePercentage) 
+            : 0
+          : 0,
         
         // If in inspection mode (accepted), set status to confirmed
         ...(isInspectionMode ? { status: 'confirmed' } : {})
@@ -288,12 +376,27 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
 
       console.log('📤 UPDATE DATA TO SAVE:', JSON.stringify(updateData, null, 2));
       console.log('📊 Key values being saved:');
-      console.log('   ├─ totalPrice: ' + updateData.totalPrice);
-      console.log('   ├─ deposit: ' + updateData.deposit);
-      console.log('   ├─ advancePayment: ' + updateData.advancePayment);
-      console.log('   ├─ remainingPayment: ' + updateData.remainingPayment);
-      console.log('   ├─ totalDays: ' + updateData.totalDays);
-      console.log('   └─ status: ' + (updateData.status || 'unchanged'));
+      console.log('   ├─ BOOKING DETAILS:');
+      console.log('   │  ├─ carId: ' + updateData.carId);
+      console.log('   │  ├─ car: ' + (formData.car?.brand + ' ' + formData.car?.model || 'N/A'));
+      console.log('   │  ├─ departureDate: ' + updateData.departureDate);
+      console.log('   │  ├─ returnDate: ' + updateData.returnDate);
+      console.log('   │  ├─ departureTime: ' + updateData.departureTime);
+      console.log('   │  └─ returnTime: ' + updateData.returnTime);
+      console.log('   ├─ PRICING:');
+      console.log('   │  ├─ totalPrice: ' + updateData.totalPrice);
+      console.log('   │  ├─ deposit: ' + updateData.deposit);
+      console.log('   │  ├─ advancePayment: ' + updateData.advancePayment);
+      console.log('   │  └─ remainingPayment: ' + updateData.remainingPayment);
+      console.log('   ├─ CAUTION & ASSURANCE:');
+      console.log('   │  ├─ cautionCurrency: ' + updateData.cautionCurrency);
+      console.log('   │  ├─ cautionAmountDzd: ' + updateData.cautionAmountDzd);
+      console.log('   │  ├─ euroRate: ' + updateData.euroRate);
+      console.log('   │  ├─ assuranceEnabled: ' + updateData.assuranceEnabled);
+      console.log('   │  └─ assurancePercentage: ' + updateData.assurancePercentage);
+      console.log('   └─ OTHER:');
+      console.log('      ├─ totalDays: ' + updateData.totalDays);
+      console.log('      └─ status: ' + (updateData.status || 'unchanged'));
 
       // Update the reservation
       console.log('💾 Saving to database...');

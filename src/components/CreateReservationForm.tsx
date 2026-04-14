@@ -368,6 +368,16 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           remainingPayment: remainingPayment,
           status: 'pending', // save as pending until confirmed
           notes: formData.step6?.notes || '',
+          // Caution and Assurance fields
+          cautionAmountDzd: (formData.step6 as any)?.caution_amount_dzd || formData.step2?.selectedCar?.deposit || 0,
+          cautionCurrency: (formData.step6 as any)?.cautionCurrency || 'DZD',
+          euroRate: (formData.step6 as any)?.euroRate || 145,
+          assuranceEnabled: (formData.step6 as any)?.assuranceEnabled || false,
+          assurancePercentage: (formData.step6 as any)?.assuranceEnabled 
+            ? (formData.step6 as any)?.assurancePercentage !== '' 
+              ? Number((formData.step6 as any)?.assurancePercentage) 
+              : 0
+            : 0,
         });
         reservationId = result.id;
       }
@@ -2553,6 +2563,17 @@ export const Step6FinalPricing: React.FC<{
   const [manualTotal, setManualTotal] = useState<number | ''>('');
   const [cautionEnabled, setCautionEnabled] = useState(true);
   const [editedDeposit, setEditedDeposit] = useState<number | ''>('');
+  
+  // Multi-currency caution states
+  const [cautionCurrency, setCautionCurrency] = useState<'DZD' | 'EUR'>('DZD');
+  const [euroAmount, setEuroAmount] = useState<number | ''>('');
+  const [euroRate, setEuroRate] = useState(145); // Default exchange rate
+  
+  // Assurance Serenity states
+  const [assuranceEnabled, setAssuranceEnabled] = useState(false);
+  const [assurancePercentage, setAssurancePercentage] = useState<number | ''>('');
+  
+  const hasInitialized = React.useRef(false);
 
   // TVA rates options
   const tvaRates = [0, 9, 19, 21];
@@ -2563,16 +2584,52 @@ export const Step6FinalPricing: React.FC<{
     };
   }, []);
 
-  // Initialize from existing step6 data
+  // Initialize from existing step6 data (only once per reservation)
   useEffect(() => {
-    if (formData.step6) {
+    // Reset initialization flag if formData.id changes (different reservation being edited)
+    if ((formData as any).id && hasInitialized.current) {
+      hasInitialized.current = false;
+    }
+    
+    if (!hasInitialized.current && formData.step6) {
+      hasInitialized.current = true;
       setTvaEnabled(formData.step6.tvaApplied || false);
-      setTvaRate(19); // Default, could be calculated from tvaAmount if needed
+      setTvaRate(19); // Default
       setAdvancePayment(formData.step6.advancePayment || 0);
       setPaymentNotes(formData.step6.paymentNotes || '');
-    } else {
+      // Initialize manual total fields
+      setIsManualTotal(formData.step6.isManualTotal || false);
+      setManualTotal(formData.step6.totalPrice || '');
+      // Initialize currency fields
+      const savedCurrency = (formData.step6 as any).cautionCurrency || 'DZD';
+      const savedEuroAmount = (formData.step6 as any).euroAmount || '';
+      const savedEuroRate = (formData.step6 as any).euroRate || 145;
+      const savedCautionDzd = (formData.step6 as any).caution_amount_dzd;
+      
+      console.log('💾 STEP6 INITIALIZATION:');
+      console.log('   ├─ cautionCurrency:', savedCurrency);
+      console.log('   ├─ euroAmount:', savedEuroAmount);
+      console.log('   ├─ euroRate:', savedEuroRate);
+      console.log('   ├─ caution_amount_dzd:', savedCautionDzd);
+      console.log('   ├─ assuranceEnabled:', (formData.step6 as any).assuranceEnabled);
+      console.log('   └─ assurancePercentage:', (formData.step6 as any).assurancePercentage);
+      
+      setCautionCurrency(savedCurrency);
+      setEuroAmount(savedEuroAmount);
+      setEuroRate(savedEuroRate);
+      
+      // Initialize editedDeposit based on currency mode
+      if (savedCurrency === 'EUR' && savedCautionDzd) {
+        setEditedDeposit(savedCautionDzd);
+      } else if (savedCautionDzd) {
+        setEditedDeposit(savedCautionDzd);
+      }
+      
+      // Initialize assurance fields
+      setAssuranceEnabled((formData.step6 as any).assuranceEnabled || false);
+      setAssurancePercentage((formData.step6 as any).assurancePercentage || '');
     }
-  }, [formData.step6]);
+  }, [(formData as any).id]); // Reinitialize when editing a different reservation
 
   // Initialize editedDeposit from formData or selectedCar
   useEffect(() => {
@@ -2584,6 +2641,14 @@ export const Step6FinalPricing: React.FC<{
       setEditedDeposit((formData as any).car.deposit || 0);
     }
   }, [formData.step2?.selectedCar, (formData as any).car]);
+
+  // Auto-calculate DZD from EUR
+  useEffect(() => {
+    if (cautionCurrency === 'EUR' && euroAmount && euroRate) {
+      const dzd = Math.round(Number(euroAmount) * Number(euroRate));
+      setEditedDeposit(dzd);
+    }
+  }, [cautionCurrency, euroAmount, euroRate]);
 
   // Calculate pricing
   // Get car data from either step2 (new flow) or car (existing reservation/inspection)
@@ -2624,6 +2689,12 @@ export const Step6FinalPricing: React.FC<{
   const computedPrice = Math.max(0, Math.round(subtotal + tvaAmount));
   const deposit = editedDeposit !== '' ? Number(editedDeposit) : (selectedCar?.deposit || 0);
   const totalPrice = isManualTotal && manualTotal !== '' ? Math.max(0, Math.round(Number(manualTotal))) : computedPrice;
+  
+  // Calculate assurance amount
+  const assuranceAmount = assuranceEnabled && assurancePercentage !== '' 
+    ? Math.round(totalPrice * (Number(assurancePercentage) / 100))
+    : 0;
+  const finalTotal = totalPrice + assuranceAmount;
 
   // Console logging for debugging
   React.useEffect(() => {
@@ -2649,12 +2720,25 @@ export const Step6FinalPricing: React.FC<{
         advancePayment: prev.step6?.advancePayment ?? prev.advancePayment,
         remainingPayment: prev.step6?.remainingPayment ?? prev.remainingPayment,
         paymentNotes: prev.step6?.paymentNotes ?? prev.notes,
-        cautionEnabled: cautionEnabled
+        cautionEnabled: cautionEnabled,
+        // Multi-currency caution fields
+        cautionCurrency: cautionCurrency,
+        euroAmount: euroAmount,
+        euroRate: euroRate,
+        // Assurance fields
+        assuranceEnabled: assuranceEnabled,
+        assurancePercentage: assurancePercentage,
+        assuranceAmount: assuranceAmount,
+        finalTotal: finalTotal,
+        // Caution amount in DZD for database
+        caution_amount_dzd: cautionCurrency === 'EUR' && euroAmount && euroRate 
+          ? Math.round(Number(euroAmount) * Number(euroRate))
+          : (editedDeposit !== '' ? Number(editedDeposit) : deposit),
       },
       deposit: deposit,
       totalPrice: totalPrice
     }));
-  }, [totalPrice, isManualTotal, manualTotal, tvaEnabled, tvaAmount, days, cautionEnabled, setFormData]);
+  }, [totalPrice, isManualTotal, manualTotal, tvaEnabled, tvaAmount, cautionEnabled, cautionCurrency, euroAmount, euroRate, assuranceEnabled, assurancePercentage, assuranceAmount, finalTotal, deposit, editedDeposit]);
 
   return (
     <div className="space-y-8">
@@ -3041,27 +3125,112 @@ export const Step6FinalPricing: React.FC<{
               <span className="font-bold text-blue-700">{lang === 'fr' ? 'Activer Caution' : 'تفعيل الضمان'}</span>
             </label>
             {cautionEnabled && (
-              <div className="ml-4 flex gap-2 items-center">
-                <span className="font-bold text-blue-700">{lang === 'fr' ? 'Caution (remboursable)' : 'الضمان (قابل للاسترداد)'}: </span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={editedDeposit === '' ? '' : editedDeposit}
-                  onChange={(e) => {
-                    const value = e.target.value.trim();
-                    if (value === '') {
-                      setEditedDeposit('');
-                    } else {
-                      const numValue = parseInt(value, 10);
-                      if (!isNaN(numValue) && numValue >= 0) {
-                        setEditedDeposit(numValue);
+              <div className="ml-4 space-y-3">
+                {/* Currency Selector */}
+                <div className="flex gap-2 items-center">
+                  <span className="font-bold text-blue-700">{lang === 'fr' ? 'Devise' : 'العملة'}: </span>
+                  <select
+                    value={cautionCurrency}
+                    onChange={(e) => {
+                      setCautionCurrency(e.target.value as 'DZD' | 'EUR');
+                      if (e.target.value === 'DZD') {
+                        setEuroAmount('');
+                      } else {
+                        setEditedDeposit('');
                       }
-                    }
-                  }}
-                  className="w-32 p-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right font-bold"
-                  placeholder="0"
-                />
-                <span className="text-blue-700 font-bold">DA</span>
+                    }}
+                    className="p-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold"
+                  >
+                    <option value="DZD">DZD (DA)</option>
+                    <option value="EUR">EUR (€)</option>
+                  </select>
+                </div>
+
+                {/* DZD Mode */}
+                {cautionCurrency === 'DZD' && (
+                  <div className="flex gap-2 items-center">
+                    <span className="font-bold text-blue-700">{lang === 'fr' ? 'Caution (remboursable)' : 'الضمان (قابل للاسترداد)'}: </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={editedDeposit === '' ? '' : editedDeposit}
+                      onChange={(e) => {
+                        const value = e.target.value.trim();
+                        if (value === '') {
+                          setEditedDeposit('');
+                        } else {
+                          const numValue = parseInt(value, 10);
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            setEditedDeposit(numValue);
+                          }
+                        }
+                      }}
+                      className="w-32 p-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right font-bold"
+                      placeholder="0"
+                    />
+                    <span className="text-blue-700 font-bold">DA</span>
+                  </div>
+                )}
+
+                {/* EUR Mode */}
+                {cautionCurrency === 'EUR' && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <span className="font-bold text-blue-700">{lang === 'fr' ? 'Montant EUR' : 'المبلغ بالیورو'}: </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={euroAmount === '' ? '' : euroAmount}
+                        onChange={(e) => {
+                          const value = e.target.value.trim();
+                          if (value === '') {
+                            setEuroAmount('');
+                          } else {
+                            const numValue = parseFloat(value);
+                            if (!isNaN(numValue) && numValue >= 0) {
+                              setEuroAmount(numValue);
+                            }
+                          }
+                        }}
+                        className="w-32 p-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right font-bold"
+                        placeholder="0"
+                      />
+                      <span className="text-blue-700 font-bold">€</span>
+                    </div>
+
+                    <div className="flex gap-2 items-center">
+                      <span className="font-bold text-blue-700">{lang === 'fr' ? 'Taux de change' : 'سعر الصرف'}: </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={euroRate === '' ? '' : euroRate}
+                        onChange={(e) => {
+                          const value = e.target.value.trim();
+                          if (value === '') {
+                            setEuroRate('');
+                          } else {
+                            const numValue = parseFloat(value);
+                            if (!isNaN(numValue) && numValue > 0) {
+                              setEuroRate(numValue);
+                            }
+                          }
+                        }}
+                        className="w-32 p-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right font-bold"
+                        placeholder="145"
+                      />
+                      <span className="text-blue-700 font-bold">DA/€</span>
+                    </div>
+
+                    {euroAmount && euroRate && (
+                      <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-sm text-blue-700">
+                          {lang === 'fr' ? '= ' : '= '} 
+                          <span className="font-bold">{Math.round(Number(euroAmount) * Number(euroRate)).toLocaleString()}</span> DA
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -3105,6 +3274,65 @@ export const Step6FinalPricing: React.FC<{
               <span className="text-indigo-700">{lang === 'fr' ? 'Caution:' : 'الضمان:'}</span>
               <span className="font-bold text-indigo-900">{deposit.toLocaleString()} DA</span>
             </div>
+
+            {/* Assurance Serenity Section */}
+            <div className="border-t border-indigo-200 pt-3 mt-3">
+              <label className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={assuranceEnabled}
+                  onChange={(e) => {
+                    setAssuranceEnabled(e.target.checked);
+                    if (!e.target.checked) {
+                      setAssurancePercentage('');
+                    }
+                  }}
+                  className="w-4 h-4 text-purple-600 border-purple-300 rounded focus:ring-purple-500"
+                />
+                <span className="font-bold text-purple-700">
+                  {lang === 'fr' ? '🛡️ Assurance Serenity' : '🛡️ تأمين Serenity'}
+                </span>
+              </label>
+              {assuranceEnabled && (
+                <div className="ml-6 space-y-2">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm font-bold text-purple-700 w-24">
+                      {lang === 'fr' ? 'Pourcentage:' : 'النسبة:'}
+                    </label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={assurancePercentage === '' ? '' : assurancePercentage}
+                      onChange={(e) => {
+                        const value = e.target.value.trim();
+                        if (value === '') {
+                          setAssurancePercentage('');
+                        } else {
+                          const numValue = parseFloat(value);
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            setAssurancePercentage(numValue);
+                          }
+                        }
+                      }}
+                      className="w-20 p-1 border border-purple-300 rounded text-right font-bold"
+                      placeholder="0"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                    />
+                    <span className="text-purple-700 font-bold">%</span>
+                  </div>
+                  {assuranceAmount > 0 && (
+                    <div className="p-2 bg-purple-50 rounded border border-purple-200">
+                      <p className="text-sm text-purple-700">
+                        {lang === 'fr' ? 'Montant Assurance:' : 'مبلغ التأمين:'} 
+                        <span className="font-bold ml-2">{assuranceAmount.toLocaleString()} DA</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right Column - Duration & Payment */}
@@ -3147,6 +3375,10 @@ export const Step6FinalPricing: React.FC<{
           <ul className="text-xs text-indigo-800 space-y-1 ml-4">
             <li>✓ {lang === 'fr' ? 'Prix Total: ' : 'السعر الكلي: '}<span className="font-bold">{totalPrice.toLocaleString()} DA</span></li>
             <li>✓ {lang === 'fr' ? 'Caution: ' : 'الضمان: '}<span className="font-bold">{deposit.toLocaleString()} DA</span></li>
+            {assuranceEnabled && assuranceAmount > 0 && (
+              <li>✓ {lang === 'fr' ? 'Assurance Serenity: ' : 'تأمين Serenity: '}<span className="font-bold">{assuranceAmount.toLocaleString()} DA ({assurancePercentage}%)</span></li>
+            )}
+            <li>✓ {lang === 'fr' ? 'Total avec Assurance: ' : 'المجموع مع التأمين: '}<span className="font-bold">{finalTotal.toLocaleString()} DA</span></li>
             <li>✓ {lang === 'fr' ? 'Durée: ' : 'المدة: '}<span className="font-bold">{days} {lang === 'fr' ? 'jours' : 'أيام'}</span></li>
             <li>✓ {lang === 'fr' ? 'TVA Appliquée: ' : 'تطبيق TVA: '}<span className="font-bold">{tvaEnabled ? (lang === 'fr' ? 'Oui (' + tvaRate + '%)' : 'نعم (' + tvaRate + '%)') : (lang === 'fr' ? 'Non' : 'لا')}</span></li>
           </ul>

@@ -41,8 +41,8 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
         : 'medium';
 
     return {
-      carId: car.id,
-      carInfo: `${car.brand} ${car.model} - ${car.registration}`,
+      car_id: car.id,
+      car_info: `${car.brand} ${car.model} - ${car.registration}`,
       type,
       title:
         type === 'vidange'
@@ -58,18 +58,18 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
           : 'Contrôle technique à jour',
       message: alertObj.message,
       severity,
-      dueDate:
+      due_date:
         (type === 'assurance' || type === 'controle') && alertObj.expirationDate
           ? alertObj.expirationDate.toISOString().split('T')[0]
           : undefined,
-      isExpired: alertObj.status === 'overdue',
-      daysUntilDue:
+      is_expired: alertObj.status === 'overdue',
+      days_until_due:
         alertObj.status === 'overdue'
           ? -alertObj.daysRemaining
           : alertObj.daysRemaining,
-      currentMileage: alertObj.currentMileage,
-      nextServiceMileage: alertObj.nextVidangeKm,
-      createdAt: new Date().toISOString(),
+      current_mileage: alertObj.currentMileage,
+      next_service_mileage: alertObj.nextVidangeKm,
+      created_at: new Date().toISOString(),
     };
   };
 
@@ -223,6 +223,11 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
           nextVidangeKm: data.nextVidangeKm,
           expenseName: data.expenseName,
           expirationDate: data.expirationDate,
+          // Include filter tracking for vidange
+          oilFilterChanged: (data as any).oilFilterChanged || false,
+          airFilterChanged: (data as any).airFilterChanged || false,
+          fuelFilterChanged: (data as any).fuelFilterChanged || false,
+          acFilterChanged: (data as any).acFilterChanged || false,
         };
         const result = await addVehicleExpense(newExpenseData);
         if (result.success && result.expense) {

@@ -30,6 +30,10 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
     nextVidangeKm: 0,
     expenseName: '',
     expirationDate: '',
+    oilFilterChanged: false,
+    airFilterChanged: false,
+    fuelFilterChanged: false,
+    acFilterChanged: false,
   });
 
   useEffect(() => {
@@ -44,6 +48,10 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
         nextVidangeKm: expense.nextVidangeKm || 0,
         expenseName: expense.expenseName || '',
         expirationDate: expense.expirationDate || '',
+        oilFilterChanged: (expense as any).oilFilterChanged || false,
+        airFilterChanged: (expense as any).airFilterChanged || false,
+        fuelFilterChanged: (expense as any).fuelFilterChanged || false,
+        acFilterChanged: (expense as any).acFilterChanged || false,
       });
     } else {
       const selectedCar = cars.length > 0 ? cars[0] : null;
@@ -57,18 +65,32 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
         nextVidangeKm: selectedCar ? (selectedCar.mileage + 10000) : 0,
         expenseName: '',
         expirationDate: '',
+        oilFilterChanged: false,
+        airFilterChanged: false,
+        fuelFilterChanged: false,
+        acFilterChanged: false,
       });
     }
   }, [expense, isOpen, cars]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: ['cost', 'currentMileage', 'nextVidangeKm'].includes(name)
-        ? parseInt(value) || 0
-        : value,
-    }));
+    const { name, value, type: inputType } = e.target;
+    
+    // Handle checkbox changes
+    if (inputType === 'checkbox') {
+      const target = e.target as HTMLInputElement;
+      setFormData(prev => ({
+        ...prev,
+        [name]: target.checked,
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: ['cost', 'currentMileage', 'nextVidangeKm'].includes(name)
+          ? parseInt(value) || 0
+          : value,
+      }));
+    }
   };
 
   const handleCarChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -102,6 +124,14 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
     // Always include expirationDate for assurance and controle types
     if (formData.type === 'assurance' || formData.type === 'controle') {
       submitData.expirationDate = formData.expirationDate || undefined;
+    }
+
+    // Include filter tracking for vidange type
+    if (formData.type === 'vidange') {
+      (submitData as any).oilFilterChanged = formData.oilFilterChanged;
+      (submitData as any).airFilterChanged = formData.airFilterChanged;
+      (submitData as any).fuelFilterChanged = formData.fuelFilterChanged;
+      (submitData as any).acFilterChanged = formData.acFilterChanged;
     }
 
     onSave(submitData);
@@ -256,6 +286,76 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
                   <p className="text-2xl font-black text-green-600">
                     {(formData.currentMileage + formData.nextVidangeKm).toLocaleString('fr-FR')} KM
                   </p>
+                </div>
+              </div>
+
+              {/* Filter Tracking Section */}
+              <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <label className="label-saas">🔧 {{fr: 'Filtres changés', ar: 'الفلاتر المتغيرة'}[lang]}</label>
+                <div className="space-y-2">
+                  {/* Oil Filter */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="oilFilterChanged"
+                      name="oilFilterChanged"
+                      checked={formData.oilFilterChanged}
+                      onChange={handleChange}
+                      className="w-4 h-4 rounded cursor-pointer"
+                    />
+                    <label htmlFor="oilFilterChanged" className="cursor-pointer flex items-center gap-2 text-sm font-medium">
+                      <span>🛢️</span>
+                      <span>{{fr: 'Filtre à huile', ar: 'فلتر الزيت'}[lang]}</span>
+                    </label>
+                  </div>
+
+                  {/* Air Filter */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="airFilterChanged"
+                      name="airFilterChanged"
+                      checked={formData.airFilterChanged}
+                      onChange={handleChange}
+                      className="w-4 h-4 rounded cursor-pointer"
+                    />
+                    <label htmlFor="airFilterChanged" className="cursor-pointer flex items-center gap-2 text-sm font-medium">
+                      <span>💨</span>
+                      <span>{{fr: 'Filtre à air', ar: 'فلتر الهواء'}[lang]}</span>
+                    </label>
+                  </div>
+
+                  {/* Fuel Filter */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="fuelFilterChanged"
+                      name="fuelFilterChanged"
+                      checked={formData.fuelFilterChanged}
+                      onChange={handleChange}
+                      className="w-4 h-4 rounded cursor-pointer"
+                    />
+                    <label htmlFor="fuelFilterChanged" className="cursor-pointer flex items-center gap-2 text-sm font-medium">
+                      <span>⛽</span>
+                      <span>{{fr: 'Filtre à carburant', ar: 'فلتر الوقود'}[lang]}</span>
+                    </label>
+                  </div>
+
+                  {/* AC Filter */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="acFilterChanged"
+                      name="acFilterChanged"
+                      checked={formData.acFilterChanged}
+                      onChange={handleChange}
+                      className="w-4 h-4 rounded cursor-pointer"
+                    />
+                    <label htmlFor="acFilterChanged" className="cursor-pointer flex items-center gap-2 text-sm font-medium">
+                      <span>❄️</span>
+                      <span>{{fr: 'Filtre climatisation', ar: 'فلتر تكييف الهواء'}[lang]}</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </>

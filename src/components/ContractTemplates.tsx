@@ -30,6 +30,8 @@ interface ContractData {
   rentAmount: number;
   insurance: number;
   deposit: number;
+  assurancePercentage?: number;
+  assuranceAmount?: number;
   fuelType?: string;
   language: 'fr' | 'ar';
 }
@@ -131,6 +133,10 @@ const FRENCH_CONTRACT_TEMPLATE = `
         <tr>
           <td>Assurance:</td>
           <td>{insurance} DZD</td>
+        </tr>
+        <tr>
+          <td>Assurance Serenity:</td>
+          <td>{assuranceAmount} DZD ({assurancePercentage}%)</td>
         </tr>
         <tr>
           <td>Caution Obligatoire:</td>
@@ -269,6 +275,10 @@ const ARABIC_CONTRACT_TEMPLATE = `
           <td>التأمين:</td>
         </tr>
         <tr>
+          <td>{assuranceAmount} دج ({assurancePercentage}%)</td>
+          <td>تأمين Serenity:</td>
+        </tr>
+        <tr>
           <td>{deposit} دج</td>
           <td>الكفالة الإجبارية:</td>
         </tr>
@@ -390,13 +400,31 @@ export const ContractTemplates: React.FC<ContractTemplatesProps> = ({
     }
   };
 
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '';
+    try {
+      return new Date(dateStr).toLocaleDateString('fr-FR');
+    } catch {
+      return String(dateStr);
+    }
+  };
+
   const renderTemplatePreview = (content: string) => {
     let rendered = content;
-    Object.entries(contractData).forEach(([key, value]) => {
+    
+    // Format dates before replacing placeholders
+    const formattedData = {
+      ...contractData,
+      departureDate: contractData.departureDate ? formatDate(contractData.departureDate) : '',
+      returnDate: contractData.returnDate ? formatDate(contractData.returnDate) : '',
+      driverBirthDate: contractData.driverBirthDate ? formatDate(contractData.driverBirthDate) : '',
+    };
+    
+    Object.entries(formattedData).forEach(([key, value]) => {
       rendered = rendered.replace(`{${key}}`, String(value || ''));
     });
     
-    const total = (contractData.rentAmount || 0) + (contractData.insurance || 0) + (contractData.deposit || 0);
+    const total = (contractData.rentAmount || 0) + (contractData.insurance || 0) + (contractData.deposit || 0) + (contractData.assuranceAmount || 0);
     rendered = rendered.replace('{total}', String(total));
     
     return rendered;
@@ -547,13 +575,49 @@ export const ContractTemplates: React.FC<ContractTemplatesProps> = ({
       </motion.div>
 
       <style>{`
+        /* =============================================================
+           FIX: Contract printing layout - A4 centered on page
+           
+           Issues fixed:
+           - Contract was shifted to the left when printing
+           - Not horizontally centered
+           - Margins were inconsistent
+           - Frame (border) did not align with page limits
+           - Layout used screen styles instead of print styles
+           
+           Solution: Perfect A4 centering with proper page settings
+           ============================================================= */
+
+        /* 1. A4 PAGE SETTINGS */
+        @page {
+          size: A4;
+          margin: 0;
+        }
+
+        /* 2. RESET HTML AND BODY FOR PRINT */
+        html, body {
+          width: 100%;
+          height: 100%;
+          margin: 0;
+          padding: 0;
+          background: white;
+        }
+
+        /* 3. SCREEN DISPLAY STYLES (Non-print) */
         .contract-fr, .contract-ar {
           font-family: 'Arial', sans-serif;
           color: #333;
           background: white;
-          padding: 40px;
-          max-width: 8.5in;
-          margin: 0 auto;
+          padding: 20px;
+          width: 190mm;
+          min-height: 277mm;
+          box-sizing: border-box;
+          margin: 20px auto;
+          box-shadow: 0 0 0 2px #ddd;
+          page-break-after: always;
+          border: 2px solid #ddd;
+          display: flex;
+          flex-direction: column;
         }
 
         .contract-header {
@@ -566,64 +630,67 @@ export const ContractTemplates: React.FC<ContractTemplatesProps> = ({
         }
 
         .logo-section {
-          width: 100px;
-          height: 100px;
+          width: 80px;
+          height: 80px;
           background: #f0f0f0;
           border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 12px;
+          font-size: 11px;
           color: #999;
+          flex-shrink: 0;
         }
 
         .header-text {
           flex: 1;
           text-align: center;
+          padding: 0 15px;
         }
 
         .header-text h1 {
-          font-size: 24px;
+          font-size: 20px;
           font-weight: bold;
           margin: 0;
           color: #000;
         }
 
         .header-text h2 {
-          font-size: 16px;
+          font-size: 14px;
           font-weight: bold;
           margin: 5px 0;
           color: #333;
         }
 
         .header-text p {
-          font-size: 12px;
-          margin: 3px 0;
+          font-size: 11px;
+          margin: 2px 0;
           color: #666;
         }
 
         .contract-info {
-          margin: 20px 0;
+          margin: 15px 0;
+          flex: 1;
         }
 
         .info-section {
-          margin-bottom: 25px;
+          margin-bottom: 20px;
           page-break-inside: avoid;
         }
 
         .info-section h3 {
-          font-size: 14px;
+          font-size: 13px;
           font-weight: bold;
           background: #f0f0f0;
-          padding: 8px 12px;
-          margin: 0 0 10px 0;
+          padding: 6px 10px;
+          margin: 0 0 8px 0;
           border-left: 4px solid #333;
         }
 
         .info-section table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 12px;
+          font-size: 11px;
         }
 
         .info-section table tr {
@@ -635,7 +702,7 @@ export const ContractTemplates: React.FC<ContractTemplatesProps> = ({
         }
 
         .info-section table td {
-          padding: 8px;
+          padding: 6px;
           text-align: left;
         }
 
@@ -645,38 +712,38 @@ export const ContractTemplates: React.FC<ContractTemplatesProps> = ({
         }
 
         .conditions-section {
-          margin-top: 20px;
+          margin-top: 15px;
         }
 
         .conditions-section h3 {
-          font-size: 14px;
+          font-size: 13px;
           font-weight: bold;
           background: #f0f0f0;
-          padding: 8px 12px;
-          margin: 0 0 10px 0;
+          padding: 6px 10px;
+          margin: 0 0 8px 0;
           border-left: 4px solid #333;
         }
 
         .conditions-section ul {
           margin: 0;
           padding-left: 20px;
-          font-size: 11px;
-          line-height: 1.6;
+          font-size: 10px;
+          line-height: 1.5;
         }
 
         .conditions-section li {
-          margin-bottom: 5px;
+          margin-bottom: 4px;
         }
 
         .contract-footer {
-          margin-top: 30px;
+          margin-top: 20px;
           page-break-inside: avoid;
         }
 
         .signature-section {
           display: flex;
           justify-content: space-around;
-          margin-top: 40px;
+          margin-top: 30px;
         }
 
         .signature-box {
@@ -685,25 +752,108 @@ export const ContractTemplates: React.FC<ContractTemplatesProps> = ({
         }
 
         .signature-box p {
-          font-size: 11px;
+          font-size: 10px;
           font-weight: bold;
-          margin: 5px 0;
+          margin: 4px 0;
         }
 
         .signature-line {
           border-top: 1px solid #333;
-          width: 150px;
-          margin: 30px auto 5px;
+          width: 120px;
+          margin: 25px auto 4px;
         }
 
+        /* =============================================================
+           PRINT STYLES - CRITICAL FOR A4 CENTERING
+           ============================================================= */
         @media print {
-          body {
+          @page {
+            size: A4;
+            margin: 0;
+          }
+
+          /* 4. Reset html and body for printing */
+          html, body {
+            width: 210mm;
+            height: 297mm;
             margin: 0;
             padding: 0;
+            background: white;
+            overflow: hidden;
           }
+
+          /* 5. Center contract on page */
+          body {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+          }
+
+          /* 6. Contract container - perfectly centered with margins */
           .contract-fr, .contract-ar {
-            padding: 20px;
-            max-width: 100%;
+            width: 190mm;
+            min-height: 277mm;
+            margin: 0 auto;
+            padding: 10mm;
+            box-sizing: border-box;
+            background: white;
+            border: 2px solid black;
+            box-shadow: none;
+            page-break-after: always;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            left: 0;
+            right: 0;
+    transform: scale(1.15);
+    transform-origin: top center;
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
+
+          /* 10. Hide non-contract elements during print */
+          body > * {
+            visibility: hidden;
+          }
+
+          .contract-fr, .contract-ar,
+          .contract-fr *,
+          .contract-ar * {
+            visibility: visible;
+          }
+
+          /* 11. Reduce sizes for print to fit better */
+          .header-text h1 {
+            font-size: 18px;
+          }
+
+          .header-text h2 {
+            font-size: 12px;
+          }
+
+          .header-text p {
+            font-size: 10px;
+          }
+
+          .info-section h3 {
+            font-size: 12px;
+          }
+
+          .info-section table {
+            font-size: 10px;
+          }
+
+          .conditions-section h3 {
+            font-size: 12px;
+          }
+
+          .conditions-section ul {
+            font-size: 9px;
+          }
+
+          .signature-box p {
+            font-size: 9px;
           }
         }
       `}</style>

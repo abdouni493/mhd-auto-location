@@ -28,6 +28,11 @@ export class ReservationsService {
     remainingPayment: number;
     notes?: string;
     status?: string;
+    cautionAmountDzd?: number;
+    cautionCurrency?: 'DZD' | 'EUR';
+    euroRate?: number;
+    assuranceEnabled?: boolean;
+    assurancePercentage?: number;
   }): Promise<{ id: string }> {
     const { data: reservation, error } = await supabase
       .from('reservations')
@@ -52,12 +57,29 @@ export class ReservationsService {
         remaining_payment: data.remainingPayment,
         status: data.status || 'pending',
         notes: data.notes,
+        caution_amount_dzd: data.cautionAmountDzd || data.deposit,
+        caution_currency: data.cautionCurrency || 'DZD',
+        euro_rate: data.euroRate || 145,
+        assurance_enabled: data.assuranceEnabled || false,
+        assurance_percentage: data.assurancePercentage || null,
       }])
       .select()
       .single();
 
     if (error) throw error;
     return { id: reservation.id };
+  }
+
+  static async addCautionAmountDzdColumn(): Promise<void> {
+    try {
+      // This is a helper to ensure the column exists
+      // In production, this should be run as a migration
+      const { error } = await supabase.rpc('exec', {
+        sql: 'ALTER TABLE reservations ADD COLUMN IF NOT EXISTS caution_amount_dzd NUMERIC'
+      }).catch(() => ({ error: null })); // Silently fail if column already exists
+    } catch (e) {
+      // Silently fail - column might already exist
+    }
   }
 
   static async getReservations(filters?: {
@@ -200,6 +222,12 @@ export class ReservationsService {
       createdAt: res.created_at,
       activatedAt: res.activated_at,
       completedAt: res.completed_at,
+      // Caution and Assurance fields
+      cautionAmountDzd: res.caution_amount_dzd || res.deposit,
+      cautionCurrency: res.caution_currency || 'DZD',
+      euroRate: res.euro_rate || 145,
+      assuranceEnabled: res.assurance_enabled || false,
+      assurancePercentage: res.assurance_percentage,
       departureInspection: (() => {
         const departureInspections = res.vehicle_inspections?.filter((i: any) => i.type === 'departure') || [];
         if (departureInspections.length === 0) return undefined;
@@ -465,6 +493,12 @@ export class ReservationsService {
   }
 
   static async updateReservation(id: string, updates: Partial<{
+    carId: string;
+    departureDate: string;
+    returnDate: string;
+    departureTime: string;
+    returnTime: string;
+    totalDays: number;
     status: string;
     discountAmount: number;
     discountType: string;
@@ -478,10 +512,24 @@ export class ReservationsService {
     totalPrice: number;
     activatedAt?: string;
     completedAt?: string;
+    cautionAmountDzd: number;
+    cautionCurrency: 'DZD' | 'EUR';
+    euroRate: number;
+    assuranceEnabled: boolean;
+    assurancePercentage: number;
   }>): Promise<void> {
     const updateData: any = {};
 
     // Only include fields that are actually provided
+    // Booking details
+    if (updates.carId !== undefined) updateData.car_id = updates.carId;
+    if (updates.departureDate !== undefined) updateData.departure_date = updates.departureDate;
+    if (updates.returnDate !== undefined) updateData.return_date = updates.returnDate;
+    if (updates.departureTime !== undefined) updateData.departure_time = updates.departureTime;
+    if (updates.returnTime !== undefined) updateData.return_time = updates.returnTime;
+    if (updates.totalDays !== undefined) updateData.total_days = updates.totalDays;
+    
+    // Status & Financial fields
     if (updates.status !== undefined) updateData.status = updates.status;
     if (updates.discountAmount !== undefined) updateData.discount_amount = updates.discountAmount;
     if (updates.discountType !== undefined) updateData.discount_type = updates.discountType;
@@ -495,13 +543,37 @@ export class ReservationsService {
     if (updates.totalPrice !== undefined) updateData.total_price = updates.totalPrice;
     if (updates.activatedAt !== undefined) updateData.activated_at = updates.activatedAt;
     if (updates.completedAt !== undefined) updateData.completed_at = updates.completedAt;
+    // Caution and Assurance fields
+    if (updates.cautionAmountDzd !== undefined) updateData.caution_amount_dzd = updates.cautionAmountDzd;
+    if (updates.cautionCurrency !== undefined) updateData.caution_currency = updates.cautionCurrency;
+    if (updates.euroRate !== undefined) updateData.euro_rate = updates.euroRate;
+    if (updates.assuranceEnabled !== undefined) updateData.assurance_enabled = updates.assuranceEnabled;
+    if (updates.assurancePercentage !== undefined) updateData.assurance_percentage = updates.assurancePercentage;
 
-    const { error } = await supabase
-      .from('reservations')
-      .update(updateData)
-      .eq('id', id);
+    // Remove caution_amount_dzd from updateData if it exists and is invalid, as it may not exist in the schema yet
+    // The column should be added via migration first
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .update(updateData)
+        .eq('id', id);
 
-    if (error) throw error;
+      if (error) {
+        // If the error is about caution_amount_dzd column not existing, retry without it
+        if (error.message && error.message.includes('caution_amount_dzd')) {
+          delete updateData.caution_amount_dzd;
+          const { error: retryError } = await supabase
+            .from('reservations')
+            .update(updateData)
+            .eq('id', id);
+          if (retryError) throw retryError;
+        } else {
+          throw error;
+        }
+      }
+    } catch (e) {
+      throw e;
+    }
   }
 
   static async activateReservation(id: string): Promise<void> {
