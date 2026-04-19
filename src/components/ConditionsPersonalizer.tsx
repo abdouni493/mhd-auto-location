@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, Edit2, Save, Printer } from 'lucide-react';
-
+import { motion, AnimatePresence } from 'motion/react';
+import { X, Printer } from 'lucide-react';
+import { generateConditionsPrintHTML, getConditionsTemplate } from '../constants/ConditionsTemplates';
 
 interface ConditionsPersonalizerProps {
   lang: 'fr' | 'ar';
@@ -11,29 +11,6 @@ interface ConditionsPersonalizerProps {
   agencyId?: string;
 }
 
-// Constant templates for conditions
-const FRENCH_CONDITIONS = [
-  'Âge: Le conducteur doit être âgé de 20 ans minimum avec un permis depuis 2 ans au moins.',
-  'Pièce d\'identité: Dépôt d\'une pièce d\'identité valide (passeport biométrique) + caution initiale requise.',
-  'Carburant: Le carburant est à la charge du client.',
-  'Paiement: Paiement à la remise du véhicule (espèces ou carte bancaire).',
-  'Propreté: Le véhicule doit être rendu dans le même état de propreté, sinon une pénalité de nettoyage s\'applique.',
-  'Dommages: Tout dommage constaté sera facturé selon le devis du réparateur.',
-  'Assurance: L\'assurance tous risques est obligatoire pour tous les véhicules.',
-  'Kilométrage: Le dépassement du kilométrage inclus entraîne un supplément.',
-];
-
-const ARABIC_CONDITIONS = [
-  'السن: يجب أن يكون السائق 20 عاماً على الأقل، مع رخصة قيادة منذ سنتين على الأقل.',
-  'الهوية: إيداع بطاقة هوية صحيحة (جواز السفر البيومتري) + كفالة ابتدائية مطلوبة.',
-  'الوقود: الوقود على نفقة العميل.',
-  'الدفع: الدفع عند تسليم السيارة (نقداً أو بطاقة ائتمان).',
-  'النظافة: يجب إعادة السيارة بنفس حالة النظافة، وإلا تُفرض غرامة تنظيف.',
-  'الأضرار: أي ضرر يتم اكتشافه سيتم فوترته حسب تقدير المصلح.',
-  'التأمين: التأمين الشامل إلزامي لجميع السيارات.',
-  'المسافة: تجاوز المسافة المشمولة ينتج عنه رسوم إضافية.',
-];
-
 export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
   lang,
   reservationId,
@@ -41,651 +18,173 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
   onSave,
   agencyId
 }) => {
-  // Initialize with constant templates based on language
-  const DEFAULT_CONDITIONS = lang === 'fr' ? FRENCH_CONDITIONS : ARABIC_CONDITIONS;
-  
-  const [conditions, setConditions] = useState<string[]>(DEFAULT_CONDITIONS);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editText, setEditText] = useState('');
-  const [newCondition, setNewCondition] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedElements, setSelectedElements] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [fontSize, setFontSize] = useState(13);
-  const [fontColor, setFontColor] = useState('#333333');
-  const [backgroundColor, setBackgroundColor] = useState('#ffffff');
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
-
-
-  const handleEditCondition = (index: number) => {
-    setEditingIndex(index);
-    setEditText(conditions[index]);
-    setSelectedElements(index);
-  };
-
-  const handleSaveEdit = () => {
-    if (editingIndex !== null && editText.trim()) {
-      const updatedConditions = [...conditions];
-      updatedConditions[editingIndex] = editText;
-      setConditions(updatedConditions);
-      setEditingIndex(null);
-      setEditText('');
-    }
-  };
-
-  const handleDeleteCondition = (index: number) => {
-    const updatedConditions = conditions.filter((_, i) => i !== index);
-    setConditions(updatedConditions);
-    if (selectedElements === index) {
-      setSelectedElements(null);
-    }
-    setDeleteConfirm(null);
-
-    // Call onSave callback
-    if (onSave) {
-      onSave(updatedConditions.join('\n'));
-    }
-  };
-
-  const handleAddCondition = () => {
-    if (newCondition.trim()) {
-      setConditions([...conditions, newCondition]);
-      setNewCondition('');
-      setShowAddForm(false);
-    }
-  };
-
-  const handleMoveUp = (index: number) => {
-    if (index > 0) {
-      const newConditions = [...conditions];
-      [newConditions[index - 1], newConditions[index]] = [newConditions[index], newConditions[index - 1]];
-      setConditions(newConditions);
-      setSelectedElements(index - 1);
-    }
-  };
-
-  const handleMoveDown = (index: number) => {
-    if (index < conditions.length - 1) {
-      const newConditions = [...conditions];
-      [newConditions[index], newConditions[index + 1]] = [newConditions[index + 1], newConditions[index]];
-      setConditions(newConditions);
-      setSelectedElements(index + 1);
-    }
-  };
-
-  const handleSaveAll = () => {
-    const conditionsText = conditions.join('\n');
-
-    if (onSave) {
-      onSave(conditionsText);
-    }
-
-    alert(lang === 'fr' ? 'Conditions sauvegardées!' : 'تم حفظ الشروط!');
-    onClose();
-  };
+  const [conditionsLanguage, setConditionsLanguage] = useState<'ar' | 'fr'>('ar');
+  const [isPrinting, setIsPrinting] = useState(false);
+  const template = getConditionsTemplate(conditionsLanguage);
+  const isArabic = conditionsLanguage === 'ar';
+  const dir = isArabic ? 'rtl' : 'ltr';
+  const textAlign = isArabic ? 'right' : 'left';
 
   const handlePrint = () => {
-    const printWindow = window.open('', '', 'height=900,width=900');
-    if (!printWindow) return;
-
-    const currentDate = new Date().toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-AR');
-    
-    // Generate HTML content for single-page print
-    let htmlContent = `
-      <!DOCTYPE html>
-      <html dir="${lang === 'ar' ? 'rtl' : 'ltr'}">
-      <head>
-        <meta charset="UTF-8">
-        <title>${lang === 'fr' ? 'Conditions de Location' : 'شروط الإيجار'}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { 
-            font-family: 'Segoe UI', Arial, sans-serif; 
-            line-height: 1.4;
-            color: #2c3e50;
-            background: #fff;
-          }
-          .container {
-            width: 210mm;
-            height: 297mm;
-            padding: 12mm;
-            margin: 0 auto;
-            background: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-          }
-          
-          .header {
-            text-align: center;
-            margin-bottom: 12px;
-            padding-bottom: 10px;
-            border-bottom: 3px solid #2563eb;
-          }
-          
-          .header h1 {
-            font-size: 18px;
-            font-weight: 700;
-            color: #1e40af;
-            margin-bottom: 2px;
-          }
-          
-          .header p {
-            font-size: 11px;
-            color: #666;
-            font-style: italic;
-          }
-          
-          .conditions-section {
-            margin-bottom: 15px;
-          }
-          
-          .conditions-title {
-            font-size: 12px;
-            font-weight: 700;
-            color: #1e40af;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-          }
-          
-          .conditions-list {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 12px;
-          }
-          
-          .condition-item {
-            padding: 7px 8px;
-            border-left: 2px solid #2563eb;
-            background: #f0f7ff;
-            border-radius: 2px;
-            font-size: 10px;
-            line-height: 1.4;
-            text-align: justify;
-          }
-          
-          .condition-item strong {
-            color: #1e40af;
-            display: inline-block;
-            min-width: 18px;
-          }
-          
-          .signatures-section {
-            display: flex;
-            justify-content: space-between;
-            gap: 15px;
-            align-items: flex-end;
-            margin-top: 12px;
-          }
-          
-          .signature-box {
-            flex: 1;
-            text-align: center;
-            border: 1px solid #ddd;
-            padding: 8px;
-            border-radius: 4px;
-            background: #fafafa;
-          }
-          
-          .signature-label {
-            font-size: 9px;
-            font-weight: 700;
-            color: #1e40af;
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-          }
-          
-          .signature-area {
-            min-height: 40px;
-            border-top: 1px solid #333;
-            border-bottom: 1px solid #ddd;
-            margin-bottom: 6px;
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            font-size: 8px;
-            color: #999;
-          }
-          
-          .seal-area {
-            min-height: 40px;
-            border: 2px dashed #999;
-            border-radius: 4px;
-            margin-bottom: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 9px;
-            color: #999;
-            font-style: italic;
-          }
-          
-          .date-field {
-            font-size: 8px;
-            color: #666;
-            margin-top: 4px;
-          }
-          
-          .footer {
-            margin-top: 10px;
-            padding-top: 8px;
-            border-top: 1px solid #e0e0e0;
-            text-align: center;
-            font-size: 9px;
-            color: #999;
-          }
-          
-          @media print {
-            body { 
-              margin: 0; 
-              padding: 0;
-              background: white;
-            }
-            .container { 
-              width: 100%;
-              height: auto;
-              padding: 10mm;
-              margin: 0;
-              box-shadow: none;
-              page-break-after: avoid;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <!-- Header -->
-          <div class="header">
-            <h1>${lang === 'fr' ? '📋 CONDITIONS DE LOCATION' : '📋 شروط التأجير'}</h1>
-            <p>${lang === 'fr' ? 'Conditions générales - General Terms & Conditions' : 'الشروط العامة'}</p>
-          </div>
-          
-          <!-- Conditions List -->
-          <div class="conditions-section">
-            <div class="conditions-title">
-              ${lang === 'fr' ? 'Clauses principales' : 'الشروط الرئيسية'}
-            </div>
-            <div class="conditions-list">
-              ${conditions.map((condition, index) => `
-                <div class="condition-item">
-                  <strong>${index + 1}.</strong> ${condition}
-                </div>
-              `).join('')}
-            </div>
-          </div>
-          
-          <!-- Signatures & Seals -->
-          <div class="signatures-section">
-            <!-- Client Signature -->
-            <div class="signature-box">
-              <div class="signature-label">
-                👤 ${lang === 'fr' ? 'Client' : 'العميل'}
-              </div>
-              <div class="signature-area"></div>
-              <div class="date-field">
-                ${lang === 'fr' ? 'Date:' : 'التاريخ:'} ____________
-              </div>
-            </div>
-            
-            <!-- Agency Seal -->
-            <div class="signature-box">
-              <div class="signature-label">
-                🏢 ${lang === 'fr' ? 'Agence' : 'الوكالة'}
-              </div>
-              <div class="seal-area">
-                ${lang === 'fr' ? '[Cachet]' : '[ختم]'}
-              </div>
-              <div class="date-field">
-                _____________
-              </div>
-            </div>
-          </div>
-          
-          <!-- Footer -->
-          <div class="footer">
-            ${lang === 'fr' ? 'Généré le' : 'تم الإنشاء في'} ${currentDate}
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-    
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for content to load then print
+    setIsPrinting(true);
+    const content = generateConditionsPrintHTML(conditionsLanguage);
     setTimeout(() => {
-      printWindow.print();
-    }, 250);
+      const printWindow = window.open('', '', 'height=800,width=900');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        setTimeout(() => setIsPrinting(false), 100);
+      }
+    }, 300);
   };
 
   return (
     <>
-      <AnimatePresence>
-        {deleteConfirm === null && (
-          <motion.div
-            key="conditions-modal"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl"
-            >
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 backdrop-blur-sm z-40"
+        onClick={onClose}
+      />
+      <motion.div
+        key="modal"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex justify-between items-center z-10">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              📋 {lang === 'fr' ? 'Personnaliser les Conditions' : 'تخصيص الشروط والأحكام'}
-            </h2>
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-white">
+                  {conditionsLanguage === 'fr' ? 'Conditions de Location' : 'شروط الإيجار'}
+                </h2>
+                <p className="text-blue-100 text-sm mt-1">
+                  {template.subtitle}
+                </p>
+              </div>
+              {/* Template Selector */}
+              <div className="flex gap-2 ml-8">
+                <button
+                  onClick={() => setConditionsLanguage('fr')}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                    conditionsLanguage === 'fr'
+                      ? 'bg-white text-blue-600'
+                      : 'bg-blue-500 text-white hover:bg-blue-400'
+                  }`}
+                >
+                  🇫🇷 Français
+                </button>
+                <button
+                  onClick={() => setConditionsLanguage('ar')}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                    conditionsLanguage === 'ar'
+                      ? 'bg-white text-blue-600'
+                      : 'bg-blue-500 text-white hover:bg-blue-400'
+                  }`}
+                >
+                  🇸🇦 العربية
+                </button>
+              </div>
+            </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-blue-500 rounded-lg transition"
+              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
             >
               <X size={24} />
             </button>
           </div>
 
-          {/* Main Content */}
-          <div className="p-6">
-            <div className="grid grid-cols-3 gap-6">
-              {/* Left: Editor */}
-              <div className="col-span-2">
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {conditions.map((condition, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ x: -20, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition ${
-                        selectedElements === index
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                      onClick={() => setSelectedElements(index)}
-                    >
-                      {editingIndex === index ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded text-sm resize-none"
-                            rows={2}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleSaveEdit}
-                              className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
-                            >
-                              <Save size={14} /> {lang === 'fr' ? 'OK' : 'حفظ'}
-                            </button>
-                            <button
-                              onClick={() => setEditingIndex(null)}
-                              className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                            >
-                              {lang === 'fr' ? 'Annuler' : 'إلغاء'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="flex-1 text-sm" style={{ color: fontColor }}>
-                              <strong>{index + 1}.</strong> {condition}
-                            </span>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleEditCondition(index)}
-                                className="p-1 text-blue-500 hover:bg-blue-100 rounded"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(index)}
-                                className="p-1 text-red-500 hover:bg-red-100 rounded"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {selectedElements === index && (
-                            <div className="flex gap-2 pt-2 border-t">
-                              <button
-                                onClick={() => handleMoveUp(index)}
-                                disabled={index === 0}
-                                className="text-sm px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50"
-                              >
-                                ⬆ {lang === 'fr' ? 'Haut' : 'أعلى'}
-                              </button>
-                              <button
-                                onClick={() => handleMoveDown(index)}
-                                disabled={index === conditions.length - 1}
-                                className="text-sm px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50"
-                              >
-                                ⬇ {lang === 'fr' ? 'Bas' : 'أسفل'}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
-
-                  {/* Add New Condition */}
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="border-2 border-dashed border-green-300 rounded-lg p-4"
-                  >
-                    {!showAddForm ? (
-                      <button
-                        onClick={() => setShowAddForm(true)}
-                        className="w-full flex items-center justify-center gap-2 text-green-600 hover:text-green-700 font-semibold py-2"
+          {/* Content Area */}
+          <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-50 to-white p-8">
+            {/* Conditions Table - Professional Display */}
+            <div className="bg-white rounded-lg shadow-lg p-0 mx-auto" style={{ maxWidth: '900px' }}>
+              <div style={{ direction: dir, textAlign }} className="overflow-hidden rounded-lg border border-gray-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 border-b border-gray-200">
+                    <tr>
+                      <th className="w-12 px-3 py-3 text-center font-semibold text-gray-700">#</th>
+                      <th className="w-1/3 px-4 py-3 font-semibold text-gray-700" style={{ textAlign }}>
+                        {conditionsLanguage === 'fr' ? 'Condition' : 'الشرط'}
+                      </th>
+                      <th className="flex-1 px-4 py-3 font-semibold text-gray-700" style={{ textAlign }}>
+                        {conditionsLanguage === 'fr' ? 'Description' : 'التفاصيل'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {template.conditions.map((condition, index) => (
+                      <motion.tr
+                        key={index}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: index * 0.02 }}
+                        className="hover:bg-blue-50 transition-colors"
                       >
-                        <Plus size={18} />
-                        {lang === 'fr' ? 'Ajouter une condition' : 'إضافة شرط جديد'}
-                      </button>
-                    ) : (
-                      <div className="space-y-2">
-                        <textarea
-                          value={newCondition}
-                          onChange={(e) => setNewCondition(e.target.value)}
-                          placeholder={lang === 'fr' ? 'Nouvelle condition...' : 'شرط جديد...'}
-                          className="w-full p-2 border border-gray-300 rounded text-sm resize-none"
-                          rows={2}
-                          autoFocus
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleAddCondition}
-                            disabled={!newCondition.trim()}
-                            className="flex-1 px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 flex items-center justify-center gap-2"
-                          >
-                            <Plus size={14} />
-                            {lang === 'fr' ? 'Ajouter' : 'إضافة'}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowAddForm(false);
-                              setNewCondition('');
-                            }}
-                            className="flex-1 px-3 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                          >
-                            {lang === 'fr' ? 'Annuler' : 'إلغاء'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
+                        <td className="px-3 py-3 text-center font-bold text-blue-600">{index + 1}</td>
+                        <td className="px-4 py-3 font-semibold text-gray-800">{condition.title}</td>
+                        <td className="px-4 py-3 text-gray-700 leading-relaxed">{condition.content}</td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Signature Preview Area */}
+              <div className="bg-white px-6 py-8 border-t border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <div className="flex flex-col" style={{ direction: dir }}>
+                    <div className="h-12 border-b-2 border-gray-400 mb-3"></div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      {template.clientSignatureLabel}
+                    </p>
+                  </div>
+                  <div className="flex flex-col" style={{ direction: dir }}>
+                    <div className="h-12 border-b-2 border-gray-400 mb-3"></div>
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      {template.agencySignatureLabel}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Right: Formatting & Preview */}
-              <div className="space-y-4">
-                {/* Formatting Options */}
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <h3 className="font-semibold mb-3 text-sm">
-                    {lang === 'fr' ? 'Formatage' : 'التنسيق'}
-                  </h3>
-
-                  <div className="space-y-3">
-                    {/* Font Size */}
-                    <div>
-                      <label className="text-xs font-semibold text-gray-700 block mb-1">
-                        {lang === 'fr' ? 'Taille de police' : 'حجم الخط'}
-                      </label>
-                      <input
-                        type="range"
-                        min="10"
-                        max="18"
-                        value={fontSize}
-                        onChange={(e) => setFontSize(Number(e.target.value))}
-                        className="w-full"
-                      />
-                      <span className="text-xs text-gray-600">{fontSize}px</span>
-                    </div>
-
-                    {/* Font Color */}
-                    <div>
-                      <label className="text-xs font-semibold text-gray-700 block mb-1">
-                        {lang === 'fr' ? 'Couleur du texte' : 'لون النص'}
-                      </label>
-                      <input
-                        type="color"
-                        value={fontColor}
-                        onChange={(e) => setFontColor(e.target.value)}
-                        className="w-full h-8 rounded cursor-pointer"
-                      />
-                    </div>
-
-                    {/* Background Color */}
-                    <div>
-                      <label className="text-xs font-semibold text-gray-700 block mb-1">
-                        {lang === 'fr' ? 'Couleur de fond' : 'لون الخلفية'}
-                      </label>
-                      <input
-                        type="color"
-                        value={backgroundColor}
-                        onChange={(e) => setBackgroundColor(e.target.value)}
-                        className="w-full h-8 rounded cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Preview */}
-                <div
-                  className="p-4 rounded-lg border-2 border-blue-200"
-                  style={{ backgroundColor, color: fontColor }}
-                >
-                  <h4 className="font-semibold text-xs mb-2">
-                    {lang === 'fr' ? 'Aperçu' : 'معاينة'}
-                  </h4>
-                  <p style={{ fontSize: `${fontSize}px` }} className="leading-relaxed">
-                    {selectedElements !== null ? conditions[selectedElements] : conditions[0]}
-                  </p>
-                </div>
-
-                {/* Info */}
-                <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700">
-                  <strong>{lang === 'fr' ? 'Total:' : 'المجموع:'}</strong> {conditions.length}{' '}
-                  {lang === 'fr' ? 'conditions' : 'شرط'}
-                </div>
+              {/* Info Alert */}
+              <div className="bg-blue-50 border-t border-blue-200 px-6 py-4">
+                <p className="text-blue-900 text-sm">
+                  <span className="font-semibold">ℹ️ {conditionsLanguage === 'fr' ? 'Info:' : 'معلومة:'}</span>{' '}
+                  {conditionsLanguage === 'fr' 
+                    ? 'Modèle standard optimisé pour impression A4 sur une seule page.' 
+                    : 'نموذج قياسي محسّن للطباعة على صفحة A4 واحدة.'}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="sticky bottom-0 bg-gray-100 p-6 flex gap-3 border-t flex-wrap justify-end">
+          {/* Footer with Actions */}
+          <div className="bg-gray-100 px-8 py-4 flex items-center justify-between border-t border-gray-200">
             <button
               onClick={onClose}
-              className="px-6 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition font-semibold"
+              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold rounded-lg transition-all"
             >
-              {lang === 'fr' ? 'Fermer' : 'إغلاق'}
+              {conditionsLanguage === 'fr' ? 'Fermer' : 'إغلاق'}
             </button>
             <button
               onClick={handlePrint}
-              disabled={conditions.length === 0}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold disabled:opacity-50 flex items-center gap-2"
+              disabled={isPrinting}
+              className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
             >
               <Printer size={18} />
-              {lang === 'fr' ? 'Imprimer' : 'طباعة'}
-            </button>
-            <button
-              onClick={handleSaveAll}
-              disabled={conditions.length === 0}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold disabled:opacity-50 flex items-center gap-2"
-            >
-              <Save size={18} />
-              {lang === 'fr' ? 'Sauvegarder les conditions' : 'حفظ الشروط'}
+              {isPrinting ? (conditionsLanguage === 'fr' ? 'Impression...' : 'جاري الطباعة...') : (conditionsLanguage === 'fr' ? 'Imprimer' : 'طباعة')}
             </button>
           </div>
-        </motion.div>
+        </div>
       </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Delete Confirmation Modal */}
-      <AnimatePresence>
-        {deleteConfirm !== null && (
-          <motion.div
-            key="delete-confirmation"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="bg-white rounded-lg shadow-xl max-w-sm w-full"
-            >
-              <div className="bg-red-50 p-6 border-b border-red-200">
-                <h3 className="text-lg font-bold text-red-900 flex items-center gap-2">
-                  ⚠️ {lang === 'fr' ? 'Confirmer la suppression' : 'تأكيد الحذف'}
-                </h3>
-              </div>
-              
-              <div className="p-6">
-                <p className="text-gray-700 mb-4">
-                  {lang === 'fr' ? 'Êtes-vous sûr de vouloir supprimer cette condition ?' : 'هل أنت متأكد من رغبتك في حذف هذا الشرط؟'}
-                </p>
-                <div className="bg-gray-100 rounded p-3 mb-4 max-h-24 overflow-y-auto">
-                  <p className="text-sm text-gray-700">
-                    <strong>{deleteConfirm + 1}.</strong> {conditions[deleteConfirm]}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 p-6 flex gap-3 justify-end border-t">
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold"
-                >
-                  {lang === 'fr' ? 'Annuler' : 'إلغاء'}
-                </button>
-                <button
-                  onClick={() => {
-                    handleDeleteCondition(deleteConfirm);
-                  }}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold flex items-center gap-2"
-                >
-                  <Trash2 size={16} />
-                  {lang === 'fr' ? 'Supprimer' : 'حذف'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-
     </>
   );
 };

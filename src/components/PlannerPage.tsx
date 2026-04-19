@@ -12,6 +12,7 @@ import { SendContractModal } from './SendContractModal';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { supabase } from '../supabase';
+import { generateConditionsPrintHTML, getConditionsTemplate } from '../constants/ConditionsTemplates';
 
 interface PlannerPageProps {
   lang: Language;
@@ -40,6 +41,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   const [showSendContractModal, setShowSendContractModal] = useState<ReservationDetails | null>(null);
   const [showInspectionMode, setShowInspectionMode] = useState(false);
   const [showConditionsModal, setShowConditionsModal] = useState(false);
+  const [conditionsLanguage, setConditionsLanguage] = useState<'ar' | 'fr'>('ar');
   const [showConditionsPersonalizer, setShowConditionsPersonalizer] = useState<ReservationDetails | null>(null);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
@@ -881,11 +883,8 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
               <button
                 onClick={() => {
                   setShowPrintModal(null);
-                  // Trigger conditions print
-                  setTimeout(() => {
-                    setShowConditionsPersonalizer(showPrintModal?.reservation || null);
-                    // This will be handled by the conditions personalizer's print button
-                  }, 100);
+                  setShowConditionsModal(true);
+                  setConditionsLanguage('ar'); // Reset to Arabic when opening
                 }}
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all"
               >
@@ -918,7 +917,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
         )}
       </AnimatePresence>
 
-      {/* Conditions Modal */}
+      {/* Conditions Modal - Streamlined */}
       <AnimatePresence>
         {showConditionsModal && (
           <motion.div
@@ -928,190 +927,159 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto"
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="glass-card w-full max-w-4xl p-8 border border-saas-border rounded-xl my-4"
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="bg-white w-full max-w-5xl rounded-xl shadow-2xl overflow-hidden"
             >
-              {/* Header */}
-              <div className="mb-6 text-center">
-                <h2 className="text-2xl font-black text-saas-text-main mb-2">
-                  📋 {lang === 'fr' ? 'Conditions de Location' : 'شروط الإيجار'}
-                </h2>
-              </div>
-
-              {/* Conditions Content - Simplified Clean Design */}
-              <div className="bg-white p-6 rounded-lg border-2 border-blue-200 mb-6 max-h-96 overflow-y-auto">
-                <div className="space-y-3 text-gray-800" style={{ textAlign: 'right', direction: 'rtl' }}>
-                  <ol className="space-y-2 text-sm leading-relaxed">
-                    <li><strong>السن:</strong> يجب أن يكون السائق 20 عاماً على الأقل، مع رخصة قيادة منذ سنتين على الأقل.</li>
-                    <li><strong>جواز السفر:</strong> إيداع جواز السفر البيومتري + تأمين ابتدائي من 30,000.00 دج.</li>
-                    <li><strong>الوقود:</strong> الوقود على نفقة الزبون.</li>
-                    <li><strong>الدفع:</strong> يتم الدفع نقداً عند تسليم السيارة.</li>
-                    <li><strong>النظافة:</strong> السيارة تُسلم نظيفة وتُرجع بنفس الحالة، وإلا غرامة غسيل 1000 دج.</li>
-                    <li><strong>مكان التسليم:</strong> موقف السيارات التابع للوكالة.</li>
-                    <li><strong>المواعيد:</strong> احترام المواعيد، إشعار مسبق 48 ساعة لأي تغيير.</li>
-                    <li><strong>الأضرار:</strong> الزبون يدفع جميع الأضرار بالمركبة.</li>
-                    <li><strong>السرقة:</strong> تقديم تصريح للشرطة أو الدرك فوراً.</li>
-                    <li><strong>التأمين:</strong> منع إعارة أو تأجير المركبة من الباطن.</li>
-                    <li><strong>الصيانة:</strong> فحص مستوى الزيت والضغط والمحرك.</li>
-                    <li><strong>أضرار إضافية:</strong> جميع الأضرار الناتجة عن سوء الاستخدام على الزبون.</li>
-                    <li><strong>التأخير:</strong> 800 دج لكل ساعة تأخير.</li>
-                    <li><strong>الأميال:</strong> حد أقصى 300 كم يومياً، غرامة 30 دج/كم زائد.</li>
-                    <li><strong>الموافقة:</strong> الزبون يقر بقراءة الشروط وقبولها.</li>
-                  </ol>
-                </div>
-              </div>
-
-              {/* Signature Area - Simple Clean Design */}
-              <div className="grid grid-cols-2 gap-8">
-                {/* Client Signature */}
-                <div className="border-2 border-gray-300 rounded-lg p-6 bg-gray-50">
-                  <div className="mb-16 h-24 border-b-2 border-gray-400"></div>
-                  <p className="text-center font-bold text-gray-800 text-sm">
-                    امضاء وبصمة الزبون
+              {/* Sleek Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 md:px-8 py-4 md:py-5 flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg md:text-xl font-bold text-white truncate">
+                    {conditionsLanguage === 'fr' ? 'Conditions de Location' : 'شروط الإيجار'}
+                  </h2>
+                  <p className="text-blue-100 text-xs md:text-sm mt-1 truncate">
+                    {(() => {
+                      const template = getConditionsTemplate(conditionsLanguage);
+                      return template.subtitle;
+                    })()}
                   </p>
                 </div>
 
-                {/* Agency Signature */}
-                <div className="border-2 border-gray-300 rounded-lg p-6 bg-gray-50">
-                  <div className="mb-16 h-24 border-b-2 border-gray-400"></div>
-                  <p className="text-center font-bold text-gray-800 text-sm">
-                    توقيع وبصمة الوكالة
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 flex-wrap mt-6">
-                <button
-                  onClick={() => {
-                    const content = `
-                      <!DOCTYPE html>
-                      <html dir="rtl" lang="ar">
-                      <head>
-                        <meta charset="utf-8">
-                        <style>
-                          body { 
-                            font-family: 'Arial', sans-serif; 
-                            padding: 40px; 
-                            direction: rtl; 
-                            margin: 0;
-                            background: white;
-                          }
-                          .header { 
-                            text-align: center; 
-                            margin-bottom: 30px; 
-                          }
-                          .header h1 { 
-                            font-size: 20px; 
-                            margin: 0 0 5px 0; 
-                            color: #1a3a52;
-                            font-weight: bold;
-                          }
-                          .conditions { 
-                            background: white; 
-                            padding: 20px; 
-                            border-radius: 4px; 
-                            border: 1px solid #ddd;
-                            margin-bottom: 30px;
-                          }
-                          .conditions ol { 
-                            margin: 0; 
-                            padding-right: 20px;
-                          }
-                          .conditions li { 
-                            margin-bottom: 8px; 
-                            line-height: 1.5; 
-                            font-size: 13px;
-                          }
-                          .conditions strong { 
-                            color: #1a3a52; 
-                          }
-                          .signatures { 
-                            display: grid; 
-                            grid-template-columns: 1fr 1fr; 
-                            gap: 30px;
-                            margin-top: 40px;
-                          }
-                          .signature-box { 
-                            border: 2px solid #999; 
-                            padding: 20px; 
-                            background: #f9f9f9;
-                            border-radius: 4px;
-                          }
-                          .signature-space {
-                            height: 80px;
-                            border-bottom: 2px solid #333;
-                            margin-bottom: 15px;
-                          }
-                          .signature-label { 
-                            font-size: 13px; 
-                            color: #333; 
-                            font-weight: bold; 
-                            text-align: center;
-                          }
-                          @media print { 
-                            body { padding: 20px; }
-                          }
-                        </style>
-                      </head>
-                      <body>
-                        <div class="header">
-                          <h1>شروط الإيجار</h1>
-                        </div>
-                        <div class="conditions">
-                          <ol>
-                            <li><strong>السن:</strong> يجب أن يكون السائق 20 عاماً على الأقل، مع رخصة قيادة منذ سنتين على الأقل.</li>
-                            <li><strong>جواز السفر:</strong> إيداع جواز السفر البيومتري + تأمين ابتدائي من 30,000.00 دج.</li>
-                            <li><strong>الوقود:</strong> الوقود على نفقة الزبون.</li>
-                            <li><strong>الدفع:</strong> يتم الدفع نقداً عند تسليم السيارة.</li>
-                            <li><strong>النظافة:</strong> السيارة تُسلم نظيفة وتُرجع بنفس الحالة، وإلا غرامة غسيل 1000 دج.</li>
-                            <li><strong>مكان التسليم:</strong> موقف السيارات التابع للوكالة.</li>
-                            <li><strong>المواعيد:</strong> احترام المواعيد، إشعار مسبق 48 ساعة لأي تغيير.</li>
-                            <li><strong>الأضرار:</strong> الزبون يدفع جميع الأضرار بالمركبة.</li>
-                            <li><strong>السرقة:</strong> تقديم تصريح للشرطة أو الدرك فوراً.</li>
-                            <li><strong>التأمين:</strong> منع إعارة أو تأجير المركبة من الباطن.</li>
-                            <li><strong>الصيانة:</strong> فحص مستوى الزيت والضغط والمحرك.</li>
-                            <li><strong>أضرار إضافية:</strong> جميع الأضرار الناتجة عن سوء الاستخدام على الزبون.</li>
-                            <li><strong>التأخير:</strong> 800 دج لكل ساعة تأخير.</li>
-                            <li><strong>الأميال:</strong> حد أقصى 300 كم يومياً، غرامة 30 دج/كم زائد.</li>
-                            <li><strong>الموافقة:</strong> الزبون يقر بقراءة الشروط وقبولها.</li>
-                          </ol>
-                        </div>
-                        <div class="signatures">
-                          <div class="signature-box">
-                            <div class="signature-space"></div>
-                            <div class="signature-label">امضاء وبصمة الزبون</div>
-                          </div>
-                          <div class="signature-box">
-                            <div class="signature-space"></div>
-                            <div class="signature-label">توقيع وبصمة الوكالة</div>
-                          </div>
-                        </div>
-                      </body>
-                      </html>
-                    `;
-                    const printWindow = window.open('', '', 'height=600,width=800');
-                    if (printWindow) {
-                      printWindow.document.write(content);
-                      printWindow.document.close();
-                      setTimeout(() => {
-                        printWindow.print();
-                        printWindow.close();
-                      }, 250);
-                    }
-                  }}
-                  className="flex-1 min-w-32 bg-saas-success hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
-                >
-                  🖨️ {lang === 'fr' ? 'Imprimer' : 'طباعة'}
-                </button>
+                {/* Close Button */}
                 <button
                   onClick={() => setShowConditionsModal(false)}
-                  className="flex-1 min-w-32 bg-saas-bg hover:bg-saas-secondary-start/10 text-saas-text-muted font-bold py-3 px-4 rounded-lg border border-saas-border transition-all"
+                  className="flex-shrink-0 ml-3 p-2 hover:bg-white/20 rounded-lg transition"
+                  aria-label="Close"
                 >
-                  {lang === 'fr' ? 'Fermer' : 'إغلاق'}
+                  <X size={22} className="text-white" />
                 </button>
+              </div>
+
+              {/* Main Content */}
+              <div className="p-4 md:p-6 lg:p-8">
+                {/* Language Toggle - Minimal */}
+                <div className="flex gap-2 mb-6">
+                  <button
+                    onClick={() => setConditionsLanguage('ar')}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                      conditionsLanguage === 'ar'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    العربية
+                  </button>
+                  <button
+                    onClick={() => setConditionsLanguage('fr')}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                      conditionsLanguage === 'fr'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Français
+                  </button>
+                </div>
+
+                {/* Conditions Table - Streamlined */}
+                <div className="overflow-hidden rounded-lg border border-gray-200 mb-6">
+                  <div style={{ direction: conditionsLanguage === 'ar' ? 'rtl' : 'ltr', textAlign: conditionsLanguage === 'ar' ? 'right' : 'left' }}>
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="w-8 px-3 py-3 text-center font-semibold text-gray-700">#</th>
+                          <th className="w-1/4 px-4 py-3 text-left font-semibold text-gray-700">
+                            {conditionsLanguage === 'fr' ? 'Condition' : 'الشرط'}
+                          </th>
+                          <th className="flex-1 px-4 py-3 text-left font-semibold text-gray-700">
+                            {conditionsLanguage === 'fr' ? 'Description' : 'التفاصيل'}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {(() => {
+                          const template = getConditionsTemplate(conditionsLanguage);
+                          return template.conditions.map((condition, index) => (
+                            <motion.tr
+                              key={index}
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: index * 0.02 }}
+                              className="hover:bg-blue-50 transition"
+                            >
+                              <td className="px-3 py-3 text-center font-bold text-blue-600">{index + 1}</td>
+                              <td className="px-4 py-3 font-semibold text-gray-800">{condition.title}</td>
+                              <td className="px-4 py-3 text-gray-700 leading-relaxed">{condition.content}</td>
+                            </motion.tr>
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Signature Preview - Minimal */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  {(() => {
+                    const template = getConditionsTemplate(conditionsLanguage);
+                    const dir = conditionsLanguage === 'ar' ? 'rtl' : 'ltr';
+                    return (
+                      <>
+                        <div className="flex flex-col" style={{ direction: dir }}>
+                          <div className="h-16 border-b-2 border-gray-400 mb-3"></div>
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                            {template.clientSignatureLabel}
+                          </p>
+                        </div>
+                        <div className="flex flex-col" style={{ direction: dir }}>
+                          <div className="h-16 border-b-2 border-gray-400 mb-3"></div>
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                            {template.agencySignatureLabel}
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* Info Alert - Compact */}
+                <div className="bg-blue-50 border-l-4 border-blue-600 p-3 mb-6 rounded">
+                  <p className="text-blue-900 text-sm">
+                    <span className="font-semibold">ℹ️ Info:</span>{' '}
+                    {conditionsLanguage === 'fr' 
+                      ? 'Modèle standard optimisé pour impression A4 sur une seule page.' 
+                      : 'نموذج قياسي محسّن للطباعة على صفحة A4 واحدة.'}
+                  </p>
+                </div>
+
+                {/* Action Buttons - Compact and Modern */}
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => setShowConditionsModal(false)}
+                    className="px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-all text-sm"
+                  >
+                    {conditionsLanguage === 'fr' ? 'Fermer' : 'إغلاق'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const content = generateConditionsPrintHTML(conditionsLanguage);
+                      const printWindow = window.open('', '', 'height=800,width=900');
+                      if (printWindow) {
+                        printWindow.document.write(content);
+                        printWindow.document.close();
+                        setTimeout(() => {
+                          printWindow.print();
+                          printWindow.close();
+                        }, 250);
+                      }
+                    }}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all flex items-center gap-2 text-sm shadow-md hover:shadow-lg"
+                  >
+                    <Printer size={18} />
+                    <span>{conditionsLanguage === 'fr' ? 'Imprimer' : 'طباعة'}</span>
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
