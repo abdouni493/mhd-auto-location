@@ -25,67 +25,67 @@ export interface ConditionsTemplate {
 export const ARABIC_CONDITIONS_TEMPLATE: ConditionsTemplate = {
   language: 'ar',
   title: 'شروط الإيجار',
-  subtitle: 'يكمك قراءة شروط العقد في الأسفل ومصادقة عليها',
+  subtitle: 'يمكنك قراءة شروط العقد في الأسفل ومصادقة عليها',
   conditions: [
     {
       title: 'السن',
-      content: 'يجب أن يكون السانق يبلغ من العمر 20 عامًا على الأقل، وأن يكون حاصلًا على رخصة قيادة منذ سنتين على الأقل'
+      content: 'يجب أن يكون السائق يبلغ من العمر 20 عامًا على الأقل، وأن يكون حاصلًا على رخصة قيادة منذ سنتين على الأقل'
     },
     {
       title: 'جواز السفر',
-      content: 'إيداع جواز السقر اليومتري الزامي، بالإضافة إلى دفع تأمين ابتدائي يبدأ من 30.000,00 دج حسب فة المركبة، ويّعدّ هذا بمناية ضمان تطلبه'
+      content: 'إيداع جواز السفر البيومتري إلزامي، بالإضافة إلى دفع تأمين ابتدائي يبدأ من 30.000,00 دج حسب فئة المركبة، ويُعدّ هذا بمثابة ضمان تطلبه'
     },
     {
       title: 'الوقود',
-      content: 'الوقود يكون على تفقة الزيون'
+      content: 'الوقود يكون على نفقة الزبون'
     },
     {
-      title: 'قاتون ونظام',
-      content: 'يتم الدفع تقدًا عند تسليم السيارة'
+      title: 'قانون ونظام',
+      content: 'يتم الدفع نقدًا عند تسليم السيارة'
     },
     {
       title: 'النظافة',
-      content: 'تسلم السيارة تظيفة ويجب إرجاعها في نفس الحالة، وفي حال عدم ذلك، سيتم احتساب تكلفة الغسيل بمبلغ 1000 دج'
+      content: 'تسلم السيارة نظيفة ويجب إرجاعها في نفس الحالة، وفي حال عدم ذلك، سيتم احتساب تكلفة الغسيل بمبلغ 1000 دج'
     },
     {
       title: 'مكان التسليم',
-      content: 'يتم تسليم السيارات في موقف السيارات التابع لوكالاتتا'
+      content: 'يتم تسليم السيارات في موقف السيارات التابع لوكالاتنا'
     },
     {
       title: 'جدول المواعيد',
-      content: 'يجب على الزبون احترام المواعيد المحددة عند الحجز. يجب الإبلاغ مسيقا عن أي تغير. لا يمكن للزبون تمديد مدة الإيجار إلا يعد الحصول على إذن من وكالتنا للإيجار، وذلك باتعار مسبق لا يقل عن 48 ساعة'
+      content: 'يجب على الزبون احترام المواعيد المحددة عند الحجز. يجب الإبلاغ مسبقًا عن أي تغيير. لا يمكن للزبون تمديد مدة الإيجار إلا بعد الحصول على إذن من وكالتنا للإيجار، وذلك بإشعار مسبق لا يقل عن 48 ساعة'
     },
     {
-      title: 'الأضرار والضائر',
-      content: 'في حالة السرقة أو تضرر المركبة، يجب تقديم تصريح لدى مصالح الشرطة أو الدرك الوطنيقل أي تصريح، يجب على الزيون إيلاغ وكالة الكراء بشكل الزامي'
+      title: 'الأضرار والخسائر',
+      content: 'في حالة السرقة أو تضرر المركبة، يجب تقديم تصريح لدى مصالح الشرطة أو الدرك الوطني. قبل أي تصريح، يجب على الزبون إبلاغ وكالة الكراء بشكل إلزامي'
     },
     {
-      title: 'عد السرقة',
-      content: 'في حالة السرقة أو تضرر المركبة، يجب تقديم تصريح لدى مصالح الشرطة أو الدرك الوطنيقل أي تصريح، يجب على الزيون إيلاغ وكالة الكراء بشكل الزامي'
+      title: 'حد السرقة',
+      content: 'في حالة السرقة أو تضرر المركبة، يجب تقديم تصريح لدى مصالح الشرطة أو الدرك الوطني. قبل أي تصريح، يجب على الزبون إبلاغ وكالة الكراء بشكل إلزامي'
     },
     {
       title: 'تأمين',
-      content: 'يستفيد من التأمين فقط الساتقون المذكورون في عقد الكراء يمنع منغا باتا إعارة أو تأجير المركبة من الياطن. وتكون جميع الأضرار الناتجة عن مثل هذه الحالات على عائق الزيون بالكامل'
+      content: 'يستفيد من التأمين فقط السائقون المذكورون في عقد الكراء. يُمنع منعًا باتًّا إعارة أو تأجير المركبة من الباطن. وتكون جميع الأضرار الناتجة عن مثل هذه الحالات على عاتق الزبون بالكامل'
     },
     {
-      title: 'عطل ميكانيكى',
-      content: 'خلال فترة الإيجار، وبناء على عدد الكيلومترات المقطوعة. يجب على الريون إجراء الفحوصات اللازمة مثل مستوى الزيت، حالة المحرك، ضغط الإطارات. وغيرها.في حال حدوث عطل ميكانيكي بسبب إهمال الزيون في إجراء هذه الفحوصات أو لأي سبب آخر ناتج عن مسؤولية الزبون (مثلاً: سر حوض الزيت، العارضة السفلية، القفل أو غرها)، فإن تكاليف الإصلاح والصياتة تكون على عاتق الزيون بالكامل'
+      title: 'عطل ميكانيكي',
+      content: 'خلال فترة الإيجار، وبناء على عدد الكيلومترات المقطوعة، يجب على الزبون إجراء الفحوصات اللازمة مثل مستوى الزيت، حالة المحرك، ضغط الإطارات، وغيرها. في حال حدوث عطل ميكانيكي بسبب إهمال الزبون في إجراء هذه الفحوصات أو لأي سبب آخر ناتج عن مسؤولية الزبون (مثلاً: كسر حوض الزيت، العارضة السفلية، القفل أو غيرها)، فإن تكاليف الإصلاح والصيانة تكون على عاتق الزبون بالكامل'
     },
     {
-      title: 'خسائر اضافية',
-      content: 'الأضرار التي تلحق بالعجلات والإطارات، القيادة بالإطارات المفرغة من الهواع. التدهور، السرقة، تهب الملحقات، أعمال التخريب، الأضرار الميكاتيكي الناتجة عن سوء استخدام المركبة، المخالفات المرورية، الأضرار التي تحدث أسفل المركبة (الصدام الأمامي، الجوانب، حوض الزيت، العادم) والأضرار الناتجة عن الاضطرابات والتغبد كلها سيتم تحميل تكلفتها على الزيون'
+      title: 'خسائر إضافية',
+      content: 'الأضرار التي تلحق بالعجلات والإطارات، القيادة بالإطارات المفرغة من الهواء، التدهور، السرقة، نهب الملحقات، أعمال التخريب، الأضرار الميكانيكية الناتجة عن سوء استخدام المركبة، المخالفات المرورية، الأضرار التي تحدث أسفل المركبة (الصدام الأمامي، الجوانب، حوض الزيت، العادم) والأضرار الناتجة عن الاضطرابات والشغب، كلها سيتم تحميل تكلفتها على الزبون'
     },
     {
-      title: 'ضربية التاخر',
-      content: 'دة الإيجار تحتسب على فرات كاملة مدتها 24 ساعة غير قابلة للتقسم، بدغا من وقت حجز المركية وحتى الوقت المذكور في العقد يجب على زيون إعادة المركبة فى نفس الوقت، وإلا سيتم احتساب تكلفة تأخير مقدار ها 800 دينار لكل ساعة تأذ'
+      title: 'ضريبة التأخر',
+      content: 'مدة الإيجار تُحتسب على فترات كاملة مدتها 24 ساعة غير قابلة للتقسيم، ابتداءً من وقت حجز المركبة وحتى الوقت المذكور في العقد. يجب على الزبون إعادة المركبة في نفس الوقت، وإلا سيتم احتساب تكلفة تأخير مقدارها 800 دينار لكل ساعة تأخير'
     },
     {
       title: 'عدد الأميال',
-      content: 'عدد الكيلومترات محدود لجميع مركبانتا ب 300 كم يوميا.ويفرض غرامة قدرها 30 دج عن كل كلومتر زائد'
+      content: 'عدد الكيلومترات محدود لجميع مركباتنا بـ 300 كم يوميًا، ويُفرض غرامة قدرها 30 دج عن كل كيلومتر زائد'
     },
     {
       title: 'شروط',
-      content: 'يقرّ الزيون بأنه اطلع على شروط الإيجار هذه وقبولها دون أي تحفظ، ويتعهد بتوقع هذا العقد'
+      content: 'يُقرّ الزبون بأنه اطّلع على شروط الإيجار هذه وقبلها دون أي تحفظ، ويتعهد بتوقيع هذا العقد'
     }
   ],
   clientSignatureLabel: 'امضاء وبصمة الزبون',
@@ -98,7 +98,7 @@ export const ARABIC_CONDITIONS_TEMPLATE: ConditionsTemplate = {
  */
 export const FRENCH_CONDITIONS_TEMPLATE: ConditionsTemplate = {
   language: 'fr',
-  title: 'Conditions Générales de location véhicule',
+  title: 'Les Conditions Générales de location véhicule',
   subtitle: 'Vous pouvez lire les conditions de location, elles apparaîtront sur le contra de location',
   conditions: [
     {
@@ -107,7 +107,7 @@ export const FRENCH_CONDITIONS_TEMPLATE: ConditionsTemplate = {
     },
     {
       title: 'Passeport',
-      content: 'Dépôt obligatoire du passeport biométrique et le consionement a partir de 30.000,00Da selon la catégorie du vhécule qui constitue une garantie que nous de mandons.'
+      content: 'Dépôt obligatoire du passeport biométrique et le consionnement a partir de 30.000,00Da selon la catégorie du vhécule qui constitue une garantie que nous de mandons.'
     },
     {
       title: 'Carburant',
@@ -131,7 +131,7 @@ export const FRENCH_CONDITIONS_TEMPLATE: ConditionsTemplate = {
     },
     {
       title: 'Cas de sinistre',
-      content: 'Assurance de base : Le client s\'engage à payer tout dégât occasionné sur le véhicule qu\'il soit fautif ou non faut if. Toutes dégats sur le véhicule feras l\'objet d\'un ponctionnement sur la contion de garantie'
+      content: 'Assurance de base : Le client s\'engage à payer tout dégât occasionné sur le véhicule qu\'il soit fautif ou non fautif. Toutes dégats sur le véhicule feras l\'objet d\'un ponctionnement sur la contion de garantie'
     },
     {
       title: 'Cas de vol',
@@ -147,7 +147,7 @@ export const FRENCH_CONDITIONS_TEMPLATE: ConditionsTemplate = {
     },
     {
       title: 'Dégâts supplémentaire',
-      content: 'Les dégâts aux jantes et pneumatiques, le roude à plat des pneumatiques, la détérioration, les vols, les pillages d\'accessoires, les actes de vandalisme, les dégâts mécaniques dus à une mauvaise utilisation du véhicule, les procès verbaux, les dégâts survenus en dessous du véhicule (jupe, bas de caisse, carter d\'huile, échappement) et les dommages causés par les troubles et émeutes seront facturés au client.'
+      content: 'Les dégâts aux jantes et pneumatiques, le roulage à plat des pneumatiques, la détérioration, les vols, les pillages d\'accessoires, les actes de vandalisme, les dégâts mécaniques dus à une mauvaise utilisation du véhicule, les procès verbaux, les dégâts survenus en dessous du véhicule (jupe, bas de caisse, carter d\'huile, échappement) et les dommages causés par les troubles et émeutes seront facturés au client.'
     },
     {
       title: 'Pénalité de retard',
@@ -155,7 +155,7 @@ export const FRENCH_CONDITIONS_TEMPLATE: ConditionsTemplate = {
     },
     {
       title: 'Kilométrage',
-      content: 'Le kilométrage est limité pour tous nos véhicules a 300Km/Jour. Le client déclare avoir pris connaissance et accepter sans réserve les présentes conditions de location.et s engage a signé ce contrat.'
+      content: 'Le kilométrage est limité pour tous nos véhicules a 300Km/Jour.'
     },
     {
       title: 'Acceptation',
@@ -174,7 +174,18 @@ export const getConditionsTemplate = (language: 'ar' | 'fr'): ConditionsTemplate
 };
 
 /**
- * Generate HTML content for printing conditions
+ * Generate HTML content for printing conditions.
+ * Pixel-matches the ConditionsPersonalizer modal UI exactly:
+ *   - Blue gradient header  : linear-gradient(135deg, #003399 → #0047b2)
+ *   - Title                 : 24px / 800
+ *   - Subtitle              : 14px italic
+ *   - Condition font        : 14px / 1.7  (bold #003399 prefix)
+ *   - Row divider           : 1px solid #eef0f7, padding 10px 0
+ *   - Acceptance box        : bg #f0f4ff, border #b8ccee, 13.5px / 600
+ *   - Signature label       : 13px / 700 / #003399
+ *   - Signature line height : 50px, bg #f8faff
+ *   - Side padding          : 56px (matches card padding 44px 56px)
+ *   - Page border           : 2px solid #003399
  */
 export const generateConditionsPrintHTML = (language: 'ar' | 'fr'): string => {
   const template = getConditionsTemplate(language);
@@ -182,314 +193,199 @@ export const generateConditionsPrintHTML = (language: 'ar' | 'fr'): string => {
   const dir = isArabic ? 'rtl' : 'ltr';
   const textAlign = isArabic ? 'right' : 'left';
 
-  // Compact conditions HTML - optimized for single page
   const conditionsHTML = template.conditions
-    .map((condition, index) => `
-      <tr>
-        <td style="width: 5%; text-align: center; color: #1a3a52; font-weight: 700; font-size: 9px; padding: 4px 3px; border-bottom: 0.5px solid #e0e0e0; vertical-align: top;">${index + 1}</td>
-        <td style="width: 25%; font-weight: 600; color: #1a3a52; font-size: 8.5px; padding: 4px 6px; border-bottom: 0.5px solid #e0e0e0; vertical-align: top;">${condition.title}</td>
-        <td style="width: 70%; color: #333; font-size: 8px; padding: 4px 6px; border-bottom: 0.5px solid #e0e0e0; line-height: 1.2; vertical-align: top;">${condition.content}</td>
-      </tr>
-    `)
+    .map(
+      (condition, index) => `
+      <div class="condition-item">
+        <p class="condition-text">
+          <span class="condition-title">${index + 1}- ${condition.title} </span>${condition.content}
+        </p>
+      </div>`
+    )
     .join('');
 
-  return `
-    <!DOCTYPE html>
-    <html dir="${dir}" lang="${language}">
-    <head>
-      <meta charset="utf-8">
-      <title>شروط الإيجار - Conditions de Location</title>
-      <style>
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
+  const acceptanceText = isArabic
+    ? 'يُقرّ المستأجر بأنه اطّلع على شروط الإيجار هذه وقبلها دون أي تحفظ، ويتعهد بتوقيع هذا العقد.'
+    : "Le client déclare avoir pris connaissance et accepter sans réserve les présentes conditions de location et s'engage à signer ce contrat.";
 
-        html, body {
-          width: 100%;
-          height: 100%;
-          margin: 0;
-          padding: 0;
-        }
+  const printDate = new Date().toLocaleDateString(isArabic ? 'en-US' : 'fr-FR');
 
-        body {
-          font-family: 'Arial', sans-serif;
-          background: #f5f5f5;
-          color: #333;
-          line-height: 1.6;
-          direction: ${dir};
-          text-align: ${textAlign};
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
+  return `<!DOCTYPE html>
+<html dir="${dir}" lang="${language}">
+<head>
+  <meta charset="utf-8">
+  <title>${template.title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        .page {
-          width: 210mm;
-          height: 297mm;
-          margin: 0 auto;
-          padding: 12mm 12mm;
-          background: white;
-          box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
-          page-break-after: avoid;
-          page-break-inside: avoid;
-          border: 2px solid #003399;
-        }
+    html, body {
+      width: 794px;
+      margin: 0;
+      padding: 0;
+      background: white;
+    }
 
-        .header {
-          flex-shrink: 0;
-          text-align: center;
-          border-bottom: 3px solid #003399;
-          padding: 12mm 0 10mm 0;
-          margin-bottom: 10mm;
-          background: linear-gradient(to bottom, #f0f4ff 0%, #ffffff 100%);
-        }
+    body {
+      font-family: 'Arial', 'Helvetica Neue', sans-serif;
+      color: #222;
+      direction: ${dir};
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
 
-        .header h1 {
-          font-size: 24px;
-          color: #003399;
-          margin: 0 0 6px 0;
-          font-weight: 700;
-          letter-spacing: 0.5px;
-        }
+    /* ── PAGE ── */
+    .page {
+      width: 794px;
+      min-height: 1123px;
+      padding-bottom: 30px;
+      display: flex;
+      flex-direction: column;
+      background: white;
+      border: 2px solid #003399;
+    }
 
-        .header p {
-          font-size: 12px;
-          color: #555;
-          font-style: normal;
-          line-height: 1.4;
-          margin: 6px 0 0 0;
-        }
+    /* ── HEADER (÷1.2) ── */
+    .header {
+      background: linear-gradient(135deg, #003399 0%, #0047b2 100%);
+      color: white;
+      padding: 18px 47px 15px;
+      text-align: center;
+      flex-shrink: 0;
+    }
 
-        .conditions-section {
-          flex-grow: 1;
-          margin-bottom: 10mm;
-          overflow: hidden;
-          background: white;
-          border: 1px solid #ddd;
-          border-radius: 2px;
-          padding: 10mm 12mm;
-          page-break-inside: avoid;
-        }
+    .header h1 {
+      font-size: 20px;
+      font-weight: 800;
+      margin: 0 0 7px;
+      letter-spacing: 0.3px;
+    }
 
-        .conditions-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: #003399;
-          margin-bottom: 8mm;
-          text-transform: none;
-          letter-spacing: 0;
-          padding-bottom: 8px;
-          border-bottom: 2px solid #003399;
-          text-align: left;
-        }
+    .header p {
+      font-size: 11.5px;
+      margin: 0;
+      opacity: 0.88;
+      font-style: italic;
+      color: rgba(255,255,255,0.88);
+    }
 
-        .conditions-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 12px;
-        }
+    /* ── CONTENT (÷1.2) ── */
+    .content {
+      flex: 1;
+      padding: 15px 47px 0;
+    }
 
-        .conditions-table tbody tr:nth-child(odd) {
-          background-color: #ffffff;
-        }
+    /* ── CONDITION ROWS (÷1.2) ── */
+    .condition-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #eef0f7;
+    }
+    .condition-item:last-child { border-bottom: none; }
 
-        .conditions-table tbody tr:nth-child(even) {
-          background-color: #f8f9fa;
-        }
+    .condition-text {
+      font-size: 11.5px;
+      color: #222;
+      line-height: 1.55;
+      margin: 0;
+      text-align: ${textAlign};
+    }
 
-        .conditions-table tbody tr:hover {
-          background-color: #f0f4ff;
-        }
+    .condition-title {
+      font-weight: 700;
+      color: #003399;
+    }
 
-        .conditions-table td {
-          padding: 8px 10px;
-          border-bottom: 1px solid #e0e0e0;
-          vertical-align: top;
-          line-height: 1.5;
-        }
+    /* ── ACCEPTANCE (÷1.2) ── */
+    .acceptance {
+      margin: 17px 47px 0;
+      padding: 8px 12px;
+      background: #f0f4ff;
+      border-radius: 5px;
+      border: 1px solid #b8ccee;
+      font-size: 11px;
+      color: #003399;
+      font-weight: 600;
+      text-align: ${textAlign};
+    }
 
-        .conditions-table td:first-child {
-          font-weight: 700;
-          color: #003399;
-          text-align: center;
-          width: 6%;
-          background: #f0f4ff;
-          border-right: 2px solid #ddd;
-          padding: 8px 6px;
-        }
+    /* ── SIGNATURES (÷1.2) ── */
+    .signatures-section {
+      margin: 23px 47px 0;
+      padding-top: 15px;
+      border-top: 2px solid #003399;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 27px;
+    }
 
-        .conditions-table td:nth-child(2) {
-          font-weight: 700;
-          color: #003399;
-          width: 22%;
-          font-size: 12px;
-        }
+    .signature-block { text-align: center; }
 
-        .conditions-table td:nth-child(3) {
-          color: #333;
-          line-height: 1.5;
-          width: 72%;
-          font-size: 12px;
-        }
+    .signature-line {
+      border-top: 2px solid #003399;
+      height: 42px;
+      margin-bottom: 8px;
+      background: #f8faff;
+      border-radius: 4px 4px 0 0;
+    }
 
-        .signatures-section {
-          flex-shrink: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 8mm;
-          background: linear-gradient(to right, #f0f4ff 0%, #ffffff 100%);
-          border: 1px solid #ddd;
-          border-left: 4px solid #003399;
-          border-radius: 2px;
-          padding: 12mm 14mm;
-          page-break-inside: avoid;
-        }
+    .signature-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #003399;
+      letter-spacing: 0.2px;
+    }
 
-        .signatures-title {
-          font-size: 14px;
-          font-weight: 700;
-          color: #003399;
-          text-align: left;
-          margin-bottom: 4mm;
-          text-transform: none;
-          letter-spacing: 0;
-          padding-bottom: 6px;
-          border-bottom: 2px solid #003399;
-        }
+    .print-date {
+      text-align: center;
+      font-size: 9px;
+      color: #888;
+      margin: 13px 47px 0;
+      padding-top: 10px;
+      border-top: 1px solid #dde3f5;
+    }
 
-        .signatures-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 15mm;
-        }
+    @media print {
+      @page { size: A4; margin: 0; }
+      html, body { width: 794px; }
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
 
-        .signature-block {
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          gap: 3mm;
-        }
+    <div class="header">
+      <h1>${template.title}</h1>
+      <p>${template.subtitle}</p>
+    </div>
 
-        .signature-line {
-          border-top: 1.5px solid #003399;
-          height: 22px;
-          margin-bottom: 2mm;
-          background: white;
-          border-radius: 1px;
-        }
+    <div class="content">
+      ${conditionsHTML}
+    </div>
 
-        .signature-label {
-          font-size: 11px;
-          font-weight: 600;
-          color: #003399;
-          text-transform: none;
-          letter-spacing: 0;
-        }
+    <div class="acceptance">
+      ${acceptanceText}
+    </div>
 
-        .print-date {
-          text-align: center;
-          font-size: 11px;
-          color: #666;
-          margin-top: 6mm;
-          padding-top: 6mm;
-          border-top: 1px solid #ddd;
-          font-weight: 500;
-        }
-
-        @media print {
-          @page {
-            size: A4;
-            margin: 0;
-            padding: 0;
-          }
-
-          html, body {
-            width: 210mm;
-            height: 297mm;
-            margin: 0;
-            padding: 0;
-            background: white;
-            overflow: visible !important;
-          }
-
-          body {
-            display: block;
-            margin: 0;
-            padding: 0;
-          }
-
-          .page {
-            width: 210mm;
-            height: 297mm;
-            margin: 0;
-            padding: 10mm 12mm;
-            box-sizing: border-box;
-            page-break-after: avoid;
-            page-break-inside: avoid;
-            display: flex;
-            flex-direction: column;
-          }
-
-          .conditions-section {
-            page-break-inside: avoid;
-            margin-bottom: 8mm;
-          }
-
-          .signatures-section {
-            page-break-inside: avoid;
-          }
-
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="page">
-        <!-- Header -->
-        <div class="header">
-          <h1>${template.title}</h1>
-          <p>${template.subtitle}</p>
-        </div>
-
-        <!-- Conditions -->
-        <div class="conditions-section">
-          <div class="conditions-title">${language === 'ar' ? 'شروط التأجير' : 'Conditions de Location'}</div>
-          <table class="conditions-table">
-            <tbody>
-              ${conditionsHTML}
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Signatures -->
-        <div class="signatures-section">
-          <div class="signatures-title">${language === 'ar' ? 'التوقيعات' : 'Signatures'}</div>
-
-          <div class="signatures-grid">
-            <div class="signature-block">
-              <div class="signature-line"></div>
-              <div class="signature-label">${template.clientSignatureLabel}</div>
-            </div>
-
-            <div class="signature-block">
-              <div class="signature-line"></div>
-              <div class="signature-label">${template.agencySignatureLabel}</div>
-            </div>
-          </div>
-
-          <div class="print-date">
-            ${language === 'ar' ? 'التاريخ: ' : 'Date: '}${new Date().toLocaleDateString(language === 'ar' ? 'en-US' : 'fr-FR')}
-          </div>
-        </div>
+    <div class="signatures-section">
+      <div class="signature-block">
+        <div class="signature-line"></div>
+        <div class="signature-label">🏢 ${template.agencySignatureLabel}</div>
       </div>
-    </body>
-    </html>
-  `;
+      <div class="signature-block">
+        <div class="signature-line"></div>
+        <div class="signature-label">✍️ ${template.clientSignatureLabel}</div>
+      </div>
+    </div>
+
+    <div class="print-date">
+      ${isArabic ? 'التاريخ: ' : 'Date: '}${printDate}
+    </div>
+
+  </div>
+</body>
+</html>`;
 };

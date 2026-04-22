@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, Printer } from 'lucide-react';
+import { motion } from 'motion/react';
+import { X, Printer, FileText, Globe } from 'lucide-react';
 import { generateConditionsPrintHTML, getConditionsTemplate } from '../constants/ConditionsTemplates';
 
 interface ConditionsPersonalizerProps {
@@ -29,7 +29,7 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
     setIsPrinting(true);
     const content = generateConditionsPrintHTML(conditionsLanguage);
     setTimeout(() => {
-      const printWindow = window.open('', '', 'height=800,width=900');
+      const printWindow = window.open('', '', 'height=900,width=800');
       if (printWindow) {
         printWindow.document.write(content);
         printWindow.document.close();
@@ -42,146 +42,333 @@ export const ConditionsPersonalizer: React.FC<ConditionsPersonalizerProps> = ({
 
   return (
     <>
+      {/* Backdrop */}
       <motion.div
         key="backdrop"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 backdrop-blur-sm z-40"
+        className="fixed inset-0 z-40"
+        style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
         onClick={onClose}
       />
+
+      {/* Modal */}
       <motion.div
         key="modal"
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        initial={{ opacity: 0, scale: 0.96, y: 24 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        exit={{ opacity: 0, scale: 0.96, y: 24 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
       >
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '1100px',
+            maxHeight: '96vh',
+            display: 'flex',
+            flexDirection: 'column',
+            borderRadius: '14px',
+            overflow: 'hidden',
+            boxShadow: '0 30px 80px rgba(0,30,100,0.35)',
+            background: '#fff',
+          }}
+        >
+          {/* ── Header ── */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #003399 0%, #0047b2 100%)',
+              padding: '16px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.18)',
+                  borderRadius: '10px',
+                  padding: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <FileText size={22} color="#fff" />
+              </div>
               <div>
-                <h2 className="text-2xl font-bold text-white">
-                  {conditionsLanguage === 'fr' ? 'Conditions de Location' : 'شروط الإيجار'}
+                <h2 style={{ color: '#fff', fontWeight: 700, fontSize: '20px', margin: 0 }}>
+                  {isArabic ? 'شروط التأجير' : 'Conditions de Location'}
                 </h2>
-                <p className="text-blue-100 text-sm mt-1">
+                <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', margin: '3px 0 0' }}>
                   {template.subtitle}
                 </p>
               </div>
-              {/* Template Selector */}
-              <div className="flex gap-2 ml-8">
-                <button
-                  onClick={() => setConditionsLanguage('fr')}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                    conditionsLanguage === 'fr'
-                      ? 'bg-white text-blue-600'
-                      : 'bg-blue-500 text-white hover:bg-blue-400'
-                  }`}
-                >
-                  🇫🇷 Français
-                </button>
-                <button
-                  onClick={() => setConditionsLanguage('ar')}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                    conditionsLanguage === 'ar'
-                      ? 'bg-white text-blue-600'
-                      : 'bg-blue-500 text-white hover:bg-blue-400'
-                  }`}
-                >
-                  🇸🇦 العربية
-                </button>
-              </div>
             </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-all"
-            >
-              <X size={24} />
-            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Language selector */}
+              <div
+                style={{
+                  display: 'flex',
+                  background: 'rgba(255,255,255,0.15)',
+                  borderRadius: '8px',
+                  padding: '3px',
+                  gap: '3px',
+                }}
+              >
+                {(['fr', 'ar'] as const).map((lng) => (
+                  <button
+                    key={lng}
+                    onClick={() => setConditionsLanguage(lng)}
+                    style={{
+                      padding: '5px 14px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                      transition: 'all 0.2s',
+                      background: conditionsLanguage === lng ? '#fff' : 'transparent',
+                      color: conditionsLanguage === lng ? '#003399' : 'rgba(255,255,255,0.85)',
+                    }}
+                  >
+                    {lng === 'fr' ? '🇫🇷 FR' : '🇸🇦 AR'}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={onClose}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '7px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.28)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
+              >
+                <X size={20} color="#fff" />
+              </button>
+            </div>
           </div>
 
-          {/* Content Area */}
-          <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-50 to-white p-8">
-            {/* Conditions Table - Professional Display */}
-            <div className="bg-white rounded-lg shadow-lg p-0 mx-auto" style={{ maxWidth: '900px' }}>
-              <div style={{ direction: dir, textAlign }} className="overflow-hidden rounded-lg border border-gray-200">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100 border-b border-gray-200">
-                    <tr>
-                      <th className="w-12 px-3 py-3 text-center font-semibold text-gray-700">#</th>
-                      <th className="w-1/3 px-4 py-3 font-semibold text-gray-700" style={{ textAlign }}>
-                        {conditionsLanguage === 'fr' ? 'Condition' : 'الشرط'}
-                      </th>
-                      <th className="flex-1 px-4 py-3 font-semibold text-gray-700" style={{ textAlign }}>
-                        {conditionsLanguage === 'fr' ? 'Description' : 'التفاصيل'}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {template.conditions.map((condition, index) => (
-                      <motion.tr
-                        key={index}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: index * 0.02 }}
-                        className="hover:bg-blue-50 transition-colors"
-                      >
-                        <td className="px-3 py-3 text-center font-bold text-blue-600">{index + 1}</td>
-                        <td className="px-4 py-3 font-semibold text-gray-800">{condition.title}</td>
-                        <td className="px-4 py-3 text-gray-700 leading-relaxed">{condition.content}</td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Signature Preview Area */}
-              <div className="bg-white px-6 py-8 border-t border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                  <div className="flex flex-col" style={{ direction: dir }}>
-                    <div className="h-12 border-b-2 border-gray-400 mb-3"></div>
-                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      {template.clientSignatureLabel}
-                    </p>
-                  </div>
-                  <div className="flex flex-col" style={{ direction: dir }}>
-                    <div className="h-12 border-b-2 border-gray-400 mb-3"></div>
-                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      {template.agencySignatureLabel}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Info Alert */}
-              <div className="bg-blue-50 border-t border-blue-200 px-6 py-4">
-                <p className="text-blue-900 text-sm">
-                  <span className="font-semibold">ℹ️ {conditionsLanguage === 'fr' ? 'Info:' : 'معلومة:'}</span>{' '}
-                  {conditionsLanguage === 'fr' 
-                    ? 'Modèle standard optimisé pour impression A4 sur une seule page.' 
-                    : 'نموذج قياسي محسّن للطباعة على صفحة A4 واحدة.'}
+          {/* ── Document Preview Area ── */}
+          <div
+            style={{
+              flex: 1,
+              overflow: 'auto',
+              background: '#e8ecf4',
+              padding: '28px 32px',
+            }}
+          >
+            {/* A4 Document Card */}
+            <div
+              dir={dir}
+              style={{
+                background: '#fff',
+                borderRadius: '8px',
+                boxShadow: '0 4px 32px rgba(0,30,100,0.18)',
+                maxWidth: '100%',
+                margin: '0 auto',
+                padding: '44px 56px',
+                fontFamily: "'Arial', 'Helvetica Neue', sans-serif",
+                position: 'relative',
+                border: '2px solid #003399',
+              }}
+            >
+              {/* Document Title */}
+              <div
+                style={{
+                  textAlign: 'center',
+                  borderBottom: '3px solid #003399',
+                  paddingBottom: '14px',
+                  marginBottom: '22px',
+                }}
+              >
+                <h1
+                  style={{
+                    color: '#003399',
+                    fontSize: '24px',
+                    fontWeight: 800,
+                    margin: '0 0 8px',
+                    letterSpacing: '0.3px',
+                  }}
+                >
+                  {template.title}
+                </h1>
+                <p style={{ color: '#555', fontSize: '14px', margin: 0, fontStyle: 'italic' }}>
+                  {template.subtitle}
                 </p>
               </div>
+
+              {/* Conditions List — full-document style like the scanned images */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                {template.conditions.map((condition, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      padding: '10px 0',
+                      borderBottom: index < template.conditions.length - 1 ? '1px solid #eef0f7' : 'none',
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: '14px',
+                        color: '#222',
+                        lineHeight: '1.7',
+                        textAlign: textAlign as 'left' | 'right',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: '#003399',
+                          marginInlineEnd: '6px',
+                        }}
+                      >
+                        {index + 1}- {condition.title}
+                      </span>
+                      <span style={{ color: '#333' }}>{condition.content}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Acceptance Statement */}
+              <div
+                style={{
+                  marginTop: '20px',
+                  padding: '10px 14px',
+                  background: '#f0f4ff',
+                  borderRadius: '6px',
+                  border: '1px solid #b8ccee',
+                  textAlign: textAlign as 'left' | 'right',
+                }}
+              >
+                <p style={{ fontSize: '13.5px', color: '#003399', fontWeight: 600, margin: 0 }}>
+                  {isArabic
+                    ? 'يُقرّ المستأجر بأنه اطّلع على شروط الإيجار هذه وقبولها دون أي تحفظ، ويتعهد بتوقيع هذا العقد.'
+                    : "Le client déclare avoir pris connaissance et accepter sans réserve les présentes conditions de location et s'engage à signer ce contrat."}
+                </p>
+              </div>
+
+              {/* Signatures */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '32px',
+                  marginTop: '28px',
+                  paddingTop: '18px',
+                  borderTop: '2px solid #003399',
+                }}
+              >
+                {[
+                  { label: template.agencySignatureLabel, icon: '🏢' },
+                  { label: template.clientSignatureLabel, icon: '✍️' },
+                ].map((sig, i) => (
+                  <div key={i} style={{ textAlign: 'center' }}>
+                    <div
+                      style={{
+                        borderBottom: '2px solid #003399',
+                        height: '50px',
+                        marginBottom: '10px',
+                        background: '#f8faff',
+                        borderRadius: '4px 4px 0 0',
+                      }}
+                    />
+                    <p
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#003399',
+                        margin: 0,
+                        letterSpacing: '0.2px',
+                      }}
+                    >
+                      {sig.icon} {sig.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Footer with Actions */}
-          <div className="bg-gray-100 px-8 py-4 flex items-center justify-between border-t border-gray-200">
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold rounded-lg transition-all"
-            >
-              {conditionsLanguage === 'fr' ? 'Fermer' : 'إغلاق'}
-            </button>
-            <button
-              onClick={handlePrint}
-              disabled={isPrinting}
-              className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
-            >
-              <Printer size={18} />
-              {isPrinting ? (conditionsLanguage === 'fr' ? 'Impression...' : 'جاري الطباعة...') : (conditionsLanguage === 'fr' ? 'Imprimer' : 'طباعة')}
-            </button>
+          {/* ── Footer ── */}
+          <div
+            style={{
+              padding: '14px 24px',
+              background: '#f5f7ff',
+              borderTop: '1px solid #dde3f5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Globe size={15} color="#6b7acc" />
+              <span style={{ fontSize: '12px', color: '#6b7acc' }}>
+                {isArabic
+                  ? 'نموذج قياسي محسّن للطباعة على صفحة A4 واحدة'
+                  : 'Modèle standard optimisé pour impression A4 sur une seule page'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={onClose}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: '8px',
+                  border: '1.5px solid #ccd3e8',
+                  background: '#fff',
+                  color: '#444',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f2fa')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+              >
+                {isArabic ? 'إغلاق' : 'Fermer'}
+              </button>
+              <button
+                onClick={handlePrint}
+                disabled={isPrinting}
+                style={{
+                  padding: '8px 22px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: isPrinting
+                    ? '#aab5d8'
+                    : 'linear-gradient(135deg, #003399 0%, #0047b2 100%)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: isPrinting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '7px',
+                  transition: 'opacity 0.2s',
+                  boxShadow: '0 4px 14px rgba(0,51,153,0.3)',
+                }}
+              >
+                <Printer size={16} />
+                {isPrinting
+                  ? isArabic ? 'جاري الطباعة...' : 'Impression...'
+                  : isArabic ? 'طباعة' : 'Imprimer'}
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>

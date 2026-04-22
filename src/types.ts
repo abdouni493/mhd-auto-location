@@ -40,7 +40,7 @@ export interface Car {
   status?: 'disponible' | 'louer' | 'maintenance' | 'available';
 }
 
-export type ExpenseType = 'vidange' | 'assurance' | 'controle' | 'autre';
+export type ExpenseType = 'vidange' | 'assurance' | 'controle' | 'chaine' | 'autre';
 
 export interface Expense {
   id: string;
@@ -85,7 +85,7 @@ export interface Client {
   placeOfBirth?: string;
 
   // Official Documents
-  idCardNumber: string;
+  idCardNumber?: string;
   licenseNumber: string;
   licenseExpirationDate?: string;
   licenseDeliveryDate?: string;
@@ -396,7 +396,7 @@ export interface MaintenanceAlert {
   id: string;
   carId: string;
   carInfo: string;
-  type: 'vidange' | 'assurance' | 'controle';
+  type: 'vidange' | 'assurance' | 'controle' | 'chaine';
   title: string;
   message: string;
   severity: 'low' | 'medium' | 'high' | 'critical';

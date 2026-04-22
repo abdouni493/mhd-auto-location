@@ -720,9 +720,23 @@ export class DatabaseService {
   }
 
   static async createMaintenanceAlert(alert: Omit<MaintenanceAlert, 'id' | 'created_at'>): Promise<MaintenanceAlert> {
+    const dbPayload = {
+      car_id: alert.carId,
+      car_info: alert.carInfo,
+      type: alert.type,
+      title: alert.title,
+      message: alert.message,
+      severity: alert.severity,
+      due_date: alert.dueDate ?? null,
+      is_expired: alert.isExpired,
+      days_until_due: alert.daysUntilDue ?? null,
+      current_mileage: alert.currentMileage ?? null,
+      next_service_mileage: alert.nextServiceMileage ?? null,
+    };
+
     const { data, error } = await supabase
       .from('maintenance_alerts')
-      .insert([alert])
+      .insert([dbPayload])
       .select()
       .single();
 

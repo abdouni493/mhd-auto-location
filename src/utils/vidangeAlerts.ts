@@ -23,7 +23,7 @@ export interface AssuranceAlert {
  */
 export const getVidangeAlert = (car: Car, expenses: VehicleExpense[]): VidangeAlert | null => {
   // Find the latest vidange expense
-  const vidangeExpenses = expenses.filter(e => e.type === 'vidange' && e.currentMileage !== undefined && e.nextVidangeKm !== undefined);
+  const vidangeExpenses = expenses.filter(e => e.type === 'vidange' && e.currentMileage !== undefined && e.nextVidangeKm !== undefined && e.carId === car.id);
   
   if (vidangeExpenses.length === 0) {
     return null;
@@ -37,7 +37,7 @@ export const getVidangeAlert = (car: Car, expenses: VehicleExpense[]): VidangeAl
     return currentTime > latestTime ? current : latest;
   });
 
-  if (!latestVidange.currentMileage || !latestVidange.nextVidangeKm) {
+  if (latestVidange.currentMileage === undefined || latestVidange.currentMileage === null || latestVidange.nextVidangeKm === undefined || latestVidange.nextVidangeKm === null) {
     return null;
   }
 
@@ -174,4 +174,43 @@ export const getControleAlert = (car: Car, expenses: VehicleExpense[]): Assuranc
     daysRemaining,
     message
   };
+};
+/**
+ * Check if a car needs chaine (chain/belt) alert
+ * Uses same km-based logic as vidange — filtered by type 'chaine'
+ */
+export const getChaineAlert = (car: Car, expenses: VehicleExpense[]): VidangeAlert | null => {
+  const chaineExpenses = expenses.filter(
+    e => e.type === 'chaine' && e.currentMileage !== undefined && e.nextVidangeKm !== undefined && e.carId === car.id
+  );
+
+  if (chaineExpenses.length === 0) return null;
+
+  const latest = chaineExpenses.reduce((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime();
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime();
+    return bTime > aTime ? b : a;
+  });
+
+  if (latest.currentMileage === undefined || latest.currentMileage === null || latest.nextVidangeKm === undefined || latest.nextVidangeKm === null) return null;
+
+  const nextServiceKm = latest.currentMileage + latest.nextVidangeKm;
+  const currentMileage = car.mileage || 0;
+  const kmRemaining = nextServiceKm - currentMileage;
+
+  let status: 'overdue' | 'warning' | 'ok' = 'ok';
+  let message = '';
+
+  if (kmRemaining < 0) {
+    status = 'overdue';
+    message = `🚨 CHAÎNE EN RETARD! Dépassement: ${Math.abs(kmRemaining).toLocaleString()} KM`;
+  } else if (kmRemaining < 500) {
+    status = 'warning';
+    message = `⚠️ Chaîne bientôt! ${kmRemaining.toLocaleString()} KM restants`;
+  } else {
+    status = 'ok';
+    message = `✓ Chaîne OK. ${kmRemaining.toLocaleString()} KM restants`;
+  }
+
+  return { status, currentMileage, nextVidangeKm: nextServiceKm, kmRemaining, message };
 };

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DashboardStats, MaintenanceAlert, Language, Car, ReservationDetails, VehicleExpense } from '../types';
+import { DashboardStats, MaintenanceAlert, Language, Car, ReservationDetails, VehicleExpense, User } from '../types';
 import { motion } from 'motion/react';
 import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, DollarSign, Wrench, Shield, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
 import { getCars } from '../services/carService';
 import { getVehicleExpenses } from '../services/expenseService';
-import { getVidangeAlert, getAssuranceAlert, getControleAlert } from '../utils/vidangeAlerts';
+import { getVidangeAlert, getAssuranceAlert, getControleAlert, getChaineAlert } from '../utils/vidangeAlerts';
 
 // Mock data for dashboard (removed - now using real data)
 
@@ -79,13 +79,14 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
       case 'vidange': return '🛢️';
       case 'assurance': return '🛡️';
       case 'controle': return '🔍';
+      case 'chaine': return '⛓️';
       default: return '⚠️';
     }
   };
 
   const getProgressPercentage = () => {
-    if (alert.type === 'vidange' && alert.currentMileage && alert.nextServiceMileage) {
-      return Math.min((alert.currentMileage / alert.nextServiceMileage) * 100, 100);
+    if ((alert.type === 'vidange' || alert.type === 'chaine') && alert.currentMileage !== undefined && alert.nextServiceMileage) {
+      return Math.min(((alert.currentMileage || 0) / alert.nextServiceMileage) * 100, 100);
     }
     if (alert.dueDate) {
       const totalDays = alert.type === 'assurance' ? 365 : 180; // Approximate annual cycles
@@ -186,8 +187,8 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
               </span>
             </div>
 
-            {/* Mileage Progress for Vidange */}
-            {alert.type === 'vidange' && alert.currentMileage && alert.nextServiceMileage && (
+            {/* Mileage Progress for Vidange and Chaine */}
+            {(alert.type === 'vidange' || alert.type === 'chaine') && alert.currentMileage !== undefined && alert.nextServiceMileage && (
               <div className="space-y-2">
                 <div className="flex justify-between items-center text-xs">
                   <span className={styles.text}>
@@ -771,6 +772,113 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                           }
                         </p>
                       </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
+      </motion.div>
+
+      {/* Chaîne (Chain/Belt) Alerts Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="relative"
+      >
+        {(() => {
+          const chaineAlerts = cars
+            .map(car => ({
+              car,
+              alert: getChaineAlert(car, vehicleExpenses)
+            }))
+            .filter(item => item.alert !== null && item.alert.status !== 'ok');
+
+          if (chaineAlerts.length === 0) return null;
+
+          const overdueAlerts = chaineAlerts.filter(item => item.alert?.status === 'overdue');
+          const warningAlerts = chaineAlerts.filter(item => item.alert?.status === 'warning');
+
+          return (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="relative"
+                  >
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                      overdueAlerts.length > 0
+                        ? 'bg-gradient-to-br from-red-500 to-red-600'
+                        : 'bg-gradient-to-br from-orange-500 to-orange-600'
+                    }`}>
+                      <span className="text-2xl">⛓️</span>
+                    </div>
+                    {(overdueAlerts.length > 0 || warningAlerts.length > 0) && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
+                    )}
+                  </motion.div>
+                  <div>
+                    <h2 className="text-2xl font-black text-saas-text-main uppercase tracking-tighter">
+                      {lang === 'fr' ? 'Alertes Chaîne / Courroie' : 'تنبيهات السلسلة / التيمي'}
+                    </h2>
+                    <p className="text-saas-text-muted font-medium">
+                      {overdueAlerts.length} {lang === 'fr' ? 'en retard' : 'متأخرة'}, {warningAlerts.length} {lang === 'fr' ? 'avertissements' : 'تحذيرات'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {chaineAlerts.map((item, index) => {
+                  const { car, alert } = item;
+                  if (!alert) return null;
+
+                  return (
+                    <motion.div
+                      key={car.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 ${
+                        alert.status === 'overdue'
+                          ? 'bg-red-50 border-red-300'
+                          : alert.status === 'warning'
+                          ? 'bg-amber-50 border-amber-300'
+                          : 'bg-green-50 border-green-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className={`font-black text-sm uppercase tracking-tight ${
+                            alert.status === 'overdue'
+                              ? 'text-red-700'
+                              : alert.status === 'warning'
+                              ? 'text-amber-700'
+                              : 'text-green-700'
+                          }`}>
+                            {car.brand} {car.model}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">{car.registration}</p>
+                        </div>
+                        <span className="text-xl flex-shrink-0">⛓️</span>
+                      </div>
+                      <p className={`text-xs font-bold ${
+                        alert.status === 'overdue'
+                          ? 'text-red-600'
+                          : alert.status === 'warning'
+                          ? 'text-amber-600'
+                          : 'text-green-600'
+                      }`}>
+                        {alert.message}
+                      </p>
+                      <p className="text-xs text-gray-600 border-t pt-2">
+                        {lang === 'fr' ? 'Kilométrage:' : 'الكيلومترات:'} {alert.currentMileage.toLocaleString()} / {alert.nextVidangeKm.toLocaleString()} KM
+                      </p>
                     </motion.div>
                   );
                 })}

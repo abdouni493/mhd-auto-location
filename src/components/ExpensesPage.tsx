@@ -9,7 +9,7 @@ import { Plus, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getStoreExpenses, addStoreExpense, updateStoreExpense, deleteStoreExpense, getVehicleExpenses, addVehicleExpense, updateVehicleExpense, deleteVehicleExpense } from '../services/expenseService';
 import { DatabaseService } from '../services/DatabaseService';
-import { getVidangeAlert, getAssuranceAlert, getControleAlert } from '../utils/vidangeAlerts';
+import { getVidangeAlert, getAssuranceAlert, getControleAlert, getChaineAlert } from '../utils/vidangeAlerts';
 
 interface ExpensesPageProps {
   lang: Language;
@@ -30,7 +30,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
   // build alert payload from computed alert object
   const buildMaintenanceAlert = (
     car: Car,
-    type: 'vidange' | 'assurance' | 'controle',
+    type: 'vidange' | 'assurance' | 'controle' | 'chaine',
     alertObj: any
   ): Omit<MaintenanceAlert, 'id' | 'created_at'> => {
     const severity: 'low' | 'medium' | 'high' | 'critical' =
@@ -41,14 +41,18 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
         : 'medium';
 
     return {
-      car_id: car.id,
-      car_info: `${car.brand} ${car.model} - ${car.registration}`,
+      carId: car.id,
+      carInfo: `${car.brand} ${car.model} - ${car.registration}`,
       type,
       title:
         type === 'vidange'
           ? alertObj.status === 'overdue'
             ? 'Vidange en retard'
             : 'Vidange planifiée'
+          : type === 'chaine'
+          ? alertObj.status === 'overdue'
+            ? 'Chaîne en retard'
+            : 'Chaîne planifiée'
           : type === 'assurance'
           ? alertObj.status === 'overdue'
             ? 'Assurance expirée'
@@ -58,18 +62,18 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
           : 'Contrôle technique à jour',
       message: alertObj.message,
       severity,
-      due_date:
+      dueDate:
         (type === 'assurance' || type === 'controle') && alertObj.expirationDate
           ? alertObj.expirationDate.toISOString().split('T')[0]
           : undefined,
-      is_expired: alertObj.status === 'overdue',
-      days_until_due:
+      isExpired: alertObj.status === 'overdue',
+      daysUntilDue:
         alertObj.status === 'overdue'
           ? -alertObj.daysRemaining
           : alertObj.daysRemaining,
-      current_mileage: alertObj.currentMileage,
-      next_service_mileage: alertObj.nextVidangeKm,
-      created_at: new Date().toISOString(),
+      currentMileage: alertObj.currentMileage,
+      nextServiceMileage: alertObj.nextVidangeKm,
+      createdAt: new Date().toISOString(),
     };
   };
 
@@ -188,13 +192,15 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
           setVehicleExpenses(updatedExpenses);
 
           // also sync alerts similar to new expense case
-            if (data.type === 'vidange' || data.type === 'assurance' || data.type === 'controle') {
+          if (data.type === 'vidange' || data.type === 'assurance' || data.type === 'controle' || data.type === 'chaine') {
             const car = cars.find(c => c.id === result.expense!.carId);
             if (car) {
               try {
                 let alertObj: any = null;
                 if (data.type === 'vidange') {
                   alertObj = getVidangeAlert(car, updatedExpenses);
+                } else if (data.type === 'chaine') {
+                  alertObj = getChaineAlert(car, updatedExpenses);
                 } else if (data.type === 'assurance') {
                   alertObj = getAssuranceAlert(car, updatedExpenses);
                 } else if (data.type === 'controle') {
@@ -202,7 +208,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
                 }
                 await DatabaseService.deleteMaintenanceAlert(car.id, data.type || '');
                 if (alertObj) {
-                  const maintenanceAlert = buildMaintenanceAlert(car, data.type as 'vidange' | 'assurance' | 'controle', alertObj);
+                  const maintenanceAlert = buildMaintenanceAlert(car, data.type as 'vidange' | 'assurance' | 'controle' | 'chaine', alertObj);
                   await DatabaseService.createMaintenanceAlert(maintenanceAlert);
                 }
               } catch (alertError) {
@@ -236,7 +242,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
           setVehicleExpenses(newExpenses);
 
           // If the type should generate an alert, sync alerts to follow latest expense
-          if (data.type === 'vidange' || data.type === 'assurance' || data.type === 'controle') {
+          if (data.type === 'vidange' || data.type === 'assurance' || data.type === 'controle' || data.type === 'chaine') {
             const car = cars.find(c => c.id === result.expense!.carId);
             if (car) {
               try {
@@ -244,6 +250,8 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
                 let alertObj: any = null;
                 if (data.type === 'vidange') {
                   alertObj = getVidangeAlert(car, newExpenses);
+                } else if (data.type === 'chaine') {
+                  alertObj = getChaineAlert(car, newExpenses);
                 } else if (data.type === 'assurance') {
                   alertObj = getAssuranceAlert(car, newExpenses);
                 } else if (data.type === 'controle') {
@@ -255,7 +263,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
 
                 if (alertObj) {
                   // use helper to build payload
-                  const maintenanceAlert = buildMaintenanceAlert(car, data.type as 'vidange' | 'assurance' | 'controle', alertObj);
+                  const maintenanceAlert = buildMaintenanceAlert(car, data.type as 'vidange' | 'assurance' | 'controle' | 'chaine', alertObj);
                   await DatabaseService.createMaintenanceAlert(maintenanceAlert);
                   console.log(`Synced ${data.type} alert for car ${car.id}`);
                 } else {

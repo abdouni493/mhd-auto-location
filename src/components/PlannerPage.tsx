@@ -2907,373 +2907,182 @@ const PersonalizationModal: React.FC<{
 
   const generateFactureHTML = (templateLang: 'fr' | 'ar'): string => {
     const isFrench = templateLang === 'fr';
-    const textDir = isFrench ? 'ltr' : 'rtl';
-    
-    const labels = {
-      factureTitle: isFrench ? 'FACTURE' : 'الفاتورة',
-      factureNumber: isFrench ? 'N° Facture' : 'رقم الفاتورة',
-      date: isFrench ? 'Date' : 'التاريخ',
-      client: isFrench ? 'Client' : 'العميل',
-      vehicle: isFrench ? 'Véhicule' : 'المركبة',
-      period: isFrench ? 'Période' : 'الفترة',
-      amount: isFrench ? 'Montant HT' : 'المبلغ بدون ضريبة',
-      tva: isFrench ? 'TVA 19%' : 'الضريبة 19%',
-      total: isFrench ? 'Total TTC' : 'الإجمالي',
-      amountPaid: isFrench ? 'Montant Payé' : 'المبلغ المدفوع',
-      remaining: isFrench ? 'Reste à Payer' : 'المتبقي',
-      paymentTerms: isFrench ? 'Conditions de Paiement' : 'شروط الدفع',
-      bank: isFrench ? 'Virement Bancaire' : 'تحويل بنكي',
-      paymentDetails: isFrench ? 'Détails de Paiement' : 'تفاصيل الدفع',
-    };
 
     const subtotal = reservation.totalPrice || 0;
     const tvaAmount = reservation.tvaApplied ? subtotal * 0.19 : 0;
-    const total = subtotal + tvaAmount;
+    const timbre = 200;
+    const total = subtotal + tvaAmount + timbre;
     const totalPaid = reservation.payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || reservation.advancePayment || 0;
-    const remaining = total - totalPaid;
+
+    const numberToWords = (num: number): string => {
+      const ones = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf',
+        'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
+      const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
+      if (num === 0) return 'zéro';
+      let result = '';
+      if (num >= 1000000) { result += numberToWords(Math.floor(num / 1000000)) + ' million '; num = num % 1000000; }
+      if (num >= 1000) { const t = Math.floor(num / 1000); result += (t === 1 ? 'mille ' : numberToWords(t) + ' mille '); num = num % 1000; }
+      if (num >= 100) { const h = Math.floor(num / 100); result += (h === 1 ? 'cent ' : ones[h] + ' cent '); num = num % 100; }
+      if (num >= 20) {
+        const t = Math.floor(num / 10); const o = num % 10;
+        if (t === 7) result += 'soixante-' + ones[10 + o] + ' ';
+        else if (t === 9) result += 'quatre-vingt-' + ones[10 + o] + ' ';
+        else result += tens[t] + (o > 0 ? '-' + ones[o] : '') + ' ';
+      } else if (num > 0) { result += ones[num] + ' '; }
+      return result.trim();
+    };
+
+    const totalInt = Math.round(total);
+    const totalWordsText = numberToWords(totalInt);
+    const totalWords = totalWordsText.charAt(0).toUpperCase() + totalWordsText.slice(1) + ' Dinars Algériens';
+
+    const invoiceNum = '01/' + new Date().getFullYear();
+    const invoiceDate = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+    const departDate = reservation?.step1?.departureDate || '';
+    const returnDate = reservation?.step1?.returnDate || '';
+    const days = reservation?.totalDays || 0;
+    const pricePerDay = (reservation?.car as any)?.priceDay || (reservation?.car as any)?.price_per_day || 0;
 
     const html = `
     <!DOCTYPE html>
-    <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
+    <html dir="ltr" lang="fr">
     <head>
       <meta charset="UTF-8">
       <title>Facture</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          font-family: 'Segoe UI', Arial, sans-serif;
-          line-height: 1.5;
-          color: #222;
-          background: white;
-          direction: ${textDir};
-          font-size: 16px;
-        }
-        .page {
-          width: 210mm;
-          height: 297mm;
-          padding: 2.5mm;
-          margin: 0 auto;
-          background: white;
-          display: flex;
-          flex-direction: column;
-          border: 2px solid #d1d5db;
-          border-radius: 4px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .header {
-          border-bottom: 3px solid #1a3a8a;
-          padding-bottom: 3px;
-          margin-bottom: 4px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .logo {
-          width: 35px;
-          height: 35px;
-          object-fit: contain;
-          flex-shrink: 0;
-        }
-        .header-text {
-          flex: 1;
-        }
-        .agency-name {
-          font-size: 18px;
-          font-weight: bold;
-          color: #1a3a8a;
-          text-align: center;
-          margin: 0 0 2px 0;
-        }
-        .agency-contact {
-          font-size: 9px;
-          color: #555;
-          text-align: center;
-          line-height: 1.2;
-          margin-bottom: 1px;
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: center;
-          gap: 6px;
-          align-items: center;
-        }
-        .agency-contact-item {
-          margin: 0;
-          white-space: nowrap;
-        }
-        .contract-title {
-          font-size: 17px;
-          color: #555;
-          text-align: center;
-          margin-top: 1px;
-        }
-        .header-info {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 3px;
-          margin-bottom: 4px;
-        }
-        .info-box {
-          padding: 5px 6px;
-          border-radius: 3px;
-          font-size: 13px;
-          line-height: 1.3;
-        }
-        .info-box.blue {
-          background-color: #dbeafe;
-          border-left: 4px solid #2563eb;
-        }
-        .info-box.green {
-          background-color: #dcfce7;
-          border-left: 4px solid #16a34a;
-        }
-        .info-box.amber {
-          background-color: #fef3c7;
-          border-left: 4px solid #d97706;
-        }
-        .info-label {
-          font-weight: 600;
-          color: #222;
-          margin-bottom: 1px;
-          font-size: 12px;
-        }
-        .info-value {
-          color: #333;
-          font-size: 13px;
-        }
-        .section {
-          margin-bottom: 4px;
-          page-break-inside: avoid;
-          padding: 4px 5px;
-          border-radius: 4px;
-          border: 1px solid #e5e7eb;
-        }
-        .section.client-section {
-          background-color: #f0f9ff;
-          border: 1px solid #bfdbfe;
-        }
-        .section.vehicle-section {
-          background-color: #f0fdf4;
-          border: 1px solid #bbf7d0;
-        }
-        .section.pricing-section {
-          background-color: #fffbeb;
-          border: 1px solid #fde68a;
-        }
-        .section-title {
-          font-size: 15px;
-          font-weight: 700;
-          background-color: #f0f1f3;
-          padding: 3px 4px;
-          border-radius: 2px;
-          margin-bottom: 3px;
-          border-left: 4px solid #2563eb;
-          color: #1a3a8a;
-        }
-        .section-content {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 7px 6px;
-          font-size: 14px;
-        }
-        .section-content.full {
-          grid-template-columns: 1fr 1fr 1fr;
-        }
-        .info-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 13px;
-        }
-        .info-table tr {
-          border-bottom: 0.5px solid #ddd;
-        }
-        .info-table td {
-          padding: 3px 4px;
-          text-align: ${textDir === 'rtl' ? 'right' : 'left'};
-        }
-        .info-table td:first-child {
-          font-weight: 600;
-          color: #1a3a8a;
-          width: 40%;
-          padding-left: ${textDir === 'rtl' ? 'auto' : '4px'};
-          padding-right: ${textDir === 'rtl' ? '4px' : 'auto'};
-        }
-        .info-table td:last-child {
-          color: #444;
-          width: 60%;
-        }
-        .field {
-          padding: 2px 0;
-          border-bottom: 0.5px solid #ddd;
-        }
-        .field-label {
-          font-weight: 600;
-          color: #1a3a8a;
-          font-size: 12px;
-        }
-        .field-value {
-          color: #444;
-          margin-top: 0px;
-          font-size: 13px;
-        }
-        .pricing-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 2px 0;
-          border-bottom: 0.5px solid #ddd;
-          font-size: 13px;
-        }
-        .pricing-row.total {
-          border-top: 1px solid #222;
-          font-weight: 600;
-          margin-top: 1px;
-          padding-top: 2px;
-        }
-        .pricing-row.grand-total {
-          font-size: 14px;
-          font-weight: 700;
-          color: #1a3a8a;
-          border-top: 2px solid #1a3a8a;
-          padding-top: 2px;
-        }
-        @media print {
-          @page {
-            size: A4;
-            margin: 0;
-          }
-          html, body {
-            width: 210mm;
-            height: 297mm;
-            margin: 0;
-            padding: 0;
-            background: white;
-            overflow: hidden;
-          }
-          body { 
-            margin: 0; 
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            overflow: hidden;
-          }
-          .page { 
-            margin: 0 auto;
-            padding: 10mm;
-            width: 190mm;
-            min-height: 277mm;
-            height: auto;
-            box-sizing: border-box;
-            border: 2px solid black;
-            transform: scale(1.15);
-            transform-origin: top center;
-          }
-          *, *::before, *::after {
-            box-sizing: border-box;
-          }
-          body > * {
-            visibility: hidden;
-          }
-          .page, .page * {
-            visibility: visible;
-          }
-        }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #000; background: white; }
+        .page { width: 210mm; min-height: 297mm; padding: 6mm 8mm; margin: 0 auto; background: white; }
+        .fiscal-strip { width: 100%; font-size: 9px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 3px; margin-bottom: 4px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .header-row { display: flex; align-items: stretch; border: 1px solid #000; margin-bottom: 6px; }
+        .header-cell { flex: 1; padding: 4px 6px; border-right: 1px solid #000; font-size: 10px; }
+        .header-cell label { font-weight: bold; display: block; margin-bottom: 2px; }
+        .facture-num-cell { flex: 1.5; padding: 4px 6px; text-align: center; font-size: 13px; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 1px solid #000; }
+        .facture-num-label { font-size: 10px; font-weight: normal; text-decoration: underline; }
+        .info-block { display: flex; border: 1px solid #000; margin-bottom: 6px; }
+        .agency-block { flex: 1; padding: 6px 8px; border-right: 1px solid #000; display: flex; align-items: center; gap: 8px; }
+        .agency-logo { width: 50px; height: 50px; object-fit: contain; flex-shrink: 0; }
+        .agency-logo-placeholder { width: 50px; height: 50px; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+        .agency-text { flex: 1; }
+        .agency-name-big { font-size: 13px; font-weight: bold; margin-bottom: 2px; }
+        .agency-detail { font-size: 9px; line-height: 1.4; }
+        .client-block { flex: 1.2; padding: 6px 8px; }
+        .client-block-title { font-weight: bold; font-size: 10px; text-decoration: underline; margin-bottom: 4px; }
+        .client-row { font-size: 9.5px; line-height: 1.5; }
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 10px; }
+        .items-table th { background: #f0f0f0; border: 1px solid #000; padding: 4px 3px; text-align: center; font-weight: bold; font-size: 9.5px; white-space: nowrap; }
+        .items-table td { border: 1px solid #000; padding: 5px 3px; text-align: center; vertical-align: middle; }
+        .items-table td.left { text-align: left; padding-left: 5px; }
+        .totals-wrapper { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+        .totals-table { width: 260px; border-collapse: collapse; font-size: 10px; }
+        .totals-table tr td { border: 1px solid #000; padding: 3px 6px; }
+        .totals-table tr td:first-child { font-weight: bold; background: #f5f5f5; white-space: nowrap; }
+        .totals-table tr td:last-child { text-align: right; min-width: 90px; }
+        .totals-table tr.total-payer td { background: #cc0000; color: white; font-weight: bold; font-size: 11px; }
+        .arretee-section { border: 1px solid #000; padding: 5px 8px; margin-bottom: 6px; font-size: 10px; }
+        .arretee-label { font-weight: bold; font-size: 10px; margin-bottom: 3px; }
+        .amount-words-fr { font-weight: bold; font-size: 10px; text-transform: uppercase; margin-bottom: 3px; }
+        .amount-words-ar { font-size: 10px; text-align: right; direction: rtl; color: #555; }
+        .footer-section { display: flex; align-items: center; gap: 10px; border-top: 1px solid #000; padding-top: 5px; font-size: 9px; }
+        .footer-stamp { width: 60px; height: 60px; object-fit: contain; flex-shrink: 0; border-radius: 50%; border: 1px solid #ccc; }
+        .footer-stamp-placeholder { width: 60px; height: 60px; border: 2px solid #0047b2; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; color: #0047b2; }
+        .footer-info { flex: 1; text-align: center; line-height: 1.6; }
+        @media print { @page { size: A4; margin: 0; } html, body { width: 210mm; height: 297mm; margin: 0; padding: 0; } .page { margin: 0; padding: 6mm 8mm; } }
       </style>
     </head>
     <body>
       <div class="page">
-        <!-- Header -->
-        <div class="header">
-          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
-          <div class="header-text">
-            <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
-            <div class="agency-contact">
-              ${agencySettings?.address ? `<span class="agency-contact-item">${agencySettings.address}</span>` : ''}
-              ${agencySettings?.phone ? `<span class="agency-contact-item">📞 ${agencySettings.phone}</span>` : ''}
-              ${agencySettings?.phone_number_2 ? `<span class="agency-contact-item">📱 ${agencySettings.phone_number_2}</span>` : ''}
-              ${agencySettings?.bank_number ? `<span class="agency-contact-item">🏦 ${agencySettings.bank_number}</span>` : ''}
+        <div class="fiscal-strip">
+          <span>ART: ${(agencySettings as any)?.art || '—'}</span>
+          <span>&nbsp;&nbsp;RC: ${(agencySettings as any)?.rc || '—'}</span>
+          <span>&nbsp;&nbsp;NIF: ${(agencySettings as any)?.nif || '—'}</span>
+          <span>&nbsp;&nbsp;NIS: ${(agencySettings as any)?.nis || '—'}</span>
+        </div>
+        <div class="header-row">
+          <div class="header-cell" style="border-right: 1px solid #000;">
+            <label>Mode de paiement :</label>
+            <span>Virement</span>
+          </div>
+          <div class="header-cell" style="border-right: 1px solid #000;">
+            <label>FAITE LE :</label>
+            <span>${invoiceDate}</span>
+          </div>
+          <div class="facture-num-cell">
+            <span class="facture-num-label">N° DE FACTURE :</span>
+            <span>${invoiceNum}</span>
+          </div>
+        </div>
+        <div class="info-block">
+          <div class="agency-block">
+            ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="agency-logo">` : '<div class="agency-logo-placeholder">🏢</div>'}
+            <div class="agency-text">
+              <div class="agency-name-big">${agencySettings?.name || 'NOM AGENCE'}</div>
+              <div class="agency-detail">
+                ${agencySettings?.address ? agencySettings.address + '<br>' : ''}
+                ${agencySettings?.phone ? 'Tél: ' + agencySettings.phone : ''}
+                ${agencySettings?.phone_number_2 ? ' / ' + agencySettings.phone_number_2 : ''}
+              </div>
             </div>
-            <p class="contract-title">${labels.factureTitle}</p>
+          </div>
+          <div class="client-block">
+            <div class="client-block-title">CLIENT :</div>
+            <div class="client-row">
+              <strong>LOCATAIRES :</strong> ${reservation?.client?.firstName || ''} ${reservation?.client?.lastName || ''}<br>
+              <strong>CONDUCTEUR SOCIETE :</strong> ${reservation?.client?.firstName || ''} ${reservation?.client?.lastName || ''}<br>
+              <strong>ADRESSE :</strong> ${reservation?.client?.completeAddress || reservation?.client?.wilaya || 'N/A'}<br>
+              ${reservation?.client?.idCardNumber ? '<strong>BP :</strong> ' + reservation.client.idCardNumber + '<br>' : ''}
+              ${reservation?.client?.licenseNumber ? '<strong>NIS :</strong> ' + reservation.client.licenseNumber + '<br>' : ''}
+              ${reservation?.client?.documentNumber ? '<strong>NIF :</strong> ' + reservation.client.documentNumber + '<br>' : ''}
+            </div>
           </div>
         </div>
-
-        <!-- Header Info Boxes -->
-        <div class="header-info">
-          <div class="info-box blue">
-            <div class="info-label">📅 ${labels.date}</div>
-            <div class="info-value">${new Date().toLocaleDateString('en-US')}</div>
-          </div>
-          <div class="info-box green">
-            <div class="info-label">🔢 ${labels.factureNumber}</div>
-            <div class="info-value">#${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'}</div>
-          </div>
-          <div class="info-box amber">
-            <div class="info-label">👤 ${labels.client}</div>
-            <div class="info-value">${reservation?.client?.lastName || 'N/A'}</div>
-          </div>
-        </div>
-
-        <!-- Invoice Details Table -->
-        <div class="section client-section">
-          <table class="info-table">
+        <table class="items-table">
+          <thead>
             <tr>
-              <td>👤 ${labels.client}</td>
-              <td>${reservation?.client?.firstName} ${reservation?.client?.lastName}</td>
+              <th>REF</th>
+              <th>MARQUE</th>
+              <th>IMMATRICULE</th>
+              <th>DU</th>
+              <th>AU</th>
+              <th>N° de<br>jour</th>
+              <th>PRIX<br>UNITE</th>
+              <th>HT</th>
             </tr>
+          </thead>
+          <tbody>
             <tr>
-              <td>📍 ${isFrench ? 'Adresse' : 'العنوان'}</td>
-              <td>${reservation?.client?.completeAddress || 'N/A'}</td>
+              <td>${reservation?.id ? reservation.id.toString().substring(0, 3).toUpperCase() : '001'}</td>
+              <td class="left">${reservation?.car?.brand || ''} ${reservation?.car?.model || ''}</td>
+              <td>${(reservation?.car as any)?.registration || (reservation?.car as any)?.plateNumber || (reservation?.car as any)?.plate_number || 'N/A'}</td>
+              <td>${departDate}</td>
+              <td>${returnDate}</td>
+              <td>${days}</td>
+              <td>${pricePerDay.toLocaleString('fr-FR')} DA</td>
+              <td>${subtotal.toLocaleString('fr-FR')} DA</td>
             </tr>
-            <tr>
-              <td>🚗 ${labels.vehicle}</td>
-              <td>${reservation?.car?.brand} ${reservation?.car?.model}</td>
-            </tr>
-            <tr>
-              <td>📋 ${isFrench ? 'Immatricule' : 'لوحة التسجيل'}</td>
-              <td>${reservation?.car?.registration || 'N/A'}</td>
-            </tr>
-            <tr>
-              <td>📅 ${labels.period}</td>
-              <td>${reservation?.step1?.departureDate} ${isFrench ? 'إلى' : 'إلى'} ${reservation?.step1?.returnDate}</td>
-            </tr>
-            <tr>
-              <td>📊 ${isFrench ? 'Durée' : 'المدة'}</td>
-              <td>${reservation?.totalDays || '1'} ${isFrench ? 'jour(s)' : 'يوم'}</td>
-            </tr>
+          </tbody>
+        </table>
+        <div class="totals-wrapper">
+          <table class="totals-table">
+            <tr><td>TOTAL HT :</td><td>${subtotal.toLocaleString('fr-FR')} DA</td></tr>
+            <tr><td>TOTAL TVA :</td><td>${tvaAmount.toLocaleString('fr-FR')} DA</td></tr>
+            <tr><td>TIMBRE :</td><td>${timbre.toLocaleString('fr-FR')} DA</td></tr>
+            <tr class="total-payer"><td>TOTAL A PAYER :</td><td>${total.toLocaleString('fr-FR')} DA</td></tr>
           </table>
         </div>
-
-        <!-- Pricing Section -->
-        <div class="section pricing-section">
-          <div class="section-title">💰 ${isFrench ? 'Détails de Facturation' : 'تفاصيل الفاتورة'}</div>
-          <div class="section-content full" style="display: flex; flex-direction: column; gap: 0; grid-template-columns: auto;">
-            <div class="pricing-row">
-              <span>${labels.amount}</span>
-              <span class="pricing-value">${subtotal.toLocaleString()} DA</span>
-            </div>
-            ${reservation.tvaApplied ? `
-            <div class="pricing-row">
-              <span>${labels.tva}</span>
-              <span class="pricing-value">${tvaAmount.toLocaleString()} DA</span>
-            </div>
-            ` : ''}
-            <div class="pricing-row total">
-              <span>${labels.total}</span>
-              <span>${total.toLocaleString()} DA</span>
-            </div>
-            <div class="pricing-row" style="margin-top: 3px; border-bottom: 1px solid #1a3a8a; padding-bottom: 3px; font-weight: 600; color: #1a3a8a; border-top: 1px solid #1a3a8a; padding-top: 3px;">
-              <span>${isFrench ? 'Détails de Paiement' : 'تفاصيل الدفع'}</span>
-            </div>
-            <div class="pricing-row">
-              <span>${labels.amountPaid}</span>
-              <span class="pricing-value positive">${totalPaid.toLocaleString()} DA</span>
-            </div>
-            <div class="pricing-row">
-              <span>${labels.remaining}</span>
-              <span class="pricing-value ${remaining > 0 ? 'negative' : 'positive'}">${remaining.toLocaleString()} DA</span>
-            </div>
+        <div class="arretee-section">
+          <div class="arretee-label">ARRETEE LA PRESENTE FACTURE À LA SOMME DE :</div>
+          <div class="amount-words-fr">${totalWords}</div>
+          <div class="amount-words-ar">حي إبلاغ على 07 محل رقم 2 طريق الأرضي برج الكيفان الجزائر</div>
+        </div>
+        <div class="footer-section">
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Stamp" class="footer-stamp">` : '<div class="footer-stamp-placeholder">🏢</div>'}
+          <div class="footer-info">
+            <div>${agencySettings?.address || ''}</div>
+            ${agencySettings?.phone_number_2 ? '<div>' + agencySettings.phone_number_2 + '</div>' : ''}
+            ${agencySettings?.bank_number ? '<div><strong>COMPTE BANCAIRE : ' + agencySettings.bank_number + '</strong></div>' : ''}
           </div>
         </div>
-
       </div>
     </body>
     </html>
