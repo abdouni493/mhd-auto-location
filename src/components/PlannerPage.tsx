@@ -2937,13 +2937,13 @@ const PersonalizationModal: React.FC<{
     const totalWords = totalWordsText.charAt(0).toUpperCase() + totalWordsText.slice(1) + ' Dinars Algériens';
 
     const invoiceNum = '01/' + new Date().getFullYear();
-    const invoiceDate = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\\//g, '-');
+    const invoiceDate = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
     const departDate = reservation?.step1?.departureDate || '';
     const returnDate = reservation?.step1?.returnDate || '';
     const days = reservation?.totalDays || 0;
     const pricePerDay = (reservation?.car as any)?.priceDay || (reservation?.car as any)?.price_per_day || 0;
 
-    const html = \`
+    const html = `
     <!DOCTYPE html>
     <html dir="ltr" lang="fr">
     <head>
@@ -2951,106 +2951,410 @@ const PersonalizationModal: React.FC<{
       <title>Facture</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 13px; color: #000; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .page { width: 794px; min-height: 1123px; padding: 12mm 15mm; margin: 0 auto; background: white; border: 2px solid #003399; position: relative; }
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.5;
+          color: #1a1a1a;
+          background: #f5f5f5;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .page {
+          width: 210mm;
+          height: 297mm;
+          padding: 10mm;
+          margin: 10px auto;
+          background: white;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
         
-        .fiscal-strip { width: 100%; font-size: 11px; font-weight: bold; border-bottom: 2px solid #003399; padding-bottom: 5px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; color: #003399; }
+        /* Header with Logo and Title */
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          margin-bottom: 15px;
+          border-bottom: 3px solid #d97706;
+          padding-bottom: 12px;
+        }
+        .logo {
+          width: 60px;
+          height: 60px;
+          object-fit: contain;
+          flex-shrink: 0;
+          border-radius: 4px;
+        }
+        .logo-placeholder {
+          width: 60px;
+          height: 60px;
+          border: 2px solid #e5e5e5;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 40px;
+          flex-shrink: 0;
+          border-radius: 4px;
+          background: #f9f9f9;
+        }
+        .header-text {
+          flex: 1;
+        }
+        .agency-name {
+          font-size: 22px;
+          font-weight: 700;
+          color: #d97706;
+          margin: 0 0 3px 0;
+          letter-spacing: 0.3px;
+        }
+        .invoice-title {
+          font-size: 16px;
+          font-weight: 700;
+          color: #d97706;
+          margin: 0;
+          text-decoration: underline;
+        }
         
-        .header-row { display: flex; align-items: stretch; border: 2px solid #003399; margin-bottom: 12px; }
-        .header-cell { flex: 1; padding: 8px 12px; border-right: 2px solid #003399; font-size: 13px; }
-        .header-cell:last-child { border-right: none; }
-        .header-cell label { font-weight: bold; display: block; margin-bottom: 4px; color: #003399; text-transform: uppercase; font-size: 11px; }
-        .facture-num-cell { flex: 1.5; padding: 8px 12px; text-align: center; font-size: 18px; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 2px solid #003399; background: #f0f4ff; }
-        .facture-num-label { font-size: 12px; font-weight: bold; text-decoration: underline; color: #003399; margin-bottom: 2px; }
+        .agency-info-strip {
+          width: 100%;
+          border: 2px solid #d97706;
+          border-radius: 4px;
+          padding: 12px 15px;
+          margin-bottom: 12px;
+          background: #fff8f0;
+          line-height: 1.6;
+        }
+        .agency-info-line {
+          margin: 6px 0;
+          font-size: 13px;
+          color: #1a1a1a;
+        }
+        .agency-info-label {
+          font-weight: 700;
+          color: #d97706;
+          display: inline-block;
+          min-width: 180px;
+        }
+        .agency-info-value {
+          color: #333;
+          font-weight: 500;
+        }
         
-        .info-block { display: flex; border: 2px solid #003399; margin-bottom: 12px; }
-        .agency-block { flex: 1; padding: 12px 15px; border-right: 2px solid #003399; display: flex; align-items: center; gap: 15px; }
-        .agency-logo { width: 75px; height: 75px; object-fit: contain; flex-shrink: 0; }
-        .agency-logo-placeholder { width: 75px; height: 75px; border: 2px solid #ccd3e8; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; }
-        .agency-text { flex: 1; }
-        .agency-name-big { font-size: 18px; font-weight: 900; color: #003399; margin-bottom: 4px; text-transform: uppercase; }
-        .agency-detail { font-size: 11px; line-height: 1.5; color: #333; }
+        /* Info Block - Agency & Client */
+        .info-wrapper {
+          display: grid;
+          grid-template-columns: 1.2fr 1fr;
+          gap: 12px;
+          margin-bottom: 15px;
+        }
+        .info-section {
+          border: 2px solid #d97706;
+          border-radius: 4px;
+          padding: 12px;
+          background: #fafafa;
+        }
+        .section-title {
+          font-weight: 700;
+          font-size: 13px;
+          color: #d97706;
+          margin-bottom: 8px;
+          text-decoration: underline;
+          text-transform: uppercase;
+        }
+        .agency-content {
+          display: flex;
+          gap: 12px;
+        }
+        .agency-info-text {
+          flex: 1;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+        .agency-name-section {
+          font-weight: 700;
+          color: #d97706;
+          font-size: 14px;
+          margin-bottom: 4px;
+        }
+        .detail-line {
+          font-size: 12px;
+          color: #333;
+          margin: 2px 0;
+        }
+        .client-info {
+          font-size: 13px;
+          line-height: 1.6;
+        }
+        .info-row {
+          margin: 5px 0;
+          display: flex;
+          justify-content: space-between;
+        }
+        .info-label {
+          font-weight: 600;
+          color: #d97706;
+          min-width: 100px;
+        }
+        .info-value {
+          color: #1a1a1a;
+          flex: 1;
+        }
         
-        .client-block { flex: 1.2; padding: 12px 15px; }
-        .client-block-title { font-weight: 800; font-size: 13px; text-decoration: underline; margin-bottom: 8px; color: #003399; }
-        .client-row { font-size: 12px; line-height: 1.7; }
-        .client-row strong { font-weight: 700; color: #003399; }
+        /* Items Table */
+        .items-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 12px;
+          font-size: 13px;
+          border: 2px solid #d97706;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+        .items-table th {
+          background: #d97706;
+          color: white;
+          border: 1px solid #d97706;
+          padding: 10px 8px;
+          text-align: center;
+          font-weight: 700;
+          font-size: 12px;
+          text-transform: uppercase;
+        }
+        .items-table td {
+          border: 1px solid #e5e5e5;
+          padding: 10px 8px;
+          text-align: center;
+          vertical-align: middle;
+        }
+        .items-table td.left {
+          text-align: left;
+          padding-left: 12px;
+        }
+        .items-table tbody tr:nth-child(odd) {
+          background: #fafafa;
+        }
         
-        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 13px; border: 2px solid #003399; }
-        .items-table th { background: #003399; color: white; border: 1px solid #003399; padding: 10px 5px; text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; }
-        .items-table td { border: 1px solid #003399; padding: 12px 8px; text-align: center; vertical-align: middle; }
-        .items-table td.left { text-align: left; padding-left: 12px; }
+        /* Totals Section */
+        .totals-wrapper {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 15px;
+          gap: 20px;
+        }
+        .totals-container {
+          width: 320px;
+        }
+        .totals-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+          border: 2px solid #d97706;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+        .totals-table tr td {
+          border: 1px solid #e5e5e5;
+          padding: 10px 12px;
+        }
+        .totals-table tr td:first-child {
+          font-weight: 600;
+          background: #fff8f0;
+          color: #d97706;
+          white-space: nowrap;
+          width: 140px;
+        }
+        .totals-table tr td:last-child {
+          text-align: right;
+          font-weight: 600;
+          color: #1a1a1a;
+        }
+        .totals-table tr.total-payer td {
+          background: #d97706;
+          color: white;
+          font-weight: 700;
+          font-size: 14px;
+          border: 1px solid #d97706;
+        }
         
-        .totals-wrapper { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-        .totals-table { width: 320px; border-collapse: collapse; font-size: 13px; border: 2px solid #003399; }
-        .totals-table tr td { border: 1px solid #003399; padding: 8px 12px; }
-        .totals-table tr td:first-child { font-weight: bold; background: #f0f4ff; color: #003399; white-space: nowrap; width: 150px; }
-        .totals-table tr td:last-child { text-align: right; font-weight: bold; }
-        .totals-table tr.total-payer td { background: #cc0000; color: white; font-weight: 900; font-size: 16px; border: 2px solid #cc0000; }
+        /* Amount in Words Section */
+        .amount-section {
+          border: 2px solid #d97706;
+          border-radius: 4px;
+          padding: 12px;
+          margin-bottom: 15px;
+          background: #fff8f0;
+        }
+        .amount-label {
+          font-weight: 700;
+          font-size: 12px;
+          color: #d97706;
+          margin-bottom: 8px;
+          text-transform: uppercase;
+        }
+        .amount-text {
+          font-weight: 700;
+          font-size: 14px;
+          color: #1a1a1a;
+          line-height: 1.5;
+        }
         
-        .arretee-section { border: 2px solid #003399; padding: 12px 15px; margin-bottom: 15px; background: #f8faff; }
-        .arretee-label { font-weight: 800; font-size: 12px; margin-bottom: 6px; color: #003399; text-decoration: underline; }
-        .amount-words-fr { font-weight: 900; font-size: 14px; text-transform: uppercase; margin-bottom: 8px; color: #222; }
-        .amount-words-ar { font-size: 14px; text-align: right; direction: rtl; color: #444; font-weight: bold; }
+        /* Footer Section */
+        .footer-section {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          border-top: 2px solid #d97706;
+          padding-top: 12px;
+          margin-top: 15px;
+        }
+        .footer-logo {
+          width: 70px;
+          height: 70px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
+        .footer-logo-placeholder {
+          width: 70px;
+          height: 70px;
+          border: 2px solid #d97706;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 40px;
+          flex-shrink: 0;
+          color: #d97706;
+          border-radius: 4px;
+          background: #fff8f0;
+        }
+        .footer-info {
+          flex: 1;
+          text-align: center;
+          line-height: 1.6;
+          font-size: 12px;
+          color: #333;
+        }
+        .footer-info div {
+          margin: 3px 0;
+        }
+        .footer-info strong {
+          color: #d97706;
+          font-weight: 700;
+        }
         
-        .footer-section { display: flex; align-items: center; gap: 20px; border-top: 2px solid #003399; padding-top: 15px; }
-        .footer-stamp { width: 90px; height: 90px; object-fit: contain; flex-shrink: 0; }
-        .footer-stamp-placeholder { width: 90px; height: 90px; border: 3px solid #003399; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36px; flex-shrink: 0; color: #003399; }
-        .footer-info { flex: 1; text-align: center; line-height: 1.8; font-size: 12px; color: #333; }
-        .footer-info strong { color: #003399; }
-        
-        @media print { @page { size: A4; margin: 0; } body { background: white; } .page { border: 2px solid #003399; } }
+        @media print {
+          @page { size: A4; margin: 0; }
+          html, body {
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 0;
+            background: white;
+            overflow: hidden;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+          }
+          .page {
+            margin: 0 auto;
+            padding: 10mm;
+            width: 190mm;
+            min-height: 277mm;
+            height: auto;
+            box-sizing: border-box;
+            box-shadow: none;
+            transform: scale(1.15);
+            transform-origin: top center;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
+          body > * {
+            visibility: hidden;
+          }
+          .page, .page * {
+            visibility: visible;
+          }
+        }
       </style>
     </head>
     <body>
       <div class="page">
-        <div class="fiscal-strip">
-          <span>ART: \${(agencySettings as any)?.art || '—'}</span>
-          <span>&nbsp;&nbsp;RC: \${(agencySettings as any)?.rc || '—'}</span>
-          <span>&nbsp;&nbsp;NIF: \${(agencySettings as any)?.nif || '—'}</span>
-          <span>&nbsp;&nbsp;NIS: \${(agencySettings as any)?.nis || '—'}</span>
-        </div>
-        
-        <div class="header-row">
-          <div class="header-cell">
-            <label>Mode de paiement</label>
-            <span>Virement</span>
-          </div>
-          <div class="header-cell">
-            <label>FAITE LE</label>
-            <span>\${invoiceDate}</span>
-          </div>
-          <div class="facture-num-cell">
-            <span class="facture-num-label">N° DE FACTURE</span>
-            <span>\${invoiceNum}</span>
+        <!-- Header with Logo and Title -->
+        <div class="header">
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : '<div class="logo-placeholder">🏢</div>'}
+          <div class="header-text">
+            <h1 class="agency-name">${agencySettings?.name || 'NOM AGENCE'}</h1>
+            <p class="invoice-title">FACTURE</p>
           </div>
         </div>
         
-        <div class="info-block">
-          <div class="agency-block">
-            \${agencySettings?.logo ? \`<img src="\${agencySettings.logo}" alt="Logo" class="agency-logo">\` : '<div class="agency-logo-placeholder">🏢</div>'}
-            <div class="agency-text">
-              <div class="agency-name-big">\${agencySettings?.name || 'NOM AGENCE'}</div>
-              <div class="agency-detail">
-                \${agencySettings?.address ? agencySettings.address + '<br>' : ''}
-                \${agencySettings?.phone ? 'Tél: ' + agencySettings.phone : ''}
-                \${agencySettings?.phone_number_2 ? ' / ' + agencySettings.phone_number_2 : ''}
+        <!-- Agency Information Strip -->
+        <div class="agency-info-strip">
+          <div class="agency-info-line">
+            <span class="agency-info-label">Nom de l'enseigne :</span>
+            <span class="agency-info-value">${agencySettings?.name || '—'}</span>
+          </div>
+          ${agencySettings?.slogan ? `<div class="agency-info-line">
+            <span class="agency-info-label">Slogan commercial :</span>
+            <span class="agency-info-value">${agencySettings.slogan}</span>
+          </div>` : ''}
+          ${agencySettings?.address ? `<div class="agency-info-line">
+            <span class="agency-info-label">Adresse du siège :</span>
+            <span class="agency-info-value">${agencySettings.address}</span>
+          </div>` : ''}
+          ${agencySettings?.phone ? `<div class="agency-info-line">
+            <span class="agency-info-label">📞 Téléphone :</span>
+            <span class="agency-info-value">${agencySettings.phone}</span>
+          </div>` : ''}
+          ${agencySettings?.phone_number_2 ? `<div class="agency-info-line">
+            <span class="agency-info-label">📱 Deuxième numéro :</span>
+            <span class="agency-info-value">${agencySettings.phone_number_2}</span>
+          </div>` : ''}
+          ${agencySettings?.bank_number ? `<div class="agency-info-line">
+            <span class="agency-info-label">🏦 Numéro de compte :</span>
+            <span class="agency-info-value">${agencySettings.bank_number}</span>
+          </div>` : ''}
+        </div>
+        
+        <!-- Agency & Client Info -->
+        <div class="info-wrapper">
+          <!-- Agency Info -->
+          <div class="info-section">
+            <div class="section-title">Agence</div>
+            <div class="agency-content">
+              ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px;">` : ''}
+              <div class="agency-info-text">
+                <div class="agency-name-section">${agencySettings?.name || 'NOM AGENCE'}</div>
+                ${agencySettings?.address ? `<div class="detail-line">${agencySettings.address}</div>` : ''}
+                ${agencySettings?.phone ? `<div class="detail-line">Tél: ${agencySettings.phone}${agencySettings.phone_number_2 ? ' / ' + agencySettings.phone_number_2 : ''}</div>` : ''}
               </div>
             </div>
           </div>
-          <div class="client-block">
-            <div class="client-block-title">CLIENT :</div>
-            <div class="client-row">
-              <strong>LOCATAIRES :</strong> \${reservation?.client?.firstName || ''} \${reservation?.client?.lastName || ''}<br>
-              <strong>CONDUCTEUR SOCIETE :</strong> \${reservation?.client?.firstName || ''} \${reservation?.client?.lastName || ''}<br>
-              <strong>ADRESSE :</strong> \${reservation?.client?.completeAddress || reservation?.client?.wilaya || 'N/A'}<br>
-              \${reservation?.client?.idCardNumber ? '<strong>BP :</strong> ' + reservation.client.idCardNumber + '<br>' : ''}
-              \${reservation?.client?.licenseNumber ? '<strong>NIS :</strong> ' + reservation.client.licenseNumber + '<br>' : ''}
-              \${reservation?.client?.documentNumber ? '<strong>NIF :</strong> ' + reservation.client.documentNumber + '<br>' : ''}
+          
+          <!-- Client Info -->
+          <div class="info-section">
+            <div class="section-title">Client</div>
+            <div class="client-info">
+              <div class="info-row">
+                <span class="info-label">Nom:</span>
+                <span class="info-value">${reservation?.client?.firstName || ''} ${reservation?.client?.lastName || ''}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Adresse:</span>
+                <span class="info-value">${reservation?.client?.completeAddress || reservation?.client?.wilaya || 'N/A'}</span>
+              </div>
+              ${reservation?.client?.idCardNumber ? `<div class="info-row"><span class="info-label">BP:</span><span class="info-value">${reservation.client.idCardNumber}</span></div>` : ''}
+              ${reservation?.client?.licenseNumber ? `<div class="info-row"><span class="info-label">NIS:</span><span class="info-value">${reservation.client.licenseNumber}</span></div>` : ''}
             </div>
           </div>
         </div>
         
+        <!-- Items Table -->
         <table class="items-table">
           <thead>
             <tr>
@@ -3059,52 +3363,40 @@ const PersonalizationModal: React.FC<{
               <th>IMMATRICULE</th>
               <th>DU</th>
               <th>AU</th>
-              <th>N° JR</th>
-              <th>PRIX UNIT</th>
+              <th>JOURS</th>
+              <th>PRIX/JOUR</th>
               <th>HT</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>\${reservation?.id ? reservation.id.toString().substring(0, 3).toUpperCase() : '001'}</td>
-              <td class="left">\${reservation?.car?.brand || ''} \${reservation?.car?.model || ''}</td>
-              <td>\${(reservation?.car as any)?.registration || (reservation?.car as any)?.plateNumber || (reservation?.car as any)?.plate_number || 'N/A'}</td>
-              <td>\${departDate}</td>
-              <td>\${returnDate}</td>
-              <td>\${days}</td>
-              <td>\${pricePerDay.toLocaleString('fr-FR')} DA</td>
-              <td>\${subtotal.toLocaleString('fr-FR')} DA</td>
+              <td>${reservation?.id ? reservation.id.toString().substring(0, 3).toUpperCase() : '001'}</td>
+              <td class="left">${reservation?.car?.brand || ''} ${reservation?.car?.model || ''}</td>
+              <td>${(reservation?.car as any)?.registration || (reservation?.car as any)?.plateNumber || (reservation?.car as any)?.plate_number || 'N/A'}</td>
+              <td>${departDate}</td>
+              <td>${returnDate}</td>
+              <td>${days}</td>
+              <td>${pricePerDay.toLocaleString('fr-FR')} DA</td>
+              <td>${subtotal.toLocaleString('fr-FR')} DA</td>
             </tr>
           </tbody>
         </table>
         
+        <!-- Totals -->
         <div class="totals-wrapper">
-          <table class="totals-table">
-            <tr><td>TOTAL HT :</td><td>\${subtotal.toLocaleString('fr-FR')} DA</td></tr>
-            <tr><td>TOTAL TVA :</td><td>\${tvaAmount.toLocaleString('fr-FR')} DA</td></tr>
-            <tr><td>TIMBRE :</td><td>\${timbre.toLocaleString('fr-FR')} DA</td></tr>
-            <tr class="total-payer"><td>TOTAL A PAYER :</td><td>\${total.toLocaleString('fr-FR')} DA</td></tr>
-          </table>
-        </div>
-        
-        <div class="arretee-section">
-          <div class="arretee-label">ARRETEE LA PRESENTE FACTURE À LA SOMME DE :</div>
-          <div class="amount-words-fr">\${totalWords}</div>
-          <div class="amount-words-ar">حي إبلاغ على 07 محل رقم 2 طريق الأرضي برج الكيفان الجزائر</div>
-        </div>
-        
-        <div class="footer-section">
-          \${agencySettings?.logo ? \`<img src="\${agencySettings.logo}" alt="Stamp" class="footer-stamp">\` : '<div class="footer-stamp-placeholder">🏢</div>'}
-          <div class="footer-info">
-            <div>\${agencySettings?.address || ''}</div>
-            \${agencySettings?.phone_number_2 ? '<div>' + agencySettings.phone_number_2 + '</div>' : ''}
-            \${agencySettings?.bank_number ? '<div><strong>COMPTE BANCAIRE : ' + agencySettings.bank_number + '</strong></div>' : ''}
+          <div class="totals-container">
+            <table class="totals-table">
+              <tr><td>TOTAL HT :</td><td>${subtotal.toLocaleString('fr-FR')} DA</td></tr>
+              <tr><td>TOTAL TVA :</td><td>${tvaAmount.toLocaleString('fr-FR')} DA</td></tr>
+              <tr><td>TIMBRE :</td><td>${timbre.toLocaleString('fr-FR')} DA</td></tr>
+              <tr class="total-payer"><td>TOTAL A PAYER :</td><td>${total.toLocaleString('fr-FR')} DA</td></tr>
+            </table>
           </div>
         </div>
       </div>
     </body>
     </html>
-    \`;
+    `;
     return html;
   };
 
@@ -3218,8 +3510,10 @@ const PersonalizationModal: React.FC<{
         }
         .document-info {
           margin: 10px 0;
-          padding: 10px 0;
-          border-bottom: 1px solid #e5e5e5;
+          padding: 12px;
+          border: 2px solid #d97706;
+          border-radius: 4px;
+          background: #fafafa;
         }
         .info-line {
           margin: 8px 0;
@@ -3230,54 +3524,64 @@ const PersonalizationModal: React.FC<{
         }
         .info-label {
           font-weight: 600;
-          color: #444;
-          min-width: 120px;
+          color: #d97706;
+          min-width: 140px;
         }
         .info-value {
           color: #1a1a1a;
           flex: 1;
+          font-weight: 500;
         }
         .vehicle-section {
-          background: #f9f9f9;
-          padding: 12px;
+          background: #fff8f0;
+          padding: 15px;
           border-radius: 4px;
-          margin: 12px 0;
-          border-left: 4px solid #d97706;
+          margin: 15px 0;
+          border: 2px solid #d97706;
+          border-left: 5px solid #d97706;
         }
         .vehicle-header {
           font-weight: 700;
           color: #d97706;
-          margin-bottom: 8px;
-          font-size: 15px;
+          margin-bottom: 10px;
+          font-size: 16px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
         .model-highlight {
-          background: #fff8dc;
-          padding: 6px 10px;
-          border-radius: 3px;
-          font-weight: 600;
+          background: #fff3cd;
+          padding: 8px 12px;
+          border-radius: 4px;
+          font-weight: 700;
           color: #d97706;
           display: inline-block;
-          margin: 5px 0;
+          margin: 8px 0;
+          border: 1px solid #d97706;
         }
         .signature-section {
-          margin-top: 25px;
+          margin-top: 30px;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 25px;
+          gap: 30px;
         }
         .signature-block {
           text-align: center;
+          border: 2px solid #d97706;
+          border-radius: 4px;
+          padding: 20px 15px;
+          background: #fafafa;
         }
-        .signature-line {
-          border-top: 2px solid #1a1a1a;
-          margin: 45px 0 5px 0;
-          height: 2px;
+        .signature-space {
+          min-height: 60px;
+          border-bottom: 2px solid #1a1a1a;
+          margin-bottom: 10px;
         }
         .signature-label {
-          font-weight: 600;
-          font-size: 14px;
-          color: #1a1a1a;
-          margin-top: 3px;
+          font-weight: 700;
+          font-size: 13px;
+          color: #d97706;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
         @media print {
           @page {
@@ -3398,11 +3702,11 @@ const PersonalizationModal: React.FC<{
           <!-- Signatures -->
           <div class="signature-section">
             <div class="signature-block">
-              <div class="signature-line"></div>
+              <div class="signature-space"></div>
               <div class="signature-label">${labels.agencySignature}</div>
             </div>
             <div class="signature-block">
-              <div class="signature-line"></div>
+              <div class="signature-space"></div>
               <div class="signature-label">${labels.clientSignature}</div>
             </div>
           </div>
