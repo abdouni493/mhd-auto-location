@@ -12,10 +12,11 @@ interface SidebarProps {
   onLogout: () => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  alertsCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  lang, isVisible, setIsVisible, onLogout, activeTab, setActiveTab
+  lang, isVisible, setIsVisible, onLogout, activeTab, setActiveTab, alertsCount = 0
 }) => {
   const isRtl = lang === 'ar';
   const [agencyData, setAgencyData] = useState({
@@ -92,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   setActiveTab(item.id);
                   setIsVisible(false);
                 }}
-                className={`w-full flex items-center gap-3.5 p-3.5 rounded-xl transition-all duration-200 group 
+                className={`w-full flex items-center gap-3.5 p-3.5 rounded-xl transition-all duration-200 group relative
                   ${activeTab === item.id 
                     ? 'bg-saas-bg text-saas-primary-via shadow-sm border border-saas-border' 
                     : 'text-saas-text-muted hover:bg-saas-bg hover:text-saas-text-main'}`}
@@ -103,6 +104,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className={`text-xs font-bold uppercase tracking-widest ${activeTab === item.id ? 'text-saas-text-main' : ''}`}>
                   {item.label[lang]}
                 </span>
+                
+                {/* Animated alert indicator for dashboard - Modern spinning design */}
+                {item.id === 'dashboard' && alertsCount > 0 && (
+                  <motion.div
+                    className="absolute right-3.5 top-1/2 transform -translate-y-1/2 flex items-center justify-center"
+                  >
+                    {/* Outer rotating ring */}
+                    <motion.div
+                      className="absolute w-6 h-6 rounded-full border-2 border-transparent border-t-red-500 border-r-red-400"
+                      animate={{ rotate: 360 }}
+                      transition={{ 
+                        duration: 2, 
+                        repeat: Infinity,
+                        ease: "linear"
+                      }}
+                    />
+                    
+                    {/* Middle pulsing ring */}
+                    <motion.div
+                      className="absolute w-4 h-4 rounded-full border border-red-500/50"
+                      animate={{ 
+                        scale: [1, 1.3, 1],
+                        opacity: [1, 0.4, 1]
+                      }}
+                      transition={{ 
+                        duration: 1.5, 
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                    />
+                    
+                    {/* Inner glowing dot */}
+                    <motion.div
+                      className="w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-orange-500 rounded-full shadow-lg shadow-red-500/80"
+                      animate={{ 
+                        scale: [1, 1.2, 1],
+                        boxShadow: [
+                          '0 0 8px rgba(239, 68, 68, 0.8)',
+                          '0 0 16px rgba(239, 68, 68, 1)',
+                          '0 0 8px rgba(239, 68, 68, 0.8)'
+                        ]
+                      }}
+                      transition={{ 
+                        duration: 1.5, 
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                    />
+                  </motion.div>
+                )}
               </button>
             ))}
           </nav>

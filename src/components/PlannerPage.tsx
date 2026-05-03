@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Language, ReservationDetails, Client, Car } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, MoreVertical, Grid3x3, CalendarDays, X } from 'lucide-react';
+import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, MoreVertical, Grid3x3, CalendarDays, X, Zap, Gauge, Heart } from 'lucide-react';
 import { ReservationDetailsView } from './ReservationDetailsView';
 import { CreateReservationForm } from './CreateReservationForm';
 import { EditReservationForm } from './EditReservationForm';
@@ -11,6 +12,7 @@ import { ConditionsPersonalizer } from './ConditionsPersonalizer';
 import { SendContractModal } from './SendContractModal';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
+import { getCars } from '../services/carService';
 import { supabase } from '../supabase';
 import { generateConditionsPrintHTML, getConditionsTemplate } from '../constants/ConditionsTemplates';
 
@@ -21,11 +23,13 @@ interface PlannerPageProps {
 }
 
 export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
+  const location = useLocation();
   const [currentView, setCurrentView] = useState<'list' | 'calendar' | 'create' | 'details' | 'edit'>('list');
   const [displayMode, setDisplayMode] = useState<'grid' | 'calendar'>('grid');
   const [selectedReservation, setSelectedReservation] = useState<ReservationDetails | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [carAvailabilityFilter, setCarAvailabilityFilter] = useState<'all' | 'disponible' | 'louer'>('all');
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [selectedReservationForActivation, setSelectedReservationForActivation] = useState<ReservationDetails | null>(null);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -48,8 +52,9 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load reservations from database
+  // Load reservations and cars from database
   const [reservations, setReservations] = useState<ReservationDetails[]>([]);
+  const [cars, setCars] = useState<Car[]>([]);
 
   // Load reservations and agencies from database on component mount
   useEffect(() => {
@@ -115,9 +120,61 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
       }
     };
 
+    const loadCars = async () => {
+      try {
+        const result = await getCars();
+        if (result.success && result.cars) {
+          const mappedCars: Car[] = result.cars.map(dbCar => ({
+            id: dbCar.id || '',
+            brand: dbCar.brand,
+            model: dbCar.model,
+            registration: dbCar.plate_number,
+            year: dbCar.year,
+            color: dbCar.color || 'Premium',
+            vin: dbCar.vin || '',
+            energy: dbCar.energy || 'Essence',
+            transmission: dbCar.transmission || 'Automatique',
+            seats: dbCar.seats || 5,
+            doors: dbCar.doors || 4,
+            priceDay: Math.round(Number(dbCar.price_per_day)),
+            priceWeek: Math.round(Number(dbCar.price_week || dbCar.price_per_day * 2)),
+            priceMonth: Math.round(Number(dbCar.price_month || dbCar.price_per_day * 4)),
+            deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
+            images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
+            mileage: dbCar.mileage || 0,
+            status: (dbCar.status || 'disponible') as 'disponible' | 'louer' | 'maintenance' | 'available',
+          }));
+          setCars(mappedCars);
+        }
+      } catch (err) {
+        console.error('Error loading cars:', err);
+      }
+    };
+
     loadReservations();
     loadAgencies();
+    loadCars();
   }, [user, isAuthLoading]);
+
+  // Handle navigation from dashboard alert card with location state
+  useEffect(() => {
+    const state = location.state as any;
+    // Guard: only proceed if state has a valid non-empty selectedReservationId string
+    if (
+      state &&
+      typeof state.selectedReservationId === 'string' &&
+      state.selectedReservationId.length > 0 &&
+      reservations.length > 0
+    ) {
+      const selectedRes = reservations.find(r => r.id === state.selectedReservationId);
+      if (selectedRes) {
+        setSelectedReservation(selectedRes);
+        setCurrentView('details');
+        // Clear the location state to prevent re-navigation on refresh
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state, reservations]);
 
   const updateReservation = async (updatedReservation: ReservationDetails) => {
     try {
@@ -317,7 +374,10 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
 
     const matchesFilter = filterStatus === 'all' || reservation.status === filterStatus;
 
-    return matchesSearch && matchesFilter;
+    const matchesCarAvailability = carAvailabilityFilter === 'all' || 
+                                   reservation.car.status === carAvailabilityFilter;
+
+    return matchesSearch && matchesFilter && matchesCarAvailability;
   });
 
   if (currentView === 'create') {
@@ -464,31 +524,243 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
         </button>
       </div>
 
-      {/* Error Message */}
-      {error && (
+      {/* Car Availability Filter */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center gap-3 flex-wrap bg-white p-5 rounded-2xl border border-saas-border shadow-sm"
+      >
+        <span className="font-bold text-saas-text-main text-sm uppercase tracking-wide">
+          {lang === 'fr' ? '🚗 Véhicules:' : '🚗 السيارات:'}
+        </span>
+        {(['all', 'disponible', 'louer'] as const).map((status) => (
+          <motion.button
+            key={status}
+            onClick={() => setCarAvailabilityFilter(status)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`px-5 py-2.5 rounded-xl font-bold transition-all text-sm uppercase tracking-wide flex items-center gap-2 border-2 ${
+              carAvailabilityFilter === status
+                ? status === 'all'
+                  ? 'border-saas-primary-via bg-saas-primary-via/10 text-saas-primary-via shadow-lg shadow-saas-primary-via/20'
+                  : status === 'disponible'
+                  ? 'border-green-500 bg-green-50 text-green-700 shadow-lg shadow-green-500/20'
+                  : 'border-amber-500 bg-amber-50 text-amber-700 shadow-lg shadow-amber-500/20'
+                : 'border-saas-border bg-white text-saas-text-main hover:border-saas-primary-via'
+            }`}
+          >
+            {status === 'all' ? '📊 Tous' : status === 'disponible' ? '✅ Disponible' : '🔄 Loué'}
+          </motion.button>
+        ))}
+      </motion.div>
+
+      {/* Show Cars Grid when filtering by availability */}
+      {carAvailabilityFilter !== 'all' && (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 flex items-center gap-2"
+          className="space-y-6"
         >
-          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-          <span>{error}</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">
+                {carAvailabilityFilter === 'disponible' ? '✅' : '🔄'}
+              </span>
+              <div>
+                <h3 className="text-2xl font-black text-saas-text-main uppercase tracking-tighter">
+                  {carAvailabilityFilter === 'disponible' 
+                    ? (lang === 'fr' ? 'Voitures Disponibles' : 'السيارات المتاحة') 
+                    : (lang === 'fr' ? 'Voitures en Location' : 'السيارات المؤجرة')}
+                </h3>
+                <p className="text-saas-text-muted text-sm font-medium">
+                  {carAvailabilityFilter === 'disponible' 
+                    ? (lang === 'fr' ? `${cars.filter(c => c.status === 'disponible').length} véhicules disponibles` : `${cars.filter(c => c.status === 'disponible').length} مركبة متاحة`) 
+                    : (lang === 'fr' ? `${cars.filter(c => c.status !== 'disponible').length} véhicules actuellement loués` : `${cars.filter(c => c.status !== 'disponible').length} مركبة قيد الإيجار`)}
+                </p>
+              </div>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setCarAvailabilityFilter('all')}
+              className="px-4 py-2 bg-saas-bg border border-saas-border rounded-xl hover:border-saas-primary-via text-saas-text-main font-bold transition-all"
+            >
+              ← {lang === 'fr' ? 'Retour' : 'رجوع'}
+            </motion.button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {(carAvailabilityFilter === 'disponible' 
+              ? cars.filter(c => c.status === 'disponible') 
+              : cars.filter(c => c.status !== 'disponible')).map((car, index) => (
+              <motion.div
+                key={car.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="bg-white rounded-2xl overflow-hidden border border-saas-border shadow-sm hover:shadow-lg hover:border-saas-primary-via transition-all group"
+              >
+                {/* Car Image */}
+                <div className="relative h-48 overflow-hidden bg-gradient-to-br from-saas-bg to-gray-100">
+                  {car.images && car.images[0] ? (
+                    <img 
+                      src={car.images[0]} 
+                      alt={`${car.brand} ${car.model}`}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/car/400/300';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-saas-text-muted">
+                      <CarIcon size={48} />
+                    </div>
+                  )}
+                  {/* Status Badge */}
+                  <div className="absolute top-3 right-3">
+                    <motion.div
+                      animate={{ scale: [1, 1.1, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wide ${
+                        car.status === 'disponible'
+                          ? 'bg-green-500/90 text-white'
+                          : 'bg-amber-500/90 text-white'
+                      }`}
+                    >
+                      {car.status === 'disponible' ? '✅ Disponible' : '🔄 Loué'}
+                    </motion.div>
+                  </div>
+                </div>
+
+                {/* Car Info */}
+                <div className="p-5 space-y-4">
+                  <div>
+                    <h4 className="text-lg font-black text-saas-text-main uppercase tracking-tighter">
+                      {car.brand} {car.model}
+                    </h4>
+                    <p className="text-saas-text-muted text-xs font-medium mt-1">
+                      {car.registration} • {car.year}
+                    </p>
+                  </div>
+
+                  {/* Car Details Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="flex items-center gap-2 bg-saas-bg p-2 rounded-lg">
+                      <Gauge className="w-4 h-4 text-saas-primary-via" />
+                      <span className="font-medium">{car.mileage.toLocaleString()} km</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-saas-bg p-2 rounded-lg">
+                      <Fuel className="w-4 h-4 text-saas-primary-via" />
+                      <span className="font-medium">{car.energy}</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-saas-bg p-2 rounded-lg col-span-2">
+                      <Users className="w-4 h-4 text-saas-primary-via" />
+                      <span className="font-medium">{car.seats} places • {car.transmission}</span>
+                    </div>
+                  </div>
+
+                  {/* Pricing */}
+                  <div className="border-t border-saas-border pt-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-saas-text-muted text-xs font-medium">
+                        {lang === 'fr' ? 'Par jour' : 'في اليوم'}
+                      </span>
+                      <span className="font-black text-saas-primary-via">
+                        {car.priceDay.toLocaleString()} DA
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-saas-text-muted text-xs font-medium">
+                        {lang === 'fr' ? 'Dépôt' : 'الإيداع'}
+                      </span>
+                      <span className="font-bold text-amber-600">
+                        {car.deposit.toLocaleString()} DA
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      if (car.status === 'disponible') {
+                        setCurrentView('create');
+                      } else {
+                        // Find the current reservation for this rented car - search all reservations
+                        const currentReservation = reservations.find(
+                          res => res.car?.id === car.id && ['active', 'confirmed', 'accepted'].includes(res.status)
+                        );
+                        if (currentReservation) {
+                          setSelectedReservation(currentReservation);
+                          setCurrentView('details');
+                        } else {
+                          // If no active reservation found, show alert
+                          alert(lang === 'fr' 
+                            ? 'Aucune réservation active trouvée pour ce véhicule' 
+                            : 'لم يتم العثور على حجز نشط لهذه المركبة');
+                        }
+                      }
+                    }}
+                    className={`w-full py-2.5 rounded-xl font-bold transition-all text-sm uppercase tracking-wide ${
+                      car.status === 'disponible'
+                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white'
+                        : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white'
+                    }`}
+                  >
+                    {car.status === 'disponible' 
+                      ? (lang === 'fr' ? '📅 Réserver' : '📅 حجز') 
+                      : (lang === 'fr' ? '👁️ Détails' : '👁️ التفاصيل')}
+                  </motion.button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {(carAvailabilityFilter === 'disponible' 
+            ? cars.filter(c => c.status === 'disponible') 
+            : cars.filter(c => c.status !== 'disponible')).length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4 opacity-20">
+                {carAvailabilityFilter === 'disponible' ? '✅' : '🔄'}
+              </div>
+              <p className="text-saas-text-muted text-lg font-medium">
+                {carAvailabilityFilter === 'disponible' 
+                  ? (lang === 'fr' ? 'Aucune voiture disponible pour le moment' : 'لا توجد سيارات متاحة في الوقت الحالي') 
+                  : (lang === 'fr' ? 'Aucune voiture en location actuellement' : 'لا توجد سيارات قيد الإيجار حالياً')}
+              </p>
+            </div>
+          )}
         </motion.div>
       )}
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-            <p className="text-slate-500">{lang === 'fr' ? 'Chargement...' : 'جاري التحميل...'}</p>
-          </div>
-        </div>
-      )}
+      {/* Original Reservations Grid - Only show when carAvailabilityFilter is 'all' */}
+      {carAvailabilityFilter === 'all' && (
+        <>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 flex items-center gap-2"
+            >
+              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+              <span>{error}</span>
+            </motion.div>
+          )}
 
-      {/* Reservations Grid */}
-      {!isLoading && (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                <p className="text-slate-500">{lang === 'fr' ? 'Chargement...' : 'جاري التحميل...'}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Reservations Grid */}
+          {!isLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredReservations.map((reservation) => {
           // Skip rendering if client or car data is missing
           if (!reservation.client || !reservation.car) {
@@ -782,16 +1054,18 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           </motion.div>
           );
         })}
-      </div>
-      )}
+          </div>
+          )}
 
-      {filteredReservations.length === 0 && !isLoading && (
+          {filteredReservations.length === 0 && !isLoading && carAvailabilityFilter === 'all' && (
         <div className="text-center py-12">
           <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
           <p className="text-slate-500 text-lg">
             {lang === 'fr' ? 'Aucune réservation trouvée' : 'لم يتم العثور على حجوزات'}
           </p>
         </div>
+      )}
+        </>
       )}
 
       {/* Delete Confirmation Modal */}
@@ -1728,6 +2002,16 @@ const PersonalizationModal: React.FC<{
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  // Société (company client) state
+  const [isSociete, setIsSociete] = useState(false);
+  const [societeData, setSocieteData] = useState({
+    conducteur: '',
+    rc: '',
+    art: '',
+    nis: '',
+    nif: '',
+    email: '',
+  });
 
   useEffect(() => {
     loadAgencySettings();
@@ -2905,39 +3189,11 @@ const PersonalizationModal: React.FC<{
     return html;
   };
 
-  const generateFactureHTML = (templateLang: 'fr' | 'ar'): string => {
-    const isFrench = templateLang === 'fr';
-
+  const generateFactureHTML = (templateLang: 'fr' | 'ar', societe?: { conducteur: string; rc: string; art: string; nis: string; nif: string; email: string } | null): string => {
     const subtotal = reservation.totalPrice || 0;
     const tvaAmount = reservation.tvaApplied ? subtotal * 0.19 : 0;
     const timbre = 200;
     const total = subtotal + tvaAmount + timbre;
-    const totalPaid = reservation.payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || reservation.advancePayment || 0;
-
-    const numberToWords = (num: number): string => {
-      const ones = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf',
-        'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
-      const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
-      if (num === 0) return 'zéro';
-      let result = '';
-      if (num >= 1000000) { result += numberToWords(Math.floor(num / 1000000)) + ' million '; num = num % 1000000; }
-      if (num >= 1000) { const t = Math.floor(num / 1000); result += (t === 1 ? 'mille ' : numberToWords(t) + ' mille '); num = num % 1000; }
-      if (num >= 100) { const h = Math.floor(num / 100); result += (h === 1 ? 'cent ' : ones[h] + ' cent '); num = num % 100; }
-      if (num >= 20) {
-        const t = Math.floor(num / 10); const o = num % 10;
-        if (t === 7) result += 'soixante-' + ones[10 + o] + ' ';
-        else if (t === 9) result += 'quatre-vingt-' + ones[10 + o] + ' ';
-        else result += tens[t] + (o > 0 ? '-' + ones[o] : '') + ' ';
-      } else if (num > 0) { result += ones[num] + ' '; }
-      return result.trim();
-    };
-
-    const totalInt = Math.round(total);
-    const totalWordsText = numberToWords(totalInt);
-    const totalWords = totalWordsText.charAt(0).toUpperCase() + totalWordsText.slice(1) + ' Dinars Algériens';
-
-    const invoiceNum = '01/' + new Date().getFullYear();
-    const invoiceDate = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
     const departDate = reservation?.step1?.departureDate || '';
     const returnDate = reservation?.step1?.returnDate || '';
     const days = reservation?.totalDays || 0;
@@ -2961,410 +3217,149 @@ const PersonalizationModal: React.FC<{
         }
         .page {
           width: 210mm;
-          height: 297mm;
-          padding: 10mm;
+          min-height: 297mm;
+          padding: 8mm 10mm;
           margin: 10px auto;
           background: white;
           box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        
-        /* Header with Logo and Title */
         .header {
           display: flex;
           align-items: center;
-          gap: 15px;
-          margin-bottom: 15px;
+          gap: 14px;
+          margin-bottom: 10px;
           border-bottom: 3px solid #d97706;
-          padding-bottom: 12px;
+          padding-bottom: 10px;
         }
-        .logo {
-          width: 60px;
-          height: 60px;
-          object-fit: contain;
-          flex-shrink: 0;
-          border-radius: 4px;
-        }
-        .logo-placeholder {
-          width: 60px;
-          height: 60px;
-          border: 2px solid #e5e5e5;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 40px;
-          flex-shrink: 0;
-          border-radius: 4px;
-          background: #f9f9f9;
-        }
-        .header-text {
-          flex: 1;
-        }
-        .agency-name {
-          font-size: 22px;
-          font-weight: 700;
-          color: #d97706;
-          margin: 0 0 3px 0;
-          letter-spacing: 0.3px;
-        }
-        .invoice-title {
-          font-size: 16px;
-          font-weight: 700;
-          color: #d97706;
-          margin: 0;
-          text-decoration: underline;
-        }
-        
-        .agency-info-strip {
-          width: 100%;
-          border: 2px solid #d97706;
-          border-radius: 4px;
-          padding: 12px 15px;
-          margin-bottom: 12px;
-          background: #fff8f0;
-          line-height: 1.6;
-        }
-        .agency-info-line {
-          margin: 6px 0;
-          font-size: 13px;
-          color: #1a1a1a;
-        }
-        .agency-info-label {
-          font-weight: 700;
-          color: #d97706;
-          display: inline-block;
-          min-width: 180px;
-        }
-        .agency-info-value {
-          color: #333;
-          font-weight: 500;
-        }
-        
-        /* Info Block - Agency & Client */
-        .info-wrapper {
-          display: grid;
-          grid-template-columns: 1.2fr 1fr;
-          gap: 12px;
-          margin-bottom: 15px;
-        }
-        .info-section {
-          border: 2px solid #d97706;
-          border-radius: 4px;
-          padding: 12px;
-          background: #fafafa;
-        }
-        .section-title {
-          font-weight: 700;
-          font-size: 13px;
-          color: #d97706;
-          margin-bottom: 8px;
-          text-decoration: underline;
-          text-transform: uppercase;
-        }
-        .agency-content {
-          display: flex;
-          gap: 12px;
-        }
-        .agency-info-text {
-          flex: 1;
-          font-size: 13px;
-          line-height: 1.5;
-        }
-        .agency-name-section {
-          font-weight: 700;
-          color: #d97706;
-          font-size: 14px;
-          margin-bottom: 4px;
-        }
-        .detail-line {
-          font-size: 12px;
-          color: #333;
-          margin: 2px 0;
-        }
-        .client-info {
-          font-size: 13px;
-          line-height: 1.6;
-        }
-        .info-row {
-          margin: 5px 0;
-          display: flex;
-          justify-content: space-between;
-        }
-        .info-label {
-          font-weight: 600;
-          color: #d97706;
-          min-width: 100px;
-        }
-        .info-value {
-          color: #1a1a1a;
-          flex: 1;
-        }
-        
-        /* Items Table */
-        .items-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 12px;
-          font-size: 13px;
-          border: 2px solid #d97706;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-        .items-table th {
-          background: #d97706;
-          color: white;
-          border: 1px solid #d97706;
-          padding: 10px 8px;
-          text-align: center;
-          font-weight: 700;
-          font-size: 12px;
-          text-transform: uppercase;
-        }
-        .items-table td {
-          border: 1px solid #e5e5e5;
-          padding: 10px 8px;
-          text-align: center;
-          vertical-align: middle;
-        }
-        .items-table td.left {
-          text-align: left;
-          padding-left: 12px;
-        }
-        .items-table tbody tr:nth-child(odd) {
-          background: #fafafa;
-        }
-        
-        /* Totals Section */
-        .totals-wrapper {
-          display: flex;
-          justify-content: flex-end;
-          margin-bottom: 15px;
-          gap: 20px;
-        }
-        .totals-container {
-          width: 320px;
-        }
-        .totals-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 13px;
-          border: 2px solid #d97706;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-        .totals-table tr td {
-          border: 1px solid #e5e5e5;
-          padding: 10px 12px;
-        }
-        .totals-table tr td:first-child {
-          font-weight: 600;
-          background: #fff8f0;
-          color: #d97706;
-          white-space: nowrap;
-          width: 140px;
-        }
-        .totals-table tr td:last-child {
-          text-align: right;
-          font-weight: 600;
-          color: #1a1a1a;
-        }
-        .totals-table tr.total-payer td {
-          background: #d97706;
-          color: white;
-          font-weight: 700;
-          font-size: 14px;
-          border: 1px solid #d97706;
-        }
-        
-        /* Amount in Words Section */
-        .amount-section {
-          border: 2px solid #d97706;
-          border-radius: 4px;
-          padding: 12px;
-          margin-bottom: 15px;
-          background: #fff8f0;
-        }
-        .amount-label {
-          font-weight: 700;
-          font-size: 12px;
-          color: #d97706;
-          margin-bottom: 8px;
-          text-transform: uppercase;
-        }
-        .amount-text {
-          font-weight: 700;
-          font-size: 14px;
-          color: #1a1a1a;
-          line-height: 1.5;
-        }
-        
-        /* Footer Section */
-        .footer-section {
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          border-top: 2px solid #d97706;
-          padding-top: 12px;
-          margin-top: 15px;
-        }
-        .footer-logo {
-          width: 70px;
-          height: 70px;
-          object-fit: contain;
-          flex-shrink: 0;
-        }
-        .footer-logo-placeholder {
-          width: 70px;
-          height: 70px;
-          border: 2px solid #d97706;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 40px;
-          flex-shrink: 0;
-          color: #d97706;
-          border-radius: 4px;
-          background: #fff8f0;
-        }
-        .footer-info {
-          flex: 1;
-          text-align: center;
-          line-height: 1.6;
-          font-size: 12px;
-          color: #333;
-        }
-        .footer-info div {
-          margin: 3px 0;
-        }
-        .footer-info strong {
-          color: #d97706;
-          font-weight: 700;
-        }
-        
+        .logo { width: 55px; height: 55px; object-fit: contain; flex-shrink: 0; border-radius: 4px; }
+        .logo-placeholder { width: 55px; height: 55px; border: 2px solid #e5e5e5; display: flex; align-items: center; justify-content: center; font-size: 36px; flex-shrink: 0; border-radius: 4px; background: #f9f9f9; }
+        .header-text { flex: 1; }
+        .agency-name { font-size: 20px; font-weight: 700; color: #d97706; margin: 0 0 2px 0; }
+        .invoice-title { font-size: 15px; font-weight: 700; color: #d97706; margin: 0; text-decoration: underline; }
+        .invoice-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+        .meta-box { padding: 6px 10px; border-radius: 4px; background: #fff8f0; border-left: 3px solid #d97706; font-size: 12px; }
+        .meta-label { font-weight: 600; color: #92400e; font-size: 10px; text-transform: uppercase; }
+        .meta-value { color: #1a1a1a; font-weight: 600; margin-top: 1px; }
+        .two-col { display: grid; grid-template-columns: 1.1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .info-section { border: 1.5px solid #d97706; border-radius: 5px; padding: 10px 12px; background: #fffcf8; }
+        .info-section .sec-title { font-weight: 700; font-size: 11px; color: #d97706; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #fde68a; padding-bottom: 5px; margin-bottom: 7px; }
+        .info-row { display: flex; gap: 6px; margin: 4px 0; font-size: 12px; }
+        .info-label { font-weight: 600; color: #92400e; min-width: 80px; flex-shrink: 0; }
+        .info-value { color: #1a1a1a; }
+        .agency-inner { display: flex; gap: 10px; align-items: flex-start; }
+        .agency-inner img { width: 40px; height: 40px; object-fit: contain; border-radius: 3px; flex-shrink: 0; }
+        .agency-name-sm { font-weight: 700; color: #d97706; font-size: 13px; margin-bottom: 3px; }
+        .agency-detail { font-size: 11px; color: #444; margin: 1px 0; }
+        /* Societe block */
+        .societe-block { border: 2px solid #d97706; border-radius: 5px; padding: 10px 12px; margin-bottom: 10px; background: linear-gradient(135deg, #fff8f0 0%, #fef3e2 100%); }
+        .societe-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #fde68a; }
+        .societe-header-icon { width: 26px; height: 26px; background: #d97706; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+        .societe-title { font-weight: 800; font-size: 12px; color: #d97706; text-transform: uppercase; letter-spacing: 0.5px; }
+        .societe-subtitle { font-size: 10px; color: #92400e; font-weight: 500; }
+        .societe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .societe-field { padding: 6px 8px; background: white; border-radius: 4px; border: 1px solid #fde68a; border-left: 3px solid #d97706; }
+        .societe-field-label { font-weight: 700; font-size: 9px; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+        .societe-field-value { font-size: 12px; color: #1a1a1a; font-weight: 600; word-break: break-all; }
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12px; border: 1.5px solid #d97706; overflow: hidden; border-radius: 4px; }
+        .items-table th { background: #d97706; color: white; border: 1px solid #d97706; padding: 8px 6px; text-align: center; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+        .items-table td { border: 1px solid #e5e5e5; padding: 8px 6px; text-align: center; vertical-align: middle; }
+        .items-table td.left { text-align: left; padding-left: 10px; }
+        .items-table tbody tr:nth-child(odd) { background: #fffcf8; }
+        .totals-wrapper { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+        .totals-table { width: 260px; border-collapse: collapse; font-size: 12px; border: 1.5px solid #d97706; border-radius: 4px; overflow: hidden; }
+        .totals-table tr td { border: 1px solid #e5e5e5; padding: 7px 10px; }
+        .totals-table tr td:first-child { font-weight: 600; background: #fff8f0; color: #92400e; white-space: nowrap; }
+        .totals-table tr td:last-child { text-align: right; font-weight: 600; }
+        .totals-table tr.grand-total td { background: #d97706; color: white; font-weight: 700; font-size: 13px; border-color: #d97706; }
+        .agency-strip { width: 100%; border: 1.5px solid #d97706; border-radius: 4px; padding: 8px 12px; margin-bottom: 10px; background: #fff8f0; }
+        .strip-row { display: flex; gap: 5px; margin: 3px 0; font-size: 11px; }
+        .strip-label { font-weight: 700; color: #d97706; min-width: 160px; }
+        .strip-value { color: #333; font-weight: 500; }
         @media print {
           @page { size: A4; margin: 0; }
-          html, body {
-            width: 210mm;
-            height: 297mm;
-            margin: 0;
-            padding: 0;
-            background: white;
-            overflow: hidden;
-          }
-          body {
-            margin: 0;
-            padding: 0;
-            background: white;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            overflow: hidden;
-          }
-          .page {
-            margin: 0 auto;
-            padding: 10mm;
-            width: 190mm;
-            min-height: 277mm;
-            height: auto;
-            box-sizing: border-box;
-            box-shadow: none;
-            transform: scale(1.15);
-            transform-origin: top center;
-          }
-          *, *::before, *::after {
-            box-sizing: border-box;
-          }
-          body > * {
-            visibility: hidden;
-          }
-          .page, .page * {
-            visibility: visible;
-          }
+          html, body { width: 210mm; height: 297mm; margin: 0; padding: 0; background: white; overflow: hidden; }
+          body { margin: 0; padding: 0; background: white; display: flex; justify-content: center; align-items: flex-start; }
+          .page { margin: 0 auto; padding: 8mm 10mm; width: 190mm; min-height: 277mm; box-sizing: border-box; box-shadow: none; }
         }
       </style>
     </head>
     <body>
       <div class="page">
-        <!-- Header with Logo and Title -->
+
+        <!-- HEADER -->
         <div class="header">
-          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : '<div class="logo-placeholder">🏢</div>'}
+          ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : '<div class="logo-placeholder">\u{1F3E2}</div>'}
           <div class="header-text">
-            <h1 class="agency-name">${agencySettings?.name || 'NOM AGENCE'}</h1>
-            <p class="invoice-title">FACTURE</p>
+            <div class="agency-name">${agencySettings?.name || 'NOM AGENCE'}</div>
+            <div class="invoice-title">FACTURE</div>
+          </div>
+          <div style="text-align:right;font-size:11px;color:#92400e;">
+            <div style="font-weight:700;">N\u00b0 ${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : '000'}</div>
+            <div>${new Date().toLocaleDateString('fr-FR')}</div>
           </div>
         </div>
-        
-        <!-- Agency Information Strip -->
-        <div class="agency-info-strip">
-          <div class="agency-info-line">
-            <span class="agency-info-label">Nom de l'enseigne :</span>
-            <span class="agency-info-value">${agencySettings?.name || '—'}</span>
-          </div>
-          ${agencySettings?.slogan ? `<div class="agency-info-line">
-            <span class="agency-info-label">Slogan commercial :</span>
-            <span class="agency-info-value">${agencySettings.slogan}</span>
-          </div>` : ''}
-          ${agencySettings?.address ? `<div class="agency-info-line">
-            <span class="agency-info-label">Adresse du siège :</span>
-            <span class="agency-info-value">${agencySettings.address}</span>
-          </div>` : ''}
-          ${agencySettings?.phone ? `<div class="agency-info-line">
-            <span class="agency-info-label">📞 Téléphone :</span>
-            <span class="agency-info-value">${agencySettings.phone}</span>
-          </div>` : ''}
-          ${agencySettings?.phone_number_2 ? `<div class="agency-info-line">
-            <span class="agency-info-label">📱 Deuxième numéro :</span>
-            <span class="agency-info-value">${agencySettings.phone_number_2}</span>
-          </div>` : ''}
-          ${agencySettings?.bank_number ? `<div class="agency-info-line">
-            <span class="agency-info-label">🏦 Numéro de compte :</span>
-            <span class="agency-info-value">${agencySettings.bank_number}</span>
-          </div>` : ''}
+
+        <!-- AGENCY STRIP -->
+        <div class="agency-strip">
+          ${agencySettings?.name ? `<div class="strip-row"><span class="strip-label">Nom de l\u2019enseigne :</span><span class="strip-value">${agencySettings.name}</span></div>` : ''}
+          ${agencySettings?.address ? `<div class="strip-row"><span class="strip-label">Adresse :</span><span class="strip-value">${agencySettings.address}</span></div>` : ''}
+          ${agencySettings?.phone ? `<div class="strip-row"><span class="strip-label">\u{1F4DE} T\u00e9l\u00e9phone :</span><span class="strip-value">${agencySettings.phone}${agencySettings.phone_number_2 ? ' / ' + agencySettings.phone_number_2 : ''}</span></div>` : ''}
+          ${agencySettings?.bank_number ? `<div class="strip-row"><span class="strip-label">\u{1F3E6} Num\u00e9ro de compte :</span><span class="strip-value">${agencySettings.bank_number}</span></div>` : ''}
         </div>
-        
-        <!-- Agency & Client Info -->
-        <div class="info-wrapper">
-          <!-- Agency Info -->
+
+        <!-- AGENCE + CLIENT SIDE BY SIDE -->
+        <div class="two-col">
           <div class="info-section">
-            <div class="section-title">Agence</div>
-            <div class="agency-content">
-              ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px;">` : ''}
-              <div class="agency-info-text">
-                <div class="agency-name-section">${agencySettings?.name || 'NOM AGENCE'}</div>
-                ${agencySettings?.address ? `<div class="detail-line">${agencySettings.address}</div>` : ''}
-                ${agencySettings?.phone ? `<div class="detail-line">Tél: ${agencySettings.phone}${agencySettings.phone_number_2 ? ' / ' + agencySettings.phone_number_2 : ''}</div>` : ''}
+            <div class="sec-title">\u{1F3E2} Agence / Fournisseur</div>
+            <div class="agency-inner">
+              ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo">` : ''}
+              <div>
+                <div class="agency-name-sm">${agencySettings?.name || 'NOM AGENCE'}</div>
+                ${agencySettings?.address ? `<div class="agency-detail">${agencySettings.address}</div>` : ''}
+                ${agencySettings?.phone ? `<div class="agency-detail">T\u00e9l: ${agencySettings.phone}</div>` : ''}
               </div>
             </div>
           </div>
-          
-          <!-- Client Info -->
           <div class="info-section">
-            <div class="section-title">Client</div>
-            <div class="client-info">
-              <div class="info-row">
-                <span class="info-label">Nom:</span>
-                <span class="info-value">${reservation?.client?.firstName || ''} ${reservation?.client?.lastName || ''}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Adresse:</span>
-                <span class="info-value">${reservation?.client?.completeAddress || reservation?.client?.wilaya || 'N/A'}</span>
-              </div>
-              ${reservation?.client?.idCardNumber ? `<div class="info-row"><span class="info-label">BP:</span><span class="info-value">${reservation.client.idCardNumber}</span></div>` : ''}
-              ${reservation?.client?.licenseNumber ? `<div class="info-row"><span class="info-label">NIS:</span><span class="info-value">${reservation.client.licenseNumber}</span></div>` : ''}
-            </div>
+            <div class="sec-title">\u{1F464} Client</div>
+            <div class="info-row"><span class="info-label">Nom :</span><span class="info-value">${reservation?.client?.firstName || ''} ${reservation?.client?.lastName || ''}</span></div>
+            <div class="info-row"><span class="info-label">Adresse :</span><span class="info-value">${reservation?.client?.completeAddress || reservation?.client?.wilaya || 'N/A'}</span></div>
+            ${reservation?.client?.phone ? `<div class="info-row"><span class="info-label">T\u00e9l :</span><span class="info-value">${reservation.client.phone}</span></div>` : ''}
+            ${reservation?.client?.idCardNumber ? `<div class="info-row"><span class="info-label">N\u00b0 CIN :</span><span class="info-value">${reservation.client.idCardNumber}</span></div>` : ''}
           </div>
         </div>
-        
-        <!-- Items Table -->
+
+        ${societe ? `
+        <!-- SOCIETE BLOCK -->
+        <div class="societe-block">
+          <div class="societe-header">
+            <div class="societe-header-icon">\u{1F3E2}</div>
+            <div>
+              <div class="societe-title">Informations Soci\u00e9t\u00e9</div>
+              <div class="societe-subtitle">Donn\u00e9es fiscales et commerciales</div>
+            </div>
+          </div>
+          <div class="societe-grid">
+            ${societe.conducteur ? `<div class="societe-field"><div class="societe-field-label">Conducteur</div><div class="societe-field-value">${societe.conducteur}</div></div>` : ''}
+            ${societe.rc ? `<div class="societe-field"><div class="societe-field-label">RC</div><div class="societe-field-value">${societe.rc}</div></div>` : ''}
+            ${societe.art ? `<div class="societe-field"><div class="societe-field-label">ART</div><div class="societe-field-value">${societe.art}</div></div>` : ''}
+            ${societe.nis ? `<div class="societe-field"><div class="societe-field-label">NIS</div><div class="societe-field-value">${societe.nis}</div></div>` : ''}
+            ${societe.nif ? `<div class="societe-field"><div class="societe-field-label">NIF</div><div class="societe-field-value">${societe.nif}</div></div>` : ''}
+            ${societe.email ? `<div class="societe-field"><div class="societe-field-label">Email</div><div class="societe-field-value">${societe.email}</div></div>` : ''}
+          </div>
+        </div>` : ''}
+
+        <!-- ITEMS TABLE -->
         <table class="items-table">
           <thead>
             <tr>
-              <th>REF</th>
-              <th>MARQUE / MODELE</th>
-              <th>IMMATRICULE</th>
-              <th>DU</th>
-              <th>AU</th>
-              <th>JOURS</th>
-              <th>PRIX/JOUR</th>
+              <th>R\u00e9f</th>
+              <th>D\u00e9signation</th>
+              <th>Immatricul\u00e9</th>
+              <th>Du</th>
+              <th>Au</th>
+              <th>Jours</th>
+              <th>Prix/J</th>
               <th>HT</th>
             </tr>
           </thead>
@@ -3372,7 +3367,7 @@ const PersonalizationModal: React.FC<{
             <tr>
               <td>${reservation?.id ? reservation.id.toString().substring(0, 3).toUpperCase() : '001'}</td>
               <td class="left">${reservation?.car?.brand || ''} ${reservation?.car?.model || ''}</td>
-              <td>${(reservation?.car as any)?.registration || (reservation?.car as any)?.plateNumber || (reservation?.car as any)?.plate_number || 'N/A'}</td>
+              <td>${(reservation?.car as any)?.registration || (reservation?.car as any)?.plate_number || 'N/A'}</td>
               <td>${departDate}</td>
               <td>${returnDate}</td>
               <td>${days}</td>
@@ -3381,18 +3376,17 @@ const PersonalizationModal: React.FC<{
             </tr>
           </tbody>
         </table>
-        
-        <!-- Totals -->
+
+        <!-- TOTALS -->
         <div class="totals-wrapper">
-          <div class="totals-container">
-            <table class="totals-table">
-              <tr><td>TOTAL HT :</td><td>${subtotal.toLocaleString('fr-FR')} DA</td></tr>
-              <tr><td>TOTAL TVA :</td><td>${tvaAmount.toLocaleString('fr-FR')} DA</td></tr>
-              <tr><td>TIMBRE :</td><td>${timbre.toLocaleString('fr-FR')} DA</td></tr>
-              <tr class="total-payer"><td>TOTAL A PAYER :</td><td>${total.toLocaleString('fr-FR')} DA</td></tr>
-            </table>
-          </div>
+          <table class="totals-table">
+            <tr><td>TOTAL HT :</td><td>${subtotal.toLocaleString('fr-FR')} DA</td></tr>
+            <tr><td>TVA (19%) :</td><td>${tvaAmount.toLocaleString('fr-FR')} DA</td></tr>
+            <tr><td>TIMBRE :</td><td>${timbre.toLocaleString('fr-FR')} DA</td></tr>
+            <tr class="grand-total"><td>TOTAL \u00c0 PAYER :</td><td>${total.toLocaleString('fr-FR')} DA</td></tr>
+          </table>
         </div>
+
       </div>
     </body>
     </html>
@@ -4574,7 +4568,7 @@ const PersonalizationModal: React.FC<{
     if (type === 'engagement') {
       content = generateEngagementHTML(selectedTemplate);
     } else if (type === 'invoice' || type === 'facture') {
-      content = generateFactureHTML(selectedTemplate);
+      content = generateFactureHTML(selectedTemplate, isSociete ? societeData : null);
     } else if (type === 'quote' || type === 'devis') {
       content = generateDevisHTML(selectedTemplate);
     } else if (type === 'payment' || type === 'versement' || type === 'receipt' || type === 'recu') {
@@ -4630,7 +4624,7 @@ const PersonalizationModal: React.FC<{
     if (typeKey === 'engagement') {
       return generateEngagementHTML(selectedTemplate);
     } else if (typeKey === 'invoice' || typeKey === 'facture') {
-      return generateFactureHTML(selectedTemplate);
+      return generateFactureHTML(selectedTemplate, isSociete ? societeData : null);
     } else if (typeKey === 'quote' || typeKey === 'devis') {
       return generateDevisHTML(selectedTemplate);
     } else if (typeKey === 'payment' || typeKey === 'versement' || typeKey === 'receipt' || typeKey === 'recu') {
@@ -4700,6 +4694,103 @@ const PersonalizationModal: React.FC<{
 
           {/* Content Area with Preview */}
           <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-50 to-white p-8">
+
+            {/* Société Option - Only for invoice/facture */}
+            {(type === 'invoice' || type === 'facture') && (
+              <div className="mb-5 border-2 border-amber-300 rounded-xl overflow-hidden">
+                {/* Checkbox header */}
+                <label className="flex items-center gap-3 px-4 py-3 bg-amber-50 cursor-pointer select-none hover:bg-amber-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isSociete}
+                    onChange={e => setIsSociete(e.target.checked)}
+                    className="w-5 h-5 accent-amber-600 cursor-pointer"
+                  />
+                  <span className="text-xl">&#x1F3E2;</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-amber-800 text-sm">
+                      {lang === 'fr' ? 'Facturation Société' : 'فاتورة شركة'}
+                    </div>
+                    <div className="text-xs text-amber-600">
+                      {lang === 'fr' ? 'Cochez pour ajouter les informations de la société sur la facture' : 'حدد لإضافة معلومات الشركة إلى الفاتورة'}
+                    </div>
+                  </div>
+                  {isSociete && (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-black bg-amber-600 text-white">
+                      {lang === 'fr' ? 'ACTIF' : 'مفعل'}
+                    </span>
+                  )}
+                </label>
+
+                {/* Fields - shown when checked */}
+                {isSociete && (
+                  <div className="p-4 bg-white border-t border-amber-200 space-y-3">
+                    <p className="text-xs text-amber-600 font-semibold">
+                      {lang === 'fr'
+                        ? 'Remplissez les champs voulus — seuls les champs remplis apparaitront sur la facture.'
+                        : 'ملأ الحقول المطلوبة — ستظهر فقط الحقول المملوئة على الفاتورة.'}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1F464; {lang === 'fr' ? 'Conducteur' : 'المسؤول'}</label>
+                        <input type="text" value={societeData.conducteur}
+                          onChange={e => setSocieteData(prev => ({ ...prev, conducteur: e.target.value }))}
+                          placeholder={lang === 'fr' ? 'Nom du conducteur' : 'اسم المسؤول'}
+                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1F4CB; RC</label>
+                        <input type="text" value={societeData.rc}
+                          onChange={e => setSocieteData(prev => ({ ...prev, rc: e.target.value }))}
+                          placeholder="Ex: 12/00-0000000B19"
+                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1F3DB;&#xFE0F; ART</label>
+                        <input type="text" value={societeData.art}
+                          onChange={e => setSocieteData(prev => ({ ...prev, art: e.target.value }))}
+                          placeholder="Ex: 000000000"
+                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1F522; NIS</label>
+                        <input type="text" value={societeData.nis}
+                          onChange={e => setSocieteData(prev => ({ ...prev, nis: e.target.value }))}
+                          placeholder="Ex: 000000000000000"
+                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1FAA6; NIF</label>
+                        <input type="text" value={societeData.nif}
+                          onChange={e => setSocieteData(prev => ({ ...prev, nif: e.target.value }))}
+                          placeholder="Ex: 000000000000000"
+                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x2709;&#xFE0F; Email</label>
+                        <input type="email" value={societeData.email}
+                          onChange={e => setSocieteData(prev => ({ ...prev, email: e.target.value }))}
+                          placeholder="societe@example.com"
+                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                        />
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {/* Second Conductor Search (only for contract) */}
             {type === 'contract' && (
               <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-5">

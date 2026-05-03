@@ -4,6 +4,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'dashboard', label: { fr: 'Tableau de bord', ar: 'لوحة القيادة' }, icon: '📊' },
   { id: 'planner', label: { fr: 'Planificateur', ar: 'المخطط' }, icon: '📅' },
   { id: 'vehicles', label: { fr: 'Véhicules', ar: 'المركبات' }, icon: '🚗' },
+  { id: 'maintenance', label: { fr: 'Maintenance', ar: 'الصيانة' }, icon: '🔧' },
   { id: 'clients', label: { fr: 'Clients', ar: 'العملاء' }, icon: '👥' },
   { id: 'agencies', label: { fr: 'Agences', ar: 'الوكالات' }, icon: '🏢' },
   { id: 'team', label: { fr: 'Équipe', ar: 'الفريق' }, icon: '🤝' },

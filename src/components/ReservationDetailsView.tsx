@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Language, ReservationDetails, Payment, VehicleInspection, InspectionItem } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Language, ReservationDetails, Payment, VehicleInspection, InspectionItem, Agency } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Calendar, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, CheckCircle, XCircle, Plus, Trash2, Edit, Eye, Car as CarIcon, User, Phone, Mail, CreditCard as CardIcon, Shield, Wrench, Sofa, Sparkles, Droplets } from 'lucide-react';
 import { ReservationsService } from '../services/ReservationsService';
+import { DatabaseService } from '../services/DatabaseService';
 import { supabase } from '../supabase';
 
 interface ReservationDetailsViewProps {
@@ -261,11 +262,13 @@ const OverviewTab: React.FC<{ lang: Language; reservation: ReservationDetails }>
         </h3>
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <img
-              src={reservation.client.profilePhoto || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'}
-              alt={`${reservation.client.firstName} ${reservation.client.lastName}`}
-              className="w-12 h-12 rounded-full object-cover"
-            />
+            {reservation.client.profilePhoto && (
+              <img
+                src={reservation.client.profilePhoto}
+                alt={`${reservation.client.firstName} ${reservation.client.lastName}`}
+                className="w-12 h-12 rounded-full object-cover"
+              />
+            )}
             <div>
               <p className="font-bold text-lg">{reservation.client.firstName} {reservation.client.lastName}</p>
               <p className="text-slate-600">📱 {reservation.client.phone}</p>
@@ -1106,8 +1109,26 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>(
     reservation.departureInspection?.inspectionItems || []
   );
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
   
-  // New states for enhanced features
+  // Load agencies on component mount
+  useEffect(() => {
+    const loadAgencies = async () => {
+      try {
+        setIsLoadingAgencies(true);
+        const data = await DatabaseService.getAgencies();
+        setAgencies(data || []);
+      } catch (err) {
+        console.error('Error loading agencies:', err);
+        setAgencies([]);
+      } finally {
+        setIsLoadingAgencies(false);
+      }
+    };
+
+    loadAgencies();
+  }, []);
 
 
   const fuelLevels = [
@@ -1239,11 +1260,19 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
               <select
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-transparent"
+                disabled={isLoadingAgencies}
+                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-transparent disabled:bg-slate-100"
               >
-                <option value="">{lang === 'fr' ? 'Sélectionner...' : 'اختر...'}</option>
-                <option value="AGENCE MHD-AUTO">AGENCE MHD-AUTO</option>
-                <option value="Autre">{lang === 'fr' ? 'Autre' : 'أخرى'}</option>
+                <option value="">
+                  {isLoadingAgencies
+                    ? (lang === 'fr' ? 'Chargement des agences...' : 'جاري تحميل الوكالات...')
+                    : (lang === 'fr' ? 'Sélectionner une agence...' : 'اختر وكالة...')}
+                </option>
+                {agencies.map(agency => (
+                  <option key={agency.id} value={agency.name}>
+                    {agency.name} {agency.city ? `(${agency.city})` : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

@@ -369,6 +369,8 @@ export interface ReservationDetails {
   createdAt: string;
   activatedAt?: string;
   completedAt?: string;
+  createdBy?: string;
+  createdByName?: string;
 }
 
 export interface Invoice {

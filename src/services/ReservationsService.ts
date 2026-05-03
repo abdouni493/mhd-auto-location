@@ -33,6 +33,8 @@ export class ReservationsService {
     euroRate?: number;
     assuranceEnabled?: boolean;
     assurancePercentage?: number;
+    createdBy?: string;
+    createdByName?: string;
   }): Promise<{ id: string }> {
     const { data: reservation, error } = await supabase
       .from('reservations')
@@ -62,6 +64,8 @@ export class ReservationsService {
         euro_rate: data.euroRate || 145,
         assurance_enabled: data.assuranceEnabled || false,
         assurance_percentage: data.assurancePercentage || null,
+        created_by: data.createdBy || null,
+        created_by_name: data.createdByName || null,
       }])
       .select()
       .single();
@@ -126,7 +130,20 @@ export class ReservationsService {
 
     const { data, error } = await query.order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching reservations:', error);
+      throw error;
+    }
+
+    // Debug: Log raw data to check if creator fields exist
+    if (data && data.length > 0) {
+      console.log('📦 Raw reservation data from DB (first item):', {
+        id: data[0].id,
+        created_by: data[0].created_by,
+        created_by_name: data[0].created_by_name,
+        allKeys: Object.keys(data[0])
+      });
+    }
 
     return (data || []).map(res => ({
       id: res.id,
@@ -298,7 +315,16 @@ export class ReservationsService {
       payments: res.payments || [],
       excessMileage: res.excess_mileage,
       missingFuel: res.missing_fuel,
-    }));
+      createdBy: res.created_by,
+      createdByName: res.created_by_name,
+    })).map(mapped => {
+      console.log('✅ Mapped reservation:', {
+        id: mapped.id,
+        createdBy: mapped.createdBy,
+        createdByName: mapped.createdByName
+      });
+      return mapped;
+    });
   }
 
   static async getReservationById(id: string): Promise<ReservationDetails> {
@@ -489,6 +515,8 @@ export class ReservationsService {
           signature: latest.client_signature
         };
       })(),
+      createdBy: data.created_by,
+      createdByName: data.created_by_name,
     };
   }
 

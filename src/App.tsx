@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Login } from './components/Login';
 import { CarsPage } from './components/CarsPage';
+import { MaintenancePage } from './components/MaintenancePage';
 import { AgenciesPage } from './components/AgenciesPage';
 import { ClientsPage } from './components/ClientsPage';
 import { EquipePage } from './components/EquipePage';
@@ -47,6 +48,7 @@ export default function App() {
   const [websiteSettings, setWebsiteSettings] = useState<any>(null);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [isLoadingAgenciesForWebsite, setIsLoadingAgenciesForWebsite] = useState(true);
+  const [maintenanceAlertsCount, setMaintenanceAlertsCount] = useState(0);
   
   // Refs to prevent multiple listener initialization (especially important in StrictMode dev environment)
   const authListenerInitialized = useRef(false);
@@ -63,6 +65,7 @@ export default function App() {
       '/dashboard': 'dashboard',
       '/planificateur': 'planner',
       '/vehicules': 'vehicles',
+      '/maintenance': 'maintenance',
       '/clients': 'clients',
       '/agences': 'agencies',
       '/equipe': 'team',
@@ -87,6 +90,7 @@ export default function App() {
       'dashboard': '/dashboard',
       'planner': '/planificateur',
       'vehicles': '/vehicules',
+      'maintenance': '/maintenance',
       'clients': '/clients',
       'agencies': '/agences',
       'team': '/equipe',
@@ -98,13 +102,37 @@ export default function App() {
       'config': '/configuration',
     };
     
-    navigate(urlMap[tabId] || '/dashboard');
+    // Navigate with empty state to clear any previous location.state
+    // This prevents pages like MaintenancePage from re-opening modals
+    // triggered by previous dashboard alert clicks
+    navigate(urlMap[tabId] || '/dashboard', { state: {} });
   };
 
   useEffect(() => {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
   }, [lang]);
+
+  // Load maintenance alerts count when user is authenticated
+  useEffect(() => {
+    if (!user || isAuthLoading) return;
+
+    const loadAlerts = async () => {
+      try {
+        const alerts = await DatabaseService.getMaintenanceAlerts();
+        setMaintenanceAlertsCount(alerts.length);
+      } catch (err) {
+        console.error('Error loading alerts:', err);
+        setMaintenanceAlertsCount(0);
+      }
+    };
+
+    loadAlerts();
+
+    // Refresh alerts every 5 minutes
+    const interval = setInterval(loadAlerts, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user, isAuthLoading]);
 
   // Load cars from database when user is authenticated
   useEffect(() => {
@@ -403,6 +431,7 @@ export default function App() {
         '/dashboard': 'dashboard',
         '/planificateur': 'planner',
         '/vehicules': 'vehicles',
+        '/maintenance': 'maintenance',
         '/clients': 'clients',
         '/agences': 'agencies',
         '/equipe': 'team',
@@ -427,6 +456,8 @@ export default function App() {
           return <PlannerPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'vehicles':
           return <CarsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
+        case 'maintenance':
+          return <MaintenancePage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'agencies':
           return <AgenciesPage lang={lang} />;
         case 'clients':
@@ -498,6 +529,7 @@ export default function App() {
           onLogout={handleLogout}
           activeTab={activeTab}
           setActiveTab={handleTabChange}
+          alertsCount={maintenanceAlertsCount}
         />
         
         <div className="flex-1 flex flex-col min-w-0">
@@ -612,6 +644,7 @@ export default function App() {
       <Route path="/dashboard" element={<ProtectedRoute />} />
       <Route path="/planificateur" element={<ProtectedRoute />} />
       <Route path="/vehicules" element={<ProtectedRoute />} />
+      <Route path="/maintenance" element={<ProtectedRoute />} />
       <Route path="/clients" element={<ProtectedRoute />} />
       <Route path="/agences" element={<ProtectedRoute />} />
       <Route path="/equipe" element={<ProtectedRoute />} />

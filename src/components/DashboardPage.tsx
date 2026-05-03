@@ -7,6 +7,9 @@ import { DatabaseService } from '../services/DatabaseService';
 import { getCars } from '../services/carService';
 import { getVehicleExpenses } from '../services/expenseService';
 import { getVidangeAlert, getAssuranceAlert, getControleAlert, getChaineAlert } from '../utils/vidangeAlerts';
+import { ReservationsService } from '../services/ReservationsService';
+import { getReservationAlerts } from '../utils/reservationAlerts';
+import { ReservationAlertCard } from './ReservationAlertCard';
 
 // Mock data for dashboard (removed - now using real data)
 
@@ -19,9 +22,10 @@ interface DashboardPageProps {
 interface AlertCardProps {
   alert: MaintenanceAlert;
   lang: Language;
+  onAlertClick?: (alert: MaintenanceAlert) => void;
 }
 
-const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
+const AlertCard: React.FC<AlertCardProps> = ({ alert, lang, onAlertClick }) => {
   const getSeverityStyles = (severity: string) => {
     switch (severity) {
       case 'low':
@@ -270,13 +274,14 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, lang }) => {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            onClick={() => onAlertClick?.(alert)}
             className={`mt-4 w-full py-2 px-4 rounded-xl font-semibold text-sm transition-all duration-200 ${
               alert.isExpired
                 ? 'bg-red-500 hover:bg-red-600 text-white'
                 : 'bg-white/20 hover:bg-white/30 text-current backdrop-blur-sm border border-white/30'
             }`}
           >
-            {lang === 'fr' ? 'Voir les détails' : 'عرض التفاصيل'}
+            {lang === 'fr' ? 'Ajouter une dépense' : 'إضافة نفقة'}
           </motion.button>
         </div>
       </div>
@@ -303,6 +308,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
   const [alerts, setAlerts] = useState<MaintenanceAlert[]>([]);
   const [cars, setCars] = useState<Car[]>([]);
   const [vehicleExpenses, setVehicleExpenses] = useState<VehicleExpense[]>([]);
+  const [reservations, setReservations] = useState<ReservationDetails[]>([]);
+  const [showOnlyReservationAlerts, setShowOnlyReservationAlerts] = useState(false);
+  const [alertFilter, setAlertFilter] = useState<'all' | 'maintenance' | 'reservations'>('all');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -318,11 +326,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
         setError(null);
 
         // Fetch real data from database in parallel
-        const [dbStats, dbAlerts, carsResult, expensesResult] = await Promise.all([
+        const [dbStats, dbAlerts, carsResult, expensesResult, reservationsResult] = await Promise.all([
           DatabaseService.getDashboardStats(),
           DatabaseService.getMaintenanceAlerts(),
           getCars(),
-          getVehicleExpenses()
+          getVehicleExpenses(),
+          ReservationsService.getReservations()
         ]);
 
         // Set cars and expenses for vidange alerts
@@ -350,6 +359,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
 
         if (expensesResult.success && expensesResult.expenses) {
           setVehicleExpenses(expensesResult.expenses);
+        }
+
+        // Set reservations for alerts
+        if (Array.isArray(reservationsResult)) {
+          setReservations(reservationsResult);
         }
 
         // Map database stats to component state
@@ -389,9 +403,56 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
     return () => clearInterval(timer);
   }, [user, isAuthLoading]);
 
-  const criticalAlerts = alerts.filter(a => a.severity === 'critical');
-  const highAlerts = alerts.filter(a => a.severity === 'high');
-  const otherAlerts = alerts.filter(a => a.severity !== 'critical' && a.severity !== 'high');
+  // Filter maintenance alerts by status (exclude 'ok' status which means resolved)
+  const maintenanceAlerts = cars
+    .flatMap(car => [
+      { type: 'vidange', alert: getVidangeAlert(car, vehicleExpenses), car },
+      { type: 'assurance', alert: getAssuranceAlert(car, vehicleExpenses), car },
+      { type: 'controle', alert: getControleAlert(car, vehicleExpenses), car },
+      { type: 'chaine', alert: getChaineAlert(car, vehicleExpenses), car }
+    ])
+    .filter(item => item.alert !== null && item.alert.status !== 'ok')
+    .map(item => ({
+      ...item.alert,
+      type: item.type,
+      carId: item.car.id,
+      carInfo: `${item.car.brand} ${item.car.model} - ${item.car.registration}`,
+      id: `${item.car.id}-${item.type}`,
+      severity: (item.alert as any).status === 'overdue' ? 'critical' : (item.alert as any).status === 'warning' ? 'high' : 'low',
+      title: item.type === 'vidange' ? 'Vidange' : item.type === 'assurance' ? 'Assurance' : item.type === 'controle' ? 'Contrôle' : 'Chaîne',
+      daysUntilDue: (item.alert as any).daysRemaining || 0,
+      dueDate: (item.alert as any).expirationDate || null,
+      currentMileage: (item.alert as any).currentMileage || 0,
+      nextServiceMileage: (item.alert as any).nextVidangeKm || 0,
+      isExpired: (item.alert as any).status === 'overdue'
+    } as MaintenanceAlert));
+
+  const reservationAlerts = getReservationAlerts(reservations);
+
+  // Apply alert filter
+  let visibleAlerts = maintenanceAlerts;
+  let visibleResAlerts = reservationAlerts;
+  
+  if (alertFilter === 'maintenance') {
+    visibleResAlerts = [];
+  } else if (alertFilter === 'reservations') {
+    visibleAlerts = [];
+  }
+
+  const criticalAlerts = visibleAlerts.filter(a => a.severity === 'critical');
+  const highAlerts = visibleAlerts.filter(a => a.severity === 'high');
+  const otherAlerts = visibleAlerts.filter(a => a.severity !== 'critical' && a.severity !== 'high');
+
+  const handleAlertClick = (alert: MaintenanceAlert) => {
+    // Navigate to maintenance page with pre-selected car and expense type
+    navigate('/maintenance', {
+      state: {
+        selectedCarId: alert.carId,
+        expenseType: alert.type,
+        showExpenseModal: true
+      }
+    });
+  };
 
   if (loading) {
     return (
@@ -424,11 +485,60 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
 
   return (
     <div className="space-y-8">
+      {/* Alert Filter Controls - Simple & Clean Design */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-saas-text-main uppercase tracking-widest">
+          {lang === 'fr' ? 'Filtrer les alertes' : 'تصفية التنبيهات'}
+        </h3>
+        
+        <div className="flex flex-wrap gap-3">
+          <motion.button
+            whileHover={{ y: -2, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setAlertFilter('all')}
+            className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wide transition-all duration-300 flex items-center gap-2 border-2 ${
+              alertFilter === 'all'
+                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-transparent shadow-lg shadow-blue-500/30'
+                : 'bg-white/5 border-blue-200/30 text-blue-100 hover:bg-white/10 hover:border-blue-300/50'
+            }`}
+          >
+            <span className="text-xl">📋</span>
+            <span>{lang === 'fr' ? 'Toutes' : 'الجميع'}</span>
+          </motion.button>
+          
+          <motion.button
+            whileHover={{ y: -2, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setAlertFilter('maintenance')}
+            className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wide transition-all duration-300 flex items-center gap-2 border-2 ${
+              alertFilter === 'maintenance'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-transparent shadow-lg shadow-emerald-500/30'
+                : 'bg-white/5 border-emerald-200/30 text-emerald-100 hover:bg-white/10 hover:border-emerald-300/50'
+            }`}
+          >
+            <span className="text-xl">🔧</span>
+            <span>{lang === 'fr' ? 'Maintenance' : 'الصيانة'}</span>
+          </motion.button>
+          
+          <motion.button
+            whileHover={{ y: -2, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setAlertFilter('reservations')}
+            className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wide transition-all duration-300 flex items-center gap-2 border-2 ${
+              alertFilter === 'reservations'
+                ? 'bg-gradient-to-r from-cyan-500 to-sky-600 text-white border-transparent shadow-lg shadow-cyan-500/30'
+                : 'bg-white/5 border-cyan-200/30 text-cyan-100 hover:bg-white/10 hover:border-cyan-300/50'
+            }`}
+          >
+            <span className="text-xl">📅</span>
+            <span>{lang === 'fr' ? 'Réservations' : 'الحجوزات'}</span>
+          </motion.button>
+        </div>
+      </div>
+
       {/* Vidange Alerts Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
+      {(alertFilter === 'all' || alertFilter === 'maintenance') && (
+      <div
         className="relative"
       >
         {(() => {
@@ -487,13 +597,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 ${
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      onClick={() => {
+                        navigate('/maintenance', {
+                          state: {
+                            selectedCarId: car.id,
+                            expenseType: 'vidange',
+                            showExpenseModal: true
+                          }
+                        });
+                      }}
+                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 cursor-pointer transition-all ${
                         alert.status === 'overdue'
-                          ? 'bg-red-50 border-red-300'
+                          ? 'bg-red-50 border-red-300 hover:shadow-red-200'
                           : alert.status === 'warning'
-                          ? 'bg-amber-50 border-amber-300'
-                          : 'bg-green-50 border-green-300'
-                      }`}
+                          ? 'bg-amber-50 border-amber-300 hover:shadow-amber-200'
+                          : 'bg-green-50 border-green-300 hover:shadow-green-200'
+                      } shadow-lg hover:shadow-2xl`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -535,15 +655,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
             </>
           );
         })()}
-      </motion.div>
+      </div>
+      )}
 
       {/* Assurance Alerts Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="relative"
-      >
+      {(alertFilter === 'all' || alertFilter === 'maintenance') && (
+      <div className="relative">
         {(() => {
           const assuranceAlerts = cars
             .map(car => ({
@@ -601,13 +718,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 ${
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      onClick={() => {
+                        navigate('/maintenance', {
+                          state: {
+                            selectedCarId: car.id,
+                            expenseType: 'assurance',
+                            showExpenseModal: true
+                          }
+                        });
+                      }}
+                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 cursor-pointer transition-all ${
                         alert.status === 'overdue'
-                          ? 'bg-red-50 border-red-300'
+                          ? 'bg-red-50 border-red-300 hover:shadow-red-200'
                           : alert.status === 'warning'
-                          ? 'bg-amber-50 border-amber-300'
-                          : 'bg-green-50 border-green-300'
-                      }`}
+                          ? 'bg-amber-50 border-amber-300 hover:shadow-amber-200'
+                          : 'bg-green-50 border-green-300 hover:shadow-green-200'
+                      } shadow-lg hover:shadow-2xl`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -657,15 +784,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
             </>
           );
         })()}
-      </motion.div>
+      </div>
+      )}
 
       {/* Controle Technique Alerts Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="relative"
-      >
+      {(alertFilter === 'all' || alertFilter === 'maintenance') && (
+      <div className="relative">
         {(() => {
           const controleAlerts = cars
             .map(car => ({
@@ -723,13 +847,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 ${
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      onClick={() => {
+                        navigate('/maintenance', {
+                          state: {
+                            selectedCarId: car.id,
+                            expenseType: 'controle',
+                            showExpenseModal: true
+                          }
+                        });
+                      }}
+                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 cursor-pointer transition-all ${
                         alert.status === 'overdue'
-                          ? 'bg-red-50 border-red-300'
+                          ? 'bg-red-50 border-red-300 hover:shadow-red-200'
                           : alert.status === 'warning'
-                          ? 'bg-amber-50 border-amber-300'
-                          : 'bg-green-50 border-green-300'
-                      }`}
+                          ? 'bg-amber-50 border-amber-300 hover:shadow-amber-200'
+                          : 'bg-green-50 border-green-300 hover:shadow-green-200'
+                      } shadow-lg hover:shadow-2xl`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -779,15 +913,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
             </>
           );
         })()}
-      </motion.div>
+      </div>
+      )}
 
       {/* Chaîne (Chain/Belt) Alerts Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="relative"
-      >
+      {(alertFilter === 'all' || alertFilter === 'maintenance') && (
+      <div className="relative">
         {(() => {
           const chaineAlerts = cars
             .map(car => ({
@@ -844,13 +975,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 ${
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      onClick={() => {
+                        navigate('/maintenance', {
+                          state: {
+                            selectedCarId: car.id,
+                            expenseType: 'chaine',
+                            showExpenseModal: true
+                          }
+                        });
+                      }}
+                      className={`p-5 rounded-2xl border-2 flex flex-col gap-3 cursor-pointer transition-all ${
                         alert.status === 'overdue'
-                          ? 'bg-red-50 border-red-300'
+                          ? 'bg-red-50 border-red-300 hover:shadow-red-200'
                           : alert.status === 'warning'
-                          ? 'bg-amber-50 border-amber-300'
-                          : 'bg-green-50 border-green-300'
-                      }`}
+                          ? 'bg-amber-50 border-amber-300 hover:shadow-amber-200'
+                          : 'bg-green-50 border-green-300 hover:shadow-green-200'
+                      } shadow-lg hover:shadow-2xl`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -886,15 +1027,92 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
             </>
           );
         })()}
-      </motion.div>
+      </div>
+      )}
+
+      {/* Reservation Alerts Section */}
+      {(alertFilter === 'all' || alertFilter === 'reservations') && reservations && reservations.length > 0 && (() => {
+        const resAlerts = getReservationAlerts(reservations);
+        
+        if (resAlerts.length === 0) return null;
+
+        const criticalResAlerts = resAlerts.filter(a => a.severity === 'critical');
+        const highResAlerts = resAlerts.filter(a => a.severity === 'high');
+        const mediumResAlerts = resAlerts.filter(a => a.severity === 'medium');
+
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                  className="relative"
+                >
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                    criticalResAlerts.length > 0
+                      ? 'bg-gradient-to-br from-red-600 to-rose-600'
+                      : highResAlerts.length > 0
+                      ? 'bg-gradient-to-br from-orange-500 to-red-600'
+                      : 'bg-gradient-to-br from-yellow-500 to-orange-600'
+                  }`}>
+                    <span className="text-2xl">🚗</span>
+                  </div>
+                  {resAlerts.length > 0 && (
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full animate-pulse shadow-lg"
+                    />
+                  )}
+                </motion.div>
+                <div>
+                  <h2 className="text-2xl font-black text-saas-text-main uppercase tracking-tighter">
+                    {lang === 'fr' ? 'Alertes Réservations' : 'تنبيهات الحجوزات'}
+                  </h2>
+                  <p className="text-saas-text-muted font-medium">
+                    {criticalResAlerts.length} {lang === 'fr' ? 'critiques' : 'حرجة'}, {highResAlerts.length} {lang === 'fr' ? 'élevées' : 'عالية'}, {mediumResAlerts.length} {lang === 'fr' ? 'moyennes' : 'متوسطة'}
+                  </p>
+                </div>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowOnlyReservationAlerts(!showOnlyReservationAlerts)}
+                className={`px-6 py-2 rounded-lg font-bold text-sm uppercase tracking-wide transition-all ${
+                  showOnlyReservationAlerts
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-white/20 hover:bg-white/30 text-white border border-white/30'
+                }`}
+              >
+                {lang === 'fr' ? '+ Voir Alertes' : '+ عرض التنبيهات'}
+              </motion.button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {resAlerts.map((alert, index) => (
+                <ReservationAlertCard
+                  key={alert.id}
+                  alert={alert}
+                  onAlertClick={(res) => {
+                    console.log('[Reservation Alert] Clicked alert:', res.reservationId, res.id);
+                    navigate('/planner', {
+                      state: {
+                        selectedReservationId: res.reservationId,
+                        viewMode: 'details'
+                      }
+                    });
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Enhanced Header with Better Design */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 rounded-3xl text-white shadow-2xl"
-      >
+      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 rounded-3xl text-white shadow-2xl">
         {/* Animated Background Elements */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12"></div>
@@ -942,12 +1160,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
             </motion.p>
           </div>
 
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 1, type: "spring", stiffness: 200 }}
-            className="flex gap-4"
-          >
+          <div className="flex gap-4">
             <div className="text-center">
               <div className="text-3xl font-black text-white">
                 {stats.totalClients}
@@ -956,9 +1169,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                 {lang === 'fr' ? 'Clients' : 'العملاء'}
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Enhanced Key Metrics with Better Gradients */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1257,13 +1470,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Critical alerts first */}
             {criticalAlerts.slice(0, 3).map((alert, index) => (
-              <motion.div
+              <motion.button
                 key={alert.id}
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ delay: 1.1 + index * 0.1 }}
                 whileHover={{ scale: 1.02 }}
-                className="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-2xl border-2 border-red-200 shadow-lg hover:shadow-red-500/25"
+                onClick={() => handleAlertClick(alert)}
+                className="relative text-left overflow-hidden bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-2xl border-2 border-red-200 shadow-lg hover:shadow-red-500/25 transition-all active:scale-95"
               >
                 <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/10 rounded-full -translate-y-8 translate-x-8"></div>
                 <div className="relative">
@@ -1273,7 +1487,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                       transition={{ duration: 2, repeat: Infinity }}
                       className="text-3xl"
                     >
-                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : '🔍'}
+                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : alert.type === 'controle' ? '🔍' : '⛓️'}
                     </motion.div>
                     <div className="flex-1">
                       <h4 className="font-bold text-red-800 uppercase tracking-tighter text-sm mb-1">
@@ -1284,7 +1498,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-red-600">
-                    <span className="font-medium">{alert.carInfo.split(' - ')[0]}</span>
+                    <span className="font-medium">{alert.carInfo ? alert.carInfo.split(' - ')[0] : 'N/A'}</span>
                     <span className={`font-bold ${alert.isExpired ? 'text-red-800' : ''}`}>
                       {alert.isExpired
                         ? (lang === 'fr' ? 'Expiré' : 'منتهي الصلاحية')
@@ -1293,18 +1507,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                     </span>
                   </div>
                 </div>
-              </motion.div>
+              </motion.button>
             ))}
 
             {/* High priority alerts */}
             {highAlerts.slice(0, 3).map((alert, index) => (
-              <motion.div
+              <motion.button
                 key={alert.id}
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ delay: 1.2 + index * 0.1 }}
                 whileHover={{ scale: 1.02 }}
-                className="relative overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-2xl border-2 border-orange-200 shadow-lg hover:shadow-orange-500/25"
+                onClick={() => handleAlertClick(alert)}
+                className="relative text-left overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-2xl border-2 border-orange-200 shadow-lg hover:shadow-orange-500/25 transition-all active:scale-95"
               >
                 <div className="absolute top-0 right-0 w-16 h-16 bg-orange-500/10 rounded-full -translate-y-8 translate-x-8"></div>
                 <div className="relative">
@@ -1314,7 +1529,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                       transition={{ duration: 1.5, repeat: Infinity }}
                       className="text-3xl"
                     >
-                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : '🔍'}
+                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : alert.type === 'controle' ? '🔍' : '⛓️'}
                     </motion.div>
                     <div className="flex-1">
                       <h4 className="font-bold text-orange-800 uppercase tracking-tighter text-sm mb-1">
@@ -1325,51 +1540,52 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-orange-600">
-                    <span className="font-medium">{alert.carInfo.split(' - ')[0]}</span>
+                    <span className="font-medium">{alert.carInfo ? alert.carInfo.split(' - ')[0] : 'N/A'}</span>
                     <span className="font-bold">
                       {lang === 'fr' ? `${alert.daysUntilDue} jours` : `${alert.daysUntilDue} أيام`}
                     </span>
                   </div>
                 </div>
-              </motion.div>
+              </motion.button>
             ))}
 
             {/* Other alerts */}
             {otherAlerts.slice(0, 3).map((alert, index) => (
-              <motion.div
+              <motion.button
                 key={alert.id}
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ delay: 1.3 + index * 0.1 }}
                 whileHover={{ scale: 1.02 }}
-                className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 p-6 rounded-2xl border-2 border-blue-200 shadow-lg hover:shadow-blue-500/25"
+                onClick={() => handleAlertClick(alert)}
+                className="relative text-left overflow-hidden bg-gradient-to-br from-green-50 to-emerald-100 p-6 rounded-2xl border-2 border-green-200 shadow-lg hover:shadow-green-500/25 transition-all active:scale-95"
               >
-                <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/10 rounded-full -translate-y-8 translate-x-8"></div>
+                <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/10 rounded-full -translate-y-8 translate-x-8"></div>
                 <div className="relative">
                   <div className="flex items-start gap-3 mb-4">
                     <motion.div
-                      animate={{ rotate: [0, -5, 5, 0] }}
-                      transition={{ duration: 2.5, repeat: Infinity }}
+                      animate={{ scale: [1, 1.08, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
                       className="text-3xl"
                     >
-                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : '🔍'}
+                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : alert.type === 'controle' ? '🔍' : '⛓️'}
                     </motion.div>
                     <div className="flex-1">
-                      <h4 className="font-bold text-blue-800 uppercase tracking-tighter text-sm mb-1">
+                      <h4 className="font-bold text-green-800 uppercase tracking-tighter text-sm mb-1">
                         {alert.title}
                       </h4>
-                      <p className="text-blue-700 text-sm">{alert.message}</p>
+                      <p className="text-green-700 text-sm">{alert.message}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-blue-600">
-                    <span className="font-medium">{alert.carInfo.split(' - ')[0]}</span>
+                  <div className="flex items-center justify-between text-xs text-green-600">
+                    <span className="font-medium">{alert.carInfo ? alert.carInfo.split(' - ')[0] : 'N/A'}</span>
                     <span className="font-bold">
                       {lang === 'fr' ? `${alert.daysUntilDue} jours` : `${alert.daysUntilDue} أيام`}
                     </span>
                   </div>
                 </div>
-              </motion.div>
+              </motion.button>
             ))}
           </div>
 

@@ -7,6 +7,7 @@ import { DatabaseService } from '../services/DatabaseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { uploadInspectionImage } from '../services/uploadInspectionImage';
 import { ClientModal } from './ClientModal';
+import { supabase } from '../supabase';
 
 // Signature Pad Component
 const SignaturePad: React.FC<{
@@ -145,9 +146,10 @@ interface CreateReservationFormProps {
   inspectionMode?: boolean;
   initialData?: Partial<ReservationDetails>;
   defaultStatus?: 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled';
+  user?: any;
 }
 
-export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ lang, onBack, inspectionMode = false, initialData, defaultStatus = 'pending' }) => {
+export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ lang, onBack, inspectionMode = false, initialData, defaultStatus = 'pending', user }) => {
   const [currentStep, setCurrentStep] = useState(inspectionMode ? 3 : 1);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
@@ -349,37 +351,89 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
         });
       } else {
         // Create new reservation
-        const result = await ReservationsService.createReservation({
-          clientId,
-          carId,
-          departureDate: formData.step1?.departureDate || '',
-          departureTime: formData.step1?.departureTime || '',
-          departureAgencyId,
-          returnDate: formData.step1?.returnDate || '',
-          returnTime: formData.step1?.returnTime || '',
-          returnAgencyId,
-          pricePerDay: formData.step2?.selectedCar?.priceDay || 0,
-          priceWeek: formData.step2?.selectedCar?.priceWeek || 0,
-          priceMonth: formData.step2?.selectedCar?.priceMonth || 0,
-          totalDays: totalDays,
-          totalPrice: totalPrice,
-          deposit: formData.step2?.selectedCar?.deposit || 0,
-          advancePayment: advancePayment,
-          remainingPayment: remainingPayment,
-          status: 'pending', // save as pending until confirmed
-          notes: formData.step6?.notes || '',
-          // Caution and Assurance fields
-          cautionAmountDzd: (formData.step6 as any)?.caution_amount_dzd || formData.step2?.selectedCar?.deposit || 0,
-          cautionCurrency: (formData.step6 as any)?.cautionCurrency || 'DZD',
-          euroRate: (formData.step6 as any)?.euroRate || 145,
-          assuranceEnabled: (formData.step6 as any)?.assuranceEnabled || false,
-          assurancePercentage: (formData.step6 as any)?.assuranceEnabled 
-            ? (formData.step6 as any)?.assurancePercentage !== '' 
-              ? Number((formData.step6 as any)?.assurancePercentage) 
-              : 0
-            : 0,
-        });
-        reservationId = result.id;
+        try {
+          // Fetch worker's full name from database using email
+          let workerFullName: string | null = null;
+          
+          if (user?.email) {
+            try {
+              console.log('🔍 Fetching worker by email:', user.email);
+              
+              const { data: workerData, error: workerError } = await supabase
+                .from('workers')
+                .select('full_name, email, username')
+                .eq('email', user.email)
+                .single();
+              
+              console.log('📦 Worker query result:', {
+                data: workerData,
+                error: workerError?.message
+              });
+              
+              if (!workerError && workerData) {
+                workerFullName = workerData.full_name;
+                console.log('✅ Successfully fetched worker full_name:', workerFullName);
+              } else {
+                console.log('⚠️ Could not fetch worker:', workerError?.message);
+                // Don't fall back to user.name (which might be email)
+              }
+            } catch (err: any) {
+              console.error('❌ Error fetching worker:', err);
+            }
+          }
+          
+          console.log('Creating reservation with creator info:', {
+            userEmail: user?.email,
+            workerFullName: workerFullName
+          });
+          
+          const result = await ReservationsService.createReservation({
+            clientId,
+            carId,
+            departureDate: formData.step1?.departureDate || '',
+            departureTime: formData.step1?.departureTime || '',
+            departureAgencyId,
+            returnDate: formData.step1?.returnDate || '',
+            returnTime: formData.step1?.returnTime || '',
+            returnAgencyId,
+            pricePerDay: formData.step2?.selectedCar?.priceDay || 0,
+            priceWeek: formData.step2?.selectedCar?.priceWeek || 0,
+            priceMonth: formData.step2?.selectedCar?.priceMonth || 0,
+            totalDays: totalDays,
+            totalPrice: totalPrice,
+            deposit: formData.step2?.selectedCar?.deposit || 0,
+            advancePayment: advancePayment,
+            remainingPayment: remainingPayment,
+            status: 'pending', // save as pending until confirmed
+            notes: formData.step6?.notes || '',
+            // Caution and Assurance fields
+            cautionAmountDzd: (formData.step6 as any)?.caution_amount_dzd || formData.step2?.selectedCar?.deposit || 0,
+            cautionCurrency: (formData.step6 as any)?.cautionCurrency || 'DZD',
+            euroRate: (formData.step6 as any)?.euroRate || 145,
+            assuranceEnabled: (formData.step6 as any)?.assuranceEnabled || false,
+            assurancePercentage: (formData.step6 as any)?.assuranceEnabled 
+              ? (formData.step6 as any)?.assurancePercentage !== '' 
+                ? Number((formData.step6 as any)?.assurancePercentage) 
+                : 0
+              : 0,
+            // Creator info - Only save name since User object doesn't have ID
+            createdBy: null,  // No user ID available in current auth system
+            createdByName: workerFullName || null,
+          });
+          
+          console.log('✅ Reservation created successfully with ID:', result.id);
+          reservationId = result.id;
+        } catch (creationError: any) {
+          console.error('❌ Error creating reservation with creator info:', {
+            error: creationError?.message,
+            details: creationError,
+            creatorData: {
+              createdBy: null,
+              createdByName: workerFullName
+            }
+          });
+          throw creationError;
+        }
       }
 
       // Save selected services
@@ -476,7 +530,11 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
 
       onBack();
     } catch (err: any) {
-      console.error('Error ' + (inspectionMode && initialData ? 'updating' : 'creating') + ' reservation:', err);
+      console.error('❌ Error ' + (inspectionMode && initialData ? 'updating' : 'creating') + ' reservation:', {
+        message: err?.message,
+        error: err,
+        stack: err?.stack
+      });
       alert(lang === 'fr' ? `Erreur: ${err.message}` : `خطأ: ${err.message}`);
     }
   };

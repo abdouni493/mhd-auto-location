@@ -11,8 +11,6 @@ export const setupErrorInterceptor = () => {
     const url = typeof resource === 'string' ? resource : (resource instanceof URL ? resource.toString() : (resource as Request).url);
     const method = config?.method || 'GET';
     
-    console.log(`[Fetch] ${method} ${url}`);
-    
     try {
       const response = await originalFetch.apply(window, args as any);
       
