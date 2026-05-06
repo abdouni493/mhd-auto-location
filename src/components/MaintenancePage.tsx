@@ -8,7 +8,7 @@ import { MaintenanceStatus, getMaintenanceStatus } from '../services/maintenance
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Loader2, RefreshCw, Filter } from 'lucide-react';
 import { getCars, updateCar } from '../services/carService';
-import { addVehicleExpense, updateVehicleExpense } from '../services/expenseService';
+import { addVehicleExpense, updateVehicleExpense, getVehicleExpenses } from '../services/expenseService';
 
 interface MaintenancePageProps {
   lang: Language;
@@ -64,8 +64,13 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
 
         setCars(mappedCars);
 
-        // Load maintenance data
-        const maintenanceStatus = await getMaintenanceStatus(mappedCars);
+        // Load all vehicle expenses
+        const expensesResult = await getVehicleExpenses();
+        const allExpenses = expensesResult.expenses || [];
+        console.log(`[MaintenancePage] Loaded ${allExpenses.length} total expenses`);
+
+        // Load maintenance data with expenses
+        const maintenanceStatus = await getMaintenanceStatus(mappedCars, allExpenses);
         setMaintenanceData(maintenanceStatus);
       }
     } catch (err) {
@@ -415,8 +420,10 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
             onClose={() => {
               setIsExpenseModalOpen(false);
               setSelectedCar(null);
+              setPrefilledExpense(undefined);
             }}
             onSave={handleSaveExpense}
+            expense={prefilledExpense as any}
             cars={[selectedCar]}
             lang={lang}
           />

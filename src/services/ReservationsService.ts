@@ -522,6 +522,7 @@ export class ReservationsService {
 
   static async updateReservation(id: string, updates: Partial<{
     carId: string;
+    clientId: string;
     departureDate: string;
     returnDate: string;
     departureTime: string;
@@ -538,6 +539,7 @@ export class ReservationsService {
     tvaAmount: number;
     additionalFees: number;
     totalPrice: number;
+    deposit: number;
     activatedAt?: string;
     completedAt?: string;
     cautionAmountDzd: number;
@@ -551,6 +553,7 @@ export class ReservationsService {
     // Only include fields that are actually provided
     // Booking details
     if (updates.carId !== undefined) updateData.car_id = updates.carId;
+    if (updates.clientId !== undefined) updateData.client_id = updates.clientId;
     if (updates.departureDate !== undefined) updateData.departure_date = updates.departureDate;
     if (updates.returnDate !== undefined) updateData.return_date = updates.returnDate;
     if (updates.departureTime !== undefined) updateData.departure_time = updates.departureTime;
@@ -569,6 +572,7 @@ export class ReservationsService {
     if (updates.tvaAmount !== undefined) updateData.tva_amount = updates.tvaAmount;
     if (updates.additionalFees !== undefined) updateData.additional_fees = updates.additionalFees;
     if (updates.totalPrice !== undefined) updateData.total_price = updates.totalPrice;
+    if (updates.deposit !== undefined) updateData.deposit = updates.deposit;
     if (updates.activatedAt !== undefined) updateData.activated_at = updates.activatedAt;
     if (updates.completedAt !== undefined) updateData.completed_at = updates.completedAt;
     // Caution and Assurance fields

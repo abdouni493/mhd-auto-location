@@ -89,7 +89,7 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       caution_amount_dzd: (reservation as any).cautionAmountDzd || reservation.deposit
     },
     additionalServices: reservation.additionalServices,
-    deposit: reservation.deposit,
+    deposit: (reservation as any).cautionAmountDzd || reservation.deposit,
     totalDays: reservation.totalDays,
     totalPrice: reservation.totalPrice,
     discountAmount: reservation.discountAmount,
@@ -135,6 +135,23 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       }
     }));
   }, [agencies, reservation.step1.departureAgency, reservation.step1.returnAgency]);
+
+  // Sync clientId with selected client when client selection changes
+  useEffect(() => {
+    if (formData.step4?.selectedClient) {
+      const newClientId = formData.step4.selectedClient.id;
+      const currentClientId = formData.clientId;
+      
+      if (newClientId && newClientId !== currentClientId) {
+        console.log('🔄 Client selection changed:', currentClientId, '→', newClientId);
+        setFormData(prev => ({
+          ...prev,
+          clientId: newClientId,
+          client: formData.step4!.selectedClient,
+        }));
+      }
+    }
+  }, [formData.step4?.selectedClient?.id]);
 
   // Sync carId with selected car when car selection changes
   useEffect(() => {
@@ -356,8 +373,11 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
         additionalFees: formData.step6?.additionalFees || formData.additionalFees,
         totalPrice: newTotalPrice,
         
+        // Client (selected in edit mode)
+        clientId: formData.step4?.selectedClient?.id || formData.clientId || reservation.clientId,
+        
         // Deposit & Status
-        deposit: newDeposit,
+        deposit: (formData.step6 as any)?.caution_amount_dzd || (formData.step6 as any)?.editedDeposit || newDeposit,
         cautionEnabled: formData.step6?.cautionEnabled,
         // Caution and Assurance fields
         cautionAmountDzd: (formData.step6 as any)?.caution_amount_dzd || newDeposit,
@@ -517,7 +537,10 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
       const updatedReservation = {
         ...reservation,
         ...updateData,
+        clientId: updateData.clientId || reservation.clientId,
+        client: formData.step4?.selectedClient || formData.client || reservation.client,
         step1: formData.step1,
+        step4: formData.step4,
         step6: formData.step6,
         step3: formData.step3,
         step5: formData.step5

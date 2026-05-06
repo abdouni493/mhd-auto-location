@@ -2676,8 +2676,9 @@ export const Step6FinalPricing: React.FC<{
       setEuroAmount(savedEuroAmount);
       setEuroRate(savedEuroRate);
       
-      // Initialize editedDeposit based on currency mode
-      if (savedCurrency === 'EUR' && savedCautionDzd) {
+      // Initialize editedDeposit from saved caution_amount_dzd if it differs from default
+      if (savedCautionDzd && savedCautionDzd !== deposit) {
+        console.log('💾 Setting editedDeposit from saved caution_amount_dzd:', savedCautionDzd);
         setEditedDeposit(savedCautionDzd);
       } else if (savedCautionDzd) {
         setEditedDeposit(savedCautionDzd);

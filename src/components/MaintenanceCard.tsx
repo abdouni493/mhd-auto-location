@@ -165,16 +165,28 @@ export const MaintenanceCard: React.FC<MaintenanceCardProps> = ({
               >
                 <div className="flex items-center gap-3 text-left flex-1">
                   <span className="text-2xl">{item.icon}</span>
-                  <div>
+                  <div className="flex-1">
                     <p className={`text-xs font-bold uppercase tracking-widest ${statusTextColor}`}>
                       {item.label}
                     </p>
                     {item.status.lastDate && (
-                      <p className="text-[9px] opacity-60 mt-0.5">
-                        {lang === 'fr' ? 'Dernier:' : 'آخر:'} {new Date(item.status.lastDate).toLocaleDateString(
-                          lang === 'fr' ? 'fr-FR' : 'ar-SA'
+                      <div className="text-[9px] opacity-60 mt-0.5 space-y-0.5">
+                        <p>
+                          {lang === 'fr' ? 'Dernier:' : 'آخر:'} {new Date(item.status.lastDate).toLocaleDateString(
+                            lang === 'fr' ? 'fr-FR' : 'ar-SA'
+                          )}
+                        </p>
+                        {item.status.lastMileage !== null && item.status.lastMileage !== undefined && (
+                          <p>
+                            {lang === 'fr' ? 'À' : 'في'} {item.status.lastMileage.toLocaleString()} km
+                          </p>
                         )}
-                      </p>
+                        {item.status.nextMileage !== null && item.status.nextMileage !== undefined && (
+                          <p className={`font-bold ${statusTextColor}`}>
+                            {lang === 'fr' ? 'Prochain à' : 'القادم في'} {item.status.nextMileage.toLocaleString()} km
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -185,6 +197,9 @@ export const MaintenanceCard: React.FC<MaintenanceCardProps> = ({
                       {getStatusEmoji(item.color)}
                     </span>
                     <div>
+                      <p className={`text-xs font-bold uppercase tracking-widest ${statusTextColor} opacity-70 mb-0.5`}>
+                        {lang === 'fr' ? 'Restant' : 'متبقي'}
+                      </p>
                       <p className={`text-lg font-black ${statusTextColor} tracking-tighter`}>
                         {item.statusValue !== null && item.statusValue !== undefined
                           ? Math.abs(item.statusValue).toLocaleString()

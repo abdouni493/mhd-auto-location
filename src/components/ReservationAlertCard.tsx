@@ -83,6 +83,18 @@ export const ReservationAlertCard: React.FC<ReservationAlertCardProps> = ({
           label: 'Retour Demain',
           color: 'from-green-400 to-emerald-500'
         };
+      case 'expiring_today':
+        return {
+          icon: '🚨',
+          label: 'Expire Aujourd\'hui',
+          color: 'from-red-600 to-rose-700'
+        };
+      case 'expiring_tomorrow':
+        return {
+          icon: '🔔',
+          label: 'Expire Demain',
+          color: 'from-orange-400 to-red-500'
+        };
       case 'not_closed':
         return {
           icon: '⏰',

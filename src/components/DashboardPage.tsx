@@ -10,6 +10,7 @@ import { getVidangeAlert, getAssuranceAlert, getControleAlert, getChaineAlert } 
 import { ReservationsService } from '../services/ReservationsService';
 import { getReservationAlerts } from '../utils/reservationAlerts';
 import { ReservationAlertCard } from './ReservationAlertCard';
+import { scheduleNotification, checkAndTriggerScheduledNotifications, requestNotificationPermission } from '../services/notificationService';
 
 // Mock data for dashboard (removed - now using real data)
 
@@ -402,6 +403,42 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
 
     return () => clearInterval(timer);
   }, [user, isAuthLoading]);
+
+  // Schedule notifications for reservations expiring tomorrow
+  useEffect(() => {
+    if (reservations.length === 0) return;
+
+    // Request notification permission on first load
+    requestNotificationPermission();
+
+    // Get all alerts to find expiring_tomorrow alerts
+    const allAlerts = getReservationAlerts(reservations);
+    const expiringTomorrowAlerts = allAlerts.filter(a => a.type === 'expiring_tomorrow');
+
+    // Schedule notifications for each expiring reservation
+    expiringTomorrowAlerts.forEach(alert => {
+      const returnDate = new Date(alert.reservation.step1.returnDate);
+      const clientName = `${alert.reservation.client.firstName} ${alert.reservation.client.lastName}`;
+      const vehicleName = `${alert.reservation.car.brand} ${alert.reservation.car.model}`;
+      const message = `La réservation de ${clientName} pour ${vehicleName} expire demain!`;
+      
+      scheduleNotification(alert.reservationId, returnDate, message);
+    });
+
+    console.log(`[Dashboard] Scheduled ${expiringTomorrowAlerts.length} notification(s) for expiring reservations`);
+  }, [reservations]);
+
+  // Check and trigger scheduled notifications every minute
+  useEffect(() => {
+    const notificationCheckInterval = setInterval(() => {
+      checkAndTriggerScheduledNotifications();
+    }, 60000); // Check every minute
+
+    // Check immediately on mount
+    checkAndTriggerScheduledNotifications();
+
+    return () => clearInterval(notificationCheckInterval);
+  }, []);
 
   // Filter maintenance alerts by status (exclude 'ok' status which means resolved)
   const maintenanceAlerts = cars

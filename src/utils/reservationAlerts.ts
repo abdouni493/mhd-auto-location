@@ -5,7 +5,7 @@ export interface ReservationAlert {
   reservationId: string;
   car: any;
   reservation: ReservationDetails;
-  type: 'pre_start' | 'pre_end' | 'not_closed' | 'late_activation';
+  type: 'pre_start' | 'pre_end' | 'not_closed' | 'late_activation' | 'expiring_tomorrow' | 'expiring_today';
   severity: 'low' | 'medium' | 'high' | 'critical';
   title: string;
   message: string;
@@ -25,6 +25,9 @@ export const getReservationAlert = (
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
   const departureDate = new Date(reservation.step1.departureDate);
   departureDate.setHours(0, 0, 0, 0);
 
@@ -38,6 +41,52 @@ export const getReservationAlert = (
   const daysUntilDeparture = Math.floor((departureDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   const daysUntilReturn = Math.floor((returnDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   const daysSinceReturn = Math.floor((today.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  // 0. NEW ALERT: Reservation expires today (date_fin = today)
+  if (
+    returnDate.getTime() === today.getTime() && 
+    (reservation.status === 'active' || reservation.status === 'confirmed')
+  ) {
+    const clientName = `${reservation.client.firstName} ${reservation.client.lastName}`;
+    const vehicleName = `${reservation.car.brand} ${reservation.car.model}`;
+    return {
+      id: `${reservation.id}-expiring-today`,
+      reservationId: reservation.id,
+      car: reservation.car,
+      reservation,
+      type: 'expiring_today',
+      severity: 'critical',
+      title: 'Réservation expire aujourd\'hui / الحجز ينتهي اليوم',
+      message: `La réservation de ${clientName} pour ${vehicleName} expire aujourd\'hui à minuit!`,
+      icon: '🚨',
+      daysUntil: 0,
+      status: 'critical',
+      actionRequired: true
+    };
+  }
+
+  // 0.5 NEW ALERT: Reservation expires tomorrow (date_fin = tomorrow)
+  if (
+    returnDate.getTime() === tomorrow.getTime() && 
+    (reservation.status === 'active' || reservation.status === 'confirmed')
+  ) {
+    const clientName = `${reservation.client.firstName} ${reservation.client.lastName}`;
+    const vehicleName = `${reservation.car.brand} ${reservation.car.model}`;
+    return {
+      id: `${reservation.id}-expiring-tomorrow`,
+      reservationId: reservation.id,
+      car: reservation.car,
+      reservation,
+      type: 'expiring_tomorrow',
+      severity: 'high',
+      title: 'Réservation expire demain / الحجز ينتهي غدا',
+      message: `La réservation de ${clientName} pour ${vehicleName} expire demain (${returnDate.toLocaleDateString('fr-FR')})`,
+      icon: '🔔',
+      daysUntil: 1,
+      status: 'warning',
+      actionRequired: true
+    };
+  }
 
   // 1. Alert: One day before departure
   if (daysUntilDeparture === 1 && reservation.status === 'confirmed') {
