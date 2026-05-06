@@ -28,6 +28,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
     note: '',
     currentMileage: 0,
     nextVidangeKm: 0,
+    prochainKm: 0,
     expenseName: '',
     expirationDate: '',
     oilFilterChanged: false,
@@ -46,6 +47,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
         note: expense.note || '',
         currentMileage: expense.currentMileage || 0,
         nextVidangeKm: expense.nextVidangeKm || 0,
+        prochainKm: (expense.currentMileage || 0) + (expense.nextVidangeKm || 0),
         expenseName: expense.expenseName || '',
         expirationDate: expense.expirationDate || '',
         oilFilterChanged: (expense as any).oilFilterChanged || false,
@@ -55,14 +57,17 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
       });
     } else {
       const selectedCar = cars.length > 0 ? cars[0] : null;
+      const currentMileage = selectedCar?.mileage || 0;
+      const nextVidangeKm = 10000;
       setFormData({
         carId: selectedCar?.id || '',
         type: 'vidange',
         cost: 0,
         date: new Date().toISOString().split('T')[0],
         note: '',
-        currentMileage: selectedCar?.mileage || 0,
-        nextVidangeKm: selectedCar ? (selectedCar.mileage + 10000) : 0,
+        currentMileage,
+        nextVidangeKm,
+        prochainKm: currentMileage + nextVidangeKm,
         expenseName: '',
         expirationDate: '',
         oilFilterChanged: false,
@@ -84,23 +89,51 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
         [name]: target.checked,
       }));
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: ['cost', 'currentMileage', 'nextVidangeKm'].includes(name)
-          ? parseInt(value) || 0
-          : value,
-      }));
+      const numValue = ['cost', 'currentMileage', 'nextVidangeKm', 'prochainKm'].includes(name)
+        ? parseInt(value) || 0
+        : value;
+
+      setFormData(prev => {
+        const updated = {
+          ...prev,
+          [name]: numValue,
+        };
+
+        // Bidirectional calculation for vidange and chaine
+        if ((formData.type === 'vidange' || formData.type === 'chaine') && 
+            ['currentMileage', 'nextVidangeKm', 'prochainKm'].includes(name)) {
+          
+          if (name === 'nextVidangeKm') {
+            // If user edits "Km pour Prochaine Vidange", calculate Prochain
+            // Prochain = currentMileage + nextVidangeKm
+            updated.prochainKm = (updated.currentMileage || prev.currentMileage) + numValue;
+          } else if (name === 'prochainKm') {
+            // If user edits "Prochain", calculate "Km pour Prochaine Vidange"
+            // nextVidangeKm = Prochain - currentMileage
+            updated.nextVidangeKm = numValue - (updated.currentMileage || prev.currentMileage);
+          } else if (name === 'currentMileage') {
+            // If user edits currentMileage, recalculate Prochain
+            // Prochain = currentMileage + nextVidangeKm
+            updated.prochainKm = numValue + (updated.nextVidangeKm || prev.nextVidangeKm);
+          }
+        }
+
+        return updated;
+      });
     }
   };
 
   const handleCarChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const carId = e.target.value;
     const selectedCar = cars.find(c => c.id === carId);
+    const currentMileage = selectedCar?.mileage || 0;
+    const nextVidangeKm = 10000;
     setFormData(prev => ({
       ...prev,
       carId,
-      currentMileage: selectedCar?.mileage || 0,
-      nextVidangeKm: selectedCar ? (selectedCar.mileage + 10000) : 0,
+      currentMileage,
+      nextVidangeKm,
+      prochainKm: currentMileage + nextVidangeKm,
     }));
   };
 
@@ -265,7 +298,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
                 />
               </div>
 
-              {/* Next Vidange KM */}
+              {/* Next Vidange KM - Editable with automatic Prochain calculation */}
               <div className="space-y-2">
                 <label className="label-saas">↩️ {{fr: 'Km pour Prochaine Vidange', ar: 'كم للتغيير التالي'}[lang]}</label>
                 <input
@@ -279,14 +312,18 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
                 />
               </div>
 
-              {/* Next Service Display */}
+              {/* Prochain - NOW EDITABLE with automatic nextVidangeKm calculation */}
               <div className="space-y-2">
                 <label className="label-saas">🏁 {{fr: 'Prochain', ar: 'القادم'}[lang]}</label>
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
-                  <p className="text-2xl font-black text-green-600">
-                    {(formData.currentMileage + formData.nextVidangeKm).toLocaleString('fr-FR')} KM
-                  </p>
-                </div>
+                <input
+                  type="number"
+                  name="prochainKm"
+                  value={formData.prochainKm || ''}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className="input-saas text-lg font-bold text-center text-green-600"
+                  min="0"
+                />
               </div>
 
               {/* Filter Tracking Section */}
@@ -406,7 +443,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
                 />
               </div>
 
-              {/* Next Chaîne KM */}
+              {/* Next Chaîne KM - Editable with automatic Prochain calculation */}
               <div className="space-y-2">
                 <label className="label-saas">↩️ {{fr: 'Km pour Prochaine Chaîne', ar: 'كم للسلسلة التالية'}[lang]}</label>
                 <input
@@ -420,14 +457,18 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
                 />
               </div>
 
-              {/* Next Service Display */}
+              {/* Prochain - NOW EDITABLE with automatic nextVidangeKm calculation */}
               <div className="space-y-2">
                 <label className="label-saas">🏁 {{fr: 'Prochain', ar: 'القادم'}[lang]}</label>
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
-                  <p className="text-2xl font-black text-green-600">
-                    {(formData.currentMileage + formData.nextVidangeKm).toLocaleString('fr-FR')} KM
-                  </p>
-                </div>
+                <input
+                  type="number"
+                  name="prochainKm"
+                  value={formData.prochainKm || ''}
+                  onChange={handleChange}
+                  placeholder="0"
+                  className="input-saas text-lg font-bold text-center text-green-600"
+                  min="0"
+                />
               </div>
             </>
           )}
