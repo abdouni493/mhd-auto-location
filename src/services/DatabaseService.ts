@@ -438,7 +438,9 @@ export class DatabaseService {
   }
 
   static async createWorker(worker: Omit<Worker, 'id' | 'createdAt' | 'advances' | 'absences' | 'payments'>): Promise<Worker> {
-    // Map camelCase to snake_case for database
+    // Create worker record in database with email and password
+    console.log('[DatabaseService] Creating worker:', worker.email);
+    
     const dbWorker = {
       full_name: worker.fullName,
       date_of_birth: worker.dateOfBirth,
@@ -459,7 +461,12 @@ export class DatabaseService {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[DatabaseService] Worker creation failed:', error);
+      throw error;
+    }
+
+    console.log('[DatabaseService] Worker created successfully:', data.id);
 
     // Map back to camelCase for the return
     return {

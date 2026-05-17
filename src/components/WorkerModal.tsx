@@ -115,12 +115,16 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({ isOpen, onClose, onSav
     }
     if (!formData.email?.trim()) {
       errors.push(lang === 'fr' ? 'Email est requis' : 'البريد الإلكتروني مطلوب');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.push(lang === 'fr' ? 'Email invalide' : 'بريد إلكتروني غير صحيح');
     }
     if (!formData.username?.trim()) {
       errors.push(lang === 'fr' ? 'Nom d\'utilisateur est requis' : 'اسم المستخدم مطلوب');
     }
     if (!formData.password?.trim()) {
       errors.push(lang === 'fr' ? 'Mot de passe est requis' : 'كلمة المرور مطلوبة');
+    } else if (formData.password.length < 6) {
+      errors.push(lang === 'fr' ? 'Mot de passe doit avoir au moins 6 caractères' : 'كلمة المرور يجب أن تكون على الأقل 6 أحرف');
     }
     if (paymentEnabled && (!formData.baseSalary || formData.baseSalary <= 0)) {
       errors.push(lang === 'fr' ? 'Salaire de base est requis' : 'الراتب الأساسي مطلوب');
@@ -135,9 +139,21 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({ isOpen, onClose, onSav
       setSaving(true);
       await onSave(formData);
       // Success - modal will be closed by parent
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving worker:', err);
-      setValidationError(lang === 'fr' ? 'Erreur lors de l\'enregistrement du travailleur' : 'خطأ في حفظ العامل');
+      let errorMsg = lang === 'fr' ? 'Erreur lors de l\'enregistrement du travailleur' : 'خطأ في حفظ العامل';
+      
+      // Handle specific Supabase Auth errors
+      if (err.message) {
+        if (err.message.includes('already registered')) {
+          errorMsg = lang === 'fr' ? 'Cet email est déjà utilisé' : 'هذا البريد الإلكتروني مستخدم بالفعل';
+        } else if (err.message.includes('Auth')) {
+          errorMsg = lang === 'fr' ? 'Erreur d\'authentification: ' + err.message : 'خطأ في المصادقة: ' + err.message;
+        } else {
+          errorMsg = err.message;
+        }
+      }
+      setValidationError(errorMsg);
     } finally {
       setSaving(false);
     }
