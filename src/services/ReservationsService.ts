@@ -767,14 +767,23 @@ export class ReservationsService {
 
       // Create the return inspection
       console.log('🔍 Creating return inspection...');
+      const now = new Date();
+      // Format date as YYYY-MM-DD (PostgreSQL expects this format, not DD/MM/YYYY)
+      const dateString = now.toISOString().split('T')[0];
+      // Format time as HH:MM:SS
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const timeString = `${hours}:${minutes}:${seconds}`;
+      
       const inspectionData = {
         reservationId: data.reservationId,
         type: 'return' as const,
         mileage: data.returnMileage,
         fuelLevel: data.returnFuelLevel,
         agencyId: data.returnAgencyId || data.returnLocation,
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString(),
+        date: dateString,
+        time: timeString,
         notes: data.notes,
         clientSignatureUrl: signatureUrl,
       };
