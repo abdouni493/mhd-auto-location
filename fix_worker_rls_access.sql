@@ -81,6 +81,30 @@ BEGIN
     ALTER TABLE public.inspections DISABLE ROW LEVEL SECURITY;
   END IF;
 
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'vehicle_inspections' AND table_schema = 'public') THEN
+    ALTER TABLE public.vehicle_inspections DISABLE ROW LEVEL SECURITY;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'inspection_responses' AND table_schema = 'public') THEN
+    ALTER TABLE public.inspection_responses DISABLE ROW LEVEL SECURITY;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'vehicle_inspection_photos' AND table_schema = 'public') THEN
+    ALTER TABLE public.vehicle_inspection_photos DISABLE ROW LEVEL SECURITY;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'inspection_checklist_items' AND table_schema = 'public') THEN
+    ALTER TABLE public.inspection_checklist_items DISABLE ROW LEVEL SECURITY;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'reservation_services' AND table_schema = 'public') THEN
+    ALTER TABLE public.reservation_services DISABLE ROW LEVEL SECURITY;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'services' AND table_schema = 'public') THEN
+    ALTER TABLE public.services DISABLE ROW LEVEL SECURITY;
+  END IF;
+
 END $$;
 
 -- Verify RLS is disabled
@@ -89,5 +113,5 @@ SELECT
   rowsecurity
 FROM pg_tables 
 WHERE schemaname = 'public' 
-  AND tablename IN ('clients', 'reservations', 'cars', 'workers', 'agencies', 'payments', 'invoices', 'vehicle_expenses', 'store_expenses', 'maintenance_alerts', 'website_orders', 'document_templates', 'website_contacts', 'website_settings', 'offers', 'special_offers', 'agency_settings', 'profiles', 'inspections')
+  AND tablename IN ('clients', 'reservations', 'cars', 'workers', 'agencies', 'payments', 'invoices', 'vehicle_expenses', 'store_expenses', 'maintenance_alerts', 'website_orders', 'document_templates', 'website_contacts', 'website_settings', 'offers', 'special_offers', 'agency_settings', 'profiles', 'inspections', 'vehicle_inspections', 'inspection_responses', 'vehicle_inspection_photos', 'inspection_checklist_items', 'reservation_services', 'services')
 ORDER BY tablename;

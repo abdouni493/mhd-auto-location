@@ -1463,6 +1463,8 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
   );
   const [signature, setSignature] = useState('');
   const [notes, setNotes] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const totalDistance = returnMileage && reservation.departureInspection?.mileage
     ? parseInt(returnMileage) - reservation.departureInspection.mileage
@@ -1492,6 +1494,26 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
 
   const handleComplete = async () => {
     try {
+      // Validate required fields
+      if (!returnMileage || returnMileage.trim() === '') {
+        const msg = lang === 'fr' ? 'Le kilométrage de retour est obligatoire' : 'عداد العودة مطلوب';
+        setErrorMessage(msg);
+        console.warn('Validation: Missing return mileage');
+        return;
+      }
+
+      if (isNaN(parseInt(returnMileage))) {
+        const msg = lang === 'fr' ? 'Le kilométrage doit être un nombre valide' : 'العداد يجب أن يكون رقم صحيح';
+        setErrorMessage(msg);
+        console.warn('Validation: Invalid return mileage');
+        return;
+      }
+
+      setErrorMessage(null);
+      setIsLoading(true);
+
+      console.log('🟢 Starting reservation completion for:', reservation.id);
+
       await ReservationsService.completeReservationWithInspection({
         reservationId: reservation.id,
         carId: reservation.carId,
@@ -1506,14 +1528,23 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
         inspectionItems: returnInspectionItems,
       });
 
-      // Update car mileage and fuel level only (no status changes for period-based availability)
-      await supabase
+      console.log('🟢 Reservation completion successful, updating car info...');
+
+      // Update car mileage and fuel level
+      const { error: carError } = await supabase
         .from('cars')
         .update({ 
           mileage: parseInt(returnMileage),
           fuel_level: returnFuelLevel
         })
         .eq('id', reservation.car.id);
+
+      if (carError) {
+        console.error('❌ Car update error:', carError);
+        throw new Error(`Car update failed: ${carError.message}`);
+      }
+
+      console.log('🟢 Car info updated successfully');
 
       // Update the local reservation state
       const updatedReservation = {
@@ -1542,11 +1573,36 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
         notes: notes
       };
 
+      console.log('🟢 Reservation completed successfully');
       onComplete?.(updatedReservation);
       onClose();
-    } catch (error) {
-      console.error('Error completing reservation:', error);
-      // TODO: Show error message to user
+    } catch (error: any) {
+      const errorMsg = error?.message || error?.toString() || 'Unknown error';
+      console.error('❌ Error completing reservation:', error);
+      console.error('Error details:', {
+        message: errorMsg,
+        code: error?.code,
+        details: error?.details
+      });
+
+      // Provide user-friendly error message
+      let userMessage = lang === 'fr' 
+        ? 'Erreur lors de la finalisation de la location'
+        : 'خطأ في إنهاء التأجير';
+
+      if (errorMsg.includes('permission') || errorMsg.includes('Policy')) {
+        userMessage = lang === 'fr'
+          ? 'Vous n\'avez pas la permission d\'effectuer cette action. Veuillez contacter l\'administrateur.'
+          : 'ليس لديك صلاحية لإجراء هذا الإجراء. يرجى الاتصال بالمسؤول.';
+      } else if (errorMsg.includes('not found') || errorMsg.includes('does not exist')) {
+        userMessage = lang === 'fr'
+          ? 'La réservation n\'existe pas ou a été supprimée'
+          : 'التأجير غير موجود أو تم حذفه';
+      }
+
+      setErrorMessage(`${userMessage}: ${errorMsg}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1908,18 +1964,45 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
           </div>
         </div>
 
+        {/* Error Message Display */}
+        {errorMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4"
+          >
+            <p className="text-red-700 font-bold text-sm">
+              ❌ {lang === 'fr' ? 'Erreur' : 'خطأ'}: {errorMessage}
+            </p>
+            <p className="text-red-600 text-xs mt-2">
+              {lang === 'fr' 
+                ? 'Vérifiez votre connexion et les données saisies. Voir la console pour plus de détails.'
+                : 'تحقق من الاتصال والبيانات المدخلة. راجع وحدة التحكم لمزيد من التفاصيل.'}
+            </p>
+          </motion.div>
+        )}
+
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-4 rounded-lg transition-colors"
+            disabled={isLoading}
+            className="flex-1 bg-slate-200 hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-bold py-3 px-4 rounded-lg transition-colors"
           >
             {lang === 'fr' ? 'Annuler' : 'إلغاء'}
           </button>
           <button
             onClick={handleComplete}
-            className="flex-1 btn-saas-primary"
+            disabled={isLoading}
+            className="flex-1 btn-saas-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            ✅ {lang === 'fr' ? 'Terminer la Location' : 'إنهاء التأجير'}
+            {isLoading ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                {lang === 'fr' ? 'Traitement...' : 'جاري المعالجة...'}
+              </>
+            ) : (
+              <>✅ {lang === 'fr' ? 'Terminer la Location' : 'إنهاء التأجير'}</>
+            )}
           </button>
         </div>
       </motion.div>

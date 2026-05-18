@@ -740,68 +740,112 @@ export class ReservationsService {
     inspectionItems: any[];
     returnAgencyId?: string;
   }): Promise<void> {
-    // Upload signature if provided
-    let signatureUrl = '';
-    if (data.signatureDataUrl) {
-      // Convert data URL to File
-      const response = await fetch(data.signatureDataUrl);
-      const blob = await response.blob();
-      const file = new File([blob], `signature-return-${data.reservationId}-${Date.now()}.png`, { type: 'image/png' });
-      signatureUrl = await this.uploadSignature(file, data.reservationId);
+    try {
+      console.log('📋 Starting completion process for reservation:', data.reservationId);
+
+      // Validate inputs
+      if (!data.reservationId || !data.carId || data.returnMileage === undefined) {
+        throw new Error('Missing required fields: reservationId, carId, or returnMileage');
+      }
+
+      console.log('✅ Inputs validated');
+
+      // Upload signature if provided
+      let signatureUrl = '';
+      if (data.signatureDataUrl) {
+        try {
+          console.log('📸 Uploading signature...');
+          const response = await fetch(data.signatureDataUrl);
+          const blob = await response.blob();
+          const file = new File([blob], `signature-return-${data.reservationId}-${Date.now()}.png`, { type: 'image/png' });
+          signatureUrl = await this.uploadSignature(file, data.reservationId);
+          console.log('✅ Signature uploaded');
+        } catch (err) {
+          console.warn('⚠️ Signature upload failed (non-blocking):', err);
+        }
+      }
+
+      // Create the return inspection
+      console.log('🔍 Creating return inspection...');
+      const inspectionData = {
+        reservationId: data.reservationId,
+        type: 'return' as const,
+        mileage: data.returnMileage,
+        fuelLevel: data.returnFuelLevel,
+        agencyId: data.returnAgencyId || data.returnLocation,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+        notes: data.notes,
+        clientSignatureUrl: signatureUrl,
+      };
+
+      const { id: inspectionId } = await this.createInspection(inspectionData);
+      console.log('✅ Return inspection created:', inspectionId);
+
+      // Save inspection responses (checklist items) for return inspection
+      if (data.inspectionItems && data.inspectionItems.length > 0) {
+        try {
+          console.log('📝 Saving inspection responses...');
+          const responses = data.inspectionItems.map((item: any) => ({
+            inspection_id: inspectionId,
+            checklist_item_id: item.id,
+            status: !!item.checked,
+            note: item.note || null
+          }));
+          // Use upsert to avoid duplicates
+          const { DatabaseService } = await import('./DatabaseService');
+          await DatabaseService.upsertInspectionResponses(responses);
+          console.log('✅ Inspection responses saved');
+        } catch (err) {
+          console.warn('⚠️ Failed to save inspection responses (non-blocking):', err);
+        }
+      }
+
+      // Update the car's mileage
+      console.log('🚗 Updating car mileage...');
+      const { error: carError } = await supabase
+        .from('cars')
+        .update({ mileage: data.returnMileage })
+        .eq('id', data.carId);
+
+      if (carError) {
+        console.error('❌ Car update failed:', carError);
+        throw new Error(`Failed to update car mileage: ${carError.message}`);
+      }
+      console.log('✅ Car mileage updated');
+
+      // Update reservation with completion data
+      console.log('📋 Updating reservation status to completed...');
+      const updateData: any = {
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      };
+
+      if (data.excessMileage !== undefined) updateData.excess_mileage = data.excessMileage;
+      if (data.missingFuel !== undefined) updateData.missing_fuel = data.missingFuel;
+      if (data.notes) updateData.notes = data.notes;
+
+      console.log('Update data:', updateData);
+
+      const { error } = await supabase
+        .from('reservations')
+        .update(updateData)
+        .eq('id', data.reservationId);
+
+      if (error) {
+        console.error('❌ Reservation update failed:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error);
+        throw new Error(`Failed to complete reservation: ${error.message}`);
+      }
+
+      console.log('✅ Reservation completion successful');
+    } catch (error: any) {
+      console.error('❌ Error in completeReservationWithInspection:', error);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+      throw error;
     }
-
-    // Create the return inspection
-    const inspectionData = {
-      reservationId: data.reservationId,
-      type: 'return' as const,
-      mileage: data.returnMileage,
-      fuelLevel: data.returnFuelLevel,
-      agencyId: data.returnAgencyId || data.returnLocation,
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString(),
-      notes: data.notes,
-      clientSignatureUrl: signatureUrl,
-    };
-
-    const { id: inspectionId } = await this.createInspection(inspectionData);
-
-    // Save inspection responses (checklist items) for return inspection
-    if (data.inspectionItems && data.inspectionItems.length > 0) {
-      const responses = data.inspectionItems.map((item: any) => ({
-        inspection_id: inspectionId,
-        checklist_item_id: item.id,
-        status: !!item.checked,
-        note: item.note || null
-      }));
-      // Use upsert to avoid duplicates
-      const { DatabaseService } = await import('./DatabaseService');
-      await DatabaseService.upsertInspectionResponses(responses);
-    }
-
-    // Update the car's mileage
-    const { error: carError } = await supabase
-      .from('cars')
-      .update({ mileage: data.returnMileage })
-      .eq('id', data.carId);
-
-    if (carError) throw carError;
-
-    // Update reservation with completion data
-    const updateData: any = {
-      status: 'completed',
-      completed_at: new Date().toISOString(),
-    };
-
-    if (data.excessMileage !== undefined) updateData.excess_mileage = data.excessMileage;
-    if (data.missingFuel !== undefined) updateData.missing_fuel = data.missingFuel;
-    if (data.notes) updateData.notes = data.notes;
-
-    const { error } = await supabase
-      .from('reservations')
-      .update(updateData)
-      .eq('id', data.reservationId);
-
-    if (error) throw error;
   }
 
   static async cancelReservation(id: string): Promise<void> {
