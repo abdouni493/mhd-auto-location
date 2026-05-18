@@ -823,12 +823,14 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   reservation.status === 'accepted' ? 'bg-teal-100 text-teal-800' :
                   reservation.status === 'active' ? 'bg-blue-100 text-blue-800' :
                   reservation.status === 'completed' ? 'bg-purple-100 text-purple-800' :
+                  reservation.status === 'terminated' ? 'bg-red-100 text-red-800' :
                   'bg-yellow-100 text-yellow-800'
                 }`}>
                   {reservation.status === 'confirmed' ? '✅ Confirmé' :
                    reservation.status === 'accepted' ? '✅ Accepté' :
                    reservation.status === 'active' ? '🔄 Actif' :
                    reservation.status === 'completed' ? '🏁 Terminé' :
+                   reservation.status === 'terminated' ? '🛑 Terminée' :
                    '⏳ En attente'}
                 </span>
               </div>
@@ -960,6 +962,16 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                     className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
                   >
                     🏁 {lang === 'fr' ? 'Terminer' : 'إنهاء'}
+                  </button>
+                )}
+
+                {/* Completed Status - Convert to Active Button */}
+                {reservation.status === 'completed' && (
+                  <button
+                    onClick={() => handleActivate(reservation)}
+                    className="flex-1 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                  >
+                    🔄 {lang === 'fr' ? 'Réactiver' : 'إعادة تفعيل'}
                   </button>
                 )}
 
