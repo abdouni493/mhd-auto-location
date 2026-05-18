@@ -963,6 +963,16 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   </button>
                 )}
 
+                {/* Terminated Status - Convert to Active Button */}
+                {reservation.status === 'terminated' && (
+                  <button
+                    onClick={() => handleActivate(reservation)}
+                    className="flex-1 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                  >
+                    🔄 {lang === 'fr' ? 'Réactiver' : 'إعادة تفعيل'}
+                  </button>
+                )}
+
                 {/* Print Menu Button */}
                 <div className="relative">
                   <button
