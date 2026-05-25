@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Car, Rental, Language, Expense, ReservationDetails } from '../types';
 import { CarCard } from './CarCard';
 import { CarModal } from './CarModal';
@@ -12,6 +12,7 @@ import { motion } from 'motion/react';
 import { getCars, addCar, updateCar, deleteCar, AddCarData } from '../services/carService';
 import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
 import { ReservationsService } from '../services/ReservationsService';
+import { DatabaseService } from '../services/DatabaseService';
 
 interface CarsPageProps {
   lang: Language;
@@ -22,6 +23,51 @@ interface CarsPageProps {
 export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
   const [cars, setCars] = useState<Car[]>([]);
   const [reservations, setReservations] = useState<ReservationDetails[]>([]);
+
+  // ── Statuts réels calculés à partir des réservations ──────────────────────
+  /** Calcule le statut réel de chaque voiture d'après les réservations chargées */
+  const computeRealStatuses = (rawCars: Car[], allReservations: ReservationDetails[]): Car[] => {
+    const today = new Date().toISOString().substring(0, 10);
+    return rawCars.map(car => {
+      // La maintenance reste la priorité (saisie manuellement)
+      if (car.status === 'maintenance') return car;
+
+      const carRes = allReservations.filter(r => r.carId === car.id || (r.car && r.car.id === car.id));
+      const coversToday = (r: ReservationDetails) => {
+        const dep = (r.step1?.departureDate || '').substring(0, 10);
+        const ret = (r.step1?.returnDate    || '').substring(0, 10);
+        return dep <= today && today <= ret;
+      };
+
+      const active   = carRes.find(r => r.status === 'active'    && coversToday(r));
+      const reserved = carRes.find(r => (r.status === 'confirmed' || r.status === 'pending') && coversToday(r));
+
+      let realStatus: Car['status'] = 'disponible';
+      if (active)   realStatus = 'louer';
+      else if (reserved) realStatus = 'reserve';
+
+      return { ...car, status: realStatus };
+    });
+  };
+
+  /** Retourne la réservation en cours pour une voiture donnée (pour afficher client + dates) */
+  const getActiveReservationInfo = (carId: string) => {
+    const today = new Date().toISOString().substring(0, 10);
+    const res = reservations.find(r => {
+      const id = r.carId || r.car?.id;
+      if (id !== carId) return false;
+      if (!['active', 'confirmed', 'pending'].includes(r.status)) return false;
+      const dep = (r.step1?.departureDate || '').substring(0, 10);
+      const ret = (r.step1?.returnDate    || '').substring(0, 10);
+      return dep <= today && today <= ret;
+    });
+    if (!res) return null;
+    return {
+      clientName: res.client ? `${res.client.firstName} ${res.client.lastName}` : '',
+      departureDate: res.step1?.departureDate || '',
+      returnDate:    res.step1?.returnDate    || '',
+    };
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -69,7 +115,8 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
           deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
           images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
           mileage: dbCar.mileage || 0,
-          status: dbCar.status || 'disponible',
+          // Conserve 'maintenance' si en DB ; le vrai statut sera recalculé avec les réservations
+          status: dbCar.status === 'maintenance' ? 'maintenance' : 'disponible',
           fuelLevel: dbCar.fuel_level || 'full',
         }));
         setCars(mappedCars);
@@ -109,11 +156,25 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
     loadReservations();
   }, [user, isAuthLoading]);
 
-  const filteredCars = cars.filter(car => 
+  // Voitures avec leur statut RÉEL calculé (dépend des réservations chargées)
+  const carsWithRealStatus = useMemo(
+    () => computeRealStatuses(cars, reservations),
+    [cars, reservations]
+  );
+
+  const filteredCars = carsWithRealStatus.filter(car =>
     car.brand.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
     car.model.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
     car.registration.toLowerCase().includes(debouncedSearch.toLowerCase())
   );
+
+  // Compteurs par statut réel
+  const counters = useMemo(() => ({
+    disponible:  carsWithRealStatus.filter(c => c.status === 'disponible').length,
+    reserve:     carsWithRealStatus.filter(c => c.status === 'reserve').length,
+    louer:       carsWithRealStatus.filter(c => c.status === 'louer').length,
+    maintenance: carsWithRealStatus.filter(c => c.status === 'maintenance').length,
+  }), [carsWithRealStatus]);
 
   const handleAddCar = () => {
     setSelectedCar(null);
@@ -256,16 +317,18 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
     setIsReportModalOpen(true);
   };
 
+  /**
+   * Seul le basculement vers/depuis 'maintenance' est autorisé manuellement.
+   * Les statuts 'disponible' / 'reserve' / 'louer' sont calculés automatiquement.
+   */
   const handleStatusChange = async (carId: string, newStatus: string) => {
+    const allowed = ['maintenance', 'disponible'];
+    if (!allowed.includes(newStatus)) return; // Sécurité — ignore les appels non autorisés
     try {
-      // Update car status in database
-      const updateData = {
-        status: newStatus,
-      };
-      const result = await updateCar(carId, updateData as any);
+      const result = await updateCar(carId, { status: newStatus } as any);
       if (result.success) {
-        setCars(prev => prev.map(c => 
-          c.id === carId ? { ...c, status: newStatus as any } : c
+        setCars(prev => prev.map(c =>
+          c.id === carId ? { ...c, status: newStatus as Car['status'] } : c
         ));
       } else {
         setError('Failed to update car status');
@@ -361,6 +424,28 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         </div>
       </div>
 
+      {/* ── Compteurs statuts réels ─────────────────────────────────────────── */}
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { key: 'disponible', label: { fr: 'Disponibles', ar: 'متاحة' },     color: 'bg-green-50 border-green-200 text-green-700',  dot: 'bg-green-500',  count: counters.disponible },
+            { key: 'reserve',    label: { fr: 'Réservés',    ar: 'محجوزة' },    color: 'bg-amber-50 border-amber-200 text-amber-700',   dot: 'bg-amber-500',  count: counters.reserve },
+            { key: 'louer',      label: { fr: 'En Location', ar: 'في الإيجار' }, color: 'bg-red-50 border-red-200 text-red-700',         dot: 'bg-red-500',    count: counters.louer },
+            { key: 'maintenance',label: { fr: 'Maintenance', ar: 'صيانة' },     color: 'bg-gray-50 border-gray-200 text-gray-600',      dot: 'bg-gray-500',   count: counters.maintenance },
+          ].map(item => (
+            <motion.div key={item.key}
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className={`glass-card border flex items-center gap-3 p-4 ${item.color}`}>
+              <span className={`w-3 h-3 rounded-full flex-shrink-0 ${item.dot}`} />
+              <div>
+                <p className="text-2xl font-black">{item.count}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">{item.label[lang]}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <motion.div
           initial={{ opacity: 0 }}
@@ -389,6 +474,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
                 onExpenses={handleExpenses}
                 onReports={handleReports}
                 onStatusChange={handleStatusChange}
+                activeReservationInfo={getActiveReservationInfo(car.id)}
               />
             ))}
           </div>

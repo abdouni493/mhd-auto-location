@@ -890,30 +890,47 @@ export const Step2VehicleSelection: React.FC<{
   setFormData: React.Dispatch<React.SetStateAction<Partial<ReservationDetails>>>;
 }> = ({ lang, formData, setFormData }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [cars, setCars] = useState<Car[]>([]);
+  const [availableCars, setAvailableCars] = useState<Car[]>([]);
   const [reservedCars, setReservedCars] = useState<any[]>([]);
-  const [isLoadingCars, setIsLoadingCars] = useState(true);
+  const [isLoadingCars, setIsLoadingCars] = useState(false);
+  const [deselectAlert, setDeselectAlert] = useState(false);
 
-  // Load cars from database, passing date range for period-based availability
+  const departureDate = formData.step1?.departureDate;
+  const returnDate    = formData.step1?.returnDate;
+  const hasDates      = !!departureDate && !!returnDate;
+
+  // Reload whenever the date range changes (both dates must be in the dependency array)
   useEffect(() => {
+    if (!hasDates) {
+      setAvailableCars([]);
+      setReservedCars([]);
+      return;
+    }
+
     const loadCars = async () => {
       try {
         setIsLoadingCars(true);
-        const departureDate = formData.step1?.departureDate;
-        const returnDate = formData.step1?.returnDate;
-        
-        // Get available cars for the selected dates
-        const data = await DatabaseService.getAvailableCars(departureDate, returnDate);
-        setCars(data || []);
+        const [avail, reserved] = await Promise.all([
+          DatabaseService.getAvailableCars(departureDate, returnDate),
+          DatabaseService.getReservedCarsForPeriod(departureDate!, returnDate!),
+        ]);
 
-        // Get reserved cars for this period to show in alerts
-        if (departureDate && returnDate) {
-          const reserved = await DatabaseService.getReservedCarsForPeriod(departureDate, returnDate);
-          setReservedCars(reserved || []);
+        setAvailableCars(avail || []);
+        setReservedCars(reserved || []);
+
+        // Auto-désélectionne si la voiture choisie devient indisponible après un changement de dates
+        const selectedId = (formData as any).step2?.selectedCar?.id;
+        if (selectedId) {
+          const stillAvailable = (avail || []).some(c => c.id === selectedId);
+          if (!stillAvailable) {
+            setFormData(prev => ({ ...prev, step2: { ...((prev as any).step2 || {}), selectedCar: undefined } }));
+            setDeselectAlert(true);
+            setTimeout(() => setDeselectAlert(false), 5000);
+          }
         }
       } catch (err) {
         console.error('Error loading cars:', err);
-        setCars([]);
+        setAvailableCars([]);
         setReservedCars([]);
       } finally {
         setIsLoadingCars(false);
@@ -921,21 +938,15 @@ export const Step2VehicleSelection: React.FC<{
     };
 
     loadCars();
-  }, [formData.step1?.departureDate, formData.step1?.returnDate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departureDate, returnDate]);
 
-  const filteredCars = cars.filter(car =>
+  // Filtrer la recherche uniquement sur les voitures disponibles
+  const filteredAvailable = availableCars.filter(car =>
     car.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    car.model.toLowerCase().includes(searchQuery.toLowerCase())
+    car.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    car.registration.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  // Group reserved cars by car ID
-  const reservedCarsByCarId = new Map<string, any[]>();
-  reservedCars.forEach(res => {
-    if (!reservedCarsByCarId.has(res.carId)) {
-      reservedCarsByCarId.set(res.carId, []);
-    }
-    reservedCarsByCarId.get(res.carId)!.push(res);
-  });
 
   return (
     <div className="space-y-8">
@@ -943,177 +954,209 @@ export const Step2VehicleSelection: React.FC<{
         🚗 {lang === 'fr' ? 'Sélection du Véhicule' : 'اختيار المركبة'}
       </h3>
 
-      {/* Reserved Cars Alert */}
-      {reservedCars.length > 0 && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-6">
-          <div className="flex items-start gap-3 mb-4">
-            <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-1" />
-            <div>
-              <h4 className="font-black text-amber-900 text-lg">
-                {lang === 'fr' ? 'Véhicules Réservés sur cette Période' : 'المركبات المحجوزة في هذه الفترة'}
-              </h4>
-              <p className="text-sm text-amber-700 mt-1">
-                {lang === 'fr' 
-                  ? 'Ces véhicules ne sont pas disponibles pendant votre période de location' 
-                  : 'هذه المركبات غير متاحة خلال فترة التأجير الخاصة بك'}
-              </p>
-            </div>
-          </div>
-
-          {/* Reserved Cars Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {reservedCars.map((reservation) => (
-              <div key={reservation.id} className="bg-white rounded-lg p-3 border border-amber-200">
-                {/* Car Image */}
-                <div className="relative mb-2 overflow-hidden rounded-lg bg-slate-100 h-24">
-                  <img
-                    src={reservation.image}
-                    alt={`${reservation.brand} ${reservation.model}`}
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-
-                {/* Car Info */}
-                <div className="text-xs">
-                  <p className="font-bold text-slate-900 truncate">
-                    {reservation.brand} {reservation.model}
-                  </p>
-                  <p className="text-slate-600 text-xs mt-1">
-                    {lang === 'fr' ? 'Client: ' : 'العميل: '}{reservation.clientName}
-                  </p>
-                  <div className="mt-2 pt-2 border-t border-amber-100 text-slate-700">
-                    <p className="text-xs font-bold">
-                      📅 {new Date(reservation.departureDate).toLocaleDateString()}
-                    </p>
-                    <p className="text-xs">
-                      → {new Date(reservation.returnDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Alert déselection */}
+      {deselectAlert && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-orange-50 border border-orange-300 rounded-xl p-4 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+          <p className="text-sm font-bold text-orange-800">
+            {lang === 'fr'
+              ? 'La voiture sélectionnée n\'est plus disponible pour ces dates.'
+              : 'السيارة المختارة لم تعد متاحة لهذه التواريخ.'}
+          </p>
+        </motion.div>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
-        <input
-          type="text"
-          placeholder={lang === 'fr' ? 'Rechercher un véhicule...' : 'البحث عن مركبة...'}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          disabled={isLoadingCars}
-        />
-      </div>
-
-      {/* Loading State */}
-      {isLoadingCars && (
-        <div className="flex items-center justify-center py-12">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-            <p className="text-slate-500">{lang === 'fr' ? 'Chargement des véhicules...' : 'جاري تحميل المركبات...'}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!isLoadingCars && cars.length === 0 && (
-        <div className="text-center py-12">
-          <CarIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <p className="text-slate-500 text-lg">
-            {lang === 'fr' ? 'Aucun véhicule disponible' : 'لا توجد مركبات متاحة'}
+      {/* Message si pas de dates */}
+      {!hasDates && (
+        <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center">
+          <span className="text-5xl mb-4 block">📅</span>
+          <p className="text-slate-600 font-bold text-lg">
+            {lang === 'fr' ? 'Choisissez d\'abord les dates' : 'اختر التواريخ أولاً'}
+          </p>
+          <p className="text-slate-400 text-sm mt-2">
+            {lang === 'fr'
+              ? 'Retournez à l\'étape 1 pour sélectionner une période de location.'
+              : 'ارجع إلى الخطوة 1 لاختيار فترة الإيجار.'}
           </p>
         </div>
       )}
 
-      {/* Car Grid */}
-      {!isLoadingCars && cars.length > 0 && (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filteredCars.map((car) => (
-          <motion.div
-            key={car.id}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setFormData(prev => ({
-              ...prev,
-              step2: { selectedCar: car }
-            }))}
-            className={`relative overflow-hidden rounded-2xl shadow-lg cursor-pointer transition-all duration-300 ${
-              formData.step2?.selectedCar?.id === car.id
-                ? 'ring-4 ring-blue-500 shadow-2xl'
-                : 'hover:shadow-xl'
-            }`}
-          >
-            {/* Selected indicator */}
-            {formData.step2?.selectedCar?.id === car.id && (
-              <div className="absolute top-4 right-4 z-10 bg-blue-500 text-white rounded-full p-2">
-                <CheckCircle className="w-6 h-6" />
+      {hasDates && (
+        <>
+          {/* Véhicules réservés — alerte ambre EN PREMIER */}
+          {reservedCars.length > 0 && (
+            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-1" />
+                <div>
+                  <h4 className="font-black text-amber-900 text-lg">
+                    {lang === 'fr' ? 'Réservés sur cette période' : 'محجوزة في هذه الفترة'}
+                    <span className="ml-2 text-sm font-semibold text-amber-700">({reservedCars.length})</span>
+                  </h4>
+                  <p className="text-sm text-amber-700 mt-1">
+                    {lang === 'fr'
+                      ? 'Ces véhicules ne sont pas disponibles — cliquez pour voir les détails.'
+                      : 'هذه المركبات غير متاحة — انقر لرؤية التفاصيل.'}
+                  </p>
+                </div>
               </div>
-            )}
-
-            {/* Car Image */}
-            <div className="relative h-48 overflow-hidden">
-              <img
-                src={car.images[0]}
-                alt={`${car.brand} ${car.model}`}
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-              <div className="absolute bottom-4 left-4 text-white">
-                <h4 className="text-xl font-black">{car.brand} {car.model}</h4>
-                <p className="text-sm opacity-90">{car.year} • {car.color}</p>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {reservedCars.map((reservation) => (
+                  <div key={reservation.id}
+                    className="bg-white rounded-xl p-3 border border-amber-200 opacity-70 cursor-not-allowed"
+                    style={{ cursor: 'not-allowed' }}
+                  >
+                    <div className="relative mb-2 overflow-hidden rounded-lg bg-slate-100 h-24">
+                      <img src={reservation.image} alt={`${reservation.brand} ${reservation.model}`}
+                        className="w-full h-full object-cover grayscale" referrerPolicy="no-referrer" />
+                      {/* Badge Indisponible */}
+                      <div className="absolute top-1 left-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">
+                        {lang === 'fr' ? 'Indisponible' : 'غير متاح'}
+                      </div>
+                    </div>
+                    <div className="text-xs">
+                      <p className="font-bold text-slate-900 truncate">{reservation.brand} {reservation.model}</p>
+                      <p className="text-slate-600 text-[10px] mt-1">
+                        {lang === 'fr' ? 'Client: ' : 'العميل: '}{reservation.clientName}
+                      </p>
+                      <div className="mt-1.5 pt-1.5 border-t border-amber-100 text-slate-500 text-[10px]">
+                        {new Date(reservation.departureDate).toLocaleDateString()}
+                        {' → '}
+                        {new Date(reservation.returnDate).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Car Details */}
-            <div className="p-6 bg-white">
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-1 text-slate-600 mb-1">
-                    <Fuel className="w-4 h-4" />
-                    <span className="text-sm">{car.energy}</span>
-                  </div>
-                  <p className="text-xs text-slate-500">{lang === 'fr' ? 'Carburant' : 'الوقود'}</p>
-                </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-1 text-slate-600 mb-1">
-                    <CarIcon className="w-4 h-4" />
-                    <span className="text-sm">{car.transmission}</span>
-                  </div>
-                  <p className="text-xs text-slate-500">{lang === 'fr' ? 'Transmission' : 'النقل'}</p>
-                </div>
-              </div>
+          {/* Barre de recherche (disponibles uniquement) */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <input type="text"
+              placeholder={lang === 'fr' ? 'Rechercher parmi les disponibles...' : 'البحث في المتاحة...'}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isLoadingCars}
+            />
+          </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Jour' : 'السعر/يوم'}</span>
-                  <span className="font-bold text-green-600">{car.priceDay.toLocaleString()} DA</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Semaine' : 'السعر/أسبوع'}</span>
-                  <span className="font-bold text-blue-600">{car.priceWeek.toLocaleString()} DA</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Mois' : 'السعر/شهر'}</span>
-                  <span className="font-bold text-purple-600">{car.priceMonth.toLocaleString()} DA</span>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-slate-200">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-600">{lang === 'fr' ? 'Caution' : 'الضمان'}</span>
-                  <span className="font-bold text-slate-900">{car.deposit.toLocaleString()} DA</span>
-                </div>
+          {/* Chargement */}
+          {isLoadingCars && (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                <p className="text-slate-500">{lang === 'fr' ? 'Chargement des véhicules...' : 'جاري تحميل المركبات...'}</p>
               </div>
             </div>
-          </motion.div>
-        ))}
-      </div>
+          )}
+
+          {/* Section — véhicules disponibles */}
+          {!isLoadingCars && (
+            <>
+              <div>
+                <h4 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                  {lang === 'fr' ? 'Véhicules disponibles' : 'المركبات المتاحة'}
+                  <span className="text-slate-400 font-semibold">({filteredAvailable.length})</span>
+                </h4>
+
+                {filteredAvailable.length === 0 ? (
+                  <div className="text-center py-10">
+                    <CarIcon className="w-14 h-14 text-slate-300 mx-auto mb-3" />
+                    <p className="text-slate-500 font-bold">
+                      {lang === 'fr' ? 'Aucun véhicule disponible sur cette période' : 'لا توجد مركبات متاحة في هذه الفترة'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {filteredAvailable.map((car) => (
+                      <motion.div key={car.id}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setFormData(prev => ({
+                          ...prev,
+                          step2: { ...((prev as any).step2 || {}), selectedCar: car }
+                        }))}
+                        className={`relative overflow-hidden rounded-2xl shadow-lg cursor-pointer transition-all duration-300 ${
+                          (formData as any).step2?.selectedCar?.id === car.id
+                            ? 'ring-4 ring-blue-500 shadow-2xl'
+                            : 'hover:shadow-xl'
+                        }`}
+                      >
+                        {/* Badge disponible */}
+                        <div className="absolute top-3 left-3 z-10 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow">
+                          {lang === 'fr' ? '✓ Disponible' : '✓ متاح'}
+                        </div>
+
+                        {/* Selected indicator */}
+                        {(formData as any).step2?.selectedCar?.id === car.id && (
+                          <div className="absolute top-3 right-3 z-10 bg-blue-500 text-white rounded-full p-1.5">
+                            <CheckCircle className="w-5 h-5" />
+                          </div>
+                        )}
+
+                        {/* Car Image */}
+                        <div className="relative h-48 overflow-hidden">
+                          <img src={car.images[0]} alt={`${car.brand} ${car.model}`}
+                            className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                          <div className="absolute bottom-4 left-4 text-white">
+                            <h4 className="text-xl font-black">{car.brand} {car.model}</h4>
+                            <p className="text-sm opacity-90">{car.year} • {car.color}</p>
+                          </div>
+                        </div>
+
+                        {/* Car Details */}
+                        <div className="p-6 bg-white">
+                          <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="text-center">
+                              <div className="flex items-center justify-center gap-1 text-slate-600 mb-1">
+                                <Fuel className="w-4 h-4" />
+                                <span className="text-sm">{car.energy}</span>
+                              </div>
+                              <p className="text-xs text-slate-500">{lang === 'fr' ? 'Carburant' : 'الوقود'}</p>
+                            </div>
+                            <div className="text-center">
+                              <div className="flex items-center justify-center gap-1 text-slate-600 mb-1">
+                                <CarIcon className="w-4 h-4" />
+                                <span className="text-sm">{car.transmission}</span>
+                              </div>
+                              <p className="text-xs text-slate-500">{lang === 'fr' ? 'Transmission' : 'النقل'}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Jour' : 'السعر/يوم'}</span>
+                              <span className="font-bold text-green-600">{car.priceDay.toLocaleString()} DA</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Semaine' : 'السعر/أسبوع'}</span>
+                              <span className="font-bold text-blue-600">{car.priceWeek.toLocaleString()} DA</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Mois' : 'السعر/شهر'}</span>
+                              <span className="font-bold text-purple-600">{car.priceMonth.toLocaleString()} DA</span>
+                            </div>
+                          </div>
+                          <div className="mt-4 pt-4 border-t border-slate-200">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-slate-600">{lang === 'fr' ? 'Caution' : 'الضمان'}</span>
+                              <span className="font-bold text-slate-900">{car.deposit.toLocaleString()} DA</span>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {/* Selected Car Summary */}

@@ -12,6 +12,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'expenses', label: { fr: 'Dépenses', ar: 'المصاريف' }, icon: '📉' },
   { id: 'web-mgmt', label: { fr: 'Website management', ar: 'إدارة الموقع' }, icon: '🌐' },
   { id: 'web-orders', label: { fr: 'Website commandes', ar: 'طلبات الموقع' }, icon: '🛒' },
+  { id: 'reservations', label: { fr: 'Facturation', ar: 'الفوترة' }, icon: '🧾' },
   { id: 'reports', label: { fr: 'Rapports', ar: 'التقارير' }, icon: '📄' },
   { id: 'config', label: { fr: 'Configuration', ar: 'الإعدادات' }, icon: '🛠️' },
 ];

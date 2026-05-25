@@ -12,6 +12,8 @@ interface CarCardProps {
   onExpenses: (car: Car) => void;
   onReports: (car: Car) => void;
   onStatusChange?: (carId: string, newStatus: string) => void;
+  /** Réservation en cours pour ce véhicule (si louer/reserve) */
+  activeReservationInfo?: { clientName: string; departureDate: string; returnDate: string } | null;
 }
 
 export const CarCard: React.FC<CarCardProps> = ({
@@ -24,30 +26,31 @@ export const CarCard: React.FC<CarCardProps> = ({
   onExpenses,
   onReports,
   onStatusChange,
+  activeReservationInfo,
 }) => {
+  // 4 statuts : disponible · reserve · louer · maintenance
   const getStatusColor = (status?: string) => {
     switch(status) {
-      case 'louer':
-        return 'bg-red-100 text-red-800 border-red-300';
-      case 'maintenance':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'louer':       return 'bg-red-100 text-red-800 border-red-300';
+      case 'reserve':     return 'bg-amber-100 text-amber-800 border-amber-300';
+      case 'maintenance': return 'bg-gray-100 text-gray-700 border-gray-300';
       case 'disponible':
-      default:
-        return 'bg-green-100 text-green-800 border-green-300';
+      default:            return 'bg-green-100 text-green-800 border-green-300';
     }
   };
 
   const getStatusLabel = (status?: string) => {
     switch(status) {
-      case 'louer':
-        return lang === 'fr' ? 'En Location' : 'في الإيجار';
-      case 'maintenance':
-        return lang === 'fr' ? 'En Maintenance' : 'في الصيانة';
+      case 'louer':       return lang === 'fr' ? 'En Location'      : 'في الإيجار';
+      case 'reserve':     return lang === 'fr' ? 'Réservé'          : 'محجوز';
+      case 'maintenance': return lang === 'fr' ? 'En Maintenance'   : 'في الصيانة';
       case 'disponible':
-      default:
-        return lang === 'fr' ? 'Disponible' : 'متاح';
+      default:            return lang === 'fr' ? 'Disponible'       : 'متاح';
     }
   };
+
+  const isMaintenance = car.status === 'maintenance';
+
   return (
     <motion.div
       layout
@@ -91,21 +94,40 @@ export const CarCard: React.FC<CarCardProps> = ({
         </div>
 
         {/* Status Badge */}
-        <div className="flex items-center justify-between pt-2">
-          <div className={`text-[9px] font-bold px-3 py-1.5 rounded-lg border ${getStatusColor(car.status)}`}>
-            {getStatusLabel(car.status)}
+        <div className="flex flex-col gap-2 pt-2">
+          <div className="flex items-center justify-between">
+            <div className={`text-[9px] font-bold px-3 py-1.5 rounded-lg border ${getStatusColor(car.status)}`}>
+              {getStatusLabel(car.status)}
+            </div>
+            {/* Bouton maintenance uniquement (pas de toggle disponible ↔ louer) */}
+            {onStatusChange && (
+              <button
+                onClick={() => onStatusChange(car.id, isMaintenance ? 'disponible' : 'maintenance')}
+                className={`text-[9px] font-bold px-2 py-1 rounded-lg transition-colors ${
+                  isMaintenance
+                    ? 'bg-green-100 hover:bg-green-200 text-green-700'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}
+                title={isMaintenance
+                  ? (lang === 'fr' ? 'Fin de maintenance' : 'إنهاء الصيانة')
+                  : (lang === 'fr' ? 'Mettre en maintenance' : 'وضع في الصيانة')}
+              >
+                {isMaintenance
+                  ? (lang === 'fr' ? '✓ Fin maintenance' : '✓ إنهاء الصيانة')
+                  : (lang === 'fr' ? '🔧 Maintenance' : '🔧 صيانة')}
+              </button>
+            )}
           </div>
-          {onStatusChange && (
-            <button
-              onClick={() => {
-                const newStatus = car.status === 'louer' ? 'disponible' : 'louer';
-                onStatusChange(car.id, newStatus);
-              }}
-              className="text-[9px] font-bold px-2 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors"
-              title={lang === 'fr' ? 'Changer le statut' : 'تغيير الحالة'}
-            >
-              ↔️ {lang === 'fr' ? 'Changer' : 'تغيير'}
-            </button>
+
+          {/* Infos client quand louer / reserve */}
+          {activeReservationInfo && (car.status === 'louer' || car.status === 'reserve') && (
+            <div className="text-[9px] text-saas-text-muted bg-saas-bg rounded-lg px-2 py-1.5 border border-saas-border">
+              <span className="font-bold text-saas-text-main">{activeReservationInfo.clientName}</span>
+              {' · '}
+              {new Date(activeReservationInfo.departureDate).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' })}
+              {' → '}
+              {new Date(activeReservationInfo.returnDate).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' })}
+            </div>
           )}
         </div>
 

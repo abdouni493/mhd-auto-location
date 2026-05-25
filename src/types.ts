@@ -37,7 +37,9 @@ export interface Car {
   images: string[];
   mileage: number;
   fuelLevel?: 'full' | 'half' | 'quarter' | 'eighth' | 'empty';
-  status?: 'disponible' | 'louer' | 'maintenance' | 'available';
+  // Statut dérivé des réservations réelles (calculé par getCarsWithRealStatus).
+  // Seul 'maintenance' peut être saisi manuellement en base.
+  status?: 'disponible' | 'reserve' | 'louer' | 'maintenance';
 }
 
 export type ExpenseType = 'vidange' | 'assurance' | 'controle' | 'chaine' | 'autre';

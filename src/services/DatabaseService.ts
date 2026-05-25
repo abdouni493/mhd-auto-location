@@ -4,16 +4,10 @@ import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPaymen
 // Generic database service functions
 export class DatabaseService {
   // Cars
-  static async getCars(): Promise<Car[]> {
-    const { data, error } = await supabase
-      .from('cars')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    // Map database fields to Car interface
-    return (data || []).map(dbCar => ({
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+  /** Shared DB-row → Car mapper (ne fixe PAS le statut de disponibilité). */
+  private static mapDbCar(dbCar: any): Car {
+    return {
       id: dbCar.id || '',
       brand: dbCar.brand,
       model: dbCar.model,
@@ -31,21 +25,90 @@ export class DatabaseService {
       deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
       images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
       mileage: dbCar.mileage || 0,
-      status: (dbCar.status || 'available') === 'available' ? 'disponible' : dbCar.status,
-    }));
+      // Conserve 'maintenance' si c'est ce que la DB contient ;
+      // sinon on laisse 'disponible' comme valeur par défaut (sera recalculé par getCarsWithRealStatus).
+      status: dbCar.status === 'maintenance' ? 'maintenance' : 'disponible',
+    };
   }
 
-  static async getAvailableCars(departureDate?: string, returnDate?: string): Promise<Car[]> {
-    // Get all cars with 'disponible' status
-    const allCars = await this.getCars();
-    const availableStatusCars = allCars.filter(car => car.status === 'disponible' || !car.status);
+  // ─── Cars ────────────────────────────────────────────────────────────────
+  static async getCars(): Promise<Car[]> {
+    const { data, error } = await supabase
+      .from('cars')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    // If no date range provided, return all cars with disponible status
+    if (error) throw error;
+
+    // Le statut retourné ici est soit 'maintenance' (saisi manuellement en DB) soit
+    // 'disponible' (placeholder). Utilise getCarsWithRealStatus() pour le statut calculé.
+    return (data || []).map(dbCar => this.mapDbCar(dbCar));
+  }
+
+  /**
+   * Retourne toutes les voitures avec leur statut RÉEL calculé à partir
+   * des réservations actives.
+   * - 'active'   couvre referenceDate → 'louer'
+   * - 'confirmed' | 'pending' couvrent referenceDate → 'reserve'
+   * - DB status === 'maintenance' → 'maintenance'
+   * - sinon → 'disponible'
+   *
+   * @param referenceDate  Date de référence au format YYYY-MM-DD (défaut : aujourd'hui)
+   */
+  static async getCarsWithRealStatus(referenceDate?: string): Promise<Car[]> {
+    const today = referenceDate || new Date().toISOString().substring(0, 10);
+
+    // Récupère toutes les voitures et toutes les réservations en parallèle
+    const [cars, reservationsResult] = await Promise.all([
+      this.getCars(),
+      supabase
+        .from('reservations')
+        .select('car_id, departure_date, return_date, status')
+        .in('status', ['active', 'confirmed', 'pending']),
+    ]);
+
+    const allReservations = reservationsResult.data || [];
+
+    return cars.map(car => {
+      // 'maintenance' est l'unique statut saisi manuellement — on ne le recalcule pas
+      if (car.status === 'maintenance') return car;
+
+      const carRes = allReservations.filter(r => r.car_id === car.id);
+
+      const coversToday = (res: any) => {
+        const dep = (res.departure_date || '').substring(0, 10);
+        const ret = (res.return_date || '').substring(0, 10);
+        return dep <= today && today <= ret;
+      };
+
+      const activeRes    = carRes.find(r => r.status === 'active'    && coversToday(r));
+      const reservedRes  = carRes.find(r => (r.status === 'confirmed' || r.status === 'pending') && coversToday(r));
+
+      let realStatus: Car['status'] = 'disponible';
+      if (activeRes)   realStatus = 'louer';
+      else if (reservedRes) realStatus = 'reserve';
+
+      return { ...car, status: realStatus };
+    });
+  }
+
+  /**
+   * Retourne les voitures réellement disponibles pour une période donnée.
+   * N'utilise PAS car.status pour filtrer — seul le chevauchement de réservations compte.
+   * Les voitures en maintenance sont exclues.
+   */
+  static async getAvailableCars(departureDate?: string, returnDate?: string): Promise<Car[]> {
+    const allCars = await this.getCars();
+
+    // Exclure les voitures en maintenance (seul statut saisi manuellement)
+    const nonMaintenance = allCars.filter(car => car.status !== 'maintenance');
+
+    // Si aucune plage de dates, toutes les voitures non en maintenance sont disponibles
     if (!departureDate || !returnDate) {
-      return availableStatusCars;
+      return nonMaintenance;
     }
 
-    // Check for date overlaps
+    // Récupère les réservations qui bloquent la disponibilité
     const { data: allReservations, error } = await supabase
       .from('reservations')
       .select('car_id, departure_date, return_date')
@@ -53,27 +116,21 @@ export class DatabaseService {
 
     if (error) {
       console.error('Error fetching reservations:', error);
-      return availableStatusCars;
+      return nonMaintenance;
     }
 
-    // Filter cars by checking date overlaps
     const departureTime = new Date(departureDate).getTime();
-    const returnTime = new Date(returnDate).getTime();
+    const returnTime    = new Date(returnDate).getTime();
 
-    const availableCars = availableStatusCars.filter(car => {
-      // Check if this car has any overlapping reservations
-      const carReservations = allReservations?.filter(r => r.car_id === car.id) || [];
-      
+    // Exclut les voitures dont une réservation chevauche la période demandée
+    return nonMaintenance.filter(car => {
+      const carReservations = (allReservations || []).filter(r => r.car_id === car.id);
       return !carReservations.some(reservation => {
         const resStart = new Date(reservation.departure_date).getTime();
-        const resEnd = new Date(reservation.return_date).getTime();
-        
-        // Check for overlap: current reservation overlaps if it starts before our end and ends after our start
+        const resEnd   = new Date(reservation.return_date).getTime();
         return departureTime < resEnd && returnTime > resStart;
       });
     });
-
-    return availableCars;
   }
 
   static async getReservedCarsForPeriod(departureDate: string, returnDate: string): Promise<Array<{

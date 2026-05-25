@@ -17,6 +17,7 @@ import { PlannerPage } from './components/PlannerPage';
 import { Website } from './components/Website';
 import { DashboardPage } from './components/DashboardPage';
 import ReportsPage from './components/ReportsPage';
+import { ReservationsPage } from './components/ReservationsPage';
 import { Language, User, UserRole, Car, Agency } from './types';
 import { supabase, supabaseConfigured } from './supabase';
 import { SIDEBAR_ITEMS } from './constants';
@@ -73,6 +74,7 @@ export default function App() {
       '/depenses': 'expenses',
       '/website-management': 'web-mgmt',
       '/website-commandes': 'web-orders',
+      '/reservations': 'reservations',
       '/rapports': 'reports',
       '/configuration': 'config',
       '/': 'dashboard', // Default to dashboard
@@ -98,6 +100,7 @@ export default function App() {
       'expenses': '/depenses',
       'web-mgmt': '/website-management',
       'web-orders': '/website-commandes',
+      'reservations': '/reservations',
       'reports': '/rapports',
       'config': '/configuration',
     };
@@ -439,6 +442,7 @@ export default function App() {
         '/depenses': 'expenses',
         '/website-management': 'web-mgmt',
         '/website-commandes': 'web-orders',
+        '/reservations': 'reservations',
         '/rapports': 'reports',
         '/configuration': 'config',
       };
@@ -470,6 +474,8 @@ export default function App() {
           return <WebsiteManagementPage lang={lang} cars={cars.length > 0 ? cars : mockCars} />;
         case 'web-orders':
           return <WebsiteOrders lang={lang} />;
+        case 'reservations':
+          return <ReservationsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'reports':
           return <ReportsPage lang={lang} />;
         case 'config':
@@ -652,6 +658,7 @@ export default function App() {
       <Route path="/depenses" element={<ProtectedRoute />} />
       <Route path="/website-management" element={<ProtectedRoute />} />
       <Route path="/website-commandes" element={<ProtectedRoute />} />
+      <Route path="/reservations" element={<ProtectedRoute />} />
       <Route path="/rapports" element={<ProtectedRoute />} />
       <Route path="/configuration" element={<ProtectedRoute />} />
 

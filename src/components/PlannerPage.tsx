@@ -47,6 +47,8 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   const [showConditionsModal, setShowConditionsModal] = useState(false);
   const [conditionsLanguage, setConditionsLanguage] = useState<'ar' | 'fr'>('ar');
   const [showConditionsPersonalizer, setShowConditionsPersonalizer] = useState<ReservationDetails | null>(null);
+  const [showDebtModal, setShowDebtModal] = useState<{ reservation: ReservationDetails } | null>(null);
+  const [filterDebtOnly, setFilterDebtOnly] = useState(false);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -373,11 +375,17 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                          (reservation.car.model || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesFilter = filterStatus === 'all' || reservation.status === filterStatus;
+    // Debt filter: only show reservations with remaining payment > 0
+    const resPaid = (reservation.payments && reservation.payments.length > 0)
+      ? reservation.payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
+      : (Number(reservation.advancePayment) || 0);
+    const resRemaining = Math.max(0, (Number(reservation.totalPrice) || 0) - resPaid);
+    const matchesDebt = !filterDebtOnly || resRemaining > 0;
 
-    const matchesCarAvailability = carAvailabilityFilter === 'all' || 
+    const matchesCarAvailability = carAvailabilityFilter === 'all' ||
                                    reservation.car.status === carAvailabilityFilter;
 
-    return matchesSearch && matchesFilter && matchesCarAvailability;
+    return matchesSearch && matchesFilter && matchesDebt && matchesCarAvailability;
   });
 
   if (currentView === 'create') {
@@ -497,6 +505,18 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
             <option value="completed">{lang === 'fr' ? 'Terminé' : 'مكتمل'}</option>
             <option value="cancelled">{lang === 'fr' ? 'Annulé' : 'ملغي'}</option>
           </select>
+
+          {/* Debt Filter Toggle */}
+          <button
+            onClick={() => setFilterDebtOnly(v => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+              filterDebtOnly
+                ? 'bg-red-500 text-white'
+                : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+            }`}
+          >
+            💰 {lang === 'fr' ? (filterDebtOnly ? 'Voir tout' : 'Dettes uniquement') : (filterDebtOnly ? 'عرض الكل' : 'الديون فقط')}
+          </button>
         </div>
 
         {/* View Toggle Button */}
@@ -985,6 +1005,16 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   </button>
                 )}
 
+                {/* Pay Debt Button - only when remaining > 0 */}
+                {remainingAmount > 0 && (
+                  <button
+                    onClick={() => setShowDebtModal({ reservation })}
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm flex items-center justify-center gap-2"
+                  >
+                    💰 {lang === 'fr' ? 'Payer dette' : 'سداد الدين'}
+                  </button>
+                )}
+
                 {/* Print Menu Button */}
                 <div className="relative">
                   <button
@@ -1190,6 +1220,36 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           )}
         </motion.div>
       </motion.div>
+    )}
+  </AnimatePresence>
+
+  {/* Pay Debt Modal */}
+  <AnimatePresence>
+    {showDebtModal && (
+      <PayDebtModal
+        lang={lang}
+        reservation={showDebtModal.reservation}
+        onClose={() => setShowDebtModal(null)}
+        onSave={async (reservationId, amount, method, note, newRemaining) => {
+          try {
+            await ReservationsService.addPayment({
+              reservationId,
+              amount,
+              paymentMethod: method,
+              date: new Date().toISOString().split('T')[0],
+              note,
+            });
+            // Update remaining_payment in database
+            await ReservationsService.updateReservation(reservationId, { remainingPayment: newRemaining } as any);
+            // Refresh the reservation in local state
+            const fresh = await ReservationsService.getReservationById(reservationId);
+            setReservations(prev => prev.map(r => r.id === fresh.id ? fresh : r));
+            setShowDebtModal(null);
+          } catch (err) {
+            console.error('Failed to save payment', err);
+          }
+        }}
+      />
     )}
   </AnimatePresence>
 
@@ -2009,8 +2069,176 @@ const generatePersonalizedContent = (elements: any, newTextElements: any[], rese
   `;
 };
 
-// Personalization Modal Component
-const PersonalizationModal: React.FC<{
+// ── PayDebtModal ──────────────────────────────────────────────────────────────
+const PayDebtModal: React.FC<{
+  lang: Language;
+  reservation: ReservationDetails;
+  onClose: () => void;
+  onSave: (reservationId: string, amount: number, method: 'cash' | 'card' | 'transfer' | 'check', note: string, newRemaining: number) => Promise<void>;
+}> = ({ lang, reservation, onClose, onSave }) => {
+  const totalPrice = Number(reservation.totalPrice) || 0;
+  const existingPaid = (reservation.payments && reservation.payments.length > 0)
+    ? reservation.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    : (Number(reservation.advancePayment) || 0);
+  const currentRemaining = Math.max(0, totalPrice - existingPaid);
+
+  const [amount, setAmount] = useState<string>('');
+  const [method, setMethod] = useState<'cash' | 'card' | 'transfer' | 'check'>('cash');
+  const [note, setNote] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const amountNum = Math.max(0, Math.min(Number(amount) || 0, currentRemaining));
+  const newRemaining = Math.max(0, currentRemaining - amountNum);
+  const pctPaid = totalPrice > 0 ? Math.min(100, Math.round(((existingPaid + amountNum) / totalPrice) * 100)) : 100;
+
+  const handleSave = async () => {
+    if (!amountNum || amountNum <= 0) return;
+    setIsSaving(true);
+    await onSave(reservation.id, amountNum, method, note, newRemaining);
+    setIsSaving(false);
+  };
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/60 z-50"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+      >
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md pointer-events-auto overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-emerald-600 to-green-700 px-6 py-5 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-white">
+                💰 {lang === 'fr' ? 'Enregistrer un paiement' : 'تسجيل دفعة'}
+              </h2>
+              <p className="text-emerald-100 text-xs mt-0.5 font-medium">
+                {reservation.client?.firstName} {reservation.client?.lastName} · {reservation.car?.brand} {reservation.car?.model}
+              </p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors text-white">
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Financial Summary */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500 font-medium">{lang === 'fr' ? 'Total réservation' : 'إجمالي الحجز'}</span>
+                <span className="font-black text-slate-900">{totalPrice.toLocaleString()} {lang === 'fr' ? 'DA' : 'د.ج'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500 font-medium">{lang === 'fr' ? 'Déjà payé' : 'مدفوع مسبقاً'}</span>
+                <span className="font-bold text-emerald-600">{existingPaid.toLocaleString()} {lang === 'fr' ? 'DA' : 'د.ج'}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-slate-200 pt-2">
+                <span className="text-red-500 font-bold">{lang === 'fr' ? 'Reste actuel' : 'المتبقي الحالي'}</span>
+                <span className="font-black text-red-600">{currentRemaining.toLocaleString()} {lang === 'fr' ? 'DA' : 'د.ج'}</span>
+              </div>
+            </div>
+
+            {/* Amount Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                {lang === 'fr' ? 'Montant à payer' : 'المبلغ للدفع'} *
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max={currentRemaining}
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  placeholder={`Max: ${currentRemaining.toLocaleString()} DA`}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-lg font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+                <button
+                  onClick={() => setAmount(String(currentRemaining))}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg"
+                >
+                  {lang === 'fr' ? 'Tout' : 'الكل'}
+                </button>
+              </div>
+            </div>
+
+            {/* New Remaining Preview */}
+            {amountNum > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-4 space-y-2"
+              >
+                {/* Progress bar */}
+                <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pctPaid}%` }}
+                    className="h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-green-500"
+                  />
+                </div>
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-emerald-700">{lang === 'fr' ? 'Payé après' : 'بعد الدفع'}: {(existingPaid + amountNum).toLocaleString()} DA ({pctPaid}%)</span>
+                  <span className={newRemaining === 0 ? 'text-emerald-600' : 'text-amber-600'}>
+                    {lang === 'fr' ? 'Nouveau reste' : 'المتبقي الجديد'}: {newRemaining.toLocaleString()} DA
+                  </span>
+                </div>
+                {newRemaining === 0 && (
+                  <p className="text-emerald-700 font-bold text-xs text-center">
+                    ✅ {lang === 'fr' ? 'Réservation entièrement soldée !' : 'تم سداد الحجز بالكامل!'}
+                  </p>
+                )}
+              </motion.div>
+            )}
+
+            {/* Note */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                {lang === 'fr' ? 'Note (optionnel)' : 'ملاحظة (اختياري)'}
+              </label>
+              <input
+                type="text"
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder={lang === 'fr' ? 'Ex: versement partiel...' : 'مثال: دفع جزئي...'}
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+              >
+                {lang === 'fr' ? 'Annuler' : 'إلغاء'}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!amountNum || amountNum <= 0 || isSaving}
+                className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSaving ? (
+                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {lang === 'fr' ? 'Enregistrement...' : 'جاري الحفظ...'}</>
+                ) : (
+                  <>✅ {lang === 'fr' ? 'Enregistrer' : 'حفظ'}</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </>
+  );
+};
+
+// Personalization Modal Component — exported so ReservationsPage can reuse it
+export const PersonalizationModal: React.FC<{
   lang: Language;
   reservation: ReservationDetails;
   type: string;
