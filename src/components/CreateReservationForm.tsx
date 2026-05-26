@@ -1196,7 +1196,17 @@ export const Step3DepartureInspection: React.FC<{
   setFormData: React.Dispatch<React.SetStateAction<Partial<ReservationDetails>>>;
 }> = ({ lang, formData, setFormData }) => {
   const [fuelLevel, setFuelLevel] = useState<'full' | 'half' | 'quarter' | 'eighth' | 'empty'>('full');
-  const [mileage, setMileage] = useState('');
+
+  // Resolve the selected car (supports both regular and inspection modes)
+  const _selectedCar = formData.step2?.selectedCar || (formData as any).car;
+  const _carMileage: number | undefined = (_selectedCar as any)?.mileage;
+
+  // Pre-fill with existing inspection mileage, or fall back to current car mileage
+  const [mileage, setMileage] = useState(() => {
+    const existingMileage = formData.step3?.departureInspection?.mileage;
+    if (existingMileage && existingMileage > 0) return existingMileage.toString();
+    return _carMileage ? _carMileage.toString() : '';
+  });
   const [selectedInspectionLocation, setSelectedInspectionLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<{ url: string; type: string; file?: File }[]>([]);
@@ -1338,7 +1348,12 @@ export const Step3DepartureInspection: React.FC<{
     initializedInspectionRef.current = true;
     const inspection = formData.step3.departureInspection;
     setFuelLevel(inspection.fuelLevel || 'full');
-    setMileage(inspection.mileage?.toString() || '');
+    // Use saved inspection mileage if > 0, otherwise keep car's current mileage as default
+    setMileage(
+      inspection.mileage && inspection.mileage > 0
+        ? inspection.mileage.toString()
+        : _carMileage ? _carMileage.toString() : ''
+    );
     setSelectedInspectionLocation(inspection.location || '');
     setNotes(inspection.notes || '');
     setPhotos([
@@ -1624,15 +1639,27 @@ export const Step3DepartureInspection: React.FC<{
           <div className="space-y-4">
             <div>
               <label className="block font-bold text-slate-900 mb-2">
-                ⛽ {lang === 'fr' ? 'Kilométrage au Départ' : 'عداد الكيلومترات عند المغادرة'}
+                🛣️ {lang === 'fr' ? 'Kilométrage au Départ' : 'عداد الكيلومترات عند المغادرة'}
               </label>
               <input
                 type="number"
                 value={mileage}
                 onChange={(e) => setMileage(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold text-slate-900"
                 placeholder="0"
+                min="0"
               />
+              {/* Always show current car mileage as reference */}
+              {_carMileage !== undefined && _carMileage > 0 && (
+                <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                  <span className="text-blue-500 text-xs">📌</span>
+                  <p className="text-xs font-bold text-blue-700">
+                    {lang === 'fr'
+                      ? `Kilométrage actuel du véhicule : ${_carMileage.toLocaleString()} km`
+                      : `عداد الكيلومترات الحالي للمركبة: ${_carMileage.toLocaleString()} كم`}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>
