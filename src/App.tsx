@@ -17,6 +17,7 @@ import { PlannerPage } from './components/PlannerPage';
 import { Website } from './components/Website';
 import { DashboardPage } from './components/DashboardPage';
 import ReportsPage from './components/ReportsPage';
+import { CarGainsPage } from './components/CarGainsPage';
 import { ReservationsPage } from './components/ReservationsPage';
 import { Language, User, UserRole, Car, Agency } from './types';
 import { supabase, supabaseConfigured } from './supabase';
@@ -65,6 +66,7 @@ export default function App() {
     const pathMap: Record<string, string> = {
       '/dashboard': 'dashboard',
       '/planificateur': 'planner',
+      '/gains-vehicule': 'car-gains',
       '/vehicules': 'vehicles',
       '/maintenance': 'maintenance',
       '/clients': 'clients',
@@ -91,6 +93,7 @@ export default function App() {
     const urlMap: Record<string, string> = {
       'dashboard': '/dashboard',
       'planner': '/planificateur',
+      'car-gains': '/gains-vehicule',
       'vehicles': '/vehicules',
       'maintenance': '/maintenance',
       'clients': '/clients',
@@ -433,6 +436,7 @@ export default function App() {
       const pathMap: Record<string, string> = {
         '/dashboard': 'dashboard',
         '/planificateur': 'planner',
+        '/gains-vehicule': 'car-gains',
         '/vehicules': 'vehicles',
         '/maintenance': 'maintenance',
         '/clients': 'clients',
@@ -458,6 +462,8 @@ export default function App() {
           return <DashboardPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'planner':
           return <PlannerPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
+        case 'car-gains':
+          return <CarGainsPage lang={lang} />;
         case 'vehicles':
           return <CarsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'maintenance':
@@ -649,6 +655,7 @@ export default function App() {
       {/* Dashboard and all interface routes - all protected */}
       <Route path="/dashboard" element={<ProtectedRoute />} />
       <Route path="/planificateur" element={<ProtectedRoute />} />
+      <Route path="/gains-vehicule" element={<ProtectedRoute />} />
       <Route path="/vehicules" element={<ProtectedRoute />} />
       <Route path="/maintenance" element={<ProtectedRoute />} />
       <Route path="/clients" element={<ProtectedRoute />} />

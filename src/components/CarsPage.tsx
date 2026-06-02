@@ -343,6 +343,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
     expenseData: Partial<Expense> & {
       currentMileage?: number;
       nextVidangeKm?: number;
+      expenseName?: string;
     }
   ) => {
     if (!selectedCar) return;
@@ -356,7 +357,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         currentMileage: expenseData.currentMileage,
         nextVidangeKm: expenseData.nextVidangeKm,
         expirationDate: expenseData.expirationDate,
-        expenseName: expenseData.name,
+        expenseName: expenseData.expenseName || expenseData.name,
       };
       const result = await addVehicleExpense(newExpense);
       if (!result.success) {

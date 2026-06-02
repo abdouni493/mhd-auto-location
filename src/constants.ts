@@ -3,6 +3,7 @@ import { SidebarItem, Agency, Car } from './types';
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'dashboard', label: { fr: 'Tableau de bord', ar: 'لوحة القيادة' }, icon: '📊' },
   { id: 'planner', label: { fr: 'Planificateur', ar: 'المخطط' }, icon: '📅' },
+  { id: 'car-gains', label: { fr: 'Gains par Véhicule', ar: 'الأرباح حسب المركبة' }, icon: '💰' },
   { id: 'vehicles', label: { fr: 'Véhicules', ar: 'المركبات' }, icon: '🚗' },
   { id: 'maintenance', label: { fr: 'Maintenance', ar: 'الصيانة' }, icon: '🔧' },
   { id: 'clients', label: { fr: 'Clients', ar: 'العملاء' }, icon: '👥' },

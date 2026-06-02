@@ -5,7 +5,7 @@ import {
   DollarSign, AlertTriangle, BarChart3, Activity, Loader2, Wrench,
   ShieldCheck, Droplets, Link as LinkIcon, ChevronDown, ChevronUp,
   Phone, MapPin, Briefcase, CreditCard, AlertCircle, Clock,
-  Building, Star, FileText
+  Building, Star, FileText, Printer
 } from 'lucide-react';
 import {
   Language, Car, Client, ReservationDetails, Worker,
@@ -14,6 +14,7 @@ import {
 import { DatabaseService } from '../services/DatabaseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { getVehicleExpenses } from '../services/expenseService';
+import { generateReportHTML } from './ReportPrintTemplate';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const T  = (fr: string, ar: string, lang: Language) => lang === 'fr' ? fr : ar;
@@ -436,6 +437,37 @@ const ReportsPage: React.FC<{ lang: Language }> = ({ lang }) => {
     }
   };
 
+  // ── Print Report ────────────────────────────────────────────────────────────
+  const printReport = async () => {
+    if (!data) return;
+    
+    try {
+      const agencySettings = await DatabaseService.getWebsiteSettings();
+      
+      const html = generateReportHTML(
+        null, // No specific car for general report
+        data.reservations,
+        data.vehicleExpenses,
+        startDate,
+        endDate,
+        agencySettings,
+        lang
+      );
+      
+      const printWindow = window.open('', '', 'width=794,height=1123');
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        setTimeout(() => {
+          printWindow.print();
+        }, 250);
+      }
+    } catch (err) {
+      console.error('Error printing report:', err);
+      alert(T('Erreur lors de l\'impression.', 'خطأ في الطباعة.', lang));
+    }
+  };
+
   // ── Global KPIs (computed from data) ────────────────────────────────────────
   const nonCancelledRes  = data?.reservations.filter(r => r.status !== 'cancelled') ?? [];
   const totalCollected   = nonCancelledRes.reduce((s, r) => s + calcPaid(r), 0);
@@ -601,6 +633,17 @@ const ReportsPage: React.FC<{ lang: Language }> = ({ lang }) => {
                 </motion.div>
               ))}
             </div>
+
+            {/* ── Print Button ── */}
+            <motion.div initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.3 }}>
+              <button
+                onClick={printReport}
+                className="w-full bg-gradient-to-r from-purple-600 via-purple-500 to-indigo-600 hover:from-purple-700 hover:via-purple-600 hover:to-indigo-700 text-white font-black py-3 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-3 text-base"
+              >
+                <Printer size={20} />
+                {T('Imprimer le Rapport Complet', 'طباعة التقرير الكامل', lang)}
+              </button>
+            </motion.div>
 
             {/* ── SECTION: Vehicles ── */}
             <motion.div initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.08 }}>

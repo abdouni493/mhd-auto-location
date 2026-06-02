@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Car, ReservationDetails, VehicleExpense, Language, ExpenseType } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { generateReportHTML } from './ReportPrintTemplate';
+import { DatabaseService } from '../services/DatabaseService';
 import {
   X, TrendingUp, TrendingDown, DollarSign, Calendar, Wrench,
   ShieldCheck, Activity, Droplets, Link as LinkIcon, ChevronDown,
   ChevronUp, FileText, Clock, User, AlertCircle, CheckCircle2,
-  BarChart3, CreditCard, Banknote, AlertTriangle
+  BarChart3, CreditCard, Banknote, AlertTriangle, Printer
 } from 'lucide-react';
 
 interface CarReportModalProps {
@@ -103,6 +105,62 @@ export const CarReportModal: React.FC<CarReportModalProps> = ({
     }
     setLoading(true);
     setTimeout(() => { setGenerated(true); setLoading(false); }, 500);
+  };
+
+  const handlePrint = async () => {
+    if (!startDate || !endDate) {
+      alert(T('Veuillez sélectionner les dates de début et de fin.', 'يرجى تحديد تاريخ البداية والنهاية.'));
+      return;
+    }
+
+    try {
+      const filteredRes = reservations.filter(r => {
+        const d = (r.step1?.departureDate || r.createdAt || '').substring(0, 10);
+        return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+      });
+
+      const filteredExp = expenses.filter(e => {
+        const d = (e.date || '').substring(0, 10);
+        return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+      });
+
+      // Fetch agency settings for logo and info
+      const agencySettings = await DatabaseService.getWebsiteSettings();
+
+      const html = await generateReportHTML(car, filteredRes, filteredExp, startDate, endDate, agencySettings, lang);
+      
+      // Create a temporary div to hold the HTML
+      const printDiv = document.createElement('div');
+      printDiv.id = '__print_container__';
+      printDiv.innerHTML = html;
+      printDiv.style.display = 'none';
+      document.body.appendChild(printDiv);
+
+      // Use iframe for better print handling
+      const iframe = document.createElement('iframe');
+      iframe.id = '__print_iframe__';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.open();
+        iframeDoc.write(html);
+        iframeDoc.close();
+        
+        setTimeout(() => {
+          iframe.contentWindow?.print();
+          // Clean up after print
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+            document.body.removeChild(printDiv);
+          }, 100);
+        }, 250);
+      }
+    } catch (err) {
+      console.error('Error printing report:', err);
+      alert(T('Erreur lors de la génération du rapport.', 'خطأ في إنشاء التقرير.'));
+    }
   };
 
   const carImage = car.images?.[0] || 'https://picsum.photos/seed/car/400/300';
@@ -524,7 +582,13 @@ export const CarReportModal: React.FC<CarReportModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 bg-white border-t border-gray-200 px-5 py-4 flex justify-end">
+        <div className="flex-shrink-0 bg-white border-t border-gray-200 px-5 py-4 flex justify-end gap-3">
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handlePrint}
+            disabled={!generated}
+            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-2.5 px-6 rounded-xl shadow hover:shadow-md transition-all text-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+            <Printer size={16} />
+            {T('Imprimer','طباعة')}
+          </motion.button>
           <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={onClose}
             className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold py-2.5 px-8 rounded-xl shadow hover:shadow-md transition-all text-sm">
             {T('Fermer','إغلاق')}
