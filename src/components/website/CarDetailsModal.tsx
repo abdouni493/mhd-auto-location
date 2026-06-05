@@ -1,136 +1,184 @@
 import React from 'react';
 import { Language, Car } from '../../types';
 import { motion } from 'motion/react';
-import { X } from 'lucide-react';
+import { X, Fuel, Settings, Users, DoorOpen, Palette, Gauge } from 'lucide-react';
 
 interface CarDetailsModalProps {
   lang: Language;
   car: Car;
   onClose: () => void;
-  onOrder: () => void;
+  onOrder: (car: Car) => void;
 }
 
 export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onClose, onOrder }) => {
+  const specs = [
+    { icon: Fuel, label: { fr: 'Énergie', ar: 'الوقود' }, value: car.energy },
+    { icon: Settings, label: { fr: 'Boîte', ar: 'علبة التروس' }, value: car.transmission },
+    { icon: Users, label: { fr: 'Places', ar: 'مقاعد' }, value: `${car.seats} ${lang === 'fr' ? 'places' : 'مقاعد'}` },
+    { icon: DoorOpen, label: { fr: 'Portes', ar: 'أبواب' }, value: `${car.doors} ${lang === 'fr' ? 'portes' : 'أبواب'}` },
+    { icon: Palette, label: { fr: 'Couleur', ar: 'اللون' }, value: car.color },
+    { icon: Gauge, label: { fr: 'Kilométrage', ar: 'الكيلومترات' }, value: `${car.mileage.toLocaleString()} km` },
+  ];
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(12px)' }}
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        className="relative rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        style={{
+          background: '#0D1220',
+          border: '1px solid rgba(34,211,238,0.25)',
+          boxShadow: '0 0 60px rgba(34,211,238,0.08), 0 25px 50px rgba(0,0,0,0.7)',
+        }}
       >
         {/* Close Button */}
-        <button
+        <motion.button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 bg-white rounded-full p-2 hover:bg-slate-100 transition-colors shadow-lg"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          className="absolute top-4 right-4 z-20 rounded-xl p-2 transition-all duration-200 text-vel-muted"
+          style={{
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#22D3EE'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; }}
         >
-          <X size={24} />
-        </button>
+          <X size={20} />
+        </motion.button>
 
-        {/* Car Images Carousel */}
-        <div className="relative h-96 bg-slate-200 overflow-hidden">
-          <img
-            src={car.images[0]}
-            alt={`${car.brand} ${car.model}`}
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-          <div className="absolute bottom-4 left-4 bg-black/70 text-white px-4 py-2 rounded-full text-sm font-bold">
-            {car.brand} {car.model} {car.year}
+        {/* Car Image */}
+        <div className="relative h-80 overflow-hidden rounded-t-3xl bg-vel-abyss">
+          {car.images?.[0] ? (
+            <img
+              src={car.images[0]}
+              alt={`${car.brand} ${car.model}`}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-vel-dim text-6xl">🚗</div>
+          )}
+          <div className="absolute inset-0" style={{
+            background: 'linear-gradient(to top, rgba(13,18,32,0.95) 0%, rgba(13,18,32,0.3) 50%, transparent 100%)',
+          }} />
+
+          {/* Car name on image */}
+          <div className="absolute bottom-6 left-6">
+            <h2 className="font-black text-4xl text-vel-white leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+              {car.brand}{' '}
+              <span style={{ color: '#22D3EE' }}>{car.model}</span>
+            </h2>
+            <p className="text-vel-silver mt-1">
+              {car.registration} · {car.year}
+              {car.vin && ` · ${car.vin}`}
+            </p>
           </div>
         </div>
 
         {/* Content */}
         <div className="p-8 space-y-8">
-          {/* Header Info */}
-          <div>
-            <h2 className="text-4xl font-black text-slate-900 mb-2">
-              {car.brand} <span className="text-blue-600">{car.model}</span>
-            </h2>
-            <p className="text-slate-600 font-bold">
-              {car.registration} • {car.year} • {car.vin}
-            </p>
-          </div>
 
           {/* Specs Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-4 text-center">
-              <p className="text-3xl mb-2">⛽</p>
-              <p className="font-bold text-slate-600 text-sm">{car.energy}</p>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-4 text-center">
-              <p className="text-3xl mb-2">⚙️</p>
-              <p className="font-bold text-slate-600 text-sm">{car.transmission}</p>
-            </div>
-            <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl p-4 text-center">
-              <p className="text-3xl mb-2">👥</p>
-              <p className="font-bold text-slate-600 text-sm">{car.seats} {{fr: 'places', ar: 'مقاعد'}[lang]}</p>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-4 text-center">
-              <p className="text-3xl mb-2">🚪</p>
-              <p className="font-bold text-slate-600 text-sm">{car.doors} {{fr: 'portes', ar: 'أبواب'}[lang]}</p>
+          <div>
+            <h3 className="font-bold text-xs tracking-[0.2em] uppercase mb-4"
+              style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+              {{ fr: 'Caractéristiques', ar: 'الخصائص' }[lang]}
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {specs.map((spec, i) => (
+                <div key={i} className="vel-glass rounded-xl p-4 flex items-center gap-3">
+                  <spec.icon size={16} className="flex-shrink-0" style={{ color: '#22D3EE' }} />
+                  <div className="min-w-0">
+                    <p className="text-vel-muted text-xs">{spec.label[lang]}</p>
+                    <p className="text-vel-white font-bold text-sm truncate">{spec.value}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Pricing Section */}
-          <div className="bg-gradient-to-r from-slate-100 to-slate-50 rounded-2xl p-6 space-y-4">
-            <h3 className="font-black text-xl text-slate-900">💰 {{fr: 'Tarifs', ar: 'الأسعار'}[lang]}</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                <p className="text-2xl font-black text-blue-600 mb-1">{car.priceDay.toLocaleString()}</p>
-                <p className="text-xs font-bold text-slate-600">{{fr: 'Par jour', ar: 'في اليوم'}[lang]}</p>
+          <div>
+            <h3 className="font-bold text-xs tracking-[0.2em] uppercase mb-4"
+              style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+              {{ fr: 'Tarifs', ar: 'الأسعار' }[lang]}
+            </h3>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="vel-glass-cyan rounded-xl p-4 text-center">
+                <p className="font-black text-2xl" style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+                  {car.priceDay.toLocaleString()}
+                </p>
+                <p className="text-vel-muted text-xs mt-1">
+                  {{ fr: 'DA / jour', ar: 'د.ج / يوم' }[lang]}
+                </p>
               </div>
-              <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                <p className="text-2xl font-black text-green-600 mb-1">{car.priceWeek.toLocaleString()}</p>
-                <p className="text-xs font-bold text-slate-600">{{fr: 'Par semaine', ar: 'في الأسبوع'}[lang]}</p>
+              <div className="vel-glass rounded-xl p-4 text-center">
+                <p className="font-black text-2xl text-vel-silver" style={{ fontFamily: 'var(--font-display)' }}>
+                  {car.priceWeek.toLocaleString()}
+                </p>
+                <p className="text-vel-muted text-xs mt-1">
+                  {{ fr: 'DA / semaine', ar: 'د.ج / أسبوع' }[lang]}
+                </p>
               </div>
-              <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                <p className="text-2xl font-black text-purple-600 mb-1">{car.priceMonth.toLocaleString()}</p>
-                <p className="text-xs font-bold text-slate-600">{{fr: 'Par mois', ar: 'شهريا'}[lang]}</p>
+              <div className="vel-glass rounded-xl p-4 text-center">
+                <p className="font-black text-2xl text-vel-silver" style={{ fontFamily: 'var(--font-display)' }}>
+                  {car.priceMonth.toLocaleString()}
+                </p>
+                <p className="text-vel-muted text-xs mt-1">
+                  {{ fr: 'DA / mois', ar: 'د.ج / شهر' }[lang]}
+                </p>
               </div>
             </div>
-            <div className="bg-white rounded-xl p-4 border-2 border-orange-300">
-              <p className="text-sm text-slate-600 mb-2">🏦 {{fr: 'Caution', ar: 'الكفالة'}[lang]}</p>
-              <p className="text-2xl font-black text-orange-600">{car.deposit.toLocaleString()} {{fr: 'DA', ar: 'د.ج'}[lang]}</p>
-            </div>
-          </div>
 
-          {/* Additional Details */}
-          <div className="space-y-4">
-            <h3 className="font-black text-xl text-slate-900">📋 {{fr: 'Caractéristiques', ar: 'الخصائص'}[lang]}</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-xs font-bold text-slate-500 mb-1">🎨 {{fr: 'Couleur', ar: 'اللون'}[lang]}</p>
-                <p className="font-black text-slate-900">{car.color}</p>
+            {/* Deposit */}
+            <div className="rounded-xl p-4 flex items-center justify-between"
+              style={{
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.25)',
+              }}>
+              <div>
+                <p className="text-xs text-vel-muted mb-0.5">{{ fr: 'Caution requise', ar: 'الكفالة المطلوبة' }[lang]}</p>
+                <p className="font-black text-2xl text-vel-red" style={{ fontFamily: 'var(--font-display)' }}>
+                  {car.deposit.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+                </p>
               </div>
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-xs font-bold text-slate-500 mb-1">📊 {{fr: 'Kilométrage', ar: 'المسافة المقطوعة'}[lang]}</p>
-                <p className="font-black text-slate-900">{car.mileage.toLocaleString()} km</p>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-vel-red text-lg"
+                style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                🏦
               </div>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-4 pt-6 border-t border-slate-200">
-            <button
+          <div className="flex gap-4 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <motion.button
               onClick={onClose}
-              className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-900 font-black py-4 px-6 rounded-2xl transition-colors"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex-1 btn-vel-ghost py-4"
             >
-              {{fr: 'Fermer', ar: 'إغلاق'}[lang]}
-            </button>
-            <button
-              onClick={onOrder}
-              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-black py-4 px-6 rounded-2xl transition-all"
+              {{ fr: 'Fermer', ar: 'إغلاق' }[lang]}
+            </motion.button>
+            <motion.button
+              onClick={() => { onOrder(car); onClose(); }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex-1 btn-vel-cyan py-4"
             >
-              🛒 {{fr: 'Réserver Maintenant', ar: 'احجز الآن'}[lang]}
-            </button>
+              {{ fr: 'Réserver Maintenant', ar: 'احجز الآن' }[lang]}
+            </motion.button>
           </div>
         </div>
       </motion.div>

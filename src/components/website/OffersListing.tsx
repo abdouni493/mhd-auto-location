@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Language, Car, Offer } from '../../types';
 import { motion } from 'motion/react';
-import { X } from 'lucide-react';
 import { CarDetailsModal } from './CarDetailsModal';
 
 interface OffersListingProps {
@@ -25,19 +24,26 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, offers
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 py-20 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-vel-void py-24 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-16"
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7 }}
+          className="text-center mb-20"
         >
-          <h1 className="text-5xl font-black text-slate-900 mb-4">
-            🎁 {{fr: 'Nos Offres', ar: 'عروضنا'}[lang]}
+          <p className="font-bold text-xs tracking-[0.25em] uppercase mb-4"
+            style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+            {{ fr: 'Nos Véhicules', ar: 'سياراتنا' }[lang]}
+          </p>
+          <h1 className="font-black text-6xl text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+            {{ fr: 'La Flotte', ar: 'الأسطول' }[lang]}
           </h1>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto font-medium">
-            {{fr: 'Découvrez notre sélection de véhicules premium avec les meilleures offres', ar: 'اكتشف تشكيلتنا من السيارات الفاخرة مع أفضل العروض'}[lang]}
+          <p className="text-vel-muted text-lg mt-4 max-w-2xl mx-auto">
+            {{ fr: 'Découvrez notre sélection de véhicules premium avec les meilleures offres', ar: 'اكتشف تشكيلتنا من السيارات الفاخرة مع أفضل العروض' }[lang]}
           </p>
         </motion.div>
 
@@ -46,95 +52,122 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, offers
           {displayOffers.map((offer, index) => (
             <motion.div
               key={offer.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-slate-100"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.08, duration: 0.6 }}
+              whileHover={{ y: -8 }}
+              className="vel-glass rounded-2xl overflow-hidden group transition-all duration-500"
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(34,211,238,0.4)';
+                (e.currentTarget as HTMLElement).style.boxShadow = '0 0 40px rgba(34,211,238,0.12)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+              }}
             >
               {/* Image */}
-              <div className="relative h-56 overflow-hidden bg-slate-200">
+              <div className="relative h-56 overflow-hidden bg-vel-abyss">
                 <img
-                  src={offer.car.images[0] || `https://images.unsplash.com/photo-1560958089-b8a63dd8aa8b?w=500&h=400&fit=crop`}
+                  src={offer.car.images?.[0] || `https://images.unsplash.com/photo-1560958089-b8a63dd8aa8b?w=500&h=400&fit=crop`}
                   alt={`${offer.car.brand} ${offer.car.model}`}
-                  className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   referrerPolicy="no-referrer"
                 />
-                <div className="absolute top-3 right-3 bg-saas-primary-via text-white px-3 py-1 rounded-lg text-xs font-bold">
+                <div className="absolute inset-0" style={{
+                  background: 'linear-gradient(to top, rgba(8,12,20,0.8), transparent)',
+                }} />
+                <div className="absolute top-3 right-3 px-3 py-1 rounded-lg text-xs font-bold backdrop-blur-sm"
+                  style={{
+                    color: '#22D3EE',
+                    background: 'rgba(34,211,238,0.15)',
+                    border: '1px solid rgba(34,211,238,0.3)',
+                    fontFamily: 'var(--font-display)',
+                  }}>
                   {offer.car.year}
                 </div>
               </div>
 
               {/* Content */}
-              <div className="p-6 space-y-4">
-                {/* Car Info */}
+              <div className="p-6 space-y-5">
+                {/* Car name */}
                 <div>
-                  <h3 className="text-2xl font-black text-slate-900">
-                    {offer.car.brand} <span className="text-saas-primary-via">{offer.car.model}</span>
+                  <h3 className="font-black text-2xl text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+                    {offer.car.brand}{' '}
+                    <span style={{ color: '#22D3EE' }}>{offer.car.model}</span>
                   </h3>
-                  <p className="text-sm text-slate-500 font-bold">
-                    {offer.car.registration} • {offer.car.color}
+                  <p className="text-vel-muted text-sm mt-1">
+                    {offer.car.registration} · {offer.car.color}
                   </p>
                 </div>
 
-                {/* Specs Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-saas-bg rounded-lg p-3 text-center border border-saas-border hover:border-saas-primary-via/30 transition-colors">
-                    <p className="text-2xl mb-1">⛽</p>
-                    <p className="text-xs font-bold text-slate-600">{offer.car.energy}</p>
-                  </div>
-                  <div className="bg-saas-bg rounded-lg p-3 text-center border border-saas-border hover:border-saas-primary-via/30 transition-colors">
-                    <p className="text-2xl mb-1">⚙️</p>
-                    <p className="text-xs font-bold text-slate-600">{offer.car.transmission}</p>
-                  </div>
-                  <div className="bg-saas-bg rounded-lg p-3 text-center border border-saas-border hover:border-saas-primary-via/30 transition-colors">
-                    <p className="text-2xl mb-1">👥</p>
-                    <p className="text-xs font-bold text-slate-600">{offer.car.seats} {{fr: 'places', ar: 'مقاعد'}[lang]}</p>
-                  </div>
-                  <div className="bg-saas-bg rounded-lg p-3 text-center border border-saas-border hover:border-saas-primary-via/30 transition-colors">
-                    <p className="text-2xl mb-1">🚪</p>
-                    <p className="text-xs font-bold text-slate-600">{offer.car.doors} {{fr: 'portes', ar: 'أبواب'}[lang]}</p>
-                  </div>
+                {/* Specs pills */}
+                <div className="flex flex-wrap gap-2">
+                  {[offer.car.energy, offer.car.transmission,
+                    `${offer.car.seats} ${lang === 'fr' ? 'places' : 'مقاعد'}`,
+                    `${offer.car.doors} ${lang === 'fr' ? 'portes' : 'أبواب'}`,
+                  ].map((spec, i) => (
+                    <span key={i} className="px-3 py-1 rounded-full text-xs font-medium text-vel-silver"
+                      style={{ background: '#1A2235', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      {spec}
+                    </span>
+                  ))}
                 </div>
 
-                {/* Price */}
-                <div className="bg-gradient-to-r from-saas-primary-via to-saas-primary-end text-white rounded-xl p-4 border border-saas-primary-end/20">
-                  <p className="text-xs font-bold uppercase tracking-wider opacity-90 mb-1">
-                    {{fr: 'À partir de', ar: 'ابتداءً من'}[lang]}
+                {/* Price block */}
+                <div className="vel-glass-cyan rounded-xl p-4">
+                  <p className="text-xs font-bold tracking-wider uppercase mb-1"
+                    style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+                    {{ fr: 'À partir de', ar: 'ابتداءً من' }[lang]}
                   </p>
-                  <p className="text-3xl font-black">
-                    {offer.price.toLocaleString()} {{fr: 'DA', ar: 'د.ج'}[lang]} <span className="text-sm">/{{fr: 'jour', ar: 'يوم'}[lang]}</span>
+                  <p className="font-black text-3xl" style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+                    {offer.price.toLocaleString()}{' '}
+                    <span className="text-sm" style={{ color: 'rgba(34,211,238,0.65)' }}>
+                      {{ fr: 'DA/jour', ar: 'د.ج/يوم' }[lang]}
+                    </span>
                   </p>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      setSelectedCar(offer.car);
-                      setShowDetails(true);
-                    }}
-                    className="flex-1 bg-saas-bg hover:bg-slate-200 text-slate-900 font-bold py-3 px-4 rounded-lg transition-colors border border-saas-border hover:border-saas-primary-via/30"
-                  >
-                    👁️ {{fr: 'Détails', ar: 'التفاصيل'}[lang]}
-                  </button>
-                  <button
-                    onClick={() => onOrder(offer.car)}
-                    className="flex-1 bg-gradient-to-r from-saas-primary-via to-saas-primary-end hover:from-saas-primary-via hover:to-saas-primary-end text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg"
-                  >
-                    🛒 {{fr: 'Réserver', ar: 'احجز'}[lang]}
-                  </button>
                 </div>
 
                 {/* Note */}
                 {offer.note && (
-                  <p className="text-xs text-slate-500 italic border-t border-slate-200 pt-3">
-                    📝 {offer.note}
+                  <p className="text-xs text-vel-muted italic px-3 py-2 rounded-lg"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {offer.note}
                   </p>
                 )}
+
+                {/* Buttons */}
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={() => { setSelectedCar(offer.car); setShowDetails(true); }}
+                    className="btn-vel-ghost flex-1 py-3 text-sm"
+                  >
+                    {{ fr: 'Détails', ar: 'التفاصيل' }[lang]}
+                  </button>
+                  <button
+                    onClick={() => onOrder(offer.car)}
+                    className="btn-vel-cyan flex-1 py-3 text-sm"
+                  >
+                    {{ fr: 'Réserver', ar: 'احجز' }[lang]}
+                  </button>
+                </div>
               </div>
             </motion.div>
           ))}
         </div>
+
+        {displayOffers.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-24"
+          >
+            <p className="text-vel-muted text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+              {{ fr: 'Aucune offre disponible actuellement', ar: 'لا توجد عروض متاحة حالياً' }[lang]}
+            </p>
+          </motion.div>
+        )}
       </div>
 
       {/* Car Details Modal */}

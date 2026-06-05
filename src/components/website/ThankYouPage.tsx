@@ -10,42 +10,78 @@ interface ThankYouPageProps {
 
 export const ThankYouPage: React.FC<ThankYouPageProps> = ({ lang, onBackHome }) => {
   useEffect(() => {
-    // Auto-redirect after 10 seconds
     const timer = setTimeout(onBackHome, 10000);
     return () => clearTimeout(timer);
   }, [onBackHome]);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-green-600 via-emerald-600 to-teal-600 flex items-center justify-center p-4 z-50">
-      {/* Animated Background */}
-      <div className="absolute inset-0 overflow-hidden">
+    <div className="fixed inset-0 flex items-center justify-center p-4 z-50 overflow-hidden"
+      style={{ background: '#050B18' }}>
+
+      {/* Background radial glows */}
+      <div className="absolute inset-0 pointer-events-none">
         <motion.div
-          animate={{ scale: [1, 1.2, 1], opacity: [0, 0.3, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-white rounded-full"
+          animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.12), transparent 60%)' }}
         />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.08), transparent 60%)' }} />
+
+        {/* Grid overlay */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: 'linear-gradient(#22D3EE 1px, transparent 1px), linear-gradient(90deg, #22D3EE 1px, transparent 1px)',
+          backgroundSize: '60px 60px',
+        }} />
       </div>
 
-      {/* Content */}
-      <motion.div
-        initial={{ scale: 0.5, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.6, type: 'spring' }}
-        className="relative z-10 text-center max-w-md"
-      >
-        {/* Success Icon */}
+      {/* Floating particles */}
+      {[...Array(8)].map((_, i) => (
         <motion.div
-          animate={{ rotate: [0, 360] }}
-          transition={{ duration: 2, repeat: Infinity, type: 'tween' }}
-          className="mb-6 flex justify-center"
+          key={i}
+          initial={{ y: 400, x: (i - 4) * 80, opacity: 0 }}
+          animate={{ y: -500, opacity: [0, 1, 0] }}
+          transition={{ duration: 3 + i * 0.4, repeat: Infinity, delay: i * 0.3 }}
+          className="absolute text-3xl pointer-events-none"
         >
-          <div className="relative">
+          {['🎉', '✨', '🎊', '⭐', '🚗', '💫', '🎈', '🏆'][i]}
+        </motion.div>
+      ))}
+
+      {/* Content card */}
+      <motion.div
+        initial={{ scale: 0.7, opacity: 0, y: 40 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, type: 'spring', stiffness: 200, damping: 20 }}
+        className="relative z-10 text-center max-w-lg w-full rounded-3xl p-10"
+        style={{
+          background: 'rgba(10,22,40,0.9)',
+          border: '1px solid rgba(34,211,238,0.25)',
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 0 60px rgba(34,211,238,0.15), 0 40px 80px rgba(0,0,0,0.6)',
+        }}
+      >
+        {/* Success icon */}
+        <motion.div
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+          className="flex justify-center mb-8"
+        >
+          <div className="relative w-28 h-28">
+            {/* Outer glow ring */}
             <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
+              animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
               transition={{ duration: 2, repeat: Infinity }}
-              className="absolute inset-0 bg-white rounded-full opacity-20"
+              className="absolute inset-0 rounded-full"
+              style={{ background: 'rgba(34,211,238,0.2)' }}
             />
-            <CheckCircle size={120} className="text-white relative z-10" />
+            {/* Icon container */}
+            <div className="relative w-full h-full rounded-full flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.15), rgba(139,92,246,0.15))', border: '2px solid rgba(34,211,238,0.4)' }}>
+              <CheckCircle size={56} style={{ color: '#22D3EE' }} />
+            </div>
           </div>
         </motion.div>
 
@@ -53,85 +89,73 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({ lang, onBackHome }) 
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="text-4xl md:text-5xl font-black text-white mb-4"
+          transition={{ delay: 0.35, duration: 0.5 }}
+          className="font-black text-5xl text-vel-white mb-3"
+          style={{ fontFamily: 'var(--font-display)', textShadow: '0 0 30px rgba(34,211,238,0.4)' }}
         >
-          {{fr: 'Merci!', ar: 'شكراً!'}[lang]}
+          {{ fr: 'Merci !', ar: 'شكراً !' }[lang]}
         </motion.h1>
 
-        {/* Message */}
         <motion.p
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="text-xl text-white/90 font-bold mb-6"
+          transition={{ delay: 0.45, duration: 0.5 }}
+          className="text-vel-silver text-lg font-bold mb-8"
         >
-          {{fr: 'Votre réservation a été créée avec succès', ar: 'تم إنشاء حجزك بنجاح'}[lang]}
+          {{ fr: 'Votre réservation a été créée avec succès', ar: 'تم إنشاء حجزك بنجاح' }[lang]}
         </motion.p>
 
-        {/* Details */}
+        {/* Info box */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
-          className="bg-white/20 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/30"
+          transition={{ delay: 0.55, duration: 0.5 }}
+          className="rounded-2xl p-5 mb-4 text-left"
+          style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)' }}
         >
-          <p className="text-white/90 font-bold mb-2">
-            ☎️ {{fr: 'Nous vous appellerons bientôt pour confirmer votre réservation', ar: 'سنتصل بك قريباً لتأكيد حجزك'}[lang]}
+          <p className="text-vel-silver font-bold text-sm mb-1">
+            ☎️ {{ fr: 'Nous vous appellerons bientôt pour confirmer', ar: 'سنتصل بك قريباً للتأكيد' }[lang]}
           </p>
-          <p className="text-white/80 text-sm">
-            {{fr: 'Veuillez garder votre téléphone à proximité', ar: 'يرجى إبقاء هاتفك قريباً'}[lang]}
+          <p className="text-vel-muted text-xs">
+            {{ fr: 'Veuillez garder votre téléphone à proximité', ar: 'يرجى إبقاء هاتفك قريباً' }[lang]}
           </p>
         </motion.div>
 
-        {/* Email Notification */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.6 }}
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-4 mb-8 border border-white/20"
+          transition={{ delay: 0.62, duration: 0.5 }}
+          className="rounded-2xl p-4 mb-8"
+          style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.15)' }}
         >
-          <p className="text-white/90 text-sm">
-            📧 {{fr: 'Un email de confirmation vous a été envoyé avec les détails de votre commande', ar: 'تم إرسال بريد تأكيد لك مع تفاصيل طلبك'}[lang]}
+          <p className="text-vel-muted text-sm">
+            📧 {{ fr: 'Un email de confirmation vous a été envoyé', ar: 'تم إرسال بريد تأكيد لك' }[lang]}
           </p>
         </motion.div>
 
-        {/* Countdown */}
+        {/* Redirect note */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.7 }}
-          className="text-white/70 text-sm mb-8"
+          transition={{ delay: 0.7 }}
+          className="text-vel-dim text-xs mb-6"
         >
-          {{fr: 'Redirection automatique dans quelques secondes...', ar: 'إعادة التوجيه التلقائي في بضع ثوان...'}[lang]}
+          {{ fr: 'Redirection automatique dans quelques secondes…', ar: 'إعادة توجيه تلقائية في بضع ثوانٍ…' }[lang]}
         </motion.p>
 
-        {/* Back Button */}
+        {/* Back button */}
         <motion.button
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.8 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          transition={{ delay: 0.75, duration: 0.5 }}
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
           onClick={onBackHome}
-          className="bg-white text-green-600 font-black py-3 px-8 rounded-xl hover:shadow-lg transition-all"
+          className="btn-vel-cyan px-10 py-3 text-sm"
         >
-          {{fr: 'Retour à l\'accueil', ar: 'العودة إلى الرئيسية'}[lang]}
+          {{ fr: "Retour à l'accueil", ar: 'العودة إلى الرئيسية' }[lang]}
         </motion.button>
       </motion.div>
-
-      {/* Floating Emojis */}
-      {[...Array(5)].map((_, i) => (
-        <motion.div
-          key={i}
-          initial={{ x: Math.random() * 400 - 200, y: 600 }}
-          animate={{ y: -600, x: Math.random() * 200 - 100 }}
-          transition={{ duration: 3 + i, repeat: Infinity }}
-          className="absolute text-4xl"
-        >
-          {['🎉', '🎊', '✨', '🏆', '⭐'][i]}
-        </motion.div>
-      ))}
     </div>
   );
 };

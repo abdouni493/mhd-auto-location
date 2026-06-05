@@ -1,7 +1,7 @@
 import React from 'react';
 import { Language } from '../../types';
 import { motion } from 'motion/react';
-import { ExternalLink } from 'lucide-react';
+import { Phone, Mail, MapPin, ExternalLink } from 'lucide-react';
 
 interface ContactsWebsiteProps {
   lang: Language;
@@ -14,231 +14,300 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
   contactInfo,
   websiteSettings,
 }) => {
+  const contactMethods = [
+    {
+      show: !!contactInfo?.phone,
+      icon: Phone,
+      label: { fr: 'Téléphone', ar: 'الهاتف' },
+      value: contactInfo?.phone,
+      href: `tel:${contactInfo?.phone}`,
+    },
+    {
+      show: !!contactInfo?.email,
+      icon: Mail,
+      label: { fr: 'E-mail', ar: 'البريد الإلكتروني' },
+      value: contactInfo?.email,
+      href: `mailto:${contactInfo?.email}`,
+    },
+    {
+      show: !!contactInfo?.address,
+      icon: MapPin,
+      label: { fr: 'Adresse', ar: 'العنوان' },
+      value: contactInfo?.address,
+      href: undefined,
+    },
+  ];
+
+  const socials = [
+    {
+      show: !!contactInfo?.facebook,
+      label: 'Facebook',
+      shortLabel: 'fb',
+      href: contactInfo?.facebook,
+      hoverColor: '#1877F2',
+    },
+    {
+      show: !!contactInfo?.instagram,
+      label: 'Instagram',
+      shortLabel: 'ig',
+      href: contactInfo?.instagram ? `https://instagram.com/${contactInfo.instagram}` : undefined,
+      hoverColor: '#E1306C',
+    },
+    {
+      show: !!contactInfo?.tiktok,
+      label: 'TikTok',
+      shortLabel: 'tt',
+      href: contactInfo?.tiktok ? `https://tiktok.com/@${contactInfo.tiktok}` : undefined,
+      hoverColor: '#F8FAFC',
+    },
+    {
+      show: !!contactInfo?.whatsapp,
+      label: 'WhatsApp',
+      shortLabel: 'wa',
+      href: contactInfo?.whatsapp ? `https://wa.me/${contactInfo.whatsapp.replace(/\D/g, '')}` : undefined,
+      hoverColor: '#25D366',
+    },
+  ].filter(s => s.show && s.href);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 py-20 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-vel-void py-24 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-16"
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7 }}
+          className="text-center mb-20"
         >
-          <h1 className="text-5xl font-black text-slate-900 mb-4">
-            📞 {{fr: 'Nous Contacter', ar: 'اتصل بنا'}[lang]}
+          <p className="font-bold text-xs tracking-[0.25em] uppercase mb-4"
+            style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+            {{ fr: 'Parlons', ar: 'لنتحدث' }[lang]}
+          </p>
+          <h1 className="font-black text-6xl text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+            {{ fr: 'Nous Contacter', ar: 'اتصل بنا' }[lang]}
           </h1>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto font-medium">
-            {{fr: 'Notre équipe est disponible pour répondre à vos questions', ar: 'فريقنا متاح للرد على أسئلتك'}[lang]}
+          <p className="text-vel-muted text-lg mt-4 max-w-2xl mx-auto">
+            {{ fr: 'Notre équipe est disponible pour répondre à vos questions', ar: 'فريقنا متاح للرد على أسئلتك' }[lang]}
           </p>
         </motion.div>
 
-        {/* Main Contact Info */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-          {/* Left - Agency Info */}
+        {/* Two-column layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-16">
+
+          {/* LEFT — Agency Info + Contact Methods */}
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="bg-white rounded-2xl shadow-lg p-8 space-y-8 border border-slate-100"
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7 }}
+            className="vel-glass rounded-2xl p-8 space-y-8"
           >
             <div>
-              <h2 className="text-3xl font-black text-slate-900 mb-2">
-                {websiteSettings?.name || 'Luxdrive Premium'}
+              <h2 className="font-black text-3xl text-vel-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                {websiteSettings?.name || 'AutoLocation'}
               </h2>
-              <p className="text-slate-600 text-lg font-medium">{websiteSettings?.description}</p>
+              <div className="w-10 h-0.5 mb-4"
+                style={{ background: '#22D3EE', boxShadow: '0 0 8px rgba(34,211,238,0.6)' }} />
+              {websiteSettings?.description && (
+                <p className="text-vel-muted leading-relaxed">{websiteSettings.description}</p>
+              )}
             </div>
 
-            {/* Contact Methods */}
             <div className="space-y-4">
-              {contactInfo?.phone && (
-                <motion.a
-                  whileHover={{ scale: 1.05, x: 10 }}
-                  href={`tel:${contactInfo.phone}`}
-                  className="flex items-center gap-4 p-4 bg-gradient-to-br from-saas-success-start/10 to-saas-success-end/10 rounded-xl hover:shadow-lg transition-all border border-saas-success-start/30 hover:border-saas-success-start/60"
-                >
-                  <div className="text-4xl">☎️</div>
-                  <div>
-                    <p className="text-sm text-slate-500 font-bold">{{fr: 'Téléphone', ar: 'الهاتف'}[lang]}</p>
-                    <p className="text-xl font-black text-slate-900">{contactInfo.phone}</p>
+              {contactMethods.filter(m => m.show).map((method, i) => {
+                const content = (
+                  <div className="flex items-center gap-4 p-4 rounded-xl transition-all duration-300 group/item cursor-pointer"
+                    style={{
+                      background: 'rgba(34,211,238,0.04)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderLeftWidth: '2px',
+                      borderLeftColor: '#22D3EE',
+                    }}
+                  >
+                    <div className="w-10 h-10 rounded-lg vel-glass-cyan flex items-center justify-center flex-shrink-0">
+                      <method.icon size={18} style={{ color: '#22D3EE' }} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-vel-muted mb-0.5">{method.label[lang]}</p>
+                      <p className="text-vel-white font-bold truncate transition-colors"
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#22D3EE'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; }}>
+                        {method.value}
+                      </p>
+                    </div>
+                    {method.href && <ExternalLink size={14} className="text-vel-dim ml-auto flex-shrink-0" />}
                   </div>
-                </motion.a>
-              )}
+                );
 
-              {contactInfo?.email && (
-                <motion.a
-                  whileHover={{ scale: 1.05, x: 10 }}
-                  href={`mailto:${contactInfo.email}`}
-                  className="flex items-center gap-4 p-4 bg-gradient-to-br from-saas-primary-via/10 to-saas-primary-end/10 rounded-xl hover:shadow-lg transition-all border border-saas-primary-via/30 hover:border-saas-primary-via/60"
-                >
-                  <div className="text-4xl">📧</div>
-                  <div>
-                    <p className="text-sm text-slate-500 font-bold">{{fr: 'E-mail', ar: 'البريد الإلكتروني'}[lang]}</p>
-                    <p className="text-xl font-black text-slate-900">{contactInfo.email}</p>
-                  </div>
-                </motion.a>
-              )}
-
-              {contactInfo?.address && (
-                <motion.div
-                  whileHover={{ scale: 1.05, x: 10 }}
-                  className="flex items-center gap-4 p-4 bg-gradient-to-br from-saas-warning-start/10 to-saas-warning-end/10 rounded-xl hover:shadow-lg transition-all border border-saas-warning-start/30 hover:border-saas-warning-start/60"
-                >
-                  <div className="text-4xl">📍</div>
-                  <div>
-                    <p className="text-sm text-slate-500 font-bold">{{fr: 'Adresse', ar: 'العنوان'}[lang]}</p>
-                    <p className="text-xl font-black text-slate-900">{contactInfo.address}</p>
-                  </div>
-                </motion.div>
-              )}
+                return method.href ? (
+                  <motion.a key={i} href={method.href} whileHover={{ x: 4 }} className="block">
+                    {content}
+                  </motion.a>
+                ) : (
+                  <motion.div key={i} whileHover={{ x: 4 }}>
+                    {content}
+                  </motion.div>
+                );
+              })}
 
               {contactInfo?.whatsapp && (
                 <motion.a
-                  whileHover={{ scale: 1.05, x: 10 }}
                   href={`https://wa.me/${contactInfo.whatsapp.replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-4 p-4 bg-gradient-to-br from-saas-success-start/10 to-saas-success-start/20 rounded-xl hover:shadow-lg transition-all border border-saas-success-start/30 hover:border-saas-success-start/60"
+                  whileHover={{ x: 4 }}
+                  className="flex items-center gap-4 p-4 rounded-xl block transition-all duration-300"
+                  style={{
+                    background: 'rgba(37,211,102,0.05)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderLeftWidth: '2px',
+                    borderLeftColor: '#25D366',
+                  }}
                 >
-                  <div className="text-4xl">💬</div>
-                  <div className="flex-1">
-                    <p className="text-sm text-slate-500 font-bold">WhatsApp</p>
-                    <p className="text-xl font-black text-slate-900 flex items-center gap-2">
-                      {contactInfo.whatsapp}
-                      <ExternalLink size={16} />
-                    </p>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold text-[#25D366]"
+                    style={{ background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)' }}>
+                    wa
                   </div>
+                  <div>
+                    <p className="text-xs font-bold text-vel-muted mb-0.5">WhatsApp</p>
+                    <p className="text-vel-white font-bold">{contactInfo.whatsapp}</p>
+                  </div>
+                  <ExternalLink size={14} className="text-vel-dim ml-auto" />
                 </motion.a>
               )}
             </div>
           </motion.div>
 
-          {/* Right - Social Media */}
+          {/* RIGHT — Social Media */}
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="bg-white rounded-3xl shadow-xl p-8 space-y-8"
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7 }}
+            className="vel-glass rounded-2xl p-8 space-y-8"
           >
-            <h3 className="text-2xl font-black text-slate-900">🌐 {{fr: 'Suivez-nous', ar: 'تابعنا'}[lang]}</h3>
+            <div>
+              <h3 className="font-black text-2xl text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+                {{ fr: 'Suivez-nous', ar: 'تابعنا' }[lang]}
+              </h3>
+              <div className="w-10 h-0.5 mt-2 mb-6" style={{ background: '#22D3EE' }} />
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {contactInfo?.facebook && (
+              {socials.map((social, i) => (
                 <motion.a
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  href={contactInfo.facebook}
+                  key={i}
+                  href={social.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white text-center hover:shadow-lg transition-all"
+                  whileHover={{ scale: 1.04, y: -4 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="vel-glass rounded-2xl p-6 flex flex-col items-center justify-center gap-3 transition-all duration-300"
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.boxShadow = `0 0 30px ${social.hoverColor}30`;
+                    (e.currentTarget as HTMLElement).style.borderColor = `${social.hoverColor}40`;
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                  }}
                 >
-                  <p className="text-5xl mb-2">👍</p>
-                  <p className="font-black">Facebook</p>
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black"
+                    style={{
+                      background: `${social.hoverColor}15`,
+                      border: `1px solid ${social.hoverColor}30`,
+                      color: social.hoverColor,
+                      fontFamily: 'var(--font-display)',
+                    }}>
+                    {social.shortLabel}
+                  </div>
+                  <p className="font-bold text-vel-silver text-sm" style={{ fontFamily: 'var(--font-display)' }}>
+                    {social.label}
+                  </p>
                 </motion.a>
-              )}
-
-              {contactInfo?.instagram && (
-                <motion.a
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  href={`https://instagram.com/${contactInfo.instagram}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl p-6 text-white text-center hover:shadow-lg transition-all"
-                >
-                  <p className="text-5xl mb-2">📷</p>
-                  <p className="font-black">Instagram</p>
-                </motion.a>
-              )}
-
-              {contactInfo?.tiktok && (
-                <motion.a
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  href={`https://tiktok.com/@${contactInfo.tiktok}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white text-center hover:shadow-lg transition-all"
-                >
-                  <p className="text-5xl mb-2">🎵</p>
-                  <p className="font-black">TikTok</p>
-                </motion.a>
-              )}
-
-              {contactInfo?.whatsapp && (
-                <motion.a
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  href={`https://wa.me/${contactInfo.whatsapp.replace(/\D/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white text-center hover:shadow-lg transition-all"
-                >
-                  <p className="text-5xl mb-2">💬</p>
-                  <p className="font-black">WhatsApp</p>
-                </motion.a>
-              )}
+              ))}
             </div>
+
+            {socials.length === 0 && (
+              <p className="text-vel-dim text-sm text-center py-8">
+                {{ fr: 'Aucun réseau social configuré', ar: 'لا توجد شبكات اجتماعية مضافة' }[lang]}
+              </p>
+            )}
           </motion.div>
         </div>
 
-        {/* Contact Form Section */}
+        {/* Contact Form */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white rounded-3xl shadow-xl p-8 max-w-2xl mx-auto"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, delay: 0.2 }}
+          className="vel-glass rounded-2xl p-8 max-w-2xl mx-auto"
         >
-          <h3 className="text-2xl font-black text-slate-900 mb-6">
-            ✉️ {{fr: 'Envoyez-nous un message', ar: 'أرسل لنا رسالة'}[lang]}
+          <h3 className="font-black text-2xl text-vel-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+            {{ fr: 'Envoyez-nous un message', ar: 'أرسل لنا رسالة' }[lang]}
           </h3>
-          <form className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-slate-600 mb-2">
-                {{fr: 'Votre nom', ar: 'اسمك'}[lang]}
-              </label>
-              <input
-                type="text"
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none transition-colors"
-                placeholder={{fr: 'Jean Dupont', ar: 'محمد علي'}[lang]}
-              />
-            </div>
+          <div className="w-10 h-0.5 mb-8" style={{ background: '#22D3EE' }} />
+
+          <form className="space-y-5" onSubmit={e => e.preventDefault()}>
+            {[
+              { type: 'text', labelFr: 'Votre nom', labelAr: 'اسمك', placeholder: { fr: 'Jean Dupont', ar: 'محمد علي' } },
+              { type: 'email', labelFr: 'Votre e-mail', labelAr: 'بريدك الإلكتروني', placeholder: { fr: 'email@example.com', ar: 'email@example.com' } },
+              { type: 'text', labelFr: 'Sujet', labelAr: 'الموضوع', placeholder: { fr: 'Comment puis-je vous aider ?', ar: 'كيف يمكنني مساعدتك؟' } },
+            ].map((field, i) => (
+              <div key={i}>
+                <label className="block text-xs font-bold text-vel-muted mb-2 uppercase tracking-wider"
+                  style={{ fontFamily: 'var(--font-display)' }}>
+                  {lang === 'fr' ? field.labelFr : field.labelAr}
+                </label>
+                <input
+                  type={field.type}
+                  className="w-full rounded-xl px-4 py-3 outline-none transition-all text-vel-white placeholder:text-vel-dim font-medium"
+                  style={{ background: '#1A2235', border: '1px solid rgba(255,255,255,0.08)' }}
+                  placeholder={field.placeholder[lang]}
+                  onFocus={e => {
+                    (e.target as HTMLElement).style.borderColor = '#22D3EE';
+                    (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(34,211,238,0.3)';
+                  }}
+                  onBlur={e => {
+                    (e.target as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                    (e.target as HTMLElement).style.boxShadow = 'none';
+                  }}
+                />
+              </div>
+            ))}
 
             <div>
-              <label className="block text-sm font-bold text-slate-600 mb-2">
-                {{fr: 'Votre e-mail', ar: 'بريدك الإلكتروني'}[lang]}
-              </label>
-              <input
-                type="email"
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none transition-colors"
-                placeholder="email@example.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-slate-600 mb-2">
-                {{fr: 'Sujet', ar: 'الموضوع'}[lang]}
-              </label>
-              <input
-                type="text"
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none transition-colors"
-                placeholder={{fr: 'Comment puis-je vous aider?', ar: 'كيف يمكنني مساعدتك؟'}[lang]}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-slate-600 mb-2">
-                {{fr: 'Message', ar: 'الرسالة'}[lang]}
+              <label className="block text-xs font-bold text-vel-muted mb-2 uppercase tracking-wider"
+                style={{ fontFamily: 'var(--font-display)' }}>
+                {{ fr: 'Message', ar: 'الرسالة' }[lang]}
               </label>
               <textarea
                 rows={4}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none transition-colors resize-none"
-                placeholder={{fr: 'Votre message...', ar: 'رسالتك...'}[lang]}
+                className="w-full rounded-xl px-4 py-3 outline-none transition-all text-vel-white placeholder:text-vel-dim font-medium resize-none"
+                style={{ background: '#1A2235', border: '1px solid rgba(255,255,255,0.08)' }}
+                placeholder={{ fr: 'Votre message...', ar: 'رسالتك...' }[lang]}
+                onFocus={e => {
+                  (e.target as HTMLElement).style.borderColor = '#22D3EE';
+                  (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(34,211,238,0.3)';
+                }}
+                onBlur={e => {
+                  (e.target as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                  (e.target as HTMLElement).style.boxShadow = 'none';
+                }}
               />
             </div>
 
-            <button
+            <motion.button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-black py-4 px-6 rounded-xl transition-all"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="btn-vel-cyan w-full py-4"
             >
-              {{fr: 'Envoyer le message', ar: 'إرسال الرسالة'}[lang]}
-            </button>
+              {{ fr: 'Envoyer le message', ar: 'إرسال الرسالة' }[lang]}
+            </motion.button>
           </form>
         </motion.div>
       </div>

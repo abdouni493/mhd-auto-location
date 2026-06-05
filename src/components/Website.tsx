@@ -35,6 +35,10 @@ export const Website: React.FC<WebsiteProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
 
+  // Limit displayed agency name to first 3 words
+  const shortName = (name: string | undefined) =>
+    name ? name.split(/\s+/).slice(0, 3).join(' ') : 'AutoLocation';
+
   const handleReserveClick = (car: Car) => {
     setSelectedCar(car);
     setCurrentPage('orders');
@@ -49,19 +53,21 @@ export const Website: React.FC<WebsiteProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      {/* Navigation Bar */}
-      <nav className="sticky top-0 z-50 bg-white shadow-lg">
+    <div className="min-h-screen bg-vel-void" style={{ fontFamily: 'var(--font-sans)' }}>
+      {/* ── NAVBAR ── */}
+      <nav className="sticky top-0 z-50 border-b border-vel-border bg-vel-void/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
+
             {/* Logo */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-3 cursor-pointer hover:scale-105 transition-transform"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-3 cursor-pointer group"
               onClick={() => setCurrentPage('home')}
             >
-              <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-blue-600">
+              <div className="w-11 h-11 rounded-xl overflow-hidden ring-2 transition-all duration-300"
+                style={{ borderColor: 'rgba(34,211,238,0.4)', boxShadow: '0 0 16px rgba(34,211,238,0.25)' }}>
                 {websiteSettings?.logo ? (
                   <img
                     src={websiteSettings.logo}
@@ -70,66 +76,101 @@ export const Website: React.FC<WebsiteProps> = ({
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="w-full h-full bg-linear-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white font-black text-lg">
-                    🚗
+                  <div className="w-full h-full flex items-center justify-center text-vel-void text-xl font-black"
+                    style={{ background: 'linear-gradient(135deg, #22D3EE, #06B6D4)', fontFamily: 'var(--font-display)' }}>
+                    A
                   </div>
                 )}
               </div>
               <div className="hidden sm:block">
-                <h1 className="font-black text-xl text-slate-900">
-                  {websiteSettings?.name || 'Luxdrive'}
+                <h1 className="font-black text-xl text-vel-white transition-colors"
+                  style={{ fontFamily: 'var(--font-display)' }}>
+                  {shortName(websiteSettings?.name)}
                 </h1>
-                <p className="text-xs text-blue-600 font-bold">{{fr: 'LOCATION DE VOITURES', ar: 'تأجير السيارات'}[lang]}</p>
+                <p className="text-[10px] font-bold tracking-[0.2em] uppercase"
+                  style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+                  {{ fr: 'Location de Voitures', ar: 'تأجير السيارات' }[lang]}
+                </p>
               </div>
             </motion.div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-8">
-              {navItems.map(item => (
-                <button
+            {/* Desktop Nav */}
+            <div className="hidden md:flex items-center gap-1">
+              {navItems.map((item, i) => (
+                <motion.button
                   key={item.id}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.07 }}
                   onClick={() => setCurrentPage(item.id as any)}
-                  className={`font-bold text-sm uppercase tracking-wider transition-all duration-300 ${
+                  className={`relative px-5 py-2 font-bold text-xs tracking-[0.15em] uppercase rounded-lg transition-all duration-300 ${
                     currentPage === item.id
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-slate-600 hover:text-blue-600'
+                      ? ''
+                      : 'text-vel-muted hover:text-vel-silver'
                   }`}
+                  style={currentPage === item.id ? { color: '#22D3EE' } : {}}
+                  style={{ fontFamily: 'var(--font-display)' }}
                 >
                   {item.label[lang]}
-                </button>
+                  {currentPage === item.id && (
+                    <motion.div
+                      layoutId="nav-underline"
+                      className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
+                      style={{ background: '#22D3EE', boxShadow: '0 0 8px rgba(34,211,238,0.8)' }}
+                    />
+                  )}
+                </motion.button>
               ))}
             </div>
 
-            {/* Mobile Menu Button */}
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </motion.button>
+            {/* Right side */}
+            <div className="flex items-center gap-3">
+              {onLangChange && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onLangChange(lang === 'fr' ? 'ar' : 'fr')}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    color: '#22D3EE',
+                    border: '1px solid rgba(34,211,238,0.3)',
+                    background: 'rgba(34,211,238,0.08)',
+                  }}
+                >
+                  {lang === 'fr' ? 'عربي' : 'FR'}
+                </motion.button>
+              )}
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg text-vel-silver transition-all"
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#22D3EE'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; }}
+                style={{ background: isMobileMenuOpen ? 'rgba(255,255,255,0.04)' : 'transparent' }}
+              >
+                {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+              </motion.button>
+            </div>
           </div>
 
-          {/* Mobile Navigation */}
+          {/* Mobile Menu */}
           {isMobileMenuOpen && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="md:hidden pb-4 space-y-2 border-t border-slate-200"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden pb-4 border-t border-vel-border"
             >
               {navItems.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => {
-                    setCurrentPage(item.id as any);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 font-bold text-sm uppercase tracking-wider rounded-lg transition-colors ${
-                    currentPage === item.id
-                      ? 'bg-blue-100 text-blue-600'
-                      : 'text-slate-600 hover:bg-slate-100'
+                  onClick={() => { setCurrentPage(item.id as any); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-3 font-bold text-xs tracking-[0.15em] uppercase transition-all ${
+                    currentPage === item.id ? '' : 'text-vel-muted hover:text-vel-silver'
                   }`}
+                  style={currentPage === item.id ? { color: '#22D3EE' } : {}}
+                  style={{ fontFamily: 'var(--font-display)' }}
                 >
                   {item.label[lang]}
                 </button>
@@ -142,10 +183,10 @@ export const Website: React.FC<WebsiteProps> = ({
       {/* Page Content */}
       <motion.div
         key={currentPage}
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.3 }}
+        exit={{ opacity: 0, y: -16 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
       >
         {currentPage === 'home' && (
           <Welcome lang={lang} websiteSettings={websiteSettings} onStartRenting={() => setCurrentPage('offers')} />
@@ -170,22 +211,34 @@ export const Website: React.FC<WebsiteProps> = ({
         )}
       </motion.div>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 text-white mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      {/* ── FOOTER ── */}
+      <footer style={{ background: '#0D1220', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
+            {/* Brand */}
             <div>
-              <h3 className="font-black text-xl mb-4">{websiteSettings?.name || 'Luxdrive'}</h3>
-              <p className="text-slate-400 text-sm">{websiteSettings?.description}</p>
+              <h3 className="font-black text-2xl text-vel-white mb-2"
+                style={{ fontFamily: 'var(--font-display)' }}>
+                {shortName(websiteSettings?.name)}
+              </h3>
+              <div className="w-12 h-0.5 mb-4" style={{ background: '#22D3EE', boxShadow: '0 0 8px rgba(34,211,238,0.6)' }} />
+              <p className="text-vel-muted text-sm leading-relaxed">{websiteSettings?.description}</p>
             </div>
+
+            {/* Nav links */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider mb-4">{{fr: 'Navigation', ar: 'الملاحة'}[lang]}</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
+              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE' }}
+                style={{ fontFamily: 'var(--font-display)' }}>
+                {{ fr: 'Navigation', ar: 'الملاحة' }[lang]}
+              </h4>
+              <ul className="space-y-3">
                 {navItems.map(item => (
                   <li key={item.id}>
                     <button
                       onClick={() => setCurrentPage(item.id as any)}
-                      className="hover:text-white transition-colors"
+                      className="text-vel-muted text-sm transition-colors font-medium"
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#22D3EE'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; }}
                     >
                       {item.label[lang]}
                     </button>
@@ -193,42 +246,81 @@ export const Website: React.FC<WebsiteProps> = ({
                 ))}
               </ul>
             </div>
+
+            {/* Contact */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider mb-4">📞 {{fr: 'Contact', ar: 'اتصل'}[lang]}</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
-                {contactInfo?.phone && <li>{contactInfo.phone}</li>}
-                {contactInfo?.email && <li>{contactInfo.email}</li>}
-                {contactInfo?.address && <li>{contactInfo.address}</li>}
+              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE' }}
+                style={{ fontFamily: 'var(--font-display)' }}>
+                {{ fr: 'Contact', ar: 'اتصل' }[lang]}
+              </h4>
+              <ul className="space-y-3 text-vel-muted text-sm">
+                {contactInfo?.phone && (
+                  <li className="flex items-center gap-2">
+                    <span style={{ color: '#22D3EE' }}>→</span> {contactInfo.phone}
+                  </li>
+                )}
+                {contactInfo?.email && (
+                  <li className="flex items-center gap-2">
+                    <span style={{ color: '#22D3EE' }}>→</span> {contactInfo.email}
+                  </li>
+                )}
+                {contactInfo?.address && (
+                  <li className="flex items-center gap-2">
+                    <span style={{ color: '#22D3EE' }}>→</span> {contactInfo.address}
+                  </li>
+                )}
               </ul>
             </div>
+
+            {/* Social */}
             <div>
-              <h4 className="font-bold text-sm uppercase tracking-wider mb-4">🌐 {{fr: 'Réseaux', ar: 'وسائل التواصل'}[lang]}</h4>
-              <div className="flex gap-4">
+              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE' }}
+                style={{ fontFamily: 'var(--font-display)' }}>
+                {{ fr: 'Suivez-nous', ar: 'تابعنا' }[lang]}
+              </h4>
+              <div className="flex flex-wrap gap-3">
                 {contactInfo?.facebook && (
-                  <a href={contactInfo.facebook} target="_blank" rel="noopener noreferrer" className="text-2xl hover:scale-110 transition-transform">
-                    👍
+                  <a href={contactInfo.facebook} target="_blank" rel="noopener noreferrer"
+                    className="w-10 h-10 vel-glass rounded-lg flex items-center justify-center text-vel-muted transition-all text-sm font-bold"
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#22D3EE'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; }}>
+                    f
                   </a>
                 )}
                 {contactInfo?.instagram && (
-                  <a href={`https://instagram.com/${contactInfo.instagram}`} target="_blank" rel="noopener noreferrer" className="text-2xl hover:scale-110 transition-transform">
-                    📷
+                  <a href={`https://instagram.com/${contactInfo.instagram}`} target="_blank" rel="noopener noreferrer"
+                    className="w-10 h-10 vel-glass rounded-lg flex items-center justify-center text-vel-muted hover:text-pink-400 transition-all text-sm font-bold">
+                    ig
                   </a>
                 )}
                 {contactInfo?.tiktok && (
-                  <a href={`https://tiktok.com/@${contactInfo.tiktok}`} target="_blank" rel="noopener noreferrer" className="text-2xl hover:scale-110 transition-transform">
-                    🎵
+                  <a href={`https://tiktok.com/@${contactInfo.tiktok}`} target="_blank" rel="noopener noreferrer"
+                    className="w-10 h-10 vel-glass rounded-lg flex items-center justify-center text-vel-muted hover:text-vel-white transition-all text-xs font-bold">
+                    tt
                   </a>
                 )}
                 {contactInfo?.whatsapp && (
-                  <a href={`https://wa.me/${contactInfo.whatsapp}`} target="_blank" rel="noopener noreferrer" className="text-2xl hover:scale-110 transition-transform">
-                    💬
+                  <a href={`https://wa.me/${contactInfo.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                    className="w-10 h-10 vel-glass rounded-lg flex items-center justify-center text-vel-muted hover:text-green-400 transition-all text-xs font-bold">
+                    wa
                   </a>
                 )}
               </div>
             </div>
           </div>
-          <div className="border-t border-slate-800 mt-8 pt-8 text-center text-sm text-slate-400">
-            <p>© 2026 {websiteSettings?.name || 'Luxdrive'}. {{fr: 'Tous droits réservés.', ar: 'جميع الحقوق محفوظة.'}[lang]}</p>
+
+          <div className="mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4"
+            style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <p className="text-vel-dim text-sm">
+              © {new Date().getFullYear()} {shortName(websiteSettings?.name)}.{' '}
+              <span className="text-vel-muted">{{ fr: 'Tous droits réservés.', ar: 'جميع الحقوق محفوظة.' }[lang]}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#22D3EE' }} />
+              <span className="text-vel-dim text-xs tracking-wider" style={{ fontFamily: 'var(--font-display)' }}>
+                POWERED BY AUTO LOCATION
+              </span>
+            </div>
           </div>
         </div>
       </footer>

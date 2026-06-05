@@ -25,7 +25,7 @@ export const SpecialOffersListing: React.FC<SpecialOffersListingProps> = ({
     car,
     oldPrice: car.priceDay * 1.2,
     newPrice: car.priceDay,
-    note: 'Offre spéciale limitée',
+    note: lang === 'fr' ? 'Offre spéciale limitée' : 'عرض خاص محدود',
     isActive: true,
     createdAt: new Date().toISOString(),
   }));
@@ -33,19 +33,32 @@ export const SpecialOffersListing: React.FC<SpecialOffersListingProps> = ({
   const activeOffers = displayOffers.filter(o => o.isActive);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 py-20 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="relative min-h-screen bg-vel-void py-24 px-4 sm:px-6 lg:px-8 overflow-hidden">
+
+      {/* Faint cyan radial glow background */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] pointer-events-none" style={{
+        background: 'radial-gradient(circle, rgba(34,211,238,0.04), transparent 70%)',
+      }} />
+
+      <div className="relative z-10 max-w-7xl mx-auto">
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-16"
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7 }}
+          className="text-center mb-20"
         >
-          <h1 className="text-5xl font-black text-slate-900 mb-4">
-            ⭐ {{fr: 'Offres Spéciales', ar: 'عروض خاصة'}[lang]}
+          <p className="text-vel-red font-bold text-xs tracking-[0.25em] uppercase mb-4"
+            style={{ fontFamily: 'var(--font-display)' }}>
+            {{ fr: 'Durée limitée', ar: 'لوقت محدود' }[lang]}
+          </p>
+          <h1 className="font-black text-6xl text-vel-white text-glow-red" style={{ fontFamily: 'var(--font-display)' }}>
+            {{ fr: 'Offres Limitées', ar: 'عروض محدودة' }[lang]}
           </h1>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto font-medium">
-            {{fr: 'Des réductions exceptionnelles sur nos meilleurs véhicules premium', ar: 'تخفيضات استثنائية على أفضل السيارات الفاخرة لدينا'}[lang]}
+          <p className="text-vel-muted text-lg mt-4 max-w-2xl mx-auto">
+            {{ fr: 'Des réductions exceptionnelles sur nos meilleurs véhicules', ar: 'تخفيضات استثنائية على أفضل سياراتنا' }[lang]}
           </p>
         </motion.div>
 
@@ -56,106 +69,136 @@ export const SpecialOffersListing: React.FC<SpecialOffersListingProps> = ({
             return (
               <motion.div
                 key={offer.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-saas-warning-start/30"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1, duration: 0.6 }}
+                whileHover={{ y: -8 }}
+                className="vel-glass rounded-2xl overflow-hidden group transition-all duration-500"
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = 'rgba(34,211,238,0.3)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 0 40px rgba(34,211,238,0.08)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                }}
               >
                 {/* Image with Discount Badge */}
-                <div className="relative h-64 overflow-hidden bg-slate-200">
+                <div className="relative h-64 overflow-hidden bg-vel-abyss">
                   <img
-                    src={offer.car.images[0] || `https://images.unsplash.com/photo-1552820728-8ac41f1ce891?w=500&h=400&fit=crop`}
+                    src={offer.car.images?.[0] || `https://images.unsplash.com/photo-1552820728-8ac41f1ce891?w=500&h=400&fit=crop`}
                     alt={`${offer.car.brand} ${offer.car.model}`}
-                    className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                     referrerPolicy="no-referrer"
                   />
-                  {/* Discount Badge */}
-                  <div className="absolute top-4 right-4 bg-gradient-to-br from-saas-danger-start to-saas-danger-end text-white rounded-full w-24 h-24 flex items-center justify-center shadow-xl">
-                    <div className="text-center">
-                      <p className="text-2xl font-black">-{discountPercent}%</p>
-                      <p className="text-xs font-bold">{{fr: 'RÉDUIT', ar: 'خصم'}[lang]}</p>
-                    </div>
+                  <div className="absolute inset-0" style={{
+                    background: 'linear-gradient(to top, rgba(8,12,20,0.85), transparent 60%)',
+                  }} />
+
+                  {/* Discount Badge — pulsing red (kept for semantic urgency) */}
+                  <motion.div
+                    animate={{ scale: [1, 1.04, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="absolute top-4 right-4 w-20 h-20 rounded-full flex flex-col items-center justify-center text-white"
+                    style={{
+                      background: 'linear-gradient(135deg, #EF4444, #DC2626)',
+                      boxShadow: '0 0 20px rgba(239,68,68,0.5)',
+                    }}
+                  >
+                    <p className="text-xl font-black leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+                      -{discountPercent}%
+                    </p>
+                    <p className="text-[9px] font-bold tracking-wider">
+                      {{ fr: 'RÉDUIT', ar: 'خصم' }[lang]}
+                    </p>
+                  </motion.div>
+
+                  {/* Car name overlay on image bottom */}
+                  <div className="absolute bottom-4 left-4">
+                    <h3 className="font-black text-2xl text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+                      {offer.car.brand}{' '}
+                      <span style={{ color: '#22D3EE' }}>{offer.car.model}</span>
+                    </h3>
+                    <p className="text-vel-silver text-sm">{offer.car.registration} · {offer.car.color}</p>
                   </div>
                 </div>
 
                 {/* Content */}
-                <div className="p-6 space-y-4">
-                  {/* Car Info */}
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-900">
-                      {offer.car.brand} <span className="text-saas-primary-via">{offer.car.model}</span>
-                    </h3>
-                    <p className="text-sm text-slate-500 font-bold">
-                      {offer.car.registration} • {offer.car.color}
-                    </p>
+                <div className="p-6 space-y-5">
+
+                  {/* Specs pills */}
+                  <div className="flex flex-wrap gap-2">
+                    {[offer.car.energy, offer.car.transmission,
+                      `${offer.car.seats} ${lang === 'fr' ? 'places' : 'مقاعد'}`,
+                      `${offer.car.doors} ${lang === 'fr' ? 'portes' : 'أبواب'}`,
+                    ].map((spec, i) => (
+                      <span key={i} className="px-3 py-1 rounded-full text-xs font-medium text-vel-silver"
+                        style={{ background: '#1A2235', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        {spec}
+                      </span>
+                    ))}
                   </div>
 
-                  {/* Specs Grid */}
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="bg-saas-bg rounded-lg p-2 text-center border border-saas-border hover:border-saas-primary-via/30 transition-colors">
-                      <p className="text-xl mb-1">⛽</p>
-                      <p className="text-xs font-bold text-slate-600">{offer.car.energy}</p>
-                    </div>
-                    <div className="bg-saas-bg rounded-lg p-2 text-center border border-saas-border hover:border-saas-primary-via/30 transition-colors">
-                      <p className="text-xl mb-1">⚙️</p>
-                      <p className="text-xs font-bold text-slate-600">{offer.car.transmission}</p>
-                    </div>
-                    <div className="bg-saas-bg rounded-lg p-2 text-center border border-saas-border hover:border-saas-primary-via/30 transition-colors">
-                      <p className="text-xl mb-1">👥</p>
-                      <p className="text-xs font-bold text-slate-600">{offer.car.seats}</p>
-                    </div>
-                    <div className="bg-saas-bg rounded-lg p-2 text-center border border-saas-border hover:border-saas-primary-via/30 transition-colors">
-                      <p className="text-xl mb-1">🚪</p>
-                      <p className="text-xs font-bold text-slate-600">{offer.car.doors}</p>
-                    </div>
-                  </div>
-
-                  {/* Price Comparison */}
-                  <div className="bg-gradient-to-r from-saas-warning-start/10 to-saas-danger-start/10 rounded-xl p-4 space-y-2 border border-saas-warning-start/20">
+                  {/* Price comparison */}
+                  <div className="rounded-xl p-4 space-y-3"
+                    style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    {/* Old price */}
                     <div className="flex items-center justify-between">
-                      <p className="text-slate-600 font-bold line-through text-lg">
-                        {offer.oldPrice.toLocaleString()} {{fr: 'DA', ar: 'د.ج'}[lang]}
+                      <p className="text-lg font-bold line-through" style={{ color: 'rgba(239,68,68,0.6)' }}>
+                        {offer.oldPrice.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
                       </p>
-                      <span className="bg-saas-danger-start text-white text-xs font-black px-3 py-1 rounded-lg">
-                        {{fr: 'Avant', ar: 'قبل'}[lang]}
+                      <span className="text-xs font-bold px-2 py-0.5 rounded text-white"
+                        style={{ background: '#EF4444' }}>
+                        {{ fr: 'Avant', ar: 'قبل' }[lang]}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between border-t border-saas-warning-start/30 pt-3">
-                      <p className="text-4xl font-black text-saas-success-start">
-                        {offer.newPrice.toLocaleString()} {{fr: 'DA', ar: 'د.ج'}[lang]}
+
+                    {/* New price */}
+                    <div className="flex items-center justify-between pt-2"
+                      style={{ borderTop: '1px solid rgba(239,68,68,0.2)' }}>
+                      <p className="font-black text-4xl" style={{ color: '#22D3EE', fontFamily: 'var(--font-display)', textShadow: '0 0 20px rgba(34,211,238,0.5)' }}>
+                        {offer.newPrice.toLocaleString()}
+                        <span className="text-base ml-1" style={{ color: 'rgba(34,211,238,0.65)' }}>
+                          {{ fr: 'DA/j', ar: 'د.ج/ي' }[lang]}
+                        </span>
                       </p>
-                      <span className="bg-saas-success-start text-white text-xs font-black px-3 py-1 rounded-lg">
-                        {{fr: 'Maintenant', ar: 'الآن'}[lang]}
+                      <span className="text-xs font-bold px-2 py-0.5 rounded"
+                        style={{ background: '#22D3EE', color: '#050B18' }}>
+                        {{ fr: 'Maintenant', ar: 'الآن' }[lang]}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 text-center pt-2">
-                      💚 {{fr: 'Économisez', ar: 'وفر'}[lang]}: {(offer.oldPrice - offer.newPrice).toLocaleString()} {{fr: 'DA', ar: 'د.ج'}[lang]}
-                    </p>
+
+                    {/* Savings chip */}
+                    <div className="vel-glass-cyan rounded-lg px-3 py-2 text-center">
+                      <p className="text-xs font-bold" style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+                        {{ fr: 'Économisez', ar: 'وفر' }[lang]}{' '}
+                        {(offer.oldPrice - offer.newPrice).toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+                      </p>
+                    </div>
                   </div>
 
                   {/* Note */}
                   {offer.note && (
-                    <p className="text-xs text-slate-600 italic bg-saas-primary-via/5 p-2 rounded-lg border border-saas-primary-via/10">
-                      📝 {offer.note}
+                    <p className="text-xs text-vel-muted italic px-3 py-2 rounded-lg"
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      {offer.note}
                     </p>
                   )}
 
                   {/* Buttons */}
-                  <div className="flex gap-3 pt-2">
+                  <div className="flex gap-3 pt-1">
                     <button
-                      onClick={() => {
-                        setSelectedCar(offer.car);
-                        setShowDetails(true);
-                      }}
-                      className="flex-1 bg-saas-bg hover:bg-slate-200 text-slate-900 font-bold py-3 px-4 rounded-lg transition-colors border border-saas-border hover:border-saas-primary-via/30"
+                      onClick={() => { setSelectedCar(offer.car); setShowDetails(true); }}
+                      className="btn-vel-ghost flex-1 py-3 text-sm"
                     >
-                      👁️ {{fr: 'Détails', ar: 'التفاصيل'}[lang]}
+                      {{ fr: 'Détails', ar: 'التفاصيل' }[lang]}
                     </button>
                     <button
                       onClick={() => onOrder(offer.car)}
-                      className="flex-1 bg-gradient-to-r from-saas-success-start to-saas-success-end hover:from-saas-success-start hover:to-saas-success-end text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg"
+                      className="btn-vel-red flex-1 py-3 text-sm"
                     >
-                      🎉 {{fr: 'Réserver', ar: 'احجز'}[lang]}
+                      {{ fr: 'Réserver', ar: 'احجز' }[lang]}
                     </button>
                   </div>
                 </div>
@@ -168,10 +211,10 @@ export const SpecialOffersListing: React.FC<SpecialOffersListingProps> = ({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center py-12"
+            className="text-center py-24"
           >
-            <p className="text-2xl font-black text-slate-600">
-              {{fr: 'Aucune offre spéciale actuellement', ar: 'لا توجد عروض خاصة حالياً'}[lang]}
+            <p className="text-vel-muted text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+              {{ fr: 'Aucune offre spéciale actuellement', ar: 'لا توجد عروض خاصة حالياً' }[lang]}
             </p>
           </motion.div>
         )}
