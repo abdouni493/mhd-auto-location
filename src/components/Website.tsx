@@ -201,6 +201,8 @@ export const Website: React.FC<WebsiteProps> = ({
           <OrdersPage
             lang={lang}
             cars={cars}
+            offers={offers}
+            specialOffers={specialOffers}
             agencies={agencies}
             isLoadingAgencies={isLoadingAgencies}
             selectedCar={selectedCar}

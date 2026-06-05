@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Language, Car, Agency, Reservation, ReservationStep1, ReservationStep2, AdditionalService } from '../../types';
+import { Language, Car, Agency, Offer, SpecialOffer, ReservationStep1, ReservationStep2, AdditionalService } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronRight, ChevronLeft, Upload, FileText, Loader2, Search, Check, X } from 'lucide-react';
 import { ThankYouPage } from './ThankYouPage';
@@ -78,14 +78,27 @@ const steps = [
 interface OrdersPageProps {
   lang: Language;
   cars: Car[];
+  offers: Offer[];
+  specialOffers: SpecialOffer[];
   agencies: Agency[];
   isLoadingAgencies?: boolean;
   selectedCar?: Car | null;
 }
 
 export const OrdersPage: React.FC<OrdersPageProps> = ({
-  lang, cars, agencies, isLoadingAgencies = false, selectedCar: initialCar,
+  lang, cars, offers, specialOffers, agencies, isLoadingAgencies = false, selectedCar: initialCar,
 }) => {
+  // Build the pool of cars to display: only cars that appear in offers or special offers.
+  // If no offers exist yet, fall back to all cars so the page is never empty.
+  const availableCars: Car[] = React.useMemo(() => {
+    const offerCars = offers.map(o => o.car);
+    const specialCars = specialOffers.filter(o => o.isActive).map(o => o.car);
+    const merged = [...offerCars, ...specialCars];
+    if (merged.length === 0) return cars;
+    // deduplicate by id, preserving insertion order
+    const seen = new Set<string>();
+    return merged.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; });
+  }, [offers, specialOffers, cars]);
   const [currentStep, setCurrentStep] = useState<'search' | 'step1' | 'step2' | 'step3' | 'step4' | 'success'>(
     initialCar ? 'step1' : 'search'
   );
@@ -138,7 +151,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filteredCars = searchQuery.trim()
-    ? cars.filter(car =>
+    ? availableCars.filter(car =>
         car.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
         car.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
         car.registration.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -490,7 +503,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                       {{ fr: 'Véhicules disponibles', ar: 'السيارات المتاحة' }[lang]}
                     </motion.h2>
 
-                    {cars.length === 0 ? (
+                    {availableCars.length === 0 ? (
                       <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -503,7 +516,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                       </motion.div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {cars.map((car, i) => (
+                        {availableCars.map((car, i) => (
                           <motion.button
                             key={car.id}
                             initial={{ opacity: 0, y: 24 }}
