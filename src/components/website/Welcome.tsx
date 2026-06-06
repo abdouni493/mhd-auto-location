@@ -21,9 +21,9 @@ const shortName = (name: string | undefined) =>
 function HeroVisual({ lang, logo }: { lang: Language; logo?: string }) {
   const floatingCards = [
     {
-      icon: '🏎️',
-      value: '500+',
-      label: { fr: 'Véhicules', ar: 'سيارة' },
+      icon: '🏆',
+      value: '#1',
+      label: { fr: 'en Algérie', ar: 'في الجزائر' },
       delay: 0,
       className: 'top-6 right-0',
     },
@@ -146,7 +146,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
   const heroY = useTransform(scrollYProgress, [0, 0.4], [0, -80]);
 
   const stats = [
-    { num: '500+', label: { fr: 'Véhicules', ar: 'مركبات' } },
+    { num: '#1', label: { fr: 'en Algérie', ar: 'في الجزائر' } },
     { num: '10K+', label: { fr: 'Clients', ar: 'عملاء' } },
     { num: '99%',  label: { fr: 'Satisfaction', ar: 'رضا العملاء' } },
   ];
