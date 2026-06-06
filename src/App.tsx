@@ -526,7 +526,7 @@ export default function App() {
     };
 
     return (
-      <div className={`flex min-h-screen bg-saas-bg ${lang === 'ar' ? 'font-arabic' : ''}`}>
+      <div className={`flex min-h-screen bg-saas-bg text-saas-text-main ${lang === 'ar' ? 'font-arabic' : ''}`}>
         {!supabaseConfigured && (
           <div className="fixed inset-0 bg-yellow-100 text-yellow-900 flex items-center justify-center z-50 p-4 text-center">
             <strong>Warning:</strong> Supabase variables are missing. Set
