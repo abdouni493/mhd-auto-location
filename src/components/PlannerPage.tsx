@@ -363,6 +363,14 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     setShowCompletionModal(true);
   };
 
+  // A car is NOT disponible only if it has an active or confirmed reservation
+  const rentedCarIds = new Set(
+    reservations
+      .filter(r => r.status === 'active' || r.status === 'confirmed')
+      .map(r => r.car?.id)
+      .filter((id): id is string => Boolean(id))
+  );
+
   const filteredReservations = reservations.filter(reservation => {
     // Add safety checks for client and car
     if (!reservation.client || !reservation.car) {
@@ -382,10 +390,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     const resRemaining = Math.max(0, (Number(reservation.totalPrice) || 0) - resPaid);
     const matchesDebt = !filterDebtOnly || resRemaining > 0;
 
-    const matchesCarAvailability = carAvailabilityFilter === 'all' ||
-                                   reservation.car.status === carAvailabilityFilter;
-
-    return matchesSearch && matchesFilter && matchesDebt && matchesCarAvailability;
+    return matchesSearch && matchesFilter && matchesDebt;
   });
 
   if (currentView === 'create') {
@@ -593,9 +598,9 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                     : (lang === 'fr' ? 'Voitures en Location' : 'السيارات المؤجرة')}
                 </h3>
                 <p className="text-saas-text-muted text-sm font-medium">
-                  {carAvailabilityFilter === 'disponible' 
-                    ? (lang === 'fr' ? `${cars.filter(c => c.status === 'disponible').length} véhicules disponibles` : `${cars.filter(c => c.status === 'disponible').length} مركبة متاحة`) 
-                    : (lang === 'fr' ? `${cars.filter(c => c.status !== 'disponible').length} véhicules actuellement loués` : `${cars.filter(c => c.status !== 'disponible').length} مركبة قيد الإيجار`)}
+                  {carAvailabilityFilter === 'disponible'
+                    ? (lang === 'fr' ? `${cars.filter(c => !rentedCarIds.has(c.id)).length} véhicules disponibles` : `${cars.filter(c => !rentedCarIds.has(c.id)).length} مركبة متاحة`)
+                    : (lang === 'fr' ? `${cars.filter(c => rentedCarIds.has(c.id)).length} véhicules actuellement loués` : `${cars.filter(c => rentedCarIds.has(c.id)).length} مركبة قيد الإيجار`)}
                 </p>
               </div>
             </div>
@@ -610,9 +615,9 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(carAvailabilityFilter === 'disponible' 
-              ? cars.filter(c => c.status === 'disponible') 
-              : cars.filter(c => c.status !== 'disponible')).map((car, index) => (
+            {(carAvailabilityFilter === 'disponible'
+              ? cars.filter(c => !rentedCarIds.has(c.id))
+              : cars.filter(c => rentedCarIds.has(c.id))).map((car, index) => (
               <motion.div
                 key={car.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -642,12 +647,12 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                       animate={{ scale: [1, 1.1, 1] }}
                       transition={{ duration: 2, repeat: Infinity }}
                       className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wide ${
-                        car.status === 'disponible'
+                        !rentedCarIds.has(car.id)
                           ? 'bg-green-500/90 text-white'
                           : 'bg-amber-500/90 text-white'
                       }`}
                     >
-                      {car.status === 'disponible' ? '✅ Disponible' : '🔄 Loué'}
+                      {!rentedCarIds.has(car.id) ? '✅ Disponible' : '🔄 Loué'}
                     </motion.div>
                   </div>
                 </div>
@@ -704,32 +709,31 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
-                      if (car.status === 'disponible') {
+                      if (!rentedCarIds.has(car.id)) {
                         setCurrentView('create');
                       } else {
-                        // Find the current reservation for this rented car - search all reservations
+                        // Find the current active/confirmed reservation for this car
                         const currentReservation = reservations.find(
-                          res => res.car?.id === car.id && ['active', 'confirmed', 'accepted'].includes(res.status)
+                          res => res.car?.id === car.id && ['active', 'confirmed'].includes(res.status)
                         );
                         if (currentReservation) {
                           setSelectedReservation(currentReservation);
                           setCurrentView('details');
                         } else {
-                          // If no active reservation found, show alert
-                          alert(lang === 'fr' 
-                            ? 'Aucune réservation active trouvée pour ce véhicule' 
+                          alert(lang === 'fr'
+                            ? 'Aucune réservation active trouvée pour ce véhicule'
                             : 'لم يتم العثور على حجز نشط لهذه المركبة');
                         }
                       }
                     }}
                     className={`w-full py-2.5 rounded-xl font-bold transition-all text-sm uppercase tracking-wide ${
-                      car.status === 'disponible'
+                      !rentedCarIds.has(car.id)
                         ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white'
                         : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white'
                     }`}
                   >
-                    {car.status === 'disponible' 
-                      ? (lang === 'fr' ? '📅 Réserver' : '📅 حجز') 
+                    {!rentedCarIds.has(car.id)
+                      ? (lang === 'fr' ? '📅 Réserver' : '📅 حجز')
                       : (lang === 'fr' ? '👁️ Détails' : '👁️ التفاصيل')}
                   </motion.button>
                 </div>
@@ -737,9 +741,9 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
             ))}
           </div>
 
-          {(carAvailabilityFilter === 'disponible' 
-            ? cars.filter(c => c.status === 'disponible') 
-            : cars.filter(c => c.status !== 'disponible')).length === 0 && (
+          {(carAvailabilityFilter === 'disponible'
+            ? cars.filter(c => !rentedCarIds.has(c.id))
+            : cars.filter(c => rentedCarIds.has(c.id))).length === 0 && (
             <div className="text-center py-12">
               <div className="text-6xl mb-4 opacity-20">
                 {carAvailabilityFilter === 'disponible' ? '✅' : '🔄'}
