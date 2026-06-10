@@ -134,16 +134,18 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
   // ── Computed
   const { startDate, endDate } = useMemo(() => getPeriodRange(period), [period]);
 
-  /** Réservations de la période (avant recherche texte / filtre statut) */
+  /** Contrats = only completed reservations in the selected period */
   const periodReservations = useMemo(
-    () => reservations.filter(r => inRange(r.step1?.departureDate || r.createdAt, startDate, endDate)),
+    () => reservations.filter(r =>
+      r.status === 'completed' &&
+      inRange(r.step1?.departureDate || r.createdAt, startDate, endDate)
+    ),
     [reservations, startDate, endDate]
   );
 
-  /** Réservations après tous les filtres */
+  /** After text search filter */
   const filteredReservations = useMemo(() => {
     let list = periodReservations;
-    if (filterStatus !== 'all') list = list.filter(r => r.status === filterStatus);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(r => {
@@ -153,24 +155,22 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
       });
     }
     return list;
-  }, [periodReservations, filterStatus, searchQuery]);
+  }, [periodReservations, searchQuery]);
 
-  // ── Stats (sur periodReservations avant filtre texte/statut)
+  // ── Stats
   const totalGains = useMemo(
-    () => periodReservations.filter(r => r.status !== 'cancelled').reduce((s, r) => s + calcPaid(r), 0),
+    () => periodReservations.reduce((s, r) => s + calcPaid(r), 0),
     [periodReservations]
   );
   const totalReste = useMemo(
-    () => periodReservations
-      .filter(r => !['completed', 'cancelled'].includes(r.status))
-      .reduce((s, r) => s + (Number(r.remainingPayment) || 0), 0),
-    [periodReservations]
+    () => 0,
+    []
   );
 
   /** Réservations impayées (pour le modal dette) */
   const debtReservations = useMemo(
-    () => periodReservations.filter(r => (Number(r.remainingPayment) || 0) > 0 && !['completed', 'cancelled'].includes(r.status)),
-    [periodReservations]
+    () => [] as typeof periodReservations,
+    []
   );
 
   // ── Actions
@@ -234,10 +234,10 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
         className="bg-white rounded-2xl border border-saas-border p-8 shadow-sm"
       >
         <h1 className="text-3xl font-black text-saas-text-main tracking-tighter uppercase">
-          🧾 {T('Facturation', 'الفوترة', lang)}
+          🧾 {T('Contrats', 'العقود', lang)}
         </h1>
         <p className="text-[10px] text-saas-primary-via font-bold uppercase tracking-[0.3em] mt-1">
-          {T('Gestion et suivi de toutes les réservations', 'إدارة ومتابعة جميع الحجوزات', lang)}
+          {T('Réservations terminées · contrats clôturés', 'الحجوزات المنتهية · العقود المغلقة', lang)}
         </p>
       </motion.div>
 
@@ -272,19 +272,9 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
           />
         </div>
 
-        {/* Filtre statut */}
-        <div className="relative">
-          <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className="pl-3 pr-8 py-2.5 bg-white border border-saas-border rounded-xl text-sm font-medium outline-none focus:border-saas-primary-via transition-all appearance-none cursor-pointer"
-          >
-            <option value="all">{T('Tous les statuts', 'كل الحالات', lang)}</option>
-            {Object.entries(STATUS_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>{v[lang]}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-saas-text-muted pointer-events-none" size={14} />
+        {/* Statut badge — toujours "Terminée" */}
+        <div className="px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl text-xs font-black text-violet-700 uppercase tracking-wider">
+          ✅ {T('Terminées', 'منتهية', lang)}
         </div>
       </div>
 
@@ -317,7 +307,7 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
           <div>
             <p className="text-2xl font-black text-blue-700">{periodReservations.length}</p>
             <p className="text-[9px] font-bold uppercase tracking-widest text-blue-500 mt-0.5">
-              {T('Réservations sur la période', 'الحجوزات في الفترة', lang)}
+              {T('Contrats terminés · période', 'عقود منتهية · الفترة', lang)}
             </p>
           </div>
         </motion.div>
@@ -356,7 +346,7 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
           <div className="text-center">
             <span className="text-6xl opacity-20 block mb-4">🧾</span>
             <p className="text-saas-text-muted font-bold uppercase text-sm tracking-wider">
-              {T('Aucune réservation sur cette période', 'لا توجد حجوزات في هذه الفترة', lang)}
+              {T('Aucun contrat terminé sur cette période', 'لا توجد عقود منتهية في هذه الفترة', lang)}
             </p>
           </div>
         </div>

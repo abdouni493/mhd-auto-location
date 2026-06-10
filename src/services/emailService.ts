@@ -524,7 +524,7 @@ export class EmailService {
         return this.generateDevisEmailHTML(reservation, templateLang);
       case 'contract':
       default:
-        return this.generateContractEmailHTMLForEmail(reservation, templateLang);
+        return await this.generateContractEmailHTMLForEmail(reservation, templateLang);
     }
   }
 
@@ -1146,123 +1146,371 @@ export class EmailService {
   }
 
   /**
-   * Generate contract email template
+   * Generate contract email template — same professional design as the printed contract
    */
-  private static generateContractEmailHTMLForEmail(reservation: ReservationDetails, templateLang: string = 'ar'): string {
-    // For email, create a simplified contract template
-    const client = reservation.client;
-    const depDate = new Date(reservation.step1.departureDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const retDate = new Date(reservation.step1.returnDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const dateStr = new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const subTotal = (reservation.totalPrice / 1.19);
-    const tax = reservation.totalPrice - subTotal;
-    
+  private static async generateContractEmailHTMLForEmail(reservation: ReservationDetails, templateLang: string = 'ar'): Promise<string> {
+    // Load agency settings for logo, name, contact info
+    const { data: settingsData } = await supabase
+      .from('website_settings')
+      .select('logo, name, address, phone, phone_number_2, bank_number')
+      .limit(1)
+      .single();
+
+    const agencyName    = settingsData?.name         || 'AUTO LOCATION';
+    const logoUrl       = settingsData?.logo          || '';
+    const agencyAddress = settingsData?.address       || '';
+    const agencyPhone   = settingsData?.phone         || '';
+    const agencyPhone2  = settingsData?.phone_number_2|| '';
+    const agencyBank    = settingsData?.bank_number   || '';
+
+    const isFrench = templateLang === 'fr';
+    const textDir  = isFrench ? 'ltr' : 'rtl';
+    const locale   = isFrench ? 'fr-FR' : 'ar-DZ';
+
+    const client  = reservation.client;
+    const car     = reservation.car;
+    const depDate = new Date(reservation.step1.departureDate).toLocaleDateString(locale);
+    const retDate = new Date(reservation.step1.returnDate).toLocaleDateString(locale);
+    const today   = new Date().toLocaleDateString(locale);
+    const totalDays = reservation.totalDays || Math.ceil(
+      (new Date(reservation.step1.returnDate).getTime() - new Date(reservation.step1.departureDate).getTime())
+      / (1000 * 60 * 60 * 24)
+    );
+
+    const labels = {
+      contractTitle:       isFrench ? 'Contrat de Location' : 'عقد كراء السيارة',
+      contractDate:        isFrench ? 'Date du Contrat'     : 'تاريخ العقد',
+      contractNumber:      isFrench ? 'N° de Contrat'       : 'رقم العقد',
+      clientLabel:         isFrench ? 'Client'              : 'العميل',
+      driverInfo:          isFrench ? 'Conducteur Principal': 'السائق الرئيسي',
+      fullName:            isFrench ? 'Nom Complet'         : 'الاسم الكامل',
+      phone:               isFrench ? 'Téléphone'           : 'الهاتف',
+      licenseNumber:       isFrench ? 'Numéro de Permis'    : 'رقم الرخصة',
+      licenseDelivery:     isFrench ? 'Délivrance Permis'   : 'تاريخ إصدار الرخصة',
+      licenseExpiry:       isFrench ? 'Expiration Permis'   : 'تاريخ انتهاء الرخصة',
+      licensePlace:        isFrench ? 'Lieu Délivrance'     : 'مكان الإصدار',
+      birthDate:           isFrench ? 'Date de Naissance'   : 'تاريخ الميلاد',
+      birthPlace:          isFrench ? 'Lieu de Naissance'   : 'مكان الميلاد',
+      vehicleInfo:         isFrench ? 'Informations du Véhicule': 'معلومات المركبة',
+      model:               isFrench ? 'Modèle'              : 'الموديل',
+      registration:        isFrench ? 'Immatriculation'     : 'التسجيل',
+      color:               isFrench ? 'Couleur'             : 'اللون',
+      fuel:                isFrench ? 'Carburant'           : 'الوقود',
+      vin:                 isFrench ? 'VIN'                 : 'رقم المحرك',
+      rentalPeriod:        isFrench ? 'Période de Location' : 'فترة الإيجار',
+      departure:           isFrench ? 'Départ'              : 'المغادرة',
+      returnLabel:         isFrench ? 'Retour'              : 'العودة',
+      duration:            isFrench ? 'Durée'               : 'المدة',
+      days:                isFrench ? 'jours'               : 'أيام',
+      pricing:             isFrench ? 'Tarification'        : 'التسعير',
+      pricePerDay:         isFrench ? 'Prix par Jour'       : 'السعر في اليوم',
+      numberOfDays:        isFrench ? 'Nombre de Jours'     : 'عدد الأيام',
+      total:               isFrench ? 'TOTAL'               : 'الإجمالي',
+      conditions:          isFrench ? 'Conditions Acceptées': 'الشروط المقبولة',
+      clientSignature:     isFrench ? 'Signature du Client' : 'توقيع العميل',
+      agencySignature:     isFrench ? "Signature de l'Agence": 'توقيع الوكالة',
+      dateAndSignature:    isFrench ? 'Date et signature'   : 'التاريخ والتوقيع',
+    };
+
+    const conditionsList = isFrench
+      ? ['Permis de conduire valide', 'Assurance tous risques', 'Caution dépôt', 'Carburant plein', 'État du véhicule accepté', 'Pas de dégâts supplémentaires']
+      : ['رخصة قيادة سارية', 'تأمين شامل', 'ضمان الإيداع', 'خزان ممتلئ', 'حالة المركبة مقبولة', 'لا توجد أضرار إضافية'];
+
+    const formatDate = (d: string) => {
+      try { return new Date(d).toLocaleDateString(locale); }
+      catch { return ''; }
+    };
+
     return `<!DOCTYPE html>
-<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
 <head>
-    <meta charset="UTF-8">
-    <title>${templateLang === 'ar' ? 'عقد التأجير' : 'Contrat'}</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-      .container { max-width: 900px; margin: 0 auto; background: white; padding: 40px; }
-      .header { text-align: center; border-bottom: 3px solid #17a2b8; padding-bottom: 20px; margin-bottom: 30px; }
-      .title { font-size: 24px; color: #17a2b8; margin: 10px 0; }
-      .section-title { font-size: 14px; font-weight: bold; color: #17a2b8; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #17a2b8; padding-bottom: 5px; }
-      .info-row { display: flex; justify-content: space-between; padding: 8px 0; }
-      .label { font-weight: bold; min-width: 120px; }
-      .checkbox-item { margin: 8px 0; }
-      .pricing-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-      .pricing-table th { background: #17a2b8; color: white; padding: 10px; text-align: ${templateLang === 'ar' ? 'right' : 'left'}; }
-      .pricing-table td { padding: 10px; border-bottom: 1px solid #ddd; }
-      .totals-box { margin-top: 20px; padding: 15px; background: #e8f4f8; border-left: 4px solid #17a2b8; }
-      .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }
-      .final-total { font-size: 18px; font-weight: bold; color: #17a2b8; margin-top: 10px; border-top: 2px solid #ddd; padding-top: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>${labels.contractTitle}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      line-height: 1.5;
+      color: #222;
+      background: white;
+      direction: ${textDir};
+      font-size: 14px;
+    }
+    .page {
+      width: 100%;
+      max-width: 210mm;
+      padding: 12mm;
+      margin: 0 auto;
+      background: white;
+    }
+    /* Header */
+    .header {
+      border-bottom: 3px solid #1a3a8a;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+    .header-text { flex: 1; }
+    .agency-name { font-size: 20px; font-weight: bold; color: #1a3a8a; text-align: center; margin-bottom: 2px; }
+    .agency-contact { font-size: 10px; color: #555; text-align: center; line-height: 1.4; }
+    .contract-title { font-size: 13px; color: #555; text-align: center; margin-top: 2px; }
+    /* Info boxes row */
+    .header-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .info-box { padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.3; }
+    .info-box.blue   { background: #dbeafe; border-left: 4px solid #2563eb; }
+    .info-box.green  { background: #dcfce7; border-left: 4px solid #16a34a; }
+    .info-box.amber  { background: #fef3c7; border-left: 4px solid #d97706; }
+    .info-label { font-weight: 600; color: #222; margin-bottom: 2px; font-size: 10px; }
+    .info-value { color: #333; font-size: 11px; }
+    /* Sections */
+    .section {
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      border-radius: 5px;
+      border: 1px solid #e5e7eb;
+    }
+    .section.driver-section   { background: #f0f9ff; border-color: #bfdbfe; }
+    .section.vehicle-section  { background: #f0fdf4; border-color: #bbf7d0; }
+    .section.pricing-section  { background: #fffbeb; border-color: #fde68a; }
+    .section.conditions-section{ background: #faf5ff; border-color: #e9d5ff; }
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      background: #f0f1f3;
+      padding: 4px 6px;
+      border-radius: 3px;
+      margin-bottom: 6px;
+      border-left: 4px solid #2563eb;
+      color: #1a3a8a;
+    }
+    .section-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 8px;
+      font-size: 12px;
+    }
+    .field { padding: 2px 0; border-bottom: 0.5px solid #ddd; }
+    .field-label { font-weight: 600; color: #1a3a8a; font-size: 11px; }
+    .field-value { color: #444; font-size: 12px; margin-top: 1px; }
+    /* Two-column layout */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    /* Pricing rows */
+    .pricing-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 0.5px solid #ddd; font-size: 13px; }
+    .pricing-row.grand-total { font-size: 14px; font-weight: 700; color: #1a3a8a; border-top: 2px solid #1a3a8a; border-bottom: none; padding-top: 4px; margin-top: 2px; }
+    /* Conditions grid */
+    .conditions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; }
+    .condition-item { display: flex; align-items: center; gap: 4px; }
+    .checkbox { width: 12px; height: 12px; border: 1px solid #999; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; flex-shrink: 0; }
+    /* Special conditions */
+    .special-conditions {
+      background: #fef2f2; padding: 8px; border: 1px solid #fecaca; border-radius: 4px;
+      margin-bottom: 8px; font-size: 11px; line-height: 1.5;
+    }
+    .special-title { color: #dc2626; font-weight: 600; margin-bottom: 4px; }
+    .special-item  { color: #dc2626; margin: 2px 0; }
+    /* Signatures */
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 14px; }
+    .signature-block { text-align: center; }
+    .signature-line { border-top: 1px solid #333; margin-bottom: 4px; height: 30px; }
+    .signature-label { font-weight: 600; font-size: 12px; color: #1a3a8a; }
+    .date-sig { font-size: 10px; color: #666; margin-top: 2px; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="title">${templateLang === 'ar' ? 'عقد التأجير' : 'Contrat de Location'}</div>
-            <div style="font-size: 12px; color: #666;">${templateLang === 'ar' ? 'التاريخ:' : 'Date:'} ${dateStr}</div>
-        </div>
+  <div class="page">
 
-        <div class="section-title">${templateLang === 'ar' ? 'بيانات السائق' : 'Données du Conducteur'}</div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'الاسم:' : 'Nom:'}</span>
-            <span>${client.firstName} ${client.lastName}</span>
+    <!-- Header -->
+    <div class="header">
+      ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo">` : ''}
+      <div class="header-text">
+        <div class="agency-name">${agencyName}</div>
+        <div class="agency-contact">
+          ${agencyAddress ? `<span>${agencyAddress}</span>` : ''}
+          ${agencyPhone   ? ` &nbsp;|&nbsp; 📞 ${agencyPhone}` : ''}
+          ${agencyPhone2  ? ` &nbsp;|&nbsp; 📱 ${agencyPhone2}` : ''}
+          ${agencyBank    ? ` &nbsp;|&nbsp; 🏦 ${agencyBank}` : ''}
         </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'الهاتف:' : 'Tél:'}</span>
-            <span>${client.phone}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'الرخصة:' : 'Permis:'}</span>
-            <span>${client.licenseNumber}</span>
-        </div>
-
-        <div class="section-title">${templateLang === 'ar' ? 'بيانات المركبة' : 'Données du Véhicule'}</div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'الموديل:' : 'Modèle:'}</span>
-            <span>${reservation.car.brand} ${reservation.car.model}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'اللوحة:' : 'Plaque:'}</span>
-            <span>${reservation.car.registration}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'الوقود:' : 'Carburant:'}</span>
-            <span>${reservation.car.energy}</span>
-        </div>
-
-        <div class="section-title">${templateLang === 'ar' ? 'فترة الإيجار' : 'Période de Location'}</div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'المغادرة:' : 'Départ:'}</span>
-            <span>${depDate}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'العودة:' : 'Retour:'}</span>
-            <span>${retDate}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'المدة:' : 'Durée:'}</span>
-            <span>${reservation.totalDays} ${templateLang === 'ar' ? 'يوم' : 'jours'}</span>
-        </div>
-
-        <table class="pricing-table">
-            <thead>
-                <tr>
-                    <th>${templateLang === 'ar' ? 'البيان' : 'Description'}</th>
-                    <th>${templateLang === 'ar' ? 'المبلغ' : 'Montant'}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>${reservation.car.brand} ${reservation.car.model}</td>
-                    <td>${subTotal.toFixed(2)} DA</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <div class="totals-box">
-            <div class="total-row">
-                <span>${templateLang === 'ar' ? 'الفرعي:' : 'S/Total:'}</span>
-                <span>${subTotal.toFixed(2)} DA</span>
-            </div>
-            <div class="total-row">
-                <span>${templateLang === 'ar' ? 'الضريبة:' : 'TVA 19%:'}</span>
-                <span>${tax.toFixed(2)} DA</span>
-            </div>
-            <div class="final-total">
-                ${templateLang === 'ar' ? 'الإجمالي:' : 'Total TTC:'} ${reservation.totalPrice.toFixed(2)} DA
-            </div>
-        </div>
-
-        <div class="section-title">${templateLang === 'ar' ? 'الشروط المقبولة' : 'Conditions'}</div>
-        <div class="checkbox-item">✓ ${templateLang === 'ar' ? 'الرخصة سارية' : 'Permis valide'}</div>
-        <div class="checkbox-item">✓ ${templateLang === 'ar' ? 'التأمين الشامل' : 'Assurance complète'}</div>
-        <div class="checkbox-item">✓ ${templateLang === 'ar' ? 'الإيداع مقبول' : 'Caution acceptée'}</div>
-        <div class="checkbox-item">✓ ${templateLang === 'ar' ? 'الخزان ممتلئ' : 'Réservoir plein'}</div>
+        <div class="contract-title">${labels.contractTitle}</div>
+      </div>
     </div>
+
+    <!-- Info boxes -->
+    <div class="header-info">
+      <div class="info-box blue">
+        <div class="info-label">📅 ${labels.contractDate}</div>
+        <div class="info-value">${today}</div>
+      </div>
+      <div class="info-box green">
+        <div class="info-label">🔢 ${labels.contractNumber}</div>
+        <div class="info-value">#${reservation.id?.substring(0, 8).toUpperCase() || 'N/A'}</div>
+      </div>
+      <div class="info-box amber">
+        <div class="info-label">👤 ${labels.clientLabel}</div>
+        <div class="info-value">${client.lastName || ''}</div>
+      </div>
+    </div>
+
+    <!-- Rental Period -->
+    <div class="section">
+      <div class="section-title">📅 ${labels.rentalPeriod}</div>
+      <div class="section-content" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div class="field">
+          <div class="field-label">${labels.departure}</div>
+          <div class="field-value">${depDate}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">${labels.returnLabel}</div>
+          <div class="field-value">${retDate}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">${labels.duration}</div>
+          <div class="field-value">${totalDays} ${labels.days}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Driver + Vehicle (2 columns) -->
+    <div class="two-col">
+      <!-- Driver -->
+      <div class="section driver-section">
+        <div class="section-title">👤 ${labels.driverInfo}</div>
+        <div class="section-content">
+          <div class="field">
+            <div class="field-label">${labels.fullName}</div>
+            <div class="field-value">${client.firstName || ''} ${client.lastName || ''}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.phone}</div>
+            <div class="field-value">${client.phone || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.licenseNumber}</div>
+            <div class="field-value">${client.licenseNumber || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.licenseDelivery}</div>
+            <div class="field-value">${client.licenseDeliveryDate ? formatDate(client.licenseDeliveryDate) : 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.licenseExpiry}</div>
+            <div class="field-value">${client.licenseExpirationDate ? formatDate(client.licenseExpirationDate) : 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.licensePlace}</div>
+            <div class="field-value">${client.licenseDeliveryPlace || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.birthDate}</div>
+            <div class="field-value">${client.dateOfBirth ? formatDate(client.dateOfBirth) : 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.birthPlace}</div>
+            <div class="field-value">${client.placeOfBirth || 'N/A'}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vehicle -->
+      <div class="section vehicle-section">
+        <div class="section-title">🚗 ${labels.vehicleInfo}</div>
+        <div class="section-content">
+          <div class="field">
+            <div class="field-label">${labels.model}</div>
+            <div class="field-value">${car.brand || ''} ${car.model || ''}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.registration}</div>
+            <div class="field-value">${car.registration || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.color}</div>
+            <div class="field-value">${car.color || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.fuel}</div>
+            <div class="field-value">${car.energy || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.vin}</div>
+            <div class="field-value">${car.vin || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">📏 km</div>
+            <div class="field-value">${reservation.departureInspection?.mileage || 'N/A'} km</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing + Conditions (2 columns) -->
+    <div class="two-col">
+      <!-- Pricing -->
+      <div class="section pricing-section">
+        <div class="section-title">💰 ${labels.pricing}</div>
+        <div class="pricing-row">
+          <span>${labels.pricePerDay}:</span>
+          <span>${(car.priceDay || 0).toLocaleString()} DA</span>
+        </div>
+        <div class="pricing-row">
+          <span>${labels.numberOfDays}:</span>
+          <span>${totalDays}</span>
+        </div>
+        <div class="pricing-row grand-total">
+          <span>${labels.total}:</span>
+          <span>${(reservation.totalPrice || 0).toLocaleString()} DA</span>
+        </div>
+      </div>
+
+      <!-- Conditions -->
+      <div class="section conditions-section">
+        <div class="section-title">✓ ${labels.conditions}</div>
+        <div class="conditions-grid">
+          ${conditionsList.map(c => `
+            <div class="condition-item">
+              <div class="checkbox">✓</div>
+              <span>${c}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Special Conditions -->
+    <div class="special-conditions">
+      <div class="special-title">${isFrench ? 'CONDITIONS SPÉCIALES' : 'الشروط الخاصة'}</div>
+      ${isFrench ? `
+        <div class="special-item">1- Tout renouvellement doit être confirmé par le client 48 heures avant la date d'expiration du contrat</div>
+        <div class="special-item">2- Interdiction de conduire le véhicule avec le carburant de réserve</div>
+        <div class="special-item">3- La non-restitution du véhicule à la date convenue entraîne une facturation complète du tarif quotidien</div>
+      ` : `
+        <div class="special-item">1- كل تمديد يجب على الزبون إخطار الوكالة قبل 48 ساعة من تاريخ انتهاء العقد</div>
+        <div class="special-item">2- عدم قيادة السيارة بوقود احتياطي (réserve)</div>
+        <div class="special-item">3- عدم تسليم السيارة في التاريخ المحدد ينتج عنه مبلغ اليومي كاملاً</div>
+      `}
+    </div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="signature-block">
+        <div class="signature-line"></div>
+        <div class="signature-label">${labels.clientSignature}</div>
+        <div class="date-sig">${labels.dateAndSignature}</div>
+      </div>
+      <div class="signature-block">
+        <div class="signature-line"></div>
+        <div class="signature-label">${labels.agencySignature}</div>
+        <div class="date-sig">${labels.dateAndSignature}</div>
+      </div>
+    </div>
+
+  </div>
 </body>
 </html>`;
   }

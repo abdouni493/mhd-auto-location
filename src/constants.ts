@@ -3,7 +3,7 @@ import { SidebarItem, Agency, Car } from './types';
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'dashboard', label: { fr: 'Tableau de bord', ar: 'لوحة القيادة' }, icon: '📊' },
   { id: 'planner', label: { fr: 'Planificateur', ar: 'المخطط' }, icon: '📅' },
-  { id: 'car-gains', label: { fr: 'Gains par Véhicule', ar: 'الأرباح حسب المركبة' }, icon: '💰' },
+  { id: 'reservations', label: { fr: 'Contrats', ar: 'العقود' }, icon: '🧾' },
   { id: 'vehicles', label: { fr: 'Véhicules', ar: 'المركبات' }, icon: '🚗' },
   { id: 'maintenance', label: { fr: 'Maintenance', ar: 'الصيانة' }, icon: '🔧' },
   { id: 'clients', label: { fr: 'Clients', ar: 'العملاء' }, icon: '👥' },
@@ -13,7 +13,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'expenses', label: { fr: 'Dépenses', ar: 'المصاريف' }, icon: '📉' },
   { id: 'web-mgmt', label: { fr: 'Website management', ar: 'إدارة الموقع' }, icon: '🌐' },
   { id: 'web-orders', label: { fr: 'Website commandes', ar: 'طلبات الموقع' }, icon: '🛒' },
-  { id: 'reservations', label: { fr: 'Facturation', ar: 'الفوترة' }, icon: '🧾' },
+  { id: 'car-gains', label: { fr: 'Gains par Véhicule', ar: 'الأرباح حسب المركبة' }, icon: '💰' },
   { id: 'reports', label: { fr: 'Rapports', ar: 'التقارير' }, icon: '📄' },
   { id: 'config', label: { fr: 'Configuration', ar: 'الإعدادات' }, icon: '🛠️' },
 ];

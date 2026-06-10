@@ -377,6 +377,11 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
       return false;
     }
 
+    // Never show completed (terminated) reservations in the planner
+    if (reservation.status === 'completed') {
+      return false;
+    }
+
     const matchesSearch = (reservation.client.firstName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                          (reservation.client.lastName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                          (reservation.car.brand || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -507,7 +512,6 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
             <option value="accepted">{lang === 'fr' ? 'Accepté' : 'مقبول'}</option>
             <option value="confirmed">{lang === 'fr' ? 'Confirmé' : 'مؤكد'}</option>
             <option value="active">{lang === 'fr' ? 'Actif' : 'نشط'}</option>
-            <option value="completed">{lang === 'fr' ? 'Terminé' : 'مكتمل'}</option>
             <option value="cancelled">{lang === 'fr' ? 'Annulé' : 'ملغي'}</option>
           </select>
 
