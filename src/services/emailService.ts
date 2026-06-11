@@ -513,15 +513,15 @@ export class EmailService {
     // Route to appropriate template generator based on document type
     switch(documentType) {
       case 'inspection':
-        return this.generateInspectionEmailHTML(reservation, templateLang);
+        return await this.generateInspectionEmailHTML(reservation, templateLang);
       case 'engagement':
-        return this.generateEngagementEmailHTML(reservation, templateLang);
+        return await this.generateEngagementEmailHTML(reservation, templateLang);
       case 'recu':
-        return this.generateRecuEmailHTML(reservation, templateLang);
+        return await this.generateRecuEmailHTML(reservation, templateLang);
       case 'facture':
-        return this.generateFactureEmailHTML(reservation, templateLang);
+        return await this.generateFactureEmailHTML(reservation, templateLang);
       case 'devis':
-        return this.generateDevisEmailHTML(reservation, templateLang);
+        return await this.generateDevisEmailHTML(reservation, templateLang);
       case 'contract':
       default:
         return await this.generateContractEmailHTMLForEmail(reservation, templateLang);
@@ -529,7 +529,7 @@ export class EmailService {
   }
 
   /**
-   * Generate inspection-specific email template
+   * Generate inspection email template — same professional design as the printed inspection
    */
   static async generateInspectionEmailHTML(
     reservation: ReservationDetails,
@@ -538,609 +538,897 @@ export class EmailService {
     try {
       const { data: settingsData } = await supabase
         .from('website_settings')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(1);
+        .select('logo, name, address, phone, phone_number_2')
+        .limit(1)
+        .single();
 
-      const agencyName = settingsData?.[0]?.name || 'AUTO LOCATION';
-      const logoUrl = settingsData?.[0]?.logo || '';
+      const agencyName    = settingsData?.name  || 'AUTO LOCATION';
+      const logoUrl       = settingsData?.logo  || '';
+      const agencyAddress = settingsData?.address || '';
+      const agencyPhone   = settingsData?.phone   || '';
 
-      const isRTL = templateLang === 'ar';
-      const dirAttr = isRTL ? 'rtl' : 'ltr';
+      const isFrench = templateLang === 'fr';
+      const textDir  = isFrench ? 'ltr' : 'rtl';
+      const locale   = isFrench ? 'fr-FR' : 'ar-DZ';
+      const today    = new Date().toLocaleDateString(locale);
 
       const inspectionData = reservation.departureInspection;
-      
+      const client = reservation.client;
+      const car    = reservation.car;
+
       const labels = {
-        title: templateLang === 'fr' ? 'RAPPORT D\'INSPECTION' : 'تقرير فحص المركبة',
-        date: templateLang === 'fr' ? 'Date' : 'التاريخ',
-        reservationNo: templateLang === 'fr' ? 'N° de Réservation' : 'رقم الحجز',
-        registration: templateLang === 'fr' ? 'Immatriculation' : 'التسجيل',
-        clientInfo: templateLang === 'fr' ? 'Informations Client' : 'معلومات العميل',
-        fullName: templateLang === 'fr' ? 'Nom Complet' : 'الاسم الكامل',
-        phone: templateLang === 'fr' ? 'Téléphone' : 'الهاتف',
-        email: templateLang === 'fr' ? 'Email' : 'البريد الإلكتروني',
-        license: templateLang === 'fr' ? 'Permis de Conduire' : 'رقم الرخصة',
-        vehicleInfo: templateLang === 'fr' ? 'Informations Véhicule' : 'معلومات المركبة',
-        model: templateLang === 'fr' ? 'Modèle' : 'الطراز',
-        vin: templateLang === 'fr' ? 'VIN' : 'رقم الهيكل',
-        color: templateLang === 'fr' ? 'Couleur' : 'اللون',
-        mileage: templateLang === 'fr' ? 'Kilométrage' : 'الكيلومترات',
-        inspectionDetails: templateLang === 'fr' ? 'Détails Inspection' : 'تفاصيل الفحص',
-        notes: templateLang === 'fr' ? 'Notes' : 'ملاحظات',
+        title:            isFrench ? 'RAPPORT D\'INSPECTION' : 'تقرير فحص المركبة',
+        date:             isFrench ? 'Date'                   : 'التاريخ',
+        reservationNo:    isFrench ? 'N° Réservation'         : 'رقم الحجز',
+        registration:     isFrench ? 'Immatriculation'        : 'رقم التسجيل',
+        clientInfo:       isFrench ? 'Informations Client'    : 'معلومات العميل',
+        fullName:         isFrench ? 'Nom Complet'            : 'الاسم الكامل',
+        phone:            isFrench ? 'Téléphone'              : 'الهاتف',
+        emailLabel:       isFrench ? 'Email'                  : 'البريد الإلكتروني',
+        license:          isFrench ? 'Permis'                 : 'رقم الرخصة',
+        vehicleInfo:      isFrench ? 'Informations Véhicule'  : 'معلومات المركبة',
+        model:            isFrench ? 'Modèle'                 : 'الطراز',
+        vin:              isFrench ? 'VIN'                    : 'رقم الهيكل',
+        color:            isFrench ? 'Couleur'                : 'اللون',
+        mileage:          isFrench ? 'Kilométrage départ'     : 'كيلومتراج البداية',
+        fuelLevel:        isFrench ? 'Niveau carburant'       : 'مستوى الوقود',
+        inspectionDetails:isFrench ? 'Détails Inspection'     : 'تفاصيل الفحص',
+        notes:            isFrench ? 'Notes / Observations'   : 'ملاحظات',
+        clientSig:        isFrench ? 'Signature Client'       : 'توقيع العميل',
+        agencySig:        isFrench ? 'Signature Agence'       : 'توقيع الوكالة',
+        dateAndSig:       isFrench ? 'Date et signature'      : 'التاريخ والتوقيع',
       };
 
-      const html = `
-<!DOCTYPE html>
-<html dir="${dirAttr}" lang="${templateLang}">
+      const categoryLabels: Record<string, string> = {
+        security:    isFrench ? '🛡️ Sécurité'         : '🛡️ الأمان',
+        equipment:   isFrench ? '🔧 Équipements'      : '🔧 المعدات',
+        comfort:     isFrench ? '✨ Confort & Propreté': '✨ الراحة والنظافة',
+        cleanliness: isFrench ? '🧹 Nettoyage'         : '🧹 التنظيف',
+      };
+
+      const groupedItems: Record<string, any[]> = {};
+      (inspectionData?.inspectionItems || []).forEach((item: any) => {
+        if (!groupedItems[item.category]) groupedItems[item.category] = [];
+        groupedItems[item.category].push(item);
+      });
+
+      const checklistHTML = Object.entries(groupedItems).map(([cat, items]) => `
+        <div style="margin-bottom:10px;">
+          <div style="font-weight:700;font-size:12px;color:#1a3a8a;padding:5px 8px;background:#f0f1f3;border-left:4px solid #2563eb;border-radius:3px;margin-bottom:4px;">
+            ${categoryLabels[cat] || cat}
+          </div>
+          ${(items as any[]).map(item => `
+            <div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:0.5px solid #ddd;font-size:12px;">
+              <span style="color:#333;">${item.name}</span>
+              <span style="font-weight:700;font-size:13px;">${item.checked ? '✅' : '❌'}</span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+
+      const html = `<!DOCTYPE html>
+<html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
 <head>
   <meta charset="UTF-8">
   <title>${labels.title}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; background: white; line-height: 1.5; }
-    .page { page-break-after: always; }
-    .last-page { page-break-after: avoid; }
-    
-    .container { width: 100%; max-width: 210mm; margin: 0 auto; padding: 15mm; background: white; }
-    
-    /* Header Styles */
-    .header { 
-      text-align: center; 
-      border-bottom: 3px solid #2d7a4d;
-      padding-bottom: 15px;
-      margin-bottom: 20px;
-      page-break-after: avoid;
-    }
-    .agency-name { font-size: 16px; font-weight: bold; color: #2d7a4d; margin-bottom: 5px; }
-    .report-title { font-size: 18px; font-weight: bold; color: #2d7a4d; margin: 10px 0; }
-    .report-date { font-size: 11px; color: #666; }
-    
-    /* Section Styles */
-    .section { margin-bottom: 15px; page-break-inside: avoid; }
-    .section-header { 
-      background-color: #2d7a4d;
-      color: white;
-      padding: 10px 12px;
-      font-weight: bold;
-      font-size: 13px;
-      margin-bottom: 8px;
-      page-break-after: avoid;
-    }
-    
-    /* Info Grid */
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-    .info-row { display: grid; grid-template-columns: 40% 60%; gap: 10px; padding: 6px 8px; background: #f9f9f9; border-radius: 3px; }
-    .info-label { font-weight: bold; color: #2d7a4d; font-size: 12px; }
-    .info-value { color: #555; font-size: 12px; }
-    
-    /* Checklist Styles */
-    .category-section { margin-bottom: 12px; page-break-inside: avoid; }
-    .category-title { 
-      font-weight: bold;
-      color: #2d7a4d;
-      padding: 8px 10px;
-      margin-bottom: 5px;
-      border-left: 3px solid #2d7a4d;
-      background: #f5f5f5;
-      font-size: 12px;
-    }
-    
-    .checklist-items { margin-left: 10px; }
-    .checklist-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 6px 8px;
-      border-bottom: 1px solid #eee;
-      font-size: 12px;
-    }
-    .item-name { flex: 1; color: #333; }
-    .item-status { 
-      font-weight: bold; 
-      font-size: 14px;
-      min-width: 20px;
-      text-align: right;
-    }
-    
-    /* Notes Section */
-    .notes-section {
-      background: #f9f9f9;
-      padding: 12px;
-      border-left: 3px solid #2d7a4d;
-      margin-top: 15px;
-      page-break-inside: avoid;
-    }
-    .notes-label { font-weight: bold; color: #2d7a4d; margin-bottom: 6px; font-size: 12px; }
-    .notes-content { color: #555; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; }
-    
-    /* Footer */
-    .footer { 
-      margin-top: 20px;
-      padding-top: 10px;
-      border-top: 1px solid #ddd;
-      text-align: center;
-      font-size: 10px;
-      color: #999;
-      page-break-inside: avoid;
-    }
-    
-    @media print {
-      body { margin: 0; padding: 0; }
-      .container { padding: 10mm; }
-      .page { page-break-after: always; }
-      .last-page { page-break-after: avoid; }
-    }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; background: white; line-height: 1.5; direction: ${textDir}; font-size: 13px; }
+    .page { width: 100%; max-width: 210mm; padding: 12mm; margin: 0 auto; background: white; }
+    .header { border-bottom: 3px solid #1a3a8a; padding-bottom: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+    .logo { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+    .header-text { flex: 1; }
+    .agency-name { font-size: 20px; font-weight: bold; color: #1a3a8a; text-align: center; margin-bottom: 2px; }
+    .agency-contact { font-size: 10px; color: #555; text-align: center; }
+    .doc-title { font-size: 13px; color: #555; text-align: center; margin-top: 2px; }
+    .info-boxes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+    .ibox { padding: 6px 8px; border-radius: 4px; font-size: 11px; }
+    .ibox.blue  { background: #dbeafe; border-left: 4px solid #2563eb; }
+    .ibox.green { background: #dcfce7; border-left: 4px solid #16a34a; }
+    .ibox.amber { background: #fef3c7; border-left: 4px solid #d97706; }
+    .ibox-label { font-weight: 600; color: #222; margin-bottom: 2px; font-size: 10px; }
+    .ibox-value { color: #333; font-size: 11px; font-weight: 600; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .section { padding: 8px 10px; border-radius: 5px; border: 1px solid #e5e7eb; margin-bottom: 8px; }
+    .section.client-s  { background: #f0f9ff; border-color: #bfdbfe; }
+    .section.vehicle-s { background: #f0fdf4; border-color: #bbf7d0; }
+    .section.inspect-s { background: #f8f9fa; border-color: #e5e7eb; }
+    .section-title { font-size: 12px; font-weight: 700; background: #f0f1f3; padding: 4px 6px; border-radius: 3px; margin-bottom: 6px; border-left: 4px solid #2563eb; color: #1a3a8a; }
+    .field { padding: 2px 0; border-bottom: 0.5px solid #ddd; }
+    .field-label { font-weight: 600; color: #1a3a8a; font-size: 11px; }
+    .field-value { color: #444; font-size: 12px; margin-top: 1px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+    .notes-box { background: #f0f9ff; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; padding: 10px; border-radius: 4px; margin-bottom: 8px; font-size: 12px; color: #333; }
+    .notes-label { font-weight: 700; color: #1a3a8a; margin-bottom: 4px; font-size: 11px; }
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 14px; }
+    .sig-block { text-align: center; }
+    .sig-line { border-top: 1px solid #333; margin-bottom: 4px; height: 30px; }
+    .sig-label { font-weight: 600; font-size: 12px; color: #1a3a8a; }
+    .sig-date  { font-size: 10px; color: #666; margin-top: 2px; }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="page">
+
+    <!-- Header -->
     <div class="header">
-      <div class="agency-name">${agencyName}</div>
-      <div class="report-title">🔍 ${labels.title}</div>
-      <div class="report-date">${new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</div>
-    </div>
-    
-    <!-- Reservation Info Section -->
-    <div class="section">
-      <div class="section-header">📋 ${templateLang === 'fr' ? 'Informations Réservation' : 'معلومات الحجز'}</div>
-      <div class="info-grid">
-        <div class="info-row">
-          <span class="info-label">${labels.date}</span>
-          <span class="info-value">${new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</span>
+      ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo">` : ''}
+      <div class="header-text">
+        <div class="agency-name">${agencyName}</div>
+        <div class="agency-contact">
+          ${agencyAddress}${agencyPhone ? ` &nbsp;|&nbsp; 📞 ${agencyPhone}` : ''}
         </div>
-        <div class="info-row">
-          <span class="info-label">${labels.reservationNo}</span>
-          <span class="info-value">#${reservation.id.substring(0, 8).toUpperCase()}</span>
+        <div class="doc-title">🔍 ${labels.title}</div>
+      </div>
+    </div>
+
+    <!-- Info boxes -->
+    <div class="info-boxes">
+      <div class="ibox blue">
+        <div class="ibox-label">📅 ${labels.date}</div>
+        <div class="ibox-value">${today}</div>
+      </div>
+      <div class="ibox green">
+        <div class="ibox-label">🔢 ${labels.reservationNo}</div>
+        <div class="ibox-value">#${reservation.id?.substring(0, 8).toUpperCase() || 'N/A'}</div>
+      </div>
+      <div class="ibox amber">
+        <div class="ibox-label">🚗 ${labels.registration}</div>
+        <div class="ibox-value">${car.registration || 'N/A'}</div>
+      </div>
+    </div>
+
+    <!-- Client + Vehicle (2 columns) -->
+    <div class="two-col">
+      <div class="section client-s">
+        <div class="section-title">👤 ${labels.clientInfo}</div>
+        <div class="grid-2">
+          <div class="field">
+            <div class="field-label">${labels.fullName}</div>
+            <div class="field-value">${client.firstName || ''} ${client.lastName || ''}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.phone}</div>
+            <div class="field-value">${client.phone || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.emailLabel}</div>
+            <div class="field-value">${client.email || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.license}</div>
+            <div class="field-value">${client.licenseNumber || 'N/A'}</div>
+          </div>
+        </div>
+      </div>
+      <div class="section vehicle-s">
+        <div class="section-title">🚗 ${labels.vehicleInfo}</div>
+        <div class="grid-2">
+          <div class="field">
+            <div class="field-label">${labels.model}</div>
+            <div class="field-value">${car.brand || ''} ${car.model || ''}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.color}</div>
+            <div class="field-value">${car.color || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.vin}</div>
+            <div class="field-value">${car.vin || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.mileage}</div>
+            <div class="field-value">${inspectionData?.mileage || car.mileage || 0} km</div>
+          </div>
+          <div class="field">
+            <div class="field-label">⛽ ${labels.fuelLevel}</div>
+            <div class="field-value">${inspectionData?.fuelLevel || 'N/A'}</div>
+          </div>
         </div>
       </div>
     </div>
-    
-    <!-- Client Info Section -->
-    <div class="section">
-      <div class="section-header">👤 ${labels.clientInfo}</div>
-      <div class="info-grid">
-        <div class="info-row">
-          <span class="info-label">${labels.fullName}</span>
-          <span class="info-value">${reservation.client.firstName} ${reservation.client.lastName}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.phone}</span>
-          <span class="info-value">${reservation.client.phone}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.email}</span>
-          <span class="info-value">${reservation.client.email}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.license}</span>
-          <span class="info-value">${reservation.client.licenseNumber || 'N/A'}</span>
-        </div>
+
+    <!-- Inspection Checklist -->
+    <div class="section inspect-s">
+      <div class="section-title">✅ ${labels.inspectionDetails}</div>
+      <div class="two-col">
+        ${checklistHTML || `<p style="color:#888;font-size:12px;">${isFrench ? 'Aucun élément d\'inspection' : 'لا توجد عناصر فحص'}</p>`}
       </div>
     </div>
-    
-    <!-- Vehicle Info Section -->
-    <div class="section">
-      <div class="section-header">🚗 ${labels.vehicleInfo}</div>
-      <div class="info-grid">
-        <div class="info-row">
-          <span class="info-label">${labels.model}</span>
-          <span class="info-value">${reservation.car.brand} ${reservation.car.model}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.registration}</span>
-          <span class="info-value">${reservation.car.registration}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.vin}</span>
-          <span class="info-value">${reservation.car.vin || 'N/A'}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.color}</span>
-          <span class="info-value">${reservation.car.color || 'N/A'}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">${labels.mileage}</span>
-          <span class="info-value">${reservation.car.mileage || 0} km</span>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Inspection Checklist Section -->
-    <div class="section">
-      <div class="section-header">✅ ${labels.inspectionDetails}</div>
-      ${(() => {
-        const categoryLabels = {
-          security: templateLang === 'fr' ? '🛡️ Sécurité' : '🛡️ الأمان',
-          equipment: templateLang === 'fr' ? '🔧 Équipements' : '🔧 المعدات',
-          comfort: templateLang === 'fr' ? '✨ Confort & Propreté' : '✨ الراحة والنظافة',
-          cleanliness: templateLang === 'fr' ? '🧹 Nettoyage' : '🧹 التنظيف'
-        };
-        
-        const groupedItems: any = {};
-        (inspectionData?.inspectionItems || []).forEach((item: any) => {
-          if (!groupedItems[item.category]) {
-            groupedItems[item.category] = [];
-          }
-          groupedItems[item.category].push(item);
-        });
-        
-        return Object.entries(groupedItems).map(([category, items]: any) => {
-          const categoryHeader = categoryLabels[category as keyof typeof categoryLabels];
-          const itemsHtml = (items as any[]).map((item: any) => `
-            <div class="checklist-item">
-              <span class="item-name">${item.name}</span>
-              <span class="item-status">${item.checked ? '✅' : '❌'}</span>
-            </div>
-          `).join('');
-          return `
-            <div class="category-section">
-              <div class="category-title">${categoryHeader}</div>
-              <div class="checklist-items">
-                ${itemsHtml}
-              </div>
-            </div>
-          `;
-        }).join('');
-      })()}
-    </div>
-    
-    <!-- Notes Section -->
-    <div class="notes-section last-page">
+
+    <!-- Notes -->
+    <div class="notes-box">
       <div class="notes-label">📝 ${labels.notes}</div>
-      <div class="notes-content">${inspectionData?.notes || templateLang === 'fr' ? 'Aucune note' : 'بدون ملاحظات'}</div>
+      <div>${inspectionData?.notes || (isFrench ? 'Aucune note' : 'بدون ملاحظات')}</div>
     </div>
-    
-    <!-- Footer -->
-    <div class="footer">
-      <p>${templateLang === 'fr' ? 'Rapport généré automatiquement - ' : 'تم إنشاء التقرير تلقائيًا - '}${new Date().toLocaleString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR')}</p>
-      <p style="margin-top: 5px;">${agencyName}</p>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">${labels.clientSig}</div>
+        <div class="sig-date">${labels.dateAndSig}</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">${labels.agencySig}</div>
+        <div class="sig-date">${labels.dateAndSig}</div>
+      </div>
     </div>
+
   </div>
 </body>
-</html>
-      `;
+</html>`;
 
       return html;
     } catch (error) {
       console.error('Error generating inspection HTML:', error);
-      // Fallback to contract template if inspection generation fails
       return this.generateContractHTML(reservation, templateLang);
     }
   }
 
+  // ─── SHARED AGENCY LOADER ────────────────────────────────────────────────────
+  private static async loadAgency() {
+    const { data } = await supabase
+      .from('website_settings')
+      .select('logo, name, address, phone, phone_number_2, bank_number')
+      .limit(1)
+      .single();
+    return {
+      name:    data?.name         || 'AUTO LOCATION',
+      logo:    data?.logo         || '',
+      address: data?.address      || '',
+      phone:   data?.phone        || '',
+      phone2:  data?.phone_number_2 || '',
+      bank:    data?.bank_number  || '',
+    };
+  }
+
+  // ─── SHARED HTML HEADER ──────────────────────────────────────────────────────
+  private static agencyHeaderHTML(ag: ReturnType<typeof EmailService['loadAgency']> extends Promise<infer T> ? T : never, docTitle: string, textDir: string): string {
+    return `
+    <div style="border-bottom:3px solid #1a3a8a;padding-bottom:8px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
+      ${ag.logo ? `<img src="${ag.logo}" alt="Logo" style="width:40px;height:40px;object-fit:contain;flex-shrink:0;">` : ''}
+      <div style="flex:1;">
+        <div style="font-size:20px;font-weight:bold;color:#1a3a8a;text-align:center;margin-bottom:2px;">${ag.name}</div>
+        <div style="font-size:10px;color:#555;text-align:center;">
+          ${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${ag.phone}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${ag.phone2}` : ''}
+        </div>
+        <div style="font-size:13px;color:#555;text-align:center;margin-top:2px;">${docTitle}</div>
+      </div>
+    </div>`;
+  }
+
   /**
-   * Generate engagement (personal commitment) email template
+   * Generate engagement email — same design as printed engagement (amber #d97706)
    */
-  private static generateEngagementEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): string {
-    const client = reservation.client;
-    const depDateStr = new Date(reservation.step1.departureDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const retDateStr = new Date(reservation.step1.returnDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const clientName = `${client.firstName} ${client.lastName}`;
-    
+  private static async generateEngagementEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): Promise<string> {
+    const ag = await this.loadAgency();
+    const isFrench = templateLang === 'fr';
+    const textDir  = isFrench ? 'ltr' : 'rtl';
+    const locale   = isFrench ? 'fr-FR' : 'ar-DZ';
+    const today    = new Date().toLocaleDateString(locale);
+    const client   = reservation.client;
+    const car      = reservation.car;
+    const depDate  = new Date(reservation.step1.departureDate).toLocaleDateString(locale);
+    const retDate  = new Date(reservation.step1.returnDate).toLocaleDateString(locale);
+
+    const isPassport = client.documentType === 'passport';
+    const docLabel  = isPassport ? (isFrench ? 'Passeport' : 'جواز سفر') : (isFrench ? "Carte d'Identité" : 'بطاقة هوية');
+    const depositLabel = isPassport
+      ? (isFrench ? 'Avoir déposé mon passeport' : 'قمت بإيداع جواز سفري')
+      : (isFrench ? "Avoir déposé ma carte d'identité" : 'قمت بإيداع بطاقتي الشخصية');
+    const docNumber = isPassport ? (client.documentNumber || 'N/A') : (client.idCardNumber || 'N/A');
+    const docDate   = client.documentDeliveryDate || client.licenseDeliveryDate || '';
+    const docPlace  = client.documentDeliveryAddress || client.licenseDeliveryPlace || client.wilaya || 'N/A';
+
     return `<!DOCTYPE html>
-<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
 <head>
-    <meta charset="UTF-8">
-    <title>${templateLang === 'ar' ? 'التزام' : 'Engagement'}</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-      .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; }
-      .header { text-align: center; border-bottom: 3px solid #007bff; padding-bottom: 20px; margin-bottom: 30px; }
-      .title { font-size: 24px; color: #007bff; margin: 10px 0; }
-      .section-title { font-size: 14px; font-weight: bold; color: #007bff; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-      .info-row { display: flex; justify-content: space-between; padding: 8px 0; }
-      .label { font-weight: bold; }
-      .commitment-box { background: #f9f9f9; padding: 15px; margin: 20px 0; border-left: 4px solid #007bff; }
-      .sig-section { margin-top: 40px; display: flex; justify-content: space-between; }
-      .sig-box { text-align: center; }
-      .sig-line { border-top: 2px solid #333; width: 150px; margin-top: 30px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>${isFrench ? 'Engagement' : 'التزام'}</title>
+  <style>
+    * { margin:0;padding:0;box-sizing:border-box; }
+    body { font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:white;direction:${textDir};font-size:14px;line-height:1.6; }
+    .page { width:100%;max-width:210mm;padding:12mm;margin:0 auto; }
+    .header { border-bottom:3px solid #d97706;padding-bottom:8px;margin-bottom:14px;display:flex;align-items:center;gap:10px; }
+    .logo { width:40px;height:40px;object-fit:contain;flex-shrink:0; }
+    .agency-name { font-size:20px;font-weight:700;color:#d97706;text-align:center;margin-bottom:2px; }
+    .agency-contact { font-size:10px;color:#555;text-align:center; }
+    .doc-title { font-size:16px;font-weight:700;color:#d97706;text-align:center;text-decoration:underline;margin-top:2px; }
+    .intro-line { margin:10px 0;font-size:14px; }
+    .highlight { font-weight:600;color:#d97706; }
+    .doc-info { margin:12px 0;padding:12px;border:2px solid #d97706;border-radius:4px;background:#fffcf8; }
+    .info-line { display:flex;gap:12px;margin:6px 0;font-size:13px; }
+    .info-label { font-weight:600;color:#92400e;min-width:120px;flex-shrink:0; }
+    .info-value { color:#1a1a1a; }
+    .vehicle-box { background:#fff8f0;padding:14px;border-radius:4px;margin:14px 0;border:2px solid #d97706;border-left:5px solid #d97706; }
+    .vehicle-header { font-weight:700;color:#d97706;margin-bottom:8px;font-size:15px;text-transform:uppercase; }
+    .model-badge { background:#fef3c7;padding:6px 12px;border-radius:4px;font-weight:700;color:#d97706;display:inline-block;margin:6px 0;border:1px solid #d97706;font-size:15px; }
+    .signatures { display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px; }
+    .sig-block { text-align:center;border:2px solid #d97706;border-radius:4px;padding:16px 12px;background:#fffcf8; }
+    .sig-space { min-height:50px;border-bottom:2px solid #1a1a1a;margin-bottom:8px; }
+    .sig-label { font-weight:700;font-size:12px;color:#d97706;text-transform:uppercase; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="title">${templateLang === 'ar' ? 'التزام شخصي' : 'Engagement Personnel'}</div>
-        </div>
+  <div class="page">
 
-        <div class="section-title">${templateLang === 'ar' ? 'بيانات الراكب' : 'Données du Conducteur'}</div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'الاسم:' : 'Nom:'}</span>
-            <span>${clientName}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'رقم الهاتف:' : 'Téléphone:'}</span>
-            <span>${client.phone}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'رقم الترخيص:' : 'Numéro de Permis:'}</span>
-            <span>${client.licenseNumber}</span>
-        </div>
-
-        <div class="section-title">${templateLang === 'ar' ? 'بيانات المركبة' : 'Données du Véhicule'}</div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'الموديل:' : 'Modèle:'}</span>
-            <span>${reservation.car.brand} ${reservation.car.model}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'لوحة التسجيل:' : 'Plaque:'}</span>
-            <span>${reservation.car.registration}</span>
-        </div>
-
-        <div class="section-title">${templateLang === 'ar' ? 'فترة الإيجار' : 'Période de Location'}</div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'من:' : 'De:'}</span>
-            <span>${depDateStr}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">${templateLang === 'ar' ? 'إلى:' : 'À:'}</span>
-            <span>${retDateStr}</span>
-        </div>
-
-        <div class="commitment-box">
-            <p>${templateLang === 'ar' 
-                ? 'أتعهد بالالتزام بجميع شروط وأحكام عقد الإيجار والعناية الكاملة بالمركبة المؤجرة.' 
-                : 'Je m\'engage à respecter toutes les conditions du contrat de location et à prendre soin du véhicule loué.'}</p>
-        </div>
-
-        <div class="sig-section">
-            <div class="sig-box">
-                <div>${templateLang === 'ar' ? 'توقيع الراكب' : 'Signature du Conducteur'}</div>
-                <div class="sig-line"></div>
-            </div>
-            <div class="sig-box">
-                <div>${templateLang === 'ar' ? 'توقيع الوكالة' : 'Signature de l\'Agence'}</div>
-                <div class="sig-line"></div>
-            </div>
-        </div>
+    <!-- Header -->
+    <div class="header">
+      ${ag.logo ? `<img src="${ag.logo}" alt="Logo" class="logo">` : ''}
+      <div style="flex:1;">
+        <div class="agency-name">${ag.name}</div>
+        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${ag.phone}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${ag.phone2}` : ''}</div>
+        <div class="doc-title">${isFrench ? 'ENGAGEMENT' : 'التزام'}</div>
+      </div>
     </div>
+
+    <!-- Content -->
+    <div class="intro-line">
+      ${isFrench ? 'Je soussigné(e) Mme/Mrs' : 'أنا الموقع أدناه السيدة/السيد'}
+      <span class="highlight"> ${client.firstName || ''} ${client.lastName || ''}</span>
+    </div>
+
+    <div class="intro-line" style="margin-top:10px;">${depositLabel} (${docLabel})</div>
+
+    <!-- Document details -->
+    <div class="doc-info">
+      <div class="info-line">
+        <span class="info-label">${isFrench ? 'N°' : 'رقم'}</span>
+        <span class="info-value">${docNumber}</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">${isFrench ? 'Délivré le' : 'صادر في'}</span>
+        <span class="info-value">${docDate ? new Date(docDate).toLocaleDateString(locale) : 'N/A'}</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">${isFrench ? 'À' : 'في'}</span>
+        <span class="info-value">${docPlace}</span>
+      </div>
+    </div>
+
+    <div class="intro-line">
+      ${isFrench ? 'Au niveau de votre agence de location de voiture le' : 'لدى وكالة تأجير السيارات الخاصة بكم في'}
+      <span class="highlight"> ${today}</span>
+    </div>
+
+    <div class="intro-line">
+      ${isFrench ? 'Contrat N°' : 'العقد رقم'} <span class="highlight">${reservation.id?.substring(0, 8).toUpperCase() || 'N/A'}</span>
+    </div>
+
+    <div class="intro-line">${isFrench ? 'Comme caution pour location du véhicule' : 'كضمان لاستئجار المركبة'}</div>
+
+    <!-- Vehicle -->
+    <div class="vehicle-box">
+      <div class="vehicle-header">🚗 ${isFrench ? 'Modèle Véhicule' : 'موديل المركبة'}</div>
+      <div class="model-badge">${car.brand || ''} ${car.model || ''}</div>
+      <div class="info-line" style="margin-top:8px;">
+        <span class="info-label">${isFrench ? 'Immatriculation' : 'رقم التسجيل'}</span>
+        <span class="info-value">${car.registration || 'N/A'}</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">${isFrench ? 'Période de Location' : 'فترة الإيجار'}</span>
+        <span class="info-value">${isFrench ? 'Du' : 'من'} ${depDate} ${isFrench ? 'au' : 'إلى'} ${retDate}</span>
+      </div>
+    </div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="sig-block">
+        <div class="sig-space"></div>
+        <div class="sig-label">${isFrench ? "Signature et cachet de l'Agence" : 'توقيع وختم الوكالة'}</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-space"></div>
+        <div class="sig-label">${isFrench ? 'Signature de client' : 'توقيع العميل'}</div>
+      </div>
+    </div>
+
+  </div>
 </body>
 </html>`;
   }
 
   /**
-   * Generate receipt (reçu) email template
+   * Generate receipt email — same design as printed reçu (purple #7c3aed)
    */
-  private static generateRecuEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): string {
-    const dateStr = new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const client = reservation.client;
-    const totalPrice = reservation.totalPrice;
-    const paidAmount = reservation.advancePayment;
-    const balance = totalPrice - paidAmount;
-    
+  private static async generateRecuEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): Promise<string> {
+    const ag = await this.loadAgency();
+    const isFrench = templateLang === 'fr';
+    const textDir  = isFrench ? 'ltr' : 'rtl';
+    const locale   = isFrench ? 'fr-FR' : 'ar-DZ';
+    const today    = new Date().toLocaleDateString(locale);
+    const client   = reservation.client;
+
+    const totalAmount     = reservation.totalPrice || 0;
+    const totalPaid       = reservation.payments?.reduce((s: number, p: any) => s + (p.amount || 0), 0) || reservation.advancePayment || 0;
+    const currentPayment  = reservation.payments?.[0]?.amount || totalPaid;
+    const remaining       = Math.max(0, totalAmount - totalPaid);
+
     return `<!DOCTYPE html>
-<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
 <head>
-    <meta charset="UTF-8">
-    <title>${templateLang === 'ar' ? 'إيصال الدفع' : 'Reçu'}</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-      .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; }
-      .header { text-align: center; border-bottom: 3px solid #28a745; padding-bottom: 20px; margin-bottom: 30px; }
-      .title { font-size: 24px; color: #28a745; margin: 10px 0; }
-      .badge { display: inline-block; background: #28a745; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-top: 10px; }
-      .section-title { font-size: 14px; font-weight: bold; color: #333; margin-top: 20px; margin-bottom: 10px; }
-      .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-      .amount-section { background: #f9f9f9; padding: 15px; margin: 20px 0; border-left: 4px solid #28a745; }
-      .amount-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }
-      .total { font-size: 18px; font-weight: bold; color: #28a745; margin-top: 10px; border-top: 2px solid #ddd; padding-top: 10px; }
-      .thank-you { text-align: center; font-size: 16px; font-weight: bold; color: #28a745; margin: 20px 0; }
-    </style>
+  <meta charset="UTF-8">
+  <title>${isFrench ? 'Reçu de Versement' : 'إيصال الدفع'}</title>
+  <style>
+    * { margin:0;padding:0;box-sizing:border-box; }
+    body { font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:white;direction:${textDir};font-size:13px;line-height:1.5; }
+    .page { width:100%;max-width:210mm;padding:12mm;margin:0 auto; }
+    .header { border-bottom:3px solid #7c3aed;padding-bottom:8px;margin-bottom:10px;display:flex;align-items:center;gap:10px; }
+    .logo { width:40px;height:40px;object-fit:contain;flex-shrink:0; }
+    .agency-name { font-size:20px;font-weight:700;color:#7c3aed;text-align:center;margin-bottom:2px; }
+    .agency-contact { font-size:10px;color:#555;text-align:center; }
+    .doc-title { font-size:16px;font-weight:700;color:#7c3aed;text-align:center;text-decoration:underline;margin-top:2px; }
+    .info-boxes { display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px; }
+    .ibox { padding:6px 8px;border-radius:4px;background:#f3e8ff;border-left:4px solid #7c3aed; }
+    .ibox-label { font-weight:600;font-size:10px;color:#222;margin-bottom:2px; }
+    .ibox-value { font-size:11px;font-weight:600;color:#333; }
+    .section { padding:8px 10px;border-radius:5px;border:1px solid #e9d5ff;background:#faf5ff;margin-bottom:8px; }
+    .sec-title { font-size:12px;font-weight:700;background:#f0f1f3;padding:4px 6px;border-radius:3px;margin-bottom:6px;border-left:4px solid #7c3aed;color:#7c3aed; }
+    .detail-grid { display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px; }
+    .detail-item { padding:8px;background:#f9f5ff;border-radius:3px; }
+    .det-label { font-weight:600;color:#7c3aed;font-size:10px;text-transform:uppercase;margin-bottom:2px; }
+    .det-value { color:#1a1a1a;font-size:13px; }
+    .pay-box { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0; }
+    .pay-item { background:#f9f5ff;padding:10px;border-radius:4px;border-left:4px solid #7c3aed; }
+    .pay-item.orange { background:#fff8f0;border-left-color:#f97316; }
+    .pay-label { font-weight:600;font-size:10px;color:#7c3aed;text-transform:uppercase;margin-bottom:3px; }
+    .pay-label.orange { color:#f97316; }
+    .pay-value { font-size:16px;font-weight:700;color:#1a1a1a; }
+    .pay-value.green { color:#10b981; }
+    .pay-value.red   { color:#ef4444; }
+    .pay-value.orange{ color:#f97316; }
+    .amount-hero { background:linear-gradient(135deg,#7c3aed 0%,#a78bfa 100%);color:white;padding:14px;border-radius:6px;text-align:center;margin:10px 0; }
+    .amount-hero-label { font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;opacity:0.9;margin-bottom:4px; }
+    .amount-hero-value { font-size:28px;font-weight:700; }
+    .thanks { text-align:center;color:#7c3aed;font-size:14px;font-weight:600;margin:10px 0; }
+    .signatures { display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px; }
+    .sig-block { text-align:center; }
+    .sig-line { border-top:1px solid #333;margin-bottom:4px;height:30px; }
+    .sig-label { font-weight:600;font-size:12px;color:#7c3aed; }
+    .sig-date  { font-size:10px;color:#666;margin-top:2px; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="title">${templateLang === 'ar' ? 'إيصال الدفع' : 'Reçu de Paiement'}</div>
-            <div class="badge">${templateLang === 'ar' ? '✓ مقبول' : '✓ Accepté'}</div>
-        </div>
+  <div class="page">
 
-        <div class="section-title">${templateLang === 'ar' ? 'تفاصيل الدفع' : 'Détails du Paiement'}</div>
-        <div class="info-row">
-            <span>${templateLang === 'ar' ? 'التاريخ:' : 'Date:'}</span>
-            <span>${dateStr}</span>
-        </div>
-        <div class="info-row">
-            <span>${templateLang === 'ar' ? 'العميل:' : 'Client:'}</span>
-            <span>${client.firstName} ${client.lastName}</span>
-        </div>
-        <div class="info-row">
-            <span>${templateLang === 'ar' ? 'رقم الهاتف:' : 'Téléphone:'}</span>
-            <span>${client.phone}</span>
-        </div>
-        <div class="info-row">
-            <span>${templateLang === 'ar' ? 'رقم الحجز:' : 'Réservation:'}</span>
-            <span>${reservation.id.substring(0, 8)}</span>
-        </div>
-
-        <div class="amount-section">
-            <div class="amount-row">
-                <span>${templateLang === 'ar' ? 'المبلغ الكلي:' : 'Montant Total:'}</span>
-                <span>${totalPrice.toFixed(2)} DA</span>
-            </div>
-            <div class="amount-row">
-                <span>${templateLang === 'ar' ? 'المبلغ المدفوع:' : 'Montant Payé:'}</span>
-                <span>${paidAmount.toFixed(2)} DA</span>
-            </div>
-            <div class="amount-row">
-                <span>${templateLang === 'ar' ? 'الرصيد المتبقي:' : 'Solde:'}</span>
-                <span style="color: ${balance > 0 ? '#ff6b6b' : '#28a745'}">${balance.toFixed(2)} DA</span>
-            </div>
-            <div class="total">
-                ${templateLang === 'ar' ? 'المستحصل:' : 'Reçu:'} ${paidAmount.toFixed(2)} DA
-            </div>
-        </div>
-
-        <div class="thank-you">
-            ${templateLang === 'ar' ? '🙏 شكراً على دفعتك 🙏' : '🙏 Merci pour votre paiement 🙏'}
-        </div>
+    <!-- Header -->
+    <div class="header">
+      ${ag.logo ? `<img src="${ag.logo}" alt="Logo" class="logo">` : ''}
+      <div style="flex:1;">
+        <div class="agency-name">${ag.name}</div>
+        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${ag.phone}` : ''}</div>
+        <div class="doc-title">${isFrench ? 'REÇU DE VERSEMENT' : 'إيصال الدفع'}</div>
+      </div>
     </div>
+
+    <!-- Info boxes -->
+    <div class="info-boxes">
+      <div class="ibox">
+        <div class="ibox-label">🔢 ${isFrench ? 'N° Reçu' : 'رقم الإيصال'}</div>
+        <div class="ibox-value">#${reservation.id?.substring(0, 8).toUpperCase() || 'N/A'}</div>
+      </div>
+      <div class="ibox">
+        <div class="ibox-label">📅 ${isFrench ? 'Date' : 'التاريخ'}</div>
+        <div class="ibox-value">${today}</div>
+      </div>
+      <div class="ibox">
+        <div class="ibox-label">👤 ${isFrench ? 'Client' : 'العميل'}</div>
+        <div class="ibox-value">${client.lastName || ''}</div>
+      </div>
+    </div>
+
+    <!-- Client info -->
+    <div class="section">
+      <div class="sec-title">📋 ${isFrench ? 'Informations du Client' : 'معلومات العميل'}</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="det-label">${isFrench ? 'Client' : 'العميل'}</div>
+          <div class="det-value">${client.firstName || ''} ${client.lastName || ''}</div>
+        </div>
+        <div class="detail-item">
+          <div class="det-label">${isFrench ? 'N° Réservation' : 'رقم الحجز'}</div>
+          <div class="det-value">#${reservation.id?.substring(0, 8) || 'N/A'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="det-label">📞 ${isFrench ? 'Téléphone' : 'الهاتف'}</div>
+          <div class="det-value">${client.phone || 'N/A'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="det-label">🚗 ${isFrench ? 'Véhicule' : 'المركبة'}</div>
+          <div class="det-value">${reservation.car?.brand || ''} ${reservation.car?.model || ''}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment details -->
+    <div class="section">
+      <div class="sec-title">💰 ${isFrench ? 'Détails de Paiement' : 'تفاصيل الدفع'}</div>
+      <div class="pay-box">
+        <div class="pay-item">
+          <div class="pay-label">${isFrench ? 'Montant Total' : 'المبلغ الإجمالي'}</div>
+          <div class="pay-value">${totalAmount.toLocaleString()} DA</div>
+        </div>
+        <div class="pay-item">
+          <div class="pay-label">${isFrench ? 'Montant Payé' : 'المبلغ المدفوع'}</div>
+          <div class="pay-value green">${totalPaid.toLocaleString()} DA</div>
+        </div>
+      </div>
+      <div class="pay-box">
+        <div class="pay-item">
+          <div class="pay-label">${isFrench ? 'Montant Reçu' : 'المبلغ المستلم'}</div>
+          <div class="pay-value">${currentPayment.toLocaleString()} DA</div>
+        </div>
+        <div class="pay-item orange">
+          <div class="pay-label orange">${isFrench ? 'Solde Restant' : 'الرصيد المتبقي'}</div>
+          <div class="pay-value ${remaining > 0 ? 'red' : 'green'}">${remaining.toLocaleString()} DA</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hero amount -->
+    <div class="amount-hero">
+      <div class="amount-hero-label">${isFrench ? 'Montant Reçu' : 'المبلغ المستلم'}</div>
+      <div class="amount-hero-value">${currentPayment.toLocaleString()} DA</div>
+    </div>
+
+    <div class="thanks">✓ ${isFrench ? 'Merci de votre paiement' : 'شكراً على دفعتك'}</div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">${isFrench ? 'Signature Client' : 'توقيع العميل'}</div>
+        <div class="sig-date">${isFrench ? 'Date et signature' : 'التاريخ والتوقيع'}</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">${isFrench ? "Signature Agence" : 'توقيع الوكالة'}</div>
+        <div class="sig-date">${isFrench ? 'Date et signature' : 'التاريخ والتوقيع'}</div>
+      </div>
+    </div>
+
+  </div>
 </body>
 </html>`;
   }
 
   /**
-   * Generate invoice (facture) email template
+   * Generate facture email — same design as printed facture (amber #d97706)
    */
-  private static generateFactureEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): string {
-    const dateStr = new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const client = reservation.client;
-    const depDate = new Date(reservation.step1.departureDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const retDate = new Date(reservation.step1.returnDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const subTotal = reservation.totalPrice / 1.19;
-    const tax = reservation.totalPrice - subTotal;
-    
+  private static async generateFactureEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): Promise<string> {
+    const ag = await this.loadAgency();
+    const isFrench = templateLang === 'fr';
+    const locale   = isFrench ? 'fr-FR' : 'ar-DZ';
+    const today    = new Date().toLocaleDateString(locale);
+    const client   = reservation.client;
+    const car      = reservation.car;
+    const depDate  = reservation.step1?.departureDate || '';
+    const retDate  = reservation.step1?.returnDate    || '';
+    const days     = reservation.totalDays || 0;
+    const pricePerDay = (car as any).priceDay || (car as any).price_per_day || 0;
+    const subtotal = reservation.totalPrice || 0;
+    const tva      = reservation.tvaApplied ? subtotal * 0.19 : 0;
+    const timbre   = 200;
+    const total    = subtotal + tva + timbre;
+
     return `<!DOCTYPE html>
-<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<html dir="ltr" lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>${templateLang === 'ar' ? 'الفاتورة' : 'Facture'}</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-      .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; }
-      .header { text-align: center; border-bottom: 3px solid #007bff; padding-bottom: 20px; margin-bottom: 30px; }
-      .title { font-size: 24px; color: #007bff; margin: 10px 0; }
-      .invoice-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; }
-      .section-title { font-size: 14px; font-weight: bold; color: #333; margin-top: 20px; margin-bottom: 10px; }
-      .details-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-      .details-table th { background: #f0f0f0; padding: 10px; text-align: ${templateLang === 'ar' ? 'right' : 'left'}; font-weight: bold; border-bottom: 2px solid #ddd; }
-      .details-table td { padding: 10px; border-bottom: 1px solid #ddd; }
-      .totals-box { margin-top: 20px; padding: 15px; background: #f9f9f9; border-left: 4px solid #007bff; }
-      .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }
-      .final-total { font-size: 18px; font-weight: bold; color: #007bff; margin-top: 10px; border-top: 2px solid #ddd; padding-top: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Facture</title>
+  <style>
+    * { margin:0;padding:0;box-sizing:border-box; }
+    body { font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:white;font-size:12px;line-height:1.5; }
+    .page { width:100%;max-width:210mm;padding:10mm;margin:0 auto; }
+    .header { border-bottom:3px solid #d97706;padding-bottom:10px;margin-bottom:10px;display:flex;align-items:center;gap:14px; }
+    .logo { width:50px;height:50px;object-fit:contain;flex-shrink:0;border-radius:4px; }
+    .agency-name { font-size:20px;font-weight:700;color:#d97706;margin-bottom:2px; }
+    .doc-title { font-size:15px;font-weight:700;color:#d97706;text-decoration:underline; }
+    .invoice-meta { display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px; }
+    .meta-box { padding:6px 10px;border-radius:4px;background:#fff8f0;border-left:3px solid #d97706;font-size:11px; }
+    .meta-label { font-weight:600;color:#92400e;font-size:10px;text-transform:uppercase; }
+    .meta-value { color:#1a1a1a;font-weight:600;margin-top:1px; }
+    .agency-strip { width:100%;border:1.5px solid #d97706;border-radius:4px;padding:8px 12px;margin-bottom:10px;background:#fff8f0; }
+    .strip-row { display:flex;gap:5px;margin:3px 0;font-size:11px; }
+    .strip-label { font-weight:700;color:#d97706;min-width:150px; }
+    .strip-value { color:#333; }
+    .two-col { display:grid;grid-template-columns:1.1fr 1fr;gap:10px;margin-bottom:10px; }
+    .info-section { border:1.5px solid #d97706;border-radius:5px;padding:10px 12px;background:#fffcf8; }
+    .sec-title { font-weight:700;font-size:11px;color:#d97706;text-transform:uppercase;border-bottom:1px solid #fde68a;padding-bottom:5px;margin-bottom:7px; }
+    .irow { display:flex;gap:6px;margin:4px 0;font-size:11px; }
+    .ilabel { font-weight:600;color:#92400e;min-width:70px;flex-shrink:0; }
+    .ivalue { color:#1a1a1a; }
+    .items-table { width:100%;border-collapse:collapse;margin-bottom:10px;font-size:11px;border:1.5px solid #d97706; }
+    .items-table th { background:#d97706;color:white;border:1px solid #d97706;padding:7px 6px;text-align:center;font-weight:700;font-size:10px;text-transform:uppercase; }
+    .items-table td { border:1px solid #e5e5e5;padding:7px 6px;text-align:center;vertical-align:middle; }
+    .items-table td.left { text-align:left;padding-left:10px; }
+    .items-table tbody tr { background:#fffcf8; }
+    .totals-wrap { display:flex;justify-content:flex-end;margin-bottom:10px; }
+    .totals-table { width:250px;border-collapse:collapse;font-size:12px;border:1.5px solid #d97706; }
+    .totals-table tr td { border:1px solid #e5e5e5;padding:7px 10px; }
+    .totals-table tr td:first-child { font-weight:600;background:#fff8f0;color:#92400e;white-space:nowrap; }
+    .totals-table tr td:last-child { text-align:right;font-weight:600; }
+    .totals-table tr.grand td { background:#d97706;color:white;font-weight:700;font-size:13px;border-color:#d97706; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="title">${templateLang === 'ar' ? 'الفاتورة' : 'Facture'}</div>
-        </div>
+  <div class="page">
 
-        <div class="invoice-header">
-            <div><strong>${templateLang === 'ar' ? 'التاريخ:' : 'Date:'}</strong> ${dateStr}</div>
-            <div><strong>${templateLang === 'ar' ? 'الرقم:' : 'N°:'}</strong> ${reservation.id.substring(0, 8)}</div>
-        </div>
-
-        <div class="section-title">${templateLang === 'ar' ? 'العميل' : 'Client'}</div>
-        <p>${client.firstName} ${client.lastName} - ${client.phone}</p>
-
-        <table class="details-table">
-            <thead>
-                <tr>
-                    <th>${templateLang === 'ar' ? 'الوصف' : 'Description'}</th>
-                    <th>${templateLang === 'ar' ? 'المبلغ' : 'Montant'}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>${reservation.car.brand} ${reservation.car.model} (${depDate} - ${retDate})</td>
-                    <td>${subTotal.toFixed(2)} DA</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <div class="totals-box">
-            <div class="total-row">
-                <span>${templateLang === 'ar' ? 'الإجمالي الفرعي:' : 'Sous-Total:'}</span>
-                <span>${subTotal.toFixed(2)} DA</span>
-            </div>
-            <div class="total-row">
-                <span>${templateLang === 'ar' ? 'الضريبة (19%):' : 'TVA (19%):'}</span>
-                <span>${tax.toFixed(2)} DA</span>
-            </div>
-            <div class="final-total">
-                ${templateLang === 'ar' ? 'الإجمالي الكلي:' : 'Total TTC:'} ${reservation.totalPrice.toFixed(2)} DA
-            </div>
-        </div>
+    <!-- Header -->
+    <div class="header">
+      ${ag.logo ? `<img src="${ag.logo}" alt="Logo" class="logo">` : ''}
+      <div style="flex:1;">
+        <div class="agency-name">${ag.name}</div>
+        <div class="doc-title">FACTURE</div>
+      </div>
+      <div style="text-align:right;font-size:11px;color:#92400e;">
+        <div style="font-weight:700;">N° ${reservation.id?.substring(0, 8).toUpperCase() || '000'}</div>
+        <div>${today}</div>
+      </div>
     </div>
+
+    <!-- Agency strip -->
+    <div class="agency-strip">
+      ${ag.name    ? `<div class="strip-row"><span class="strip-label">Nom de l'enseigne :</span><span class="strip-value">${ag.name}</span></div>` : ''}
+      ${ag.address ? `<div class="strip-row"><span class="strip-label">Adresse :</span><span class="strip-value">${ag.address}</span></div>` : ''}
+      ${ag.phone   ? `<div class="strip-row"><span class="strip-label">📞 Téléphone :</span><span class="strip-value">${ag.phone}${ag.phone2 ? ' / ' + ag.phone2 : ''}</span></div>` : ''}
+      ${ag.bank    ? `<div class="strip-row"><span class="strip-label">🏦 Numéro de compte :</span><span class="strip-value">${ag.bank}</span></div>` : ''}
+    </div>
+
+    <!-- Agency + Client -->
+    <div class="two-col">
+      <div class="info-section">
+        <div class="sec-title">🏢 Agence / Fournisseur</div>
+        <div class="irow"><span class="ilabel">Agence :</span><span class="ivalue">${ag.name}</span></div>
+        ${ag.address ? `<div class="irow"><span class="ilabel">Adresse :</span><span class="ivalue">${ag.address}</span></div>` : ''}
+        ${ag.phone   ? `<div class="irow"><span class="ilabel">Tél :</span><span class="ivalue">${ag.phone}</span></div>` : ''}
+      </div>
+      <div class="info-section">
+        <div class="sec-title">👤 Client</div>
+        <div class="irow"><span class="ilabel">Nom :</span><span class="ivalue">${client.firstName || ''} ${client.lastName || ''}</span></div>
+        ${client.completeAddress || client.wilaya ? `<div class="irow"><span class="ilabel">Adresse :</span><span class="ivalue">${client.completeAddress || client.wilaya}</span></div>` : ''}
+        ${client.phone ? `<div class="irow"><span class="ilabel">Tél :</span><span class="ivalue">${client.phone}</span></div>` : ''}
+        ${client.idCardNumber ? `<div class="irow"><span class="ilabel">N° CIN :</span><span class="ivalue">${client.idCardNumber}</span></div>` : ''}
+      </div>
+    </div>
+
+    <!-- Invoice meta row -->
+    <div class="invoice-meta">
+      <div class="meta-box"><div class="meta-label">📅 Date</div><div class="meta-value">${today}</div></div>
+      <div class="meta-box"><div class="meta-label">🔢 N° Facture</div><div class="meta-value">${reservation.id?.substring(0, 8).toUpperCase()}</div></div>
+      <div class="meta-box"><div class="meta-label">🚗 Véhicule</div><div class="meta-value">${car.brand || ''} ${car.model || ''}</div></div>
+    </div>
+
+    <!-- Items table -->
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>Réf</th><th>Désignation</th><th>Immatriculé</th><th>Du</th><th>Au</th><th>Jours</th><th>Prix/J</th><th>HT</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${reservation.id?.substring(0, 3).toUpperCase() || '001'}</td>
+          <td class="left">${car.brand || ''} ${car.model || ''}</td>
+          <td>${car.registration || 'N/A'}</td>
+          <td>${depDate}</td>
+          <td>${retDate}</td>
+          <td>${days}</td>
+          <td>${pricePerDay.toLocaleString('fr-FR')} DA</td>
+          <td>${subtotal.toLocaleString('fr-FR')} DA</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="totals-wrap">
+      <table class="totals-table">
+        <tr><td>TOTAL HT :</td><td>${subtotal.toLocaleString('fr-FR')} DA</td></tr>
+        <tr><td>TVA (19%) :</td><td>${tva.toLocaleString('fr-FR')} DA</td></tr>
+        <tr><td>TIMBRE :</td><td>${timbre.toLocaleString('fr-FR')} DA</td></tr>
+        <tr class="grand"><td>TOTAL À PAYER :</td><td>${total.toLocaleString('fr-FR')} DA</td></tr>
+      </table>
+    </div>
+
+  </div>
 </body>
 </html>`;
   }
 
   /**
-   * Generate quote (devis) email template
+   * Generate devis email — same design as printed devis (green #2d7a4d)
    */
-  private static generateDevisEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): string {
-    const dateStr = new Date().toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const client = reservation.client;
-    const depDate = new Date(reservation.step1.departureDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const retDate = new Date(reservation.step1.returnDate).toLocaleDateString(templateLang === 'ar' ? 'ar-DZ' : 'fr-FR');
-    const days = reservation.totalDays;
-    const subTotal = (reservation.totalPrice / 1.19);
-    const tax = reservation.totalPrice - subTotal;
-    
+  private static async generateDevisEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): Promise<string> {
+    const ag = await this.loadAgency();
+    const isFrench = templateLang === 'fr';
+    const textDir  = isFrench ? 'ltr' : 'rtl';
+    const locale   = isFrench ? 'fr-FR' : 'ar-DZ';
+    const today    = new Date().toLocaleDateString(locale);
+    const client   = reservation.client;
+    const car      = reservation.car;
+    const depDate  = new Date(reservation.step1.departureDate).toLocaleDateString(locale);
+    const retDate  = new Date(reservation.step1.returnDate).toLocaleDateString(locale);
+    const days     = reservation.totalDays || 0;
+    const subtotal = reservation.totalPrice || 0;
+    const tva      = reservation.tvaApplied ? subtotal * 0.19 : 0;
+    const total    = subtotal + tva;
+
     return `<!DOCTYPE html>
-<html dir="${templateLang === 'ar' ? 'rtl' : 'ltr'}" lang="${templateLang}">
+<html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
 <head>
-    <meta charset="UTF-8">
-    <title>${templateLang === 'ar' ? 'عرض أسعار' : 'Devis'}</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-      .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; }
-      .header { text-align: center; border-bottom: 3px solid #ff9800; padding-bottom: 20px; margin-bottom: 30px; }
-      .title { font-size: 24px; color: #ff9800; margin: 10px 0; }
-      .quote-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; }
-      .section-title { font-size: 14px; font-weight: bold; color: #ff9800; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #ff9800; padding-bottom: 5px; }
-      .info-row { display: flex; justify-content: space-between; padding: 8px 0; }
-      .pricing-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-      .pricing-table th { background: #ff9800; color: white; padding: 10px; text-align: ${templateLang === 'ar' ? 'right' : 'left'}; }
-      .pricing-table td { padding: 10px; border-bottom: 1px solid #ddd; }
-      .totals-box { margin-top: 20px; padding: 15px; background: #fff3e0; border-left: 4px solid #ff9800; }
-      .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }
-      .final-total { font-size: 18px; font-weight: bold; color: #ff9800; margin-top: 10px; border-top: 2px solid #ff9800; padding-top: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>${isFrench ? 'Devis' : 'عرض أسعار'}</title>
+  <style>
+    * { margin:0;padding:0;box-sizing:border-box; }
+    body { font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:white;direction:${textDir};font-size:13px;line-height:1.5; }
+    .page { width:100%;max-width:210mm;padding:12mm;margin:0 auto; }
+    .header { border-bottom:3px solid #2d7a4d;padding-bottom:8px;margin-bottom:10px;display:flex;align-items:center;gap:10px; }
+    .logo { width:40px;height:40px;object-fit:contain;flex-shrink:0; }
+    .agency-name { font-size:20px;font-weight:700;color:#2d7a4d;text-align:center;margin-bottom:2px; }
+    .agency-contact { font-size:10px;color:#555;text-align:center; }
+    .doc-title { font-size:15px;font-weight:700;color:#2d7a4d;text-align:center;text-decoration:underline;margin-top:2px; }
+    .info-boxes { display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px; }
+    .ibox { padding:6px 8px;border-radius:4px;background:#dcfce7;border-left:4px solid #16a34a; }
+    .ibox-label { font-weight:600;font-size:10px;color:#222;margin-bottom:2px; }
+    .ibox-value { font-size:11px;font-weight:600;color:#333; }
+    .section { padding:8px 10px;border-radius:5px;margin-bottom:8px; }
+    .section.car-s  { background:#f0fdf4;border:1px solid #bbf7d0; }
+    .section.rent-s { background:#f0fdf4;border:1px solid #bbf7d0; }
+    .sec-title { font-size:12px;font-weight:700;background:#dcfce7;padding:5px 8px;border-radius:3px;margin-bottom:8px;border-left:4px solid #2d7a4d;color:#2d7a4d; }
+    .two-col { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px; }
+    .field { padding:3px 0;border-bottom:0.5px solid #ddd; }
+    .field-label { font-weight:600;color:#2d7a4d;font-size:11px; }
+    .field-value { color:#1a1a1a;font-size:12px;margin-top:1px; }
+    .grid-2 { display:grid;grid-template-columns:1fr 1fr;gap:6px 10px; }
+    .rental-info { display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px; }
+    .r-field { padding:8px;background:#f0fdf4;border-left:3px solid #2d7a4d;border-radius:3px; }
+    .r-label { font-weight:600;color:#2d7a4d;font-size:11px;margin-bottom:2px; }
+    .r-value { color:#1a1a1a;font-size:13px;font-weight:600; }
+    .price-table { width:100%;border-collapse:collapse;margin-bottom:10px;font-size:12px;border:1px solid #2d7a4d; }
+    .price-table th { background:#2d7a4d;color:white;border:1px solid #2d7a4d;padding:7px;text-align:${isFrench ? 'left' : 'right'}; }
+    .price-table td { border:1px solid #ddd;padding:7px;background:#fafafa; }
+    .totals-wrap { display:flex;justify-content:flex-end;margin-bottom:10px; }
+    .totals-table { width:220px;border-collapse:collapse;font-size:12px;border:1px solid #2d7a4d; }
+    .totals-table tr td { border:1px solid #ddd;padding:6px 10px; }
+    .totals-table tr td:first-child { font-weight:600;color:#2d7a4d;background:#f0fdf4; }
+    .totals-table tr td:last-child { text-align:right;font-weight:600; }
+    .totals-table tr.grand td { background:#2d7a4d;color:white;font-weight:700;font-size:13px;border-color:#2d7a4d; }
+    .validity { background:#dcfce7;border:1px solid #2d7a4d;border-radius:4px;padding:8px 12px;text-align:center;font-size:12px;font-weight:600;color:#2d7a4d;margin-bottom:10px; }
+    .signatures { display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px; }
+    .sig-block { text-align:center; }
+    .sig-line { border-top:1px solid #333;margin-bottom:4px;height:30px; }
+    .sig-label { font-weight:600;font-size:12px;color:#2d7a4d; }
+    .sig-date  { font-size:10px;color:#666;margin-top:2px; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="title">${templateLang === 'ar' ? 'عرض أسعار' : 'Devis'}</div>
-        </div>
+  <div class="page">
 
-        <div class="quote-header">
-            <div><strong>${templateLang === 'ar' ? 'التاريخ:' : 'Date:'}</strong> ${dateStr}</div>
-            <div><strong>${templateLang === 'ar' ? 'العميل:' : 'Client:'}</strong> ${client.firstName} ${client.lastName}</div>
-        </div>
-
-        <div class="section-title">${templateLang === 'ar' ? 'مواصفات المركبة' : 'Spécifications'}</div>
-        <div class="info-row">
-            <span>${templateLang === 'ar' ? 'الماركة والموديل:' : 'Marque/Modèle:'}</span>
-            <span>${reservation.car.brand} ${reservation.car.model}</span>
-        </div>
-        <div class="info-row">
-            <span>${templateLang === 'ar' ? 'اللوحة:' : 'Plaque:'}</span>
-            <span>${reservation.car.registration}</span>
-        </div>
-        <div class="info-row">
-            <span>${templateLang === 'ar' ? 'الفترة:' : 'Période:'}</span>
-            <span>${depDate} - ${retDate} (${days} ${templateLang === 'ar' ? 'أيام' : 'jours'})</span>
-        </div>
-
-        <table class="pricing-table">
-            <thead>
-                <tr>
-                    <th>${templateLang === 'ar' ? 'البيان' : 'Description'}</th>
-                    <th>${templateLang === 'ar' ? 'المبلغ' : 'Montant'}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>${days} ${templateLang === 'ar' ? 'يوم × سعر اليوم' : 'jour × tarif/jour'}</td>
-                    <td>${subTotal.toFixed(2)} DA</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <div class="totals-box">
-            <div class="total-row">
-                <span>${templateLang === 'ar' ? 'الإجمالي الفرعي:' : 'Sous-Total:'}</span>
-                <span>${subTotal.toFixed(2)} DA</span>
-            </div>
-            <div class="total-row">
-                <span>${templateLang === 'ar' ? 'الضريبة (19%):' : 'TVA (19%):'}</span>
-                <span>${tax.toFixed(2)} DA</span>
-            </div>
-            <div class="final-total">
-                ${templateLang === 'ar' ? 'الإجمالي الكلي:' : 'Total TTC:'} ${reservation.totalPrice.toFixed(2)} DA
-            </div>
-        </div>
+    <!-- Header -->
+    <div class="header">
+      ${ag.logo ? `<img src="${ag.logo}" alt="Logo" class="logo">` : ''}
+      <div style="flex:1;">
+        <div class="agency-name">${ag.name}</div>
+        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${ag.phone}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${ag.phone2}` : ''}</div>
+        <div class="doc-title">${isFrench ? 'DEVIS' : 'عرض أسعار'}</div>
+      </div>
     </div>
+
+    <!-- Info boxes -->
+    <div class="info-boxes">
+      <div class="ibox">
+        <div class="ibox-label">📅 ${isFrench ? 'Date' : 'التاريخ'}</div>
+        <div class="ibox-value">${today}</div>
+      </div>
+      <div class="ibox">
+        <div class="ibox-label">🔢 ${isFrench ? 'N° Devis' : 'رقم عرض السعر'}</div>
+        <div class="ibox-value">#${reservation.id?.substring(0, 8).toUpperCase() || 'N/A'}</div>
+      </div>
+      <div class="ibox">
+        <div class="ibox-label">👤 ${isFrench ? 'Client' : 'العميل'}</div>
+        <div class="ibox-value">${client.firstName || ''} ${client.lastName || ''}</div>
+      </div>
+    </div>
+
+    <!-- Rental period -->
+    <div class="section rent-s">
+      <div class="sec-title">📅 ${isFrench ? 'Période de Location' : 'فترة الإيجار'}</div>
+      <div class="rental-info">
+        <div class="r-field">
+          <div class="r-label">${isFrench ? 'Du' : 'من'}</div>
+          <div class="r-value">${depDate}</div>
+        </div>
+        <div class="r-field">
+          <div class="r-label">${isFrench ? 'Au' : 'إلى'}</div>
+          <div class="r-value">${retDate}</div>
+        </div>
+        <div class="r-field">
+          <div class="r-label">${isFrench ? 'Jours' : 'أيام'}</div>
+          <div class="r-value">${days}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vehicle -->
+    <div class="section car-s">
+      <div class="sec-title">🚗 ${isFrench ? 'Véhicule' : 'المركبة'}</div>
+      <div class="grid-2">
+        <div class="field">
+          <div class="field-label">${isFrench ? 'Marque / Modèle' : 'الماركة / الموديل'}</div>
+          <div class="field-value">${car.brand || ''} ${car.model || ''}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">${isFrench ? 'Immatriculation' : 'التسجيل'}</div>
+          <div class="field-value">${car.registration || 'N/A'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">${isFrench ? 'Couleur' : 'اللون'}</div>
+          <div class="field-value">${car.color || 'N/A'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">${isFrench ? 'Carburant' : 'الوقود'}</div>
+          <div class="field-value">${car.energy || 'N/A'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">VIN</div>
+          <div class="field-value">${car.vin || 'N/A'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">${isFrench ? 'Kilométrage' : 'الكيلومترات'}</div>
+          <div class="field-value">${car.mileage || 0} km</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing table -->
+    <table class="price-table">
+      <thead>
+        <tr>
+          <th>${isFrench ? 'Description' : 'البيان'}</th>
+          <th>${isFrench ? 'Jours' : 'الأيام'}</th>
+          <th>${isFrench ? 'Prix/Jour' : 'السعر/اليوم'}</th>
+          <th>${isFrench ? 'Montant HT' : 'المبلغ'}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${car.brand || ''} ${car.model || ''}</td>
+          <td style="text-align:center;">${days}</td>
+          <td style="text-align:right;">${((car as any).priceDay || 0).toLocaleString()} DA</td>
+          <td style="text-align:right;">${subtotal.toLocaleString()} DA</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="totals-wrap">
+      <table class="totals-table">
+        <tr><td>${isFrench ? 'Montant HT' : 'المبلغ'} :</td><td>${subtotal.toLocaleString()} DA</td></tr>
+        ${tva > 0 ? `<tr><td>TVA (19%) :</td><td>${tva.toLocaleString()} DA</td></tr>` : ''}
+        <tr class="grand"><td>${isFrench ? 'Total TTC' : 'الإجمالي'} :</td><td>${total.toLocaleString()} DA</td></tr>
+      </table>
+    </div>
+
+    <!-- Validity -->
+    <div class="validity">⏰ ${isFrench ? 'Validité 30 jours' : 'صلاحية 30 يوم'} · ${today}</div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">${isFrench ? 'Signature Client' : 'توقيع العميل'}</div>
+        <div class="sig-date">${isFrench ? 'Date et signature' : 'التاريخ والتوقيع'}</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">${isFrench ? "Signature Agence" : 'توقيع الوكالة'}</div>
+        <div class="sig-date">${isFrench ? 'Date et signature' : 'التاريخ والتوقيع'}</div>
+      </div>
+    </div>
+
+  </div>
 </body>
 </html>`;
   }
