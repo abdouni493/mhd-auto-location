@@ -108,8 +108,10 @@ export const Website: React.FC<WebsiteProps> = ({
                       ? ''
                       : 'text-vel-muted hover:text-vel-silver'
                   }`}
-                  style={currentPage === item.id ? { color: '#22D3EE' } : {}}
-                  style={{ fontFamily: 'var(--font-display)' }}
+                  style={{
+                    ...(currentPage === item.id ? { color: '#22D3EE' } : {}),
+                    fontFamily: 'var(--font-display)'
+                  }}
                 >
                   {item.label[lang]}
                   {currentPage === item.id && (
@@ -169,8 +171,10 @@ export const Website: React.FC<WebsiteProps> = ({
                   className={`w-full text-left px-4 py-3 font-bold text-xs tracking-[0.15em] uppercase transition-all ${
                     currentPage === item.id ? '' : 'text-vel-muted hover:text-vel-silver'
                   }`}
-                  style={currentPage === item.id ? { color: '#22D3EE' } : {}}
-                  style={{ fontFamily: 'var(--font-display)' }}
+                  style={{
+                    ...(currentPage === item.id ? { color: '#22D3EE' } : {}),
+                    fontFamily: 'var(--font-display)'
+                  }}
                 >
                   {item.label[lang]}
                 </button>
@@ -229,8 +233,7 @@ export const Website: React.FC<WebsiteProps> = ({
 
             {/* Nav links */}
             <div>
-              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE' }}
-                style={{ fontFamily: 'var(--font-display)' }}>
+              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
                 {{ fr: 'Navigation', ar: 'الملاحة' }[lang]}
               </h4>
               <ul className="space-y-3">
@@ -251,8 +254,7 @@ export const Website: React.FC<WebsiteProps> = ({
 
             {/* Contact */}
             <div>
-              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE' }}
-                style={{ fontFamily: 'var(--font-display)' }}>
+              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
                 {{ fr: 'Contact', ar: 'اتصل' }[lang]}
               </h4>
               <ul className="space-y-3 text-vel-muted text-sm">
@@ -276,8 +278,7 @@ export const Website: React.FC<WebsiteProps> = ({
 
             {/* Social */}
             <div>
-              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE' }}
-                style={{ fontFamily: 'var(--font-display)' }}>
+              <h4 className="font-bold text-xs tracking-[0.2em] uppercase mb-5" style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
                 {{ fr: 'Suivez-nous', ar: 'تابعنا' }[lang]}
               </h4>
               <div className="flex flex-wrap gap-3">

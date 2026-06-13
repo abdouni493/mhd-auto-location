@@ -41,7 +41,7 @@ export default function App() {
   const [lang, setLang] = useState<Language>('fr');
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true); // Add loading state
-  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(window.innerWidth >= 1024);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [cars, setCars] = useState<Car[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
@@ -85,6 +85,20 @@ export default function App() {
     const tabId = pathMap[pathname] || 'dashboard';
     setActiveTab(tabId);
   }, [location.pathname]);
+
+  // Responsive sidebar visibility
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsSidebarVisible(true);
+      } else {
+        setIsSidebarVisible(false);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Update URL when active tab changes
   const handleTabChange = (tabId: string) => {

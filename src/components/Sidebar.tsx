@@ -54,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: isRtl ? '100%' : '-100%', opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed inset-y-0 left-0 z-50 w-72 bg-white text-saas-text-main flex flex-col shadow-xl ltr:left-0 rtl:right-0 border-r border-saas-border"
+          className="fixed inset-y-0 left-0 z-50 w-72 bg-white text-saas-text-main flex flex-col shadow-xl ltr:left-0 rtl:right-0 border-r border-saas-border lg:static lg:h-screen lg:sticky lg:top-0 lg:shadow-none"
           style={{ [isRtl ? 'right' : 'left']: 0 }}
         >
           <div className="p-8 flex items-center justify-between border-b border-saas-border">
@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <button
               onClick={() => setIsVisible(false)}
-              className="p-2 rounded-lg hover:bg-saas-bg text-saas-text-muted transition-colors"
+              className="p-2 rounded-lg hover:bg-saas-bg text-saas-text-muted transition-colors lg:hidden"
             >
               <X size={20} />
             </button>
@@ -91,7 +91,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={item.id}
                 onClick={() => {
                   setActiveTab(item.id);
-                  setIsVisible(false);
+                  if (window.innerWidth < 1024) {
+                    setIsVisible(false);
+                  }
                 }}
                 className={`w-full flex items-center gap-3.5 p-3.5 rounded-xl transition-all duration-200 group relative
                   ${activeTab === item.id 

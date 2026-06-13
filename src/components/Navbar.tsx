@@ -19,7 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({ user, lang, setLang, toggleSideb
       <div className="flex items-center gap-6">
         <button 
           onClick={toggleSidebar}
-          className="p-2.5 rounded-xl hover:bg-saas-bg text-saas-text-muted transition-colors border border-saas-border shadow-sm"
+          className="p-2.5 rounded-xl hover:bg-saas-bg text-saas-text-muted transition-colors border border-saas-border shadow-sm lg:hidden"
         >
           <Menu size={20} />
         </button>

@@ -56,14 +56,16 @@ const STATUS_LABEL: Record<string, { fr: string; ar: string }> = {
 };
 
 // ── Period options ────────────────────────────────────────────────────────────
-type PeriodKey = 'today' | '7d' | '30d';
+type PeriodKey = 'today' | '7d' | '30d' | 'custom';
 const PERIODS: { key: PeriodKey; fr: string; ar: string }[] = [
   { key: 'today', fr: "Aujourd'hui",    ar: 'اليوم'          },
   { key: '7d',    fr: '7 derniers jours', ar: '٧ أيام أخيرة'  },
   { key: '30d',   fr: '30 derniers jours',ar: '٣٠ يوماً أخيراً'},
+  { key: 'custom', fr: 'Personnalisé',   ar: 'مخصص'           },
 ];
 
 const getPeriodRange = (key: PeriodKey): { startDate: string; endDate: string } => {
+  if (key === 'custom') return { startDate: '', endDate: '' };
   const now  = new Date();
   const end  = now.toISOString().substring(0, 10);
   if (key === 'today') return { startDate: end, endDate: end };
@@ -99,6 +101,9 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
 
   // ── Filters
   const [period, setPeriod]         = useState<PeriodKey>('today');
+  const todayStr = useMemo(() => new Date().toISOString().substring(0, 10), []);
+  const [customStartDate, setCustomStartDate] = useState(todayStr);
+  const [customEndDate, setCustomEndDate] = useState(todayStr);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -132,13 +137,18 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
   }, [user, isAuthLoading]);
 
   // ── Computed
-  const { startDate, endDate } = useMemo(() => getPeriodRange(period), [period]);
+  const { startDate, endDate } = useMemo(() => {
+    if (period === 'custom') {
+      return { startDate: customStartDate, endDate: customEndDate };
+    }
+    return getPeriodRange(period);
+  }, [period, customStartDate, customEndDate]);
 
   /** Contrats = only completed reservations in the selected period */
   const periodReservations = useMemo(
     () => reservations.filter(r =>
       r.status === 'completed' &&
-      inRange(r.step1?.departureDate || r.createdAt, startDate, endDate)
+      inRange(r.completedAt || r.step1?.returnDate || r.createdAt, startDate, endDate)
     ),
     [reservations, startDate, endDate]
   );
@@ -163,14 +173,14 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
     [periodReservations]
   );
   const totalReste = useMemo(
-    () => 0,
-    []
+    () => periodReservations.reduce((s, r) => s + (Number(r.remainingPayment) || 0), 0),
+    [periodReservations]
   );
 
   /** Réservations impayées (pour le modal dette) */
   const debtReservations = useMemo(
-    () => [] as typeof periodReservations,
-    []
+    () => periodReservations.filter(r => (Number(r.remainingPayment) || 0) > 0),
+    [periodReservations]
   );
 
   // ── Actions
@@ -242,22 +252,56 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
       </motion.div>
 
       {/* ── Filtres ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-        {/* Segmented control période */}
-        <div ref={segRef} className="relative flex bg-saas-bg border border-saas-border rounded-xl p-1 gap-0.5">
-          {PERIODS.map(p => (
-            <button
-              key={p.key}
-              onClick={() => setPeriod(p.key)}
-              className={`relative z-10 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                period === p.key
-                  ? 'bg-white shadow-sm text-saas-text-main border border-saas-border'
-                  : 'text-saas-text-muted hover:text-saas-text-main'
-              }`}
-            >
-              {p[lang]}
-            </button>
-          ))}
+      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center w-full">
+        {/* Segmented control période et dates personnalisées */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div ref={segRef} className="relative flex bg-saas-bg border border-saas-border rounded-xl p-1 gap-0.5">
+            {PERIODS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className={`relative z-10 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                  period === p.key
+                    ? 'bg-white shadow-sm text-saas-text-main border border-saas-border'
+                    : 'text-saas-text-muted hover:text-saas-text-main'
+                }`}
+              >
+                {p[lang]}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom Date Inputs */}
+          <AnimatePresence>
+            {period === 'custom' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+              >
+                <div className="flex items-center gap-2 bg-white border border-saas-border rounded-xl px-3 py-2">
+                  <Calendar size={14} className="text-saas-text-muted" />
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={e => setCustomStartDate(e.target.value)}
+                    className="bg-transparent border-none outline-none text-xs text-saas-text-main font-semibold"
+                  />
+                </div>
+                <span className="text-saas-text-muted text-xs font-bold text-center">→</span>
+                <div className="flex items-center gap-2 bg-white border border-saas-border rounded-xl px-3 py-2">
+                  <Calendar size={14} className="text-saas-text-muted" />
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={e => setCustomEndDate(e.target.value)}
+                    className="bg-transparent border-none outline-none text-xs text-saas-text-main font-semibold"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Recherche */}

@@ -441,11 +441,14 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                         type="text"
                         value={searchQuery}
                         onChange={e => { setSearchQuery(e.target.value); setShowResults(true); }}
-                        onFocus={() => setShowResults(true)}
+                        onFocus={e => {
+                          setShowResults(true);
+                          (e.target as HTMLElement).style.borderColor = '#22D3EE';
+                          (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(34,211,238,0.25), 0 0 20px rgba(34,211,238,0.1)';
+                        }}
                         placeholder={lang === 'fr' ? 'Rechercher par marque, modèle, immatriculation…' : 'ابحث بالماركة أو الموديل…'}
                         className="w-full pl-12 pr-4 py-4 text-base rounded-2xl outline-none transition-all text-vel-white placeholder:text-vel-dim font-medium"
                         style={{ background: C.elevated, border: '1px solid rgba(34,211,238,0.2)', boxShadow: '0 0 0 1px transparent' }}
-                        onFocus={e => { (e.target as HTMLElement).style.borderColor = '#22D3EE'; (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(34,211,238,0.25), 0 0 20px rgba(34,211,238,0.1)'; }}
                         onBlur={e => { setTimeout(() => setShowResults(false), 150); (e.target as HTMLElement).style.borderColor = 'rgba(34,211,238,0.2)'; (e.target as HTMLElement).style.boxShadow = '0 0 0 1px transparent'; }}
                       />
                     </div>
