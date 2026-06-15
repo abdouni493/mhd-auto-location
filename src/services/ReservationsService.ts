@@ -920,7 +920,7 @@ export class ReservationsService {
   }): Promise<{ id: string }> {
     const { data: inspection, error } = await supabase
       .from('vehicle_inspections')
-      .insert([{
+      .upsert([{
         reservation_id: data.reservationId,
         type: data.type,
         mileage: data.mileage,
@@ -934,7 +934,7 @@ export class ReservationsService {
         interior_photo: data.interiorPhotoUrl,
         other_photos: data.otherPhotosUrls || [],
         client_signature: data.clientSignatureUrl,
-      }])
+      }], { onConflict: 'reservation_id,type' })
       .select()
       .single();
 
