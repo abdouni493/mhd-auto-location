@@ -452,12 +452,10 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     return matchesSearch && matchesFilter && matchesDebt;
   });
 
-    const terminatedCount = isSearching
+      const terminatedCount = isSearching
     ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
     : 0;
-.filter(r => r.status === 'completed' || r.status === 'terminated').length
-    : 0;
-;
+
 
   if (currentView === 'create') {
     return (
