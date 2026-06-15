@@ -187,25 +187,12 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
         (updatedReservation as any).returnInspection
       ) {
         const ri = (updatedReservation as any).returnInspection;
-        await supabase
+                await supabase
           .from('inspections')
-          .upsert(
-            {
-              reservation_id: updatedReservation.id,
-              type: 'return',
-              mileage: ri.mileage ?? null,
-              fuel_level: ri.fuelLevel ?? null,
-              notes: ri.notes ?? null,
-              inspection_items: ri.inspectionItems ?? null,
-              mats: ri.mats ?? null,
-              spare_tire: ri.spareTire ?? null,
-              lights: ri.lights ?? null,
-              windshield: ri.windshield ?? null,
-              wheels: ri.wheels ?? null,
-              suspension: ri.suspension ?? null,
-            },
-            { onConflict: 'reservation_id,type' }
-          );
+          .delete()
+          .eq('reservation_id', updatedReservation.id)
+          .eq('type', 'return');
+
       }
 
       await ReservationsService.updateReservation(updatedReservation.id, updatedReservation);
