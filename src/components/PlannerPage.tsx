@@ -452,14 +452,10 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     return matchesSearch && matchesFilter && matchesDebt;
   });
 
-  const terminatedCount = isSearching
+    const terminatedCount = isSearching
     ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
     : 0;
-
-
-
-  const terminatedCount = isSearching
-    ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
+.filter(r => r.status === 'completed' || r.status === 'terminated').length
     : 0;
 ;
 
@@ -646,7 +642,6 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
         </p>
       )}
 
-      {/* Car Availability Filter */}
 
 
       
