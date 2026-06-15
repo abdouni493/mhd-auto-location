@@ -180,26 +180,76 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
 
   const updateReservation = async (updatedReservation: ReservationDetails) => {
     try {
-      // Update reservation in database
+      // If finalising and there is a returnInspection, upsert it first
+      // so we never hit the unique_reservation_type_inspection constraint
+      if (
+        (updatedReservation.status === 'completed' || updatedReservation.status === 'terminated') &&
+        (updatedReservation as any).returnInspection
+      ) {
+        const ri = (updatedReservation as any).returnInspection;
+        await supabase
+          .from('inspections')
+          .upsert(
+            {
+              reservation_id: updatedReservation.id,
+              type: 'return',
+              mileage: ri.mileage ?? null,
+              fuel_level: ri.fuelLevel ?? null,
+              notes: ri.notes ?? null,
+              inspection_items: ri.inspectionItems ?? null,
+              mats: ri.mats ?? null,
+              spare_tire: ri.spareTire ?? null,
+              lights: ri.lights ?? null,
+              windshield: ri.windshield ?? null,
+              wheels: ri.wheels ?? null,
+              suspension: ri.suspension ?? null,
+            },
+            { onConflict: 'reservation_id,type' }
+          );
+      }
+
       await ReservationsService.updateReservation(updatedReservation.id, updatedReservation);
 
-      // Refetch the latest reservation data from database to ensure accuracy
       const freshReservation = await ReservationsService.getReservationById(updatedReservation.id);
 
-      // Update local state with fresh data
-      setReservations(prev => {
-        return prev.map(res => res.id === freshReservation.id ? freshReservation : res);
-      });
+      setReservations(prev =>
+        prev.map(res => res.id === freshReservation.id ? freshReservation : res)
+      );
 
-      // Update selected reservation with fresh data
       if (selectedReservation && selectedReservation.id === freshReservation.id) {
         setSelectedReservation(freshReservation);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Error updating reservation:', err);
+
+      // Graceful recovery for duplicate inspection key
+      if (
+        (err?.code === '23505' || err?.message?.includes('duplicate key')) &&
+        err?.message?.includes('unique_reservation_type_inspection')
+      ) {
+        try {
+          await supabase
+            .from('reservations')
+            .update({ status: updatedReservation.status })
+            .eq('id', updatedReservation.id);
+
+          const freshReservation = await ReservationsService.getReservationById(updatedReservation.id);
+          setReservations(prev =>
+            prev.map(res => res.id === freshReservation.id ? freshReservation : res)
+          );
+          if (selectedReservation?.id === freshReservation.id) {
+            setSelectedReservation(freshReservation);
+          }
+          return; // Status updated successfully, don't show error
+        } catch (recoveryErr) {
+          console.error('❌ Recovery failed:', recoveryErr);
+        }
+      }
+
       setError('Failed to update reservation');
     }
   };
+
 
   // Save view state when it changes (for page refresh persistence)
   useEffect(() => {
@@ -368,27 +418,31 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     reservations
       .filter(r => r.status === 'active' || r.status === 'confirmed')
       .map(r => r.car?.id)
-      .filter((id): id is string => Boolean(id))
-  );
+      .filter((id): id is string => Boolean(const isSearching = searchQuery.trim().length > 0;
+
+  const isSearching = searchQuery.trim().length > 0;
 
   const filteredReservations = reservations.filter(reservation => {
-    // Add safety checks for client and car
-    if (!reservation.client || !reservation.car) {
-      return false;
-    }
+    if (!reservation.client || !reservation.car) return false;
 
-    // Never show completed (terminated) reservations in the planner
-    if (reservation.status === 'completed') {
-      return false;
-    }
+    const isTerminated =
+      reservation.status === 'completed' || reservation.status === 'terminated';
 
-    const matchesSearch = (reservation.client.firstName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (reservation.client.lastName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (reservation.car.brand || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (reservation.car.model || '').toLowerCase().includes(searchQuery.toLowerCase());
+    // Hide terminated/completed unless the user is actively searching
+    if (isTerminated && !isSearching) return false;
+
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      !isSearching ||
+      (reservation.client.firstName || '').toLowerCase().includes(q) ||
+      (reservation.client.lastName || '').toLowerCase().includes(q) ||
+      (reservation.car.brand || '').toLowerCase().includes(q) ||
+      (reservation.car.model || '').toLowerCase().includes(q) ||
+      (reservation.car.registration || '').toLowerCase().includes(q) ||
+      (reservation.client.phone || '').toLowerCase().includes(q);
 
     const matchesFilter = filterStatus === 'all' || reservation.status === filterStatus;
-    // Debt filter: only show reservations with remaining payment > 0
+
     const resPaid = (reservation.payments && reservation.payments.length > 0)
       ? reservation.payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
       : (Number(reservation.advancePayment) || 0);
@@ -397,6 +451,16 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
 
     return matchesSearch && matchesFilter && matchesDebt;
   });
+
+  const terminatedCount = isSearching
+    ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
+    : 0;
+o
+
+  const terminatedCount = isSearching
+    ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
+    : 0;
+;
 
   if (currentView === 'create') {
     return (
@@ -553,6 +617,38 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
         </button>
       </div>
 
+            {/* Banner showing terminated results when searching */}
+      <AnimatePresence>
+        {isSearching && terminatedCount > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="flex items-center gap-3 bg-purple-50 border border-purple-200 rounded-xl px-5 py-3"
+          >
+            <span className="text-purple-600 text-lg">🔍</span>
+            <p className="text-purple-800 text-sm font-semibold">
+              {lang === 'fr'
+                ? `${terminatedCount} réservation${terminatedCount > 1 ? 's' : ''} terminée${terminatedCount > 1 ? 's' : ''} incluse${terminatedCount > 1 ? 's' : ''} dans les résultats`
+                : `${terminatedCount} حجز منتهية مضمنة في النتائج`}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hint when not searching */}
+      {!isSearching && (
+        <p className="text-xs text-slate-400 font-medium -mt-4">
+          {lang === 'fr'
+            ? '💡 Recherchez un nom, véhicule ou téléphone pour afficher aussi les réservations terminées'
+            : '💡 ابحث باسم أو سيارة أو هاتف لعرض الحجوزات المنتهية أيضًا'}
+        </p>
+      )}
+
+      {/* Car Availability Filter */}
+
+
+      
       {/* Car Availability Filter */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
