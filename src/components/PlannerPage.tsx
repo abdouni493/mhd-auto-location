@@ -414,11 +414,12 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   };
 
   // A car is NOT disponible only if it has an active or confirmed reservation
-  const rentedCarIds = new Set(
+    const rentedCarIds = new Set(
     reservations
       .filter(r => r.status === 'active' || r.status === 'confirmed')
       .map(r => r.car?.id)
-      .filter((id): id is string => Boolean(const isSearching = searchQuery.trim().length > 0;
+      .filter((id): id is string => Boolean(id))
+  );
 
   const isSearching = searchQuery.trim().length > 0;
 
@@ -428,7 +429,6 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     const isTerminated =
       reservation.status === 'completed' || reservation.status === 'terminated';
 
-    // Hide terminated/completed unless the user is actively searching
     if (isTerminated && !isSearching) return false;
 
     const q = searchQuery.toLowerCase();
@@ -455,7 +455,8 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   const terminatedCount = isSearching
     ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
     : 0;
-o
+
+
 
   const terminatedCount = isSearching
     ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
