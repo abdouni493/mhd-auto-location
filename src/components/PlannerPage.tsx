@@ -16,6 +16,13 @@ import { getCars } from '../services/carService';
 import { supabase } from '../supabase';
 import { generateConditionsPrintHTML, getConditionsTemplate } from '../constants/ConditionsTemplates';
 
+/**
+ * Force a phone number (or any latin/number string) to render strictly left-to-right,
+ * even inside an RTL (Arabic) document, so it prints in the same order as the French layout.
+ */
+const ltrPhone = (value: any): string =>
+  `<span dir="ltr" style="unicode-bidi:bidi-override;direction:ltr;display:inline-block">${value ?? ''}</span>`;
+
 interface PlannerPageProps {
   lang: Language;
   isAuthLoading?: boolean;
@@ -346,7 +353,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           </div>
           <div class="detail">
             <span class="label">${lang === 'fr' ? 'Téléphone:' : 'الهاتف:'}</span>
-            <span>${reservation.client.phone}</span>
+            <span>${ltrPhone(reservation.client.phone)}</span>
           </div>
         </div>
         
@@ -2847,8 +2854,8 @@ export const PersonalizationModal: React.FC<{
             <h1 class="agency-name">${agencySettings?.name || 'AGENCY NAME'}</h1>
             <div class="agency-contact">
               ${agencySettings?.address ? `<span class="agency-contact-item">${agencySettings.address}</span>` : ''}
-              ${agencySettings?.phone ? `<span class="agency-contact-item">📞 ${agencySettings.phone}</span>` : ''}
-              ${agencySettings?.phone_number_2 ? `<span class="agency-contact-item">📱 ${agencySettings.phone_number_2}</span>` : ''}
+              ${agencySettings?.phone ? `<span class="agency-contact-item">📞 ${ltrPhone(agencySettings.phone)}</span>` : ''}
+              ${agencySettings?.phone_number_2 ? `<span class="agency-contact-item">📱 ${ltrPhone(agencySettings.phone_number_2)}</span>` : ''}
               ${agencySettings?.bank_number ? `<span class="agency-contact-item">🏦 ${agencySettings.bank_number}</span>` : ''}
             </div>
             <p class="contract-title">${labels.contractTitle}</p>
@@ -2974,7 +2981,7 @@ export const PersonalizationModal: React.FC<{
             </div>
             <div class="field">
               <div class="field-label">${isFrench ? 'Téléphone' : 'الهاتف'}</div>
-              <div class="field-value">${secondConductor?.phone || 'N/A'}</div>
+              <div class="field-value">${secondConductor?.phone ? ltrPhone(secondConductor.phone) : 'N/A'}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.birthDate}</div>
@@ -3638,7 +3645,7 @@ export const PersonalizationModal: React.FC<{
         <div class="agency-strip">
           ${agencySettings?.name ? `<div class="strip-row"><span class="strip-label">Nom de l\u2019enseigne :</span><span class="strip-value">${agencySettings.name}</span></div>` : ''}
           ${agencySettings?.address ? `<div class="strip-row"><span class="strip-label">Adresse :</span><span class="strip-value">${agencySettings.address}</span></div>` : ''}
-          ${agencySettings?.phone ? `<div class="strip-row"><span class="strip-label">\u{1F4DE} T\u00e9l\u00e9phone :</span><span class="strip-value">${agencySettings.phone}${agencySettings.phone_number_2 ? ' / ' + agencySettings.phone_number_2 : ''}</span></div>` : ''}
+          ${agencySettings?.phone ? `<div class="strip-row"><span class="strip-label">\u{1F4DE} T\u00e9l\u00e9phone :</span><span class="strip-value">${ltrPhone(agencySettings.phone)}${agencySettings.phone_number_2 ? ' / ' + ltrPhone(agencySettings.phone_number_2) : ''}</span></div>` : ''}
           ${agencySettings?.bank_number ? `<div class="strip-row"><span class="strip-label">\u{1F3E6} Num\u00e9ro de compte :</span><span class="strip-value">${agencySettings.bank_number}</span></div>` : ''}
         </div>
 
@@ -3651,7 +3658,7 @@ export const PersonalizationModal: React.FC<{
               <div>
                 <div class="agency-name-sm">${agencySettings?.name || 'NOM AGENCE'}</div>
                 ${agencySettings?.address ? `<div class="agency-detail">${agencySettings.address}</div>` : ''}
-                ${agencySettings?.phone ? `<div class="agency-detail">T\u00e9l: ${agencySettings.phone}</div>` : ''}
+                ${agencySettings?.phone ? `<div class="agency-detail">T\u00e9l: ${ltrPhone(agencySettings.phone)}</div>` : ''}
               </div>
             </div>
           </div>
@@ -3659,7 +3666,7 @@ export const PersonalizationModal: React.FC<{
             <div class="sec-title">\u{1F464} Client</div>
             <div class="info-row"><span class="info-label">Nom :</span><span class="info-value">${reservation?.client?.firstName || ''} ${reservation?.client?.lastName || ''}</span></div>
             <div class="info-row"><span class="info-label">Adresse :</span><span class="info-value">${reservation?.client?.completeAddress || reservation?.client?.wilaya || 'N/A'}</span></div>
-            ${reservation?.client?.phone ? `<div class="info-row"><span class="info-label">T\u00e9l :</span><span class="info-value">${reservation.client.phone}</span></div>` : ''}
+            ${reservation?.client?.phone ? `<div class="info-row"><span class="info-label">T\u00e9l :</span><span class="info-value">${ltrPhone(reservation.client.phone)}</span></div>` : ''}
             ${reservation?.client?.idCardNumber ? `<div class="info-row"><span class="info-label">N\u00b0 CIN :</span><span class="info-value">${reservation.client.idCardNumber}</span></div>` : ''}
           </div>
         </div>
@@ -4377,7 +4384,7 @@ export const PersonalizationModal: React.FC<{
             </div>
             <div class="detail-item">
               <div class="detail-label">📞 ${isFrench ? 'Téléphone' : 'الهاتف'}</div>
-              <div class="detail-value">${reservation?.client?.phone || 'N/A'}</div>
+              <div class="detail-value">${reservation?.client?.phone ? ltrPhone(reservation.client.phone) : 'N/A'}</div>
             </div>
           </div>
         </div>
@@ -4796,7 +4803,7 @@ export const PersonalizationModal: React.FC<{
             </div>
             <div class="detail-item">
               <div class="detail-label">${labels.phone}</div>
-              <div class="detail-value">${reservation?.client?.phone || 'N/A'}</div>
+              <div class="detail-value">${reservation?.client?.phone ? ltrPhone(reservation.client.phone) : 'N/A'}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">${labels.email}</div>

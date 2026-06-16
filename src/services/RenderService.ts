@@ -4,6 +4,14 @@
  */
 export class RenderService {
   /**
+   * Force a phone number to render strictly left-to-right, even inside an RTL (Arabic)
+   * document, so it prints in the same order as the French layout.
+   */
+  static ltrPhone(value: any): string {
+    return `<span dir="ltr" style="unicode-bidi:bidi-override;direction:ltr;display:inline-block">${value ?? ''}</span>`;
+  }
+
+  /**
    * Render a template HTML string by replacing placeholders with data values
    * Placeholders format: {{variable_name}}
    * 
@@ -97,7 +105,7 @@ export class RenderService {
       client_name: `${client?.first_name || ''} ${client?.last_name || ''}`.trim(),
       client_first_name: client?.first_name || '',
       client_last_name: client?.last_name || '',
-      client_phone: client?.phone || '',
+      client_phone: client?.phone ? this.ltrPhone(client.phone) : '',
       client_email: client?.email || '',
       client_address: client?.address || '',
       
@@ -141,7 +149,7 @@ export class RenderService {
       
       // Agency info
       agency_name: agencySettings?.agency_name || '',
-      agency_phone: agencySettings?.phone || '',
+      agency_phone: agencySettings?.phone ? this.ltrPhone(agencySettings.phone) : '',
       agency_address: agencySettings?.address || '',
       agency_logo: agencySettings?.logo || '',
     };

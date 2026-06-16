@@ -1,5 +1,12 @@
 import { ReservationDetails } from '../types';
 
+/**
+ * Force a phone number to render strictly left-to-right, even inside an RTL (Arabic)
+ * document, so it prints in the same order as the French layout.
+ */
+const ltrPhone = (value: any): string =>
+  `<span dir="ltr" style="unicode-bidi:bidi-override;direction:ltr;display:inline-block">${value ?? ''}</span>`;
+
 export const generateContractHTML = (
   reservation: ReservationDetails | null,
   agencySettings: any,
@@ -289,8 +296,8 @@ export const generateContractHTML = (
           <div class="agency-name">${(agencySettings?.name || 'AGENCY').split(' ').slice(0, 3).join(' ')}</div>
           <div class="agency-contact">
             ${agencySettings?.address ? `<div class="agency-contact-item"><strong>${isFrench ? 'Adresse du siège' : 'عنوان المقر'}</strong><br>${agencySettings.address}</div>` : ''}
-            ${agencySettings?.phone ? `<div class="agency-contact-item">📞 ${isFrench ? 'Téléphone' : 'الهاتف'}: ${agencySettings.phone}</div>` : ''}
-            ${agencySettings?.phone_number_2 ? `<div class="agency-contact-item">📱 ${isFrench ? 'Deuxième numéro de téléphone' : 'الهاتف الثاني'}: ${agencySettings.phone_number_2}</div>` : ''}
+            ${agencySettings?.phone ? `<div class="agency-contact-item">📞 ${isFrench ? 'Téléphone' : 'الهاتف'}: ${ltrPhone(agencySettings.phone)}</div>` : ''}
+            ${agencySettings?.phone_number_2 ? `<div class="agency-contact-item">📱 ${isFrench ? 'Deuxième numéro de téléphone' : 'الهاتف الثاني'}: ${ltrPhone(agencySettings.phone_number_2)}</div>` : ''}
             ${agencySettings?.bank_number ? `<div class="agency-contact-item">🏦 ${isFrench ? 'Numéro de compte bancaire' : 'الرقم البنكي'}: ${agencySettings.bank_number}</div>` : ''}
           </div>
           <div class="contract-title">${labels.contractTitle}</div>
@@ -345,7 +352,7 @@ export const generateContractHTML = (
           <div class="field-row">
             <div class="field">
               <div class="field-label">📱 ${labels.phone} *</div>
-              <div class="field-value">${reservation?.client?.phone || ''}</div>
+              <div class="field-value">${reservation?.client?.phone ? ltrPhone(reservation.client.phone) : ''}</div>
             </div>
             <div class="field">
               <div class="field-label">🎂 ${labels.birthDate}</div>
@@ -401,7 +408,7 @@ export const generateContractHTML = (
           <div class="field-row">
             <div class="field">
               <div class="field-label">📱 ${labels.phone} *</div>
-              <div class="field-value">${secondConductor?.phone || ''}</div>
+              <div class="field-value">${secondConductor?.phone ? ltrPhone(secondConductor.phone) : ''}</div>
             </div>
             <div class="field">
               <div class="field-label">🎂 ${labels.birthDate}</div>

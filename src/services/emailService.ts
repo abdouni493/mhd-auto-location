@@ -7,6 +7,14 @@ import html2pdf from 'html2pdf.js';
  */
 export class EmailService {
   /**
+   * Force a phone number to render strictly left-to-right, even inside an RTL (Arabic)
+   * document, so it prints in the same order as the French layout.
+   */
+  static ltrPhone(value: any): string {
+    return `<span dir="ltr" style="unicode-bidi:bidi-override;direction:ltr;display:inline-block">${value ?? ''}</span>`;
+  }
+
+  /**
    * Convert HTML to PDF Buffer
    */
   static async htmlToPdf(htmlContent: string, fileName: string = 'document'): Promise<Blob> {
@@ -258,7 +266,7 @@ export class EmailService {
       </div>
       <div class="info-row">
         <div class="info-label">${templateLang === 'fr' ? 'Téléphone:' : 'الهاتف:'}:</div>
-        <div class="info-value">${reservation.client.phone || 'N/A'}</div>
+        <div class="info-value">${reservation.client.phone ? this.ltrPhone(reservation.client.phone) : 'N/A'}</div>
       </div>
       <div class="info-row">
         <div class="info-label">${templateLang === 'fr' ? 'Email:' : 'البريد:'}:</div>
@@ -453,7 +461,7 @@ export class EmailService {
   static async generateDocumentHTML(
     reservation: ReservationDetails,
     templateLang: 'fr' | 'ar',
-    documentType: 'contract' | 'devis' | 'recu' | 'engagement' | 'facture' | 'inspection'
+    documentType: 'contract' | 'devis' | 'recu' | 'engagement' | 'facture' | 'inspection' | 'reservation'
   ): Promise<string> {
     // Get the base contract HTML
     let htmlContent = await this.generateContractHTML(reservation, templateLang);
@@ -483,6 +491,10 @@ export class EmailService {
       inspection: {
         fr: 'RAPPORT D\'INSPECTION',
         ar: 'تقرير فحص المركبة'
+      },
+      reservation: {
+        fr: 'BON DE RÉSERVATION',
+        ar: 'سند الحجز'
       }
     };
     
@@ -522,6 +534,8 @@ export class EmailService {
         return await this.generateFactureEmailHTML(reservation, templateLang);
       case 'devis':
         return await this.generateDevisEmailHTML(reservation, templateLang);
+      case 'reservation':
+        return await this.generateReservationEmailHTML(reservation, templateLang);
       case 'contract':
       default:
         return await this.generateContractEmailHTMLForEmail(reservation, templateLang);
@@ -656,7 +670,7 @@ export class EmailService {
       <div class="header-text">
         <div class="agency-name">${agencyName}</div>
         <div class="agency-contact">
-          ${agencyAddress}${agencyPhone ? ` &nbsp;|&nbsp; 📞 ${agencyPhone}` : ''}
+          ${agencyAddress}${agencyPhone ? ` &nbsp;|&nbsp; 📞 ${this.ltrPhone(agencyPhone)}` : ''}
         </div>
         <div class="doc-title">🔍 ${labels.title}</div>
       </div>
@@ -689,7 +703,7 @@ export class EmailService {
           </div>
           <div class="field">
             <div class="field-label">${labels.phone}</div>
-            <div class="field-value">${client.phone || 'N/A'}</div>
+            <div class="field-value">${client.phone ? this.ltrPhone(client.phone) : 'N/A'}</div>
           </div>
           <div class="field">
             <div class="field-label">${labels.emailLabel}</div>
@@ -792,7 +806,7 @@ export class EmailService {
       <div style="flex:1;">
         <div style="font-size:20px;font-weight:bold;color:#1a3a8a;text-align:center;margin-bottom:2px;">${ag.name}</div>
         <div style="font-size:10px;color:#555;text-align:center;">
-          ${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${ag.phone}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${ag.phone2}` : ''}
+          ${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${this.ltrPhone(ag.phone)}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${this.ltrPhone(ag.phone2)}` : ''}
         </div>
         <div style="font-size:13px;color:#555;text-align:center;margin-top:2px;">${docTitle}</div>
       </div>
@@ -859,7 +873,7 @@ export class EmailService {
       ${ag.logo ? `<img src="${ag.logo}" alt="Logo" class="logo">` : ''}
       <div style="flex:1;">
         <div class="agency-name">${ag.name}</div>
-        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${ag.phone}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${ag.phone2}` : ''}</div>
+        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${this.ltrPhone(ag.phone)}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${this.ltrPhone(ag.phone2)}` : ''}</div>
         <div class="doc-title">${isFrench ? 'ENGAGEMENT' : 'التزام'}</div>
       </div>
     </div>
@@ -998,7 +1012,7 @@ export class EmailService {
       ${ag.logo ? `<img src="${ag.logo}" alt="Logo" class="logo">` : ''}
       <div style="flex:1;">
         <div class="agency-name">${ag.name}</div>
-        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${ag.phone}` : ''}</div>
+        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${this.ltrPhone(ag.phone)}` : ''}</div>
         <div class="doc-title">${isFrench ? 'REÇU DE VERSEMENT' : 'إيصال الدفع'}</div>
       </div>
     </div>
@@ -1033,7 +1047,7 @@ export class EmailService {
         </div>
         <div class="detail-item">
           <div class="det-label">📞 ${isFrench ? 'Téléphone' : 'الهاتف'}</div>
-          <div class="det-value">${client.phone || 'N/A'}</div>
+          <div class="det-value">${client.phone ? this.ltrPhone(client.phone) : 'N/A'}</div>
         </div>
         <div class="detail-item">
           <div class="det-label">🚗 ${isFrench ? 'Véhicule' : 'المركبة'}</div>
@@ -1311,7 +1325,7 @@ export class EmailService {
       ${ag.logo ? `<img src="${ag.logo}" alt="Logo" class="logo">` : ''}
       <div style="flex:1;">
         <div class="agency-name">${ag.name}</div>
-        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${ag.phone}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${ag.phone2}` : ''}</div>
+        <div class="agency-contact">${ag.address}${ag.phone ? ` &nbsp;|&nbsp; 📞 ${this.ltrPhone(ag.phone)}` : ''}${ag.phone2 ? ` &nbsp;|&nbsp; 📱 ${this.ltrPhone(ag.phone2)}` : ''}</div>
         <div class="doc-title">${isFrench ? 'DEVIS' : 'عرض أسعار'}</div>
       </div>
     </div>
@@ -1622,8 +1636,8 @@ export class EmailService {
         <div class="agency-name">${agencyName}</div>
         <div class="agency-contact">
           ${agencyAddress ? `<span>${agencyAddress}</span>` : ''}
-          ${agencyPhone   ? ` &nbsp;|&nbsp; 📞 ${agencyPhone}` : ''}
-          ${agencyPhone2  ? ` &nbsp;|&nbsp; 📱 ${agencyPhone2}` : ''}
+          ${agencyPhone   ? ` &nbsp;|&nbsp; 📞 ${this.ltrPhone(agencyPhone)}` : ''}
+          ${agencyPhone2  ? ` &nbsp;|&nbsp; 📱 ${this.ltrPhone(agencyPhone2)}` : ''}
           ${agencyBank    ? ` &nbsp;|&nbsp; 🏦 ${agencyBank}` : ''}
         </div>
         <div class="contract-title">${labels.contractTitle}</div>
@@ -1677,7 +1691,7 @@ export class EmailService {
           </div>
           <div class="field">
             <div class="field-label">${labels.phone}</div>
-            <div class="field-value">${client.phone || 'N/A'}</div>
+            <div class="field-value">${client.phone ? this.ltrPhone(client.phone) : 'N/A'}</div>
           </div>
           <div class="field">
             <div class="field-label">${labels.licenseNumber}</div>
@@ -1782,6 +1796,246 @@ export class EmailService {
         <div class="special-item">2- عدم قيادة السيارة بوقود احتياطي (réserve)</div>
         <div class="special-item">3- عدم تسليم السيارة في التاريخ المحدد ينتج عنه مبلغ اليومي كاملاً</div>
       `}
+    </div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="signature-block">
+        <div class="signature-line"></div>
+        <div class="signature-label">${labels.clientSignature}</div>
+        <div class="date-sig">${labels.dateAndSignature}</div>
+      </div>
+      <div class="signature-block">
+        <div class="signature-line"></div>
+        <div class="signature-label">${labels.agencySignature}</div>
+        <div class="date-sig">${labels.dateAndSignature}</div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>`;
+  }
+
+  /**
+   * Generate reservation booking voucher — same professional design / colours / organisation
+   * as the printed contract (blue #1a3a8a), but limited to the client, the vehicle and the
+   * date & time of the reservation, plus the agency information and logo.
+   */
+  private static async generateReservationEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): Promise<string> {
+    // Load agency settings for logo, name, contact info
+    const { data: settingsData } = await supabase
+      .from('website_settings')
+      .select('logo, name, address, phone, phone_number_2, bank_number')
+      .limit(1)
+      .single();
+
+    const agencyName    = settingsData?.name          || 'AUTO LOCATION';
+    const logoUrl       = settingsData?.logo           || '';
+    const agencyAddress = settingsData?.address        || '';
+    const agencyPhone   = settingsData?.phone          || '';
+    const agencyPhone2  = settingsData?.phone_number_2 || '';
+
+    const isFrench = templateLang === 'fr';
+    const textDir  = isFrench ? 'ltr' : 'rtl';
+    const locale   = isFrench ? 'fr-FR' : 'ar-DZ';
+
+    const client  = reservation.client;
+    const car     = reservation.car;
+    const today   = new Date().toLocaleDateString(locale);
+    const depDate = new Date(reservation.step1.departureDate).toLocaleDateString(locale);
+    const retDate = new Date(reservation.step1.returnDate).toLocaleDateString(locale);
+    const depTime = reservation.step1.departureTime || '--:--';
+    const retTime = reservation.step1.returnTime || '--:--';
+    const totalDays = reservation.totalDays || Math.ceil(
+      (new Date(reservation.step1.returnDate).getTime() - new Date(reservation.step1.departureDate).getTime())
+      / (1000 * 60 * 60 * 24)
+    );
+
+    const labels = {
+      title:            isFrench ? 'Bon de Réservation'   : 'سند الحجز',
+      date:             isFrench ? 'Date'                 : 'التاريخ',
+      reservationNo:    isFrench ? 'N° de Réservation'    : 'رقم الحجز',
+      clientLabel:      isFrench ? 'Client'               : 'العميل',
+      clientInfo:       isFrench ? 'Informations Client'  : 'معلومات العميل',
+      fullName:         isFrench ? 'Nom Complet'          : 'الاسم الكامل',
+      phone:            isFrench ? 'Téléphone'            : 'الهاتف',
+      emailLabel:       isFrench ? 'Email'                : 'البريد الإلكتروني',
+      address:          isFrench ? 'Adresse'              : 'العنوان',
+      vehicleInfo:      isFrench ? 'Informations du Véhicule' : 'معلومات المركبة',
+      model:            isFrench ? 'Modèle'               : 'الموديل',
+      registration:     isFrench ? 'Immatriculation'      : 'التسجيل',
+      color:            isFrench ? 'Couleur'              : 'اللون',
+      fuel:             isFrench ? 'Carburant'            : 'الوقود',
+      reservationDetails: isFrench ? 'Date & Heure de la Réservation' : 'تاريخ وساعة الحجز',
+      departure:        isFrench ? 'Départ'               : 'المغادرة',
+      returnLabel:      isFrench ? 'Retour'               : 'العودة',
+      departureTime:    isFrench ? 'Heure de Départ'      : 'ساعة المغادرة',
+      returnTime:       isFrench ? 'Heure de Retour'      : 'ساعة العودة',
+      duration:         isFrench ? 'Durée'                : 'المدة',
+      days:             isFrench ? 'jours'                : 'أيام',
+      clientSignature:  isFrench ? 'Signature du Client'  : 'توقيع العميل',
+      agencySignature:  isFrench ? "Signature de l'Agence": 'توقيع الوكالة',
+      dateAndSignature: isFrench ? 'Date et signature'    : 'التاريخ والتوقيع',
+    };
+
+    return `<!DOCTYPE html>
+<html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
+<head>
+  <meta charset="UTF-8">
+  <title>${labels.title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      line-height: 1.5;
+      color: #222;
+      background: white;
+      direction: ${textDir};
+      font-size: 14px;
+    }
+    .page { width: 100%; max-width: 210mm; padding: 12mm; margin: 0 auto; background: white; }
+    /* Header */
+    .header { border-bottom: 3px solid #1a3a8a; padding-bottom: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+    .logo { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+    .header-text { flex: 1; }
+    .agency-name { font-size: 20px; font-weight: bold; color: #1a3a8a; text-align: center; margin-bottom: 2px; }
+    .agency-contact { font-size: 10px; color: #555; text-align: center; line-height: 1.4; }
+    .doc-title { font-size: 13px; color: #555; text-align: center; margin-top: 2px; }
+    /* Info boxes row */
+    .header-info { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+    .info-box { padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.3; }
+    .info-box.blue   { background: #dbeafe; border-left: 4px solid #2563eb; }
+    .info-box.green  { background: #dcfce7; border-left: 4px solid #16a34a; }
+    .info-box.amber  { background: #fef3c7; border-left: 4px solid #d97706; }
+    .info-label { font-weight: 600; color: #222; margin-bottom: 2px; font-size: 10px; }
+    .info-value { color: #333; font-size: 11px; }
+    /* Sections */
+    .section { margin-bottom: 8px; padding: 8px 10px; border-radius: 5px; border: 1px solid #e5e7eb; }
+    .section.client-section   { background: #f0f9ff; border-color: #bfdbfe; }
+    .section.vehicle-section  { background: #f0fdf4; border-color: #bbf7d0; }
+    .section.period-section   { background: #fffbeb; border-color: #fde68a; }
+    .section-title { font-size: 12px; font-weight: 700; background: #f0f1f3; padding: 4px 6px; border-radius: 3px; margin-bottom: 6px; border-left: 4px solid #2563eb; color: #1a3a8a; }
+    .section-content { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; font-size: 12px; }
+    .field { padding: 2px 0; border-bottom: 0.5px solid #ddd; }
+    .field-label { font-weight: 600; color: #1a3a8a; font-size: 11px; }
+    .field-value { color: #444; font-size: 12px; margin-top: 1px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    /* Signatures */
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 14px; }
+    .signature-block { text-align: center; }
+    .signature-line { border-top: 1px solid #333; margin-bottom: 4px; height: 30px; }
+    .signature-label { font-weight: 600; font-size: 12px; color: #1a3a8a; }
+    .date-sig { font-size: 10px; color: #666; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- Header -->
+    <div class="header">
+      ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo">` : ''}
+      <div class="header-text">
+        <div class="agency-name">${agencyName}</div>
+        <div class="agency-contact">
+          ${agencyAddress ? `<span>${agencyAddress}</span>` : ''}
+          ${agencyPhone   ? ` &nbsp;|&nbsp; 📞 ${this.ltrPhone(agencyPhone)}` : ''}
+          ${agencyPhone2  ? ` &nbsp;|&nbsp; 📱 ${this.ltrPhone(agencyPhone2)}` : ''}
+        </div>
+        <div class="doc-title">${labels.title}</div>
+      </div>
+    </div>
+
+    <!-- Info boxes -->
+    <div class="header-info">
+      <div class="info-box blue">
+        <div class="info-label">📅 ${labels.date}</div>
+        <div class="info-value">${today}</div>
+      </div>
+      <div class="info-box green">
+        <div class="info-label">🔢 ${labels.reservationNo}</div>
+        <div class="info-value">#${reservation.id?.substring(0, 8).toUpperCase() || 'N/A'}</div>
+      </div>
+      <div class="info-box amber">
+        <div class="info-label">👤 ${labels.clientLabel}</div>
+        <div class="info-value">${client.lastName || ''}</div>
+      </div>
+    </div>
+
+    <!-- Reservation date & time -->
+    <div class="section period-section">
+      <div class="section-title">🕒 ${labels.reservationDetails}</div>
+      <div class="section-content" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div class="field">
+          <div class="field-label">${labels.departure}</div>
+          <div class="field-value">${depDate}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">⏰ ${labels.departureTime}</div>
+          <div class="field-value">${this.ltrPhone(depTime)}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">${labels.duration}</div>
+          <div class="field-value">${totalDays} ${labels.days}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">${labels.returnLabel}</div>
+          <div class="field-value">${retDate}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">⏰ ${labels.returnTime}</div>
+          <div class="field-value">${this.ltrPhone(retTime)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Client + Vehicle (2 columns) -->
+    <div class="two-col">
+      <!-- Client -->
+      <div class="section client-section">
+        <div class="section-title">👤 ${labels.clientInfo}</div>
+        <div class="section-content">
+          <div class="field">
+            <div class="field-label">${labels.fullName}</div>
+            <div class="field-value">${client.firstName || ''} ${client.lastName || ''}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.phone}</div>
+            <div class="field-value">${client.phone ? this.ltrPhone(client.phone) : 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.emailLabel}</div>
+            <div class="field-value">${client.email || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.address}</div>
+            <div class="field-value">${client.completeAddress || client.wilaya || 'N/A'}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vehicle -->
+      <div class="section vehicle-section">
+        <div class="section-title">🚗 ${labels.vehicleInfo}</div>
+        <div class="section-content">
+          <div class="field">
+            <div class="field-label">${labels.model}</div>
+            <div class="field-value">${car.brand || ''} ${car.model || ''}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.registration}</div>
+            <div class="field-value">${car.registration || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.color}</div>
+            <div class="field-value">${car.color || 'N/A'}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">${labels.fuel}</div>
+            <div class="field-value">${car.energy || 'N/A'}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Signatures -->
