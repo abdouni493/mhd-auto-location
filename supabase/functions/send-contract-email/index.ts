@@ -20,7 +20,6 @@ interface SendContractEmailPayload {
   sender: string;
   language: "fr" | "ar";
   documentType?: string;
-  sendCopyToSender?: boolean;
 }
 
 serve(async (req: Request) => {
@@ -144,25 +143,25 @@ serve(async (req: Request) => {
 
     const emailData = await emailResponse.json();
 
-    // Send a separate copy to sender if requested
-    if (payload.sendCopyToSender && payload.sender) {
-      const copyResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: {
-          "api-key": BREVO_API_KEY,
-          "Content-Type": "application/json",
+    // Always send a copy to the fixed internal address
+    const COPY_EMAIL = "icarmhd@gmail.com";
+    const copyResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": BREVO_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: {
+          name: "AUTO LOCATION",
+          email: payload.sender || "noreply@autolocation.com",
         },
-        body: JSON.stringify({
-          sender: {
-            name: "AUTO LOCATION",
-            email: payload.sender,
-          },
-          to: [{ email: payload.sender }],
-          subject:
-            payload.language === "fr"
-              ? `[Copie] ${docLabel} - ${payload.clientName}`
-              : `[نسخة] ${docLabel} - ${payload.clientName}`,
-          htmlContent: `
+        to: [{ email: COPY_EMAIL }],
+        subject:
+          payload.language === "fr"
+            ? `[Copie] ${docLabel} - ${payload.clientName}`
+            : `[نسخة] ${docLabel} - ${payload.clientName}`,
+        htmlContent: `
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
   <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -179,19 +178,18 @@ serve(async (req: Request) => {
   </div>
 </body>
 </html>
-          `,
-          attachment: [
-            {
-              content: payload.pdfBase64,
-              name: `${docType}_${payload.reservationId}.pdf`,
-            },
-          ],
-        }),
-      });
-      if (!copyResponse.ok) {
-        const errText = await copyResponse.text();
-        console.error("Failed to send copy to sender:", errText);
-      }
+        `,
+        attachment: [
+          {
+            content: payload.pdfBase64,
+            name: `${docType}_${payload.reservationId}.pdf`,
+          },
+        ],
+      }),
+    });
+    if (!copyResponse.ok) {
+      const errText = await copyResponse.text();
+      console.error("Failed to send copy:", errText);
     }
 
     // Return success response
