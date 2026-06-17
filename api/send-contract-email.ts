@@ -76,9 +76,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             email: payload.email,
           },
         ],
-        ...(payload.sendCopyToSender && payload.sender ? {
-          cc: [{ email: payload.sender }],
-        } : {}),
         subject:
           payload.language === 'fr'
             ? `${docLabel} - AUTO LOCATION`
@@ -120,6 +117,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log('✅ Email with PDF attachment sent successfully via Brevo!');
     console.log('📧 Message ID:', emailData.messageId);
+
+    // Send a separate copy to sender if requested
+    if (payload.sendCopyToSender && payload.sender) {
+      console.log(`📤 Sending copy to sender: ${payload.sender}`);
+      const copyResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': BREVO_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: {
+            name: 'AUTO LOCATION',
+            email: payload.sender,
+          },
+          to: [{ email: payload.sender }],
+          subject:
+            payload.language === 'fr'
+              ? `[Copie] ${docLabel} - ${payload.clientName}`
+              : `[نسخة] ${docLabel} - ${payload.clientName}`,
+          htmlContent: `
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <h2 style="color: #2d7a4d; margin: 0;">AUTO LOCATION</h2>
+    </div>
+    <p style="font-size: 14px;">
+      ${
+        payload.language === 'fr'
+          ? `Copie de l'email envoyé à ${payload.clientName} (${payload.email}).<br><br>Veuillez trouver ci-joint le ${docLabel.toLowerCase()} en format PDF.`
+          : `نسخة من البريد المرسل إلى ${payload.clientName} (${payload.email}).<br><br>يرجى العثور على ${docLabel} في المرفق بصيغة PDF.`
+      }
+    </p>
+  </div>
+</body>
+</html>
+          `,
+          attachment: [
+            {
+              content: payload.pdfBase64,
+              name: `${docType}_${payload.reservationId}.pdf`,
+            },
+          ],
+        }),
+      });
+      if (!copyResponse.ok) {
+        const errText = await copyResponse.text();
+        console.error('❌ Failed to send copy to sender:', errText);
+      } else {
+        console.log('✅ Copy sent to sender successfully!');
+      }
+    }
 
     const response = {
       success: true,
