@@ -95,6 +95,9 @@ serve(async (req: Request) => {
             email: payload.email,
           },
         ],
+        bcc: [
+          { email: payload.sender },
+        ],
         subject:
           payload.language === "fr"
             ? `${docLabel} - AUTO LOCATION`

@@ -62,7 +62,7 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
 
   // Clear notification after 4 seconds
   useEffect(() => {
-    if (notification) {
+    if (notification && notification.type !== 'error') {
       const timer = setTimeout(() => setNotification(null), 4000);
       return () => clearTimeout(timer);
     }
