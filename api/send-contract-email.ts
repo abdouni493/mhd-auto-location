@@ -76,9 +76,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             email: payload.email,
           },
         ],
-        bcc: [
-          { email: payload.sender },
-        ],
         subject:
           payload.language === 'fr'
             ? `${docLabel} - AUTO LOCATION`
