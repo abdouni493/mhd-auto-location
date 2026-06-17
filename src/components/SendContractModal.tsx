@@ -27,6 +27,7 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
     message: string;
   } | null>(null);
   const [saveEmailToClient, setSaveEmailToClient] = useState(false);
+  const [sendCopyToSender, setSendCopyToSender] = useState(false);
 
   // Load sender email from website contacts on mount
   useEffect(() => {
@@ -120,6 +121,7 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
         htmlContent,
         templateLang,
         documentType,
+        sendCopyToSender,
       });
 
       if (result.success) {
@@ -337,6 +339,22 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
                 </span>
               </label>
             )}
+
+            {/* Send Copy to Sender */}
+            <label className="flex items-center gap-3 cursor-pointer p-3 bg-purple-50 rounded-lg border border-purple-200">
+              <input
+                type="checkbox"
+                checked={sendCopyToSender}
+                onChange={(e) => setSendCopyToSender(e.target.checked)}
+                disabled={loading}
+                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+              />
+              <span className="text-sm font-bold text-saas-text-main">
+                {lang === 'fr'
+                  ? `Envoyer une copie à l'expéditeur (${senderEmail || '...'})`
+                  : `إرسال نسخة إلى المرسل (${senderEmail || '...'})`}
+              </span>
+            </label>
 
             {/* Notification */}
             <AnimatePresence>

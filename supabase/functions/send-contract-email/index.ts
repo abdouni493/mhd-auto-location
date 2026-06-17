@@ -20,6 +20,7 @@ interface SendContractEmailPayload {
   sender: string;
   language: "fr" | "ar";
   documentType?: string;
+  sendCopyToSender?: boolean;
 }
 
 serve(async (req: Request) => {
@@ -95,6 +96,9 @@ serve(async (req: Request) => {
             email: payload.email,
           },
         ],
+        ...(payload.sendCopyToSender && payload.sender ? {
+          cc: [{ email: payload.sender }],
+        } : {}),
         subject:
           payload.language === "fr"
             ? `${docLabel} - AUTO LOCATION`

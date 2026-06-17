@@ -380,6 +380,7 @@ export class EmailService {
     htmlContent: string;
     templateLang: 'fr' | 'ar';
     documentType?: string;
+    sendCopyToSender?: boolean;
   }): Promise<{ success: boolean; message: string }> {
     try {
       // Validate and sanitize email addresses
@@ -428,6 +429,7 @@ export class EmailService {
           sender: senderEmail,
           language: params.templateLang,
           documentType: params.documentType || 'contract',
+          sendCopyToSender: params.sendCopyToSender ?? false,
         }),
       });
 

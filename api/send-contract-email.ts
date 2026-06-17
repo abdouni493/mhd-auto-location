@@ -76,6 +76,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             email: payload.email,
           },
         ],
+        ...(payload.sendCopyToSender && payload.sender ? {
+          cc: [{ email: payload.sender }],
+        } : {}),
         subject:
           payload.language === 'fr'
             ? `${docLabel} - AUTO LOCATION`
