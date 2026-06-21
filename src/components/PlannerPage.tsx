@@ -31,7 +31,7 @@ interface PlannerPageProps {
 
 export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
   const location = useLocation();
-  const [currentView, setCurrentView] = useState<'list' | 'calendar' | 'create' | 'details' | 'edit'>('list');
+  const [currentView, setCurrentView] = useState<'list' | 'calendar' | 'create' | 'create-alt' | 'details' | 'edit'>('list');
   const [displayMode, setDisplayMode] = useState<'grid' | 'calendar'>('grid');
   const [selectedReservation, setSelectedReservation] = useState<ReservationDetails | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -451,11 +451,12 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     : 0;
 
 
-  if (currentView === 'create') {
+  if (currentView === 'create' || currentView === 'create-alt') {
     return (
-      <CreateReservationForm 
-        lang={lang} 
+      <CreateReservationForm
+        lang={lang}
         defaultStatus="confirmed"
+        altFlow={currentView === 'create-alt'}
         onBack={async () => {
           setCurrentView('list');
           setShowInspectionMode(false);
@@ -603,6 +604,16 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
         >
           <Plus className="w-4 h-4" />
           {lang === 'fr' ? 'Nouvelle Réservation' : 'حجز جديد'}
+        </button>
+
+        {/* Add New Reservation - Alternative order (Tarification first) */}
+        <button
+          onClick={() => setCurrentView('create-alt')}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-lg transition-all"
+          title={lang === 'fr' ? 'Nouvelle réservation (tarification avant le client)' : 'حجز جديد (التسعير قبل العميل)'}
+        >
+          <Plus className="w-4 h-4" />
+          {lang === 'fr' ? 'Réservation (Tarif. d\'abord)' : 'حجز (التسعير أولا)'}
         </button>
       </div>
 

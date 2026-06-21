@@ -147,9 +147,13 @@ interface CreateReservationFormProps {
   initialData?: Partial<ReservationDetails>;
   defaultStatus?: 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled';
   user?: any;
+  // Alternative step order:
+  // 1) Dates & Lieux  2) Véhicule  3) Tarification Finale (sans infos client)
+  // 4) Client  5) Services  6) Inspection Départ (+ création)
+  altFlow?: boolean;
 }
 
-export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ lang, onBack, inspectionMode = false, initialData, defaultStatus = 'pending', user }) => {
+export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ lang, onBack, inspectionMode = false, initialData, defaultStatus = 'pending', user, altFlow = false }) => {
   const [currentStep, setCurrentStep] = useState(inspectionMode ? 3 : 1);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
@@ -260,7 +264,14 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
     }
   });
 
-  const steps = [
+  const steps = altFlow ? [
+    { id: 1, title: lang === 'fr' ? 'Dates & Lieux' : 'التواريخ والأماكن', icon: '📅' },
+    { id: 2, title: lang === 'fr' ? 'Sélection Véhicule' : 'اختيار المركبة', icon: '🚗' },
+    { id: 3, title: lang === 'fr' ? 'Tarification Finale' : 'التسعير النهائي', icon: '💰' },
+    { id: 4, title: lang === 'fr' ? 'Client' : 'العميل', icon: '👤' },
+    { id: 5, title: lang === 'fr' ? 'Services Supplémentaires' : 'الخدمات الإضافية', icon: '🛠️' },
+    { id: 6, title: lang === 'fr' ? 'Inspection Départ' : 'فحص المغادرة', icon: '🔍' }
+  ] : [
     { id: 1, title: lang === 'fr' ? 'Dates & Lieux' : 'التواريخ والأماكن', icon: '📅' },
     { id: 2, title: lang === 'fr' ? 'Sélection Véhicule' : 'اختيار المركبة', icon: '🚗' },
     { id: 3, title: lang === 'fr' ? 'Inspection Départ' : 'فحص المغادرة', icon: '🔍' },
@@ -619,12 +630,26 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           className="bg-white rounded-2xl shadow-lg border border-slate-200"
         >
           <div className="p-8">
-            {currentStep === 1 && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} inspectionMode={inspectionMode} initialData={initialData} />}
-            {currentStep === 2 && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 3 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 5 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
-            {currentStep === 6 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} inspectionMode={inspectionMode} initialData={initialData} agencies={agencies} />}
+            {altFlow ? (
+              <>
+                {/* Alternative order: Dates → Véhicule → Tarification (sans client) → Client → Services → Inspection */}
+                {currentStep === 1 && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} inspectionMode={inspectionMode} initialData={initialData} />}
+                {currentStep === 2 && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 3 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} inspectionMode={inspectionMode} initialData={initialData} agencies={agencies} hideClientInfo={true} />}
+                {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 5 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 6 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
+              </>
+            ) : (
+              <>
+                {currentStep === 1 && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} inspectionMode={inspectionMode} initialData={initialData} />}
+                {currentStep === 2 && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 3 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 5 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 6 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} inspectionMode={inspectionMode} initialData={initialData} agencies={agencies} />}
+              </>
+            )}
           </div>
         </motion.div>
       </AnimatePresence>
@@ -2682,7 +2707,10 @@ export const Step6FinalPricing: React.FC<{
   inspectionMode?: boolean;
   initialData?: Partial<ReservationDetails>;
   agencies: any[];
-}> = ({ lang, formData, setFormData, inspectionMode, initialData, agencies }) => {
+  // When true, hide the client information section (used when this step is shown
+  // before the client has been selected in the alternative flow).
+  hideClientInfo?: boolean;
+}> = ({ lang, formData, setFormData, inspectionMode, initialData, agencies, hideClientInfo = false }) => {
   const [tvaEnabled, setTvaEnabled] = useState(false);
   const [tvaRate, setTvaRate] = useState(19); // Default TVA rate
   const [advancePayment, setAdvancePayment] = useState(0);
@@ -2876,7 +2904,7 @@ export const Step6FinalPricing: React.FC<{
       </h3>
 
       {/* CLIENT INFORMATION SECTION */}
-      {formData.step4?.selectedClient && (
+      {!hideClientInfo && formData.step4?.selectedClient && (
         <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-6 border-2 border-orange-200">
           <h4 className="text-lg font-black text-orange-900 mb-4">👤 {lang === 'fr' ? 'Informations Client' : 'معلومات العميل'}</h4>
           <div className="flex flex-col md:flex-row items-start gap-6">
