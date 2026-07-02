@@ -11,10 +11,10 @@ import { OrdersPage } from './website/OrdersPage';
 interface WebsiteProps {
   lang: Language;
   onLangChange?: (lang: Language) => void;
+  /** Voitures visibles sur le site (les masquées sont déjà filtrées par App). */
   cars: Car[];
   agencies: Agency[];
   isLoadingAgencies?: boolean;
-  offers: any[];
   specialOffers: any[];
   contactInfo: any;
   websiteSettings: any;
@@ -26,7 +26,6 @@ export const Website: React.FC<WebsiteProps> = ({
   cars,
   agencies,
   isLoadingAgencies = false,
-  offers,
   specialOffers,
   contactInfo,
   websiteSettings,
@@ -196,16 +195,15 @@ export const Website: React.FC<WebsiteProps> = ({
           <Welcome lang={lang} websiteSettings={websiteSettings} onStartRenting={() => setCurrentPage('offers')} />
         )}
         {currentPage === 'offers' && (
-          <OffersListing lang={lang} cars={cars} offers={offers} onOrder={handleReserveClick} />
+          <OffersListing lang={lang} cars={cars} specialOffers={specialOffers} onOrder={handleReserveClick} />
         )}
         {currentPage === 'special' && (
-          <SpecialOffersListing lang={lang} cars={cars} specialOffers={specialOffers} onOrder={handleReserveClick} />
+          <SpecialOffersListing lang={lang} specialOffers={specialOffers} onOrder={handleReserveClick} />
         )}
         {currentPage === 'orders' && (
           <OrdersPage
             lang={lang}
             cars={cars}
-            offers={offers}
             specialOffers={specialOffers}
             agencies={agencies}
             isLoadingAgencies={isLoadingAgencies}

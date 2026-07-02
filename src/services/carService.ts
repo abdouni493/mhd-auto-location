@@ -22,6 +22,8 @@ export interface Car {
   price_month?: number
   deposit?: number
   mileage?: number
+  fuel_level?: 'full' | 'half' | 'quarter' | 'eighth' | 'empty'
+  is_hidden_from_site?: boolean
 }
 
 export interface AddCarData {

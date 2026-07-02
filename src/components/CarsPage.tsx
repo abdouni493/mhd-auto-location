@@ -118,6 +118,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
           // Conserve 'maintenance' si en DB ; le vrai statut sera recalculé avec les réservations
           status: dbCar.status === 'maintenance' ? 'maintenance' : 'disponible',
           fuelLevel: dbCar.fuel_level || 'full',
+          isHiddenFromSite: dbCar.is_hidden_from_site === true,
         }));
         setCars(mappedCars);
       }

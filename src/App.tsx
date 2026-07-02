@@ -44,7 +44,6 @@ export default function App() {
   const [isSidebarVisible, setIsSidebarVisible] = useState(window.innerWidth >= 1024);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [cars, setCars] = useState<Car[]>([]);
-  const [offers, setOffers] = useState<any[]>([]);
   const [specialOffers, setSpecialOffers] = useState<any[]>([]);
   const [contactInfo, setContactInfo] = useState<any>(null);
   const [websiteSettings, setWebsiteSettings] = useState<any>(null);
@@ -154,15 +153,10 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user, isAuthLoading]);
 
-  // Load cars from database when user is authenticated
+  // Load cars from database. La table cars est lisible en anonyme (RLS),
+  // ce qui permet au site public d'afficher les vraies voitures sans connexion.
   useEffect(() => {
     const loadCars = async () => {
-      if (!user) {
-        // Use mock data when not authenticated
-        setCars(mockCars);
-        return;
-      }
-
       try {
         const dbCars = await DatabaseService.getCars();
         setCars(dbCars.length > 0 ? dbCars : mockCars);
@@ -174,28 +168,25 @@ export default function App() {
     };
 
     loadCars();
-  }, [user]); // Depend on user state
+  }, [user]); // Recharge après connexion/déconnexion
 
   // Load website data from database
   useEffect(() => {
     const loadWebsiteData = async () => {
       try {
-        const [dbOffers, dbSpecialOffers, dbContactInfo, dbWebsiteSettings] = await Promise.all([
-          DatabaseService.getOffers(),
+        const [dbSpecialOffers, dbContactInfo, dbWebsiteSettings] = await Promise.all([
           DatabaseService.getSpecialOffers(),
           DatabaseService.getWebsiteContacts(),
           DatabaseService.getWebsiteSettings(),
         ]);
 
-        setOffers(dbOffers.length > 0 ? dbOffers : mockOffers);
-        setSpecialOffers(dbSpecialOffers.length > 0 ? dbSpecialOffers : mockSpecialOffers);
+        setSpecialOffers(dbSpecialOffers);
         setContactInfo(dbContactInfo || mockContactInfo);
         setWebsiteSettings(dbWebsiteSettings || mockWebsiteSettings);
       } catch (error) {
         console.error('Failed to load website data from database:', error);
         // Fallback to mock data if database load fails
-        setOffers(mockOffers);
-        setSpecialOffers(mockSpecialOffers);
+        setSpecialOffers([]);
         setContactInfo(mockContactInfo);
         setWebsiteSettings(mockWebsiteSettings);
       }
@@ -307,26 +298,6 @@ export default function App() {
       createdAt: new Date().toISOString(),
     },
   ];
-
-  const mockOffers = mockCars.map((car, i) => ({
-    id: `offer-${i}`,
-    carId: car.id,
-    car,
-    price: car.priceDay,
-    note: i === 0 ? 'Location journalière premium' : '',
-    createdAt: new Date().toISOString(),
-  }));
-
-  const mockSpecialOffers = mockCars.slice(0, 2).map((car, i) => ({
-    id: `special-${i}`,
-    carId: car.id,
-    car,
-    oldPrice: car.priceDay * 1.2,
-    newPrice: car.priceDay,
-    note: 'Promotion limitée',
-    isActive: true,
-    createdAt: new Date().toISOString(),
-  }));
 
   const mockContactInfo = {
     facebook: 'https://facebook.com/luxdrive',
@@ -491,7 +462,7 @@ export default function App() {
         case 'expenses':
           return <ExpensesPage lang={lang} cars={cars} />;
         case 'web-mgmt':
-          return <WebsiteManagementPage lang={lang} cars={cars.length > 0 ? cars : mockCars} />;
+          return <WebsiteManagementPage lang={lang} />;
         case 'web-orders':
           return <WebsiteOrders lang={lang} />;
         case 'reservations':
@@ -633,13 +604,13 @@ export default function App() {
     <Routes>
       {/* Website route */}
       <Route path="/website" element={
-        <Website 
-          lang={lang} 
+        <Website
+          lang={lang}
           onLangChange={setLang}
-          cars={cars.length > 0 ? cars : mockCars}
+          // Le site public exclut les voitures masquées (isHiddenFromSite)
+          cars={(cars.length > 0 ? cars : mockCars).filter(car => car.isHiddenFromSite !== true)}
           agencies={agencies.length > 0 ? agencies : mockAgencies}
           isLoadingAgencies={isLoadingAgenciesForWebsite}
-          offers={offers}
           specialOffers={specialOffers}
           contactInfo={contactInfo}
           websiteSettings={websiteSettings}

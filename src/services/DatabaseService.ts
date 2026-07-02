@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, Offer, SpecialOffer, ContactInfo, WebsiteSettings } from '../types';
+import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings } from '../types';
 
 // Generic database service functions
 export class DatabaseService {
@@ -28,6 +28,27 @@ export class DatabaseService {
       // Conserve 'maintenance' si c'est ce que la DB contient ;
       // sinon on laisse 'disponible' comme valeur par défaut (sera recalculé par getCarsWithRealStatus).
       status: dbCar.status === 'maintenance' ? 'maintenance' : 'disponible',
+      // === true : reste false tant que la migration n'a pas ajouté la colonne
+      isHiddenFromSite: dbCar.is_hidden_from_site === true,
+    };
+  }
+
+  /** Shared DB-row → SpecialOffer mapper (la ligne doit inclure le join car:cars(*)). */
+  private static mapDbSpecialOffer(row: any): SpecialOffer {
+    return {
+      id: row.id,
+      carId: row.car_id,
+      car: this.mapDbCar(row.car || {}),
+      oldPrice: Math.round(Number(row.old_price)),
+      newPrice: Math.round(Number(row.new_price)),
+      note: row.note,
+      isActive: row.is_active,
+      createdAt: row.created_at,
+      label: row.label || undefined,
+      discountType: row.discount_type || undefined,
+      discountValue: row.discount_value != null ? Number(row.discount_value) : undefined,
+      startDate: row.start_date || undefined,
+      endDate: row.end_date || undefined,
     };
   }
 
@@ -212,6 +233,23 @@ export class DatabaseService {
       .eq('id', id);
 
     if (error) throw error;
+  }
+
+  /** Masque / affiche une voiture sur le site public (colonne is_hidden_from_site). */
+  static async setCarVisibility(id: string, isHidden: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('cars')
+      .update({ is_hidden_from_site: isHidden })
+      .eq('id', id);
+
+    if (error) {
+      if ((error.message || '').includes('is_hidden_from_site')) {
+        throw new Error(
+          "La colonne is_hidden_from_site n'existe pas encore. Exécutez la migration supabase/migrations/20260702_offers_visibility.sql dans le SQL Editor de Supabase."
+        );
+      }
+      throw error;
+    }
   }
 
   // Clients
@@ -1106,150 +1144,42 @@ export class DatabaseService {
     throw lastError;
   }
 
-  // Website Management - Offers
-  static async getOffers(): Promise<Offer[]> {
-    try {
-      const { data, error } = await supabase
-        .from('offers')
-        .select(`
-          *,
-          car:cars(*)
-        `)
-        .order('created_at', { ascending: false });
+  // Website Management - Offres spéciales (promotions)
+  // NOTE : les "offres ordinaires" (table offers) sont dépréciées — les voitures
+  // existantes s'affichent désormais automatiquement sur le site (sauf masquées).
+  // La table offers est conservée (0 ligne constatée) mais n'est plus lue ni écrite.
 
-      if (error) throw error;
+  /**
+   * Construit le payload DB d'une offre spéciale. Les nouveaux champs (label,
+   * remise, dates) ne sont inclus que s'ils sont renseignés, pour rester
+   * compatible tant que la migration 20260702_offers_visibility.sql n'est pas appliquée.
+   */
+  private static buildSpecialOfferPayload(offer: Partial<Omit<SpecialOffer, 'id' | 'createdAt' | 'car'>>): any {
+    const payload: any = {
+      car_id: offer.carId,
+      old_price: offer.oldPrice,
+      new_price: offer.newPrice,
+      note: offer.note,
+      is_active: offer.isActive,
+    };
+    if (offer.label !== undefined) payload.label = offer.label || null;
+    if (offer.discountType !== undefined) payload.discount_type = offer.discountType || null;
+    if (offer.discountValue !== undefined) payload.discount_value = offer.discountValue ?? null;
+    if (offer.startDate !== undefined) payload.start_date = offer.startDate || null;
+    if (offer.endDate !== undefined) payload.end_date = offer.endDate || null;
+    return payload;
+  }
 
-      return (data || []).map(offer => ({
-        id: offer.id,
-        carId: offer.car_id,
-        car: {
-          id: offer.car.id || '',
-          brand: offer.car.brand,
-          model: offer.car.model,
-          registration: offer.car.plate_number,
-          year: offer.car.year,
-          color: offer.car.color || 'Premium',
-          vin: offer.car.vin || '',
-          energy: offer.car.energy || 'Essence',
-          transmission: offer.car.transmission || 'Automatique',
-          seats: offer.car.seats || 5,
-          doors: offer.car.doors || 4,
-          priceDay: Math.round(Number(offer.car.price_per_day)),
-          priceWeek: Math.round(Number(offer.car.price_week || offer.car.price_per_day * 2)),
-          priceMonth: Math.round(Number(offer.car.price_month || offer.car.price_per_day * 4)),
-          deposit: Math.round(Number(offer.car.deposit || offer.car.price_per_day * 2)),
-          images: offer.car.image_url ? [offer.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-          mileage: offer.car.mileage || 0,
-        },
-        price: Math.round(Number(offer.price)),
-        note: offer.note,
-        createdAt: offer.created_at,
-      }));
-    } catch (e: any) {
-      console.warn('getOffers failed, returning empty array', e.message || e);
-      return [];
+  private static specialOfferMigrationError(error: any): Error {
+    const msg = error?.message || '';
+    if (msg.includes('column') && /label|discount_type|discount_value|start_date|end_date/.test(msg)) {
+      return new Error(
+        "Colonnes d'offre spéciale manquantes. Exécutez la migration supabase/migrations/20260702_offers_visibility.sql dans le SQL Editor de Supabase."
+      );
     }
+    return error;
   }
 
-  static async createOffer(offer: Omit<Offer, 'id' | 'createdAt' | 'car'>): Promise<Offer> {
-    const { data, error } = await supabase
-      .from('offers')
-      .insert([{
-        car_id: offer.carId,
-        price: offer.price,
-        note: offer.note,
-      }])
-      .select(`
-        *,
-        car:cars(*)
-      `)
-      .single();
-
-    if (error) throw error;
-
-    return {
-      id: data.id,
-      carId: data.car_id,
-      car: {
-        id: data.car.id || '',
-        brand: data.car.brand,
-        model: data.car.model,
-        registration: data.car.plate_number,
-        year: data.car.year,
-        color: data.car.color || 'Premium',
-        vin: data.car.vin || '',
-        energy: data.car.energy || 'Essence',
-        transmission: data.car.transmission || 'Automatique',
-        seats: data.car.seats || 5,
-        doors: data.car.doors || 4,
-        priceDay: Math.round(Number(data.car.price_per_day)),
-        priceWeek: Math.round(Number(data.car.price_week || data.car.price_per_day * 2)),
-        priceMonth: Math.round(Number(data.car.price_month || data.car.price_per_day * 4)),
-        deposit: Math.round(Number(data.car.deposit || data.car.price_per_day * 2)),
-        images: data.car.image_url ? [data.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-        mileage: data.car.mileage || 0,
-      },
-      price: Math.round(Number(data.price)),
-      note: data.note,
-      createdAt: data.created_at,
-    };
-  }
-
-  static async updateOffer(id: string, updates: Partial<Omit<Offer, 'id' | 'createdAt' | 'car'>>): Promise<Offer> {
-    const { data, error } = await supabase
-      .from('offers')
-      .update({
-        car_id: updates.carId,
-        price: updates.price,
-        note: updates.note,
-      })
-      .eq('id', id)
-      .select(`
-        *,
-        car:cars(*)
-      `)
-      .single();
-
-    if (error) throw error;
-
-    return {
-      id: data.id,
-      carId: data.car_id,
-      car: {
-        id: data.car.id || '',
-        brand: data.car.brand,
-        model: data.car.model,
-        registration: data.car.plate_number,
-        year: data.car.year,
-        color: data.car.color || 'Premium',
-        vin: data.car.vin || '',
-        energy: data.car.energy || 'Essence',
-        transmission: data.car.transmission || 'Automatique',
-        seats: data.car.seats || 5,
-        doors: data.car.doors || 4,
-        priceDay: Math.round(Number(data.car.price_per_day)),
-        priceWeek: Math.round(Number(data.car.price_week || data.car.price_per_day * 2)),
-        priceMonth: Math.round(Number(data.car.price_month || data.car.price_per_day * 4)),
-        deposit: Math.round(Number(data.car.deposit || data.car.price_per_day * 2)),
-        images: data.car.image_url ? [data.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-        mileage: data.car.mileage || 0,
-      },
-      price: Math.round(Number(data.price)),
-      note: data.note,
-      createdAt: data.created_at,
-    };
-  }
-
-  static async deleteOffer(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('offers')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
-  }
-
-  // Website Management - Special Offers
   static async getSpecialOffers(): Promise<SpecialOffer[]> {
     try {
       const { data, error } = await supabase
@@ -1262,34 +1192,7 @@ export class DatabaseService {
 
       if (error) throw error;
 
-      return (data || []).map(offer => ({
-        id: offer.id,
-        carId: offer.car_id,
-        car: {
-          id: offer.car.id || '',
-          brand: offer.car.brand,
-          model: offer.car.model,
-          registration: offer.car.plate_number,
-          year: offer.car.year,
-          color: offer.car.color || 'Premium',
-          vin: offer.car.vin || '',
-          energy: offer.car.energy || 'Essence',
-          transmission: offer.car.transmission || 'Automatique',
-          seats: offer.car.seats || 5,
-          doors: offer.car.doors || 4,
-          priceDay: Math.round(Number(offer.car.price_per_day)),
-          priceWeek: Math.round(Number(offer.car.price_week || offer.car.price_per_day * 2)),
-          priceMonth: Math.round(Number(offer.car.price_month || offer.car.price_per_day * 4)),
-          deposit: Math.round(Number(offer.car.deposit || offer.car.price_per_day * 2)),
-          images: offer.car.image_url ? [offer.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-          mileage: offer.car.mileage || 0,
-        },
-        oldPrice: Math.round(Number(offer.old_price)),
-        newPrice: Math.round(Number(offer.new_price)),
-        note: offer.note,
-        isActive: offer.is_active,
-        createdAt: offer.created_at,
-      }));
+      return (data || []).map(row => this.mapDbSpecialOffer(row));
     } catch (e: any) {
       console.warn('getSpecialOffers failed, returning empty array', e.message || e);
       return [];
@@ -1299,61 +1202,21 @@ export class DatabaseService {
   static async createSpecialOffer(offer: Omit<SpecialOffer, 'id' | 'createdAt' | 'car'>): Promise<SpecialOffer> {
     const { data, error } = await supabase
       .from('special_offers')
-      .insert([{
-        car_id: offer.carId,
-        old_price: offer.oldPrice,
-        new_price: offer.newPrice,
-        note: offer.note,
-        is_active: offer.isActive,
-      }])
+      .insert([this.buildSpecialOfferPayload(offer)])
       .select(`
         *,
         car:cars(*)
       `)
       .single();
 
-    if (error) throw error;
-
-    return {
-      id: data.id,
-      carId: data.car_id,
-      car: {
-        id: data.car.id || '',
-        brand: data.car.brand,
-        model: data.car.model,
-        registration: data.car.plate_number,
-        year: data.car.year,
-        color: data.car.color || 'Premium',
-        vin: data.car.vin || '',
-        energy: data.car.energy || 'Essence',
-        transmission: data.car.transmission || 'Automatique',
-        seats: data.car.seats || 5,
-        doors: data.car.doors || 4,
-        priceDay: Math.round(Number(data.car.price_per_day)),
-        priceWeek: Math.round(Number(data.car.price_week || data.car.price_per_day * 2)),
-        priceMonth: Math.round(Number(data.car.price_month || data.car.price_per_day * 4)),
-        deposit: Math.round(Number(data.car.deposit || data.car.price_per_day * 2)),
-        images: data.car.image_url ? [data.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-        mileage: data.car.mileage || 0,
-      },
-      oldPrice: Math.round(Number(data.old_price)),
-      newPrice: Math.round(Number(data.new_price)),
-      note: data.note,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-    };
+    if (error) throw this.specialOfferMigrationError(error);
+    return this.mapDbSpecialOffer(data);
   }
 
   static async updateSpecialOffer(id: string, updates: Partial<Omit<SpecialOffer, 'id' | 'createdAt' | 'car'>>): Promise<SpecialOffer> {
     const { data, error } = await supabase
       .from('special_offers')
-      .update({
-        car_id: updates.carId,
-        old_price: updates.oldPrice,
-        new_price: updates.newPrice,
-        note: updates.note,
-        is_active: updates.isActive,
-      })
+      .update(this.buildSpecialOfferPayload(updates))
       .eq('id', id)
       .select(`
         *,
@@ -1361,38 +1224,11 @@ export class DatabaseService {
       `)
       .single();
 
-    if (error) throw error;
-
-    return {
-      id: data.id,
-      carId: data.car_id,
-      car: {
-        id: data.car.id || '',
-        brand: data.car.brand,
-        model: data.car.model,
-        registration: data.car.plate_number,
-        year: data.car.year,
-        color: data.car.color || 'Premium',
-        vin: data.car.vin || '',
-        energy: data.car.energy || 'Essence',
-        transmission: data.car.transmission || 'Automatique',
-        seats: data.car.seats || 5,
-        doors: data.car.doors || 4,
-        priceDay: Math.round(Number(data.car.price_per_day)),
-        priceWeek: Math.round(Number(data.car.price_week || data.car.price_per_day * 2)),
-        priceMonth: Math.round(Number(data.car.price_month || data.car.price_per_day * 4)),
-        deposit: Math.round(Number(data.car.deposit || data.car.price_per_day * 2)),
-        images: data.car.image_url ? [data.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-        mileage: data.car.mileage || 0,
-      },
-      oldPrice: Math.round(Number(data.old_price)),
-      newPrice: Math.round(Number(data.new_price)),
-      note: data.note,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-    };
+    if (error) throw this.specialOfferMigrationError(error);
+    return this.mapDbSpecialOffer(data);
   }
 
+  /** Toggle affiché / masqué du site (colonne is_active). */
   static async toggleSpecialOfferStatus(id: string): Promise<SpecialOffer> {
     // First get current status
     const { data: current, error: fetchError } = await supabase
@@ -1415,35 +1251,7 @@ export class DatabaseService {
       .single();
 
     if (error) throw error;
-
-    return {
-      id: data.id,
-      carId: data.car_id,
-      car: {
-        id: data.car.id || '',
-        brand: data.car.brand,
-        model: data.car.model,
-        registration: data.car.plate_number,
-        year: data.car.year,
-        color: data.car.color || 'Premium',
-        vin: data.car.vin || '',
-        energy: data.car.energy || 'Essence',
-        transmission: data.car.transmission || 'Automatique',
-        seats: data.car.seats || 5,
-        doors: data.car.doors || 4,
-        priceDay: Math.round(Number(data.car.price_per_day)),
-        priceWeek: Math.round(Number(data.car.price_week || data.car.price_per_day * 2)),
-        priceMonth: Math.round(Number(data.car.price_month || data.car.price_per_day * 4)),
-        deposit: Math.round(Number(data.car.deposit || data.car.price_per_day * 2)),
-        images: data.car.image_url ? [data.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
-        mileage: data.car.mileage || 0,
-      },
-      oldPrice: Math.round(Number(data.old_price)),
-      newPrice: Math.round(Number(data.new_price)),
-      note: data.note,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-    };
+    return this.mapDbSpecialOffer(data);
   }
 
   static async deleteSpecialOffer(id: string): Promise<void> {
@@ -1454,6 +1262,7 @@ export class DatabaseService {
 
     if (error) throw error;
   }
+
 
   // Website Management - Contacts
   static async getWebsiteContacts(): Promise<ContactInfo> {

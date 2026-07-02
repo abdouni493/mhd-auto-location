@@ -2,35 +2,27 @@ import React, { useState } from 'react';
 import { Language, Car, SpecialOffer } from '../../types';
 import { motion } from 'motion/react';
 import { CarDetailsModal } from './CarDetailsModal';
+import { isSpecialOfferCurrent } from '../../utils/specialOffers';
 
 interface SpecialOffersListingProps {
   lang: Language;
-  cars: Car[];
   specialOffers: SpecialOffer[];
   onOrder: (car: Car) => void;
 }
 
 export const SpecialOffersListing: React.FC<SpecialOffersListingProps> = ({
   lang,
-  cars,
   specialOffers,
   onOrder,
 }) => {
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
-  const displayOffers = specialOffers.length > 0 ? specialOffers : cars.slice(0, 4).map((car, i) => ({
-    id: `special-${i}`,
-    carId: car.id,
-    car,
-    oldPrice: car.priceDay * 1.2,
-    newPrice: car.priceDay,
-    note: lang === 'fr' ? 'Offre spéciale limitée' : 'عرض خاص محدود',
-    isActive: true,
-    createdAt: new Date().toISOString(),
-  }));
-
-  const activeOffers = displayOffers.filter(o => o.isActive);
+  // Promotions affichées : actives (non masquées), dans leur période de validité,
+  // et dont la voiture n'est pas masquée du site.
+  const activeOffers = specialOffers.filter(
+    o => isSpecialOfferCurrent(o) && o.car.isHiddenFromSite !== true
+  );
 
   return (
     <div className="relative min-h-screen bg-vel-void py-24 px-4 sm:px-6 lg:px-8 overflow-hidden">
@@ -114,6 +106,14 @@ export const SpecialOffersListing: React.FC<SpecialOffersListingProps> = ({
                     </p>
                   </motion.div>
 
+                  {/* Label promo (optionnel) */}
+                  {offer.label && (
+                    <div className="absolute top-4 left-4 px-3 py-1 rounded-lg text-xs font-bold text-white shadow-lg"
+                      style={{ background: 'rgba(239,68,68,0.9)', fontFamily: 'var(--font-display)' }}>
+                      {offer.label}
+                    </div>
+                  )}
+
                   {/* Car name overlay on image bottom */}
                   <div className="absolute bottom-4 left-4">
                     <h3 className="font-black text-2xl text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
@@ -177,6 +177,16 @@ export const SpecialOffersListing: React.FC<SpecialOffersListingProps> = ({
                       </p>
                     </div>
                   </div>
+
+                  {/* Période de validité (optionnelle) */}
+                  {offer.endDate && (
+                    <p className="text-xs font-bold px-3 py-2 rounded-lg text-center"
+                      style={{ color: '#F59E0B', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                      {lang === 'fr'
+                        ? `Valable jusqu'au ${new Date(offer.endDate).toLocaleDateString('fr-FR')}`
+                        : `صالح حتى ${new Date(offer.endDate).toLocaleDateString('fr-FR')}`}
+                    </p>
+                  )}
 
                   {/* Note */}
                   {offer.note && (

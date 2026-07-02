@@ -40,6 +40,8 @@ export interface Car {
   // Statut dérivé des réservations réelles (calculé par getCarsWithRealStatus).
   // Seul 'maintenance' peut être saisi manuellement en base.
   status?: 'disponible' | 'reserve' | 'louer' | 'maintenance';
+  // Masquée du site public (visible par défaut). Les vues admin l'affichent quand même.
+  isHiddenFromSite?: boolean;
 }
 
 export type ExpenseType = 'vidange' | 'assurance' | 'controle' | 'chaine' | 'autre';
@@ -233,15 +235,9 @@ export interface Reservation {
   createdAt: string;
 }
 
-export interface Offer {
-  id: string;
-  carId: string;
-  car: Car;
-  price: number;
-  note?: string;
-  createdAt: string;
-}
-
+// Une offre spéciale est une PROMOTION attachée à une voiture existante.
+// isActive = affichée sur le site (le toggle masquer/afficher) ;
+// startDate/endDate (optionnelles) limitent la période de validité de la promo.
 export interface SpecialOffer {
   id: string;
   carId: string;
@@ -251,6 +247,11 @@ export interface SpecialOffer {
   note?: string;
   isActive: boolean;
   createdAt: string;
+  label?: string;
+  discountType?: 'percentage' | 'fixed';
+  discountValue?: number;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface ContactInfo {

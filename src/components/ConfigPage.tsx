@@ -253,7 +253,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
         clients,
         agencies,
         workers,
-        offers,
         specialOffers,
         storeExpenses,
         vehicleExpenses,
@@ -264,7 +263,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
         DatabaseService.getClients(),
         DatabaseService.getAgencies(),
         DatabaseService.getWorkers(),
-        DatabaseService.getOffers(),
         DatabaseService.getSpecialOffers(),
         DatabaseService.getStoreExpenses(),
         DatabaseService.getVehicleExpenses(),
@@ -280,7 +278,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
           clients,
           agencies,
           workers,
-          offers,
           specialOffers,
           storeExpenses,
           vehicleExpenses,
@@ -360,12 +357,9 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
             }
           }
 
-          // Restore offers (depends on cars)
-          if (data.offers?.length > 0) {
-            for (const offer of data.offers) {
-              await DatabaseService.createOffer(offer);
-            }
-          }
+          // Les "offres ordinaires" (data.offers) des anciennes sauvegardes sont
+          // dépréciées : les voitures s'affichent automatiquement sur le site,
+          // il n'y a donc plus rien à restaurer pour elles.
 
           // Restore special offers (depends on cars)
           if (data.specialOffers?.length > 0) {
