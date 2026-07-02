@@ -192,7 +192,13 @@ export const Website: React.FC<WebsiteProps> = ({
         transition={{ duration: 0.35, ease: 'easeOut' }}
       >
         {currentPage === 'home' && (
-          <Welcome lang={lang} websiteSettings={websiteSettings} onStartRenting={() => setCurrentPage('offers')} />
+          <Welcome
+            lang={lang}
+            websiteSettings={websiteSettings}
+            onStartRenting={() => setCurrentPage('offers')}
+            onReserve={() => { setSelectedCar(null); setCurrentPage('orders'); }}
+            showcaseImage={cars[0]?.images?.[0]}
+          />
         )}
         {currentPage === 'offers' && (
           <OffersListing lang={lang} cars={cars} specialOffers={specialOffers} onOrder={handleReserveClick} />

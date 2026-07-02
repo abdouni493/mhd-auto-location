@@ -3,6 +3,7 @@ import { Language } from '../../types';
 import { motion, useScroll, useTransform } from 'motion/react';
 import { ChevronDown, Shield, Zap, Star, ArrowRight, Trophy, Car as CarIcon } from 'lucide-react';
 import { Hero3D } from './Hero3D';
+import { ShowcaseBand } from './ShowcaseBand';
 import { HERO_SPLINE_SCENE_URL } from '../../constants';
 
 // ─── Colour tokens for this page ───────────────────────────────────────────
@@ -138,10 +139,15 @@ function HeroVisual({ lang, logo }: { lang: Language; logo?: string }) {
 interface WelcomeProps {
   lang: Language;
   websiteSettings: any;
+  /** Ouvre la grille des voitures ("Voir les voitures"). */
   onStartRenting: () => void;
+  /** Lance le wizard de réservation ("Réserver"). */
+  onReserve: () => void;
+  /** Photo d'une voiture de la flotte pour la bande vitrine. */
+  showcaseImage?: string;
 }
 
-export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStartRenting }) => {
+export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStartRenting, onReserve, showcaseImage }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: containerRef });
   const heroOpacity = useTransform(scrollYProgress, [0, 0.4], [1, 0]);
@@ -260,7 +266,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
                 )}
               </motion.p>
 
-              {/* CTA */}
+              {/* CTA — primaire "Réserver" (wizard) + secondaire "Voir les voitures" (grille) */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -268,27 +274,21 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
                 className="flex flex-wrap gap-4"
               >
                 <motion.button
+                  onClick={onReserve}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="btn-vel-cta px-8 py-4 text-sm"
+                >
+                  {{ fr: 'Réserver', ar: 'احجز' }[lang]}
+                  <ArrowRight size={17} />
+                </motion.button>
+                <motion.button
                   onClick={onStartRenting}
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.96 }}
-                  className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-sm tracking-wide transition-all duration-300"
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    background: `linear-gradient(135deg, ${C.accent}, #B91C1C)`,
-                    color: '#FFFFFF',
-                    boxShadow: `0 4px 14px rgba(220,38,38,0.25)`,
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 22px rgba(220,38,38,0.32)`;
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px) scale(1.04)';
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 14px rgba(220,38,38,0.25)`;
-                    (e.currentTarget as HTMLElement).style.transform = '';
-                  }}
+                  className="btn-vel-ghost px-8 py-4 text-sm"
                 >
-                  {{ fr: 'Explorer la flotte', ar: 'استكشف الأسطول' }[lang]}
-                  <ArrowRight size={17} />
+                  {{ fr: 'Voir les voitures', ar: 'عرض السيارات' }[lang]}
                 </motion.button>
               </motion.div>
 
@@ -404,6 +404,9 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
           </div>
         </div>
       </section>
+
+      {/* ══ SHOWCASE BAND (voiture en arrière-plan + titre) ══ */}
+      <ShowcaseBand lang={lang} onReserve={onReserve} imageUrl={showcaseImage} />
 
       {/* ══ CTA BANNER ══ */}
       <section className="relative py-24 px-4 sm:px-6 lg:px-8 overflow-hidden" style={{ background: C.bg }}>

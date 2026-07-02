@@ -79,7 +79,7 @@ export const SpecialOffersListing: React.FC<SpecialOffersListingProps> = ({
                 {/* Image with Discount Badge */}
                 <div className="relative h-64 overflow-hidden bg-vel-abyss">
                   <img
-                    src={offer.car.images?.[0] || `https://images.unsplash.com/photo-1552820728-8ac41f1ce891?w=500&h=400&fit=crop`}
+                    src={offer.car.images?.[0] || `https://picsum.photos/seed/car/400/300`}
                     alt={`${offer.car.brand} ${offer.car.model}`}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                     referrerPolicy="no-referrer"

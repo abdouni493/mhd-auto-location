@@ -94,7 +94,7 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, specia
                 {/* Image compacte */}
                 <div className="relative aspect-[4/3] overflow-hidden bg-vel-abyss">
                   <img
-                    src={car.images?.[0] || 'https://images.unsplash.com/photo-1560958089-b8a63dd8aa8b?w=500&h=400&fit=crop'}
+                    src={car.images?.[0] || 'https://picsum.photos/seed/car/400/300'}
                     alt={`${car.brand} ${car.model}`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
