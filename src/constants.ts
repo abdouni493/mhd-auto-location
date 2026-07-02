@@ -1,5 +1,15 @@
 import { SidebarItem, Agency, Car } from './types';
 
+/**
+ * Scène Spline 3D du hero de la page d'accueil publique.
+ * TODO : coller ici l'URL .splinecode d'une scène de VOITURE dont vous avez
+ * les droits (export "Code" → "React" dans votre compte Spline, ex :
+ * "https://prod.spline.design/xxxxxxxx/scene.splinecode").
+ * Tant que cette constante est vide, le hero affiche le visuel statique
+ * (anneaux animés + logo) — rien ne casse.
+ */
+export const HERO_SPLINE_SCENE_URL = '';
+
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'dashboard', label: { fr: 'Tableau de bord', ar: 'لوحة القيادة' }, icon: '📊' },
   { id: 'planner', label: { fr: 'Planificateur', ar: 'المخطط' }, icon: '📅' },

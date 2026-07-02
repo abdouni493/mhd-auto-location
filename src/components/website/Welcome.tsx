@@ -2,6 +2,8 @@ import React, { useRef } from 'react';
 import { Language } from '../../types';
 import { motion, useScroll, useTransform } from 'motion/react';
 import { ChevronDown, Shield, Zap, Star, ArrowRight, Trophy, Car as CarIcon } from 'lucide-react';
+import { Hero3D } from './Hero3D';
+import { HERO_SPLINE_SCENE_URL } from '../../constants';
 
 // ─── Colour tokens for this page ───────────────────────────────────────────
 const C = {
@@ -309,7 +311,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
               </motion.div>
             </motion.div>
 
-            {/* RIGHT: CSS Visual */}
+            {/* RIGHT: 3D (Spline) avec repli sur le visuel CSS statique */}
             <motion.div
               initial={{ opacity: 0, scale: 0.85 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -320,7 +322,10 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
               <div className="absolute inset-0 pointer-events-none rounded-full" style={{
                 background: `radial-gradient(ellipse at center, ${C.accentDim}, transparent 68%)`,
               }} />
-              <HeroVisual lang={lang} logo={websiteSettings?.logo} />
+              <Hero3D
+                sceneUrl={HERO_SPLINE_SCENE_URL}
+                fallback={<HeroVisual lang={lang} logo={websiteSettings?.logo} />}
+              />
             </motion.div>
           </div>
         </div>
