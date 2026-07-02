@@ -3,13 +3,13 @@ import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Language } from '../../../types';
 
-// ─── Palette du site public (thème actuel) ───────────────────────────────────
+// ─── Palette claire "Automotive" (voir design-system/auto_location/MASTER.md) ──
 export const C = {
-  cyan:      '#22D3EE',
-  violet:    '#8B5CF6',
-  bg:        '#050B18',
-  surface:   '#0A1628',
-  elevated:  '#0F1E35',
+  accent:    '#DC2626',
+  amber:     '#D97706',
+  bg:        '#F8FAFC',
+  surface:   '#FFFFFF',
+  elevated:  '#FFFFFF',
 };
 
 export const ALGERIAN_WILAYAS = [
@@ -34,16 +34,16 @@ export const fromYmd = (s: string): Date => {
 
 // ─── Styles d'inputs partagés ─────────────────────────────────────────────────
 export const inputStyle: React.CSSProperties = {
-  background: '#0F1E35',
-  border: '1px solid rgba(255,255,255,0.1)',
-  color: '#F8FAFC',
+  background: '#FFFFFF',
+  border: '1px solid rgba(15,23,42,0.1)',
+  color: '#0F172A',
 };
 export const focusInput = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-  (e.target as HTMLElement).style.borderColor = '#22D3EE';
-  (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(34,211,238,0.25)';
+  (e.target as HTMLElement).style.borderColor = '#DC2626';
+  (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(220,38,38,0.2)';
 };
 export const blurInput = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-  (e.target as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)';
+  (e.target as HTMLElement).style.borderColor = 'rgba(15,23,42,0.1)';
   (e.target as HTMLElement).style.boxShadow = 'none';
 };
 
@@ -53,14 +53,14 @@ export const inputClass = 'w-full px-4 py-3 rounded-xl outline-none transition-a
 export const SectionCard: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
   <div
     className={`rounded-2xl p-6 sm:p-8 space-y-6 ${className}`}
-    style={{ background: C.elevated, border: '1px solid rgba(34,211,238,0.1)' }}
+    style={{ background: C.elevated, border: '1px solid rgba(220,38,38,0.08)' }}
   >
     {children}
   </div>
 );
 
 export const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <h2 className="text-xl font-black text-vel-white flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+  <h2 className="text-xl font-black text-vel-ink flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
     {children}
   </h2>
 );
@@ -95,7 +95,7 @@ export function NavButtons({ onBack, onNext, backLabel, nextLabel, nextDisabled 
         disabled={nextDisabled}
         whileHover={nextDisabled ? {} : { scale: 1.02 }}
         whileTap={nextDisabled ? {} : { scale: 0.98 }}
-        className={`btn-vel-cyan flex-1 py-4 flex items-center justify-center gap-2 text-sm ${nextDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+        className={`btn-vel-cta flex-1 py-4 flex items-center justify-center gap-2 text-sm ${nextDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
       >
         {nextLabel || { fr: 'Suivant', ar: 'التالي' }[lang]} <ChevronRight size={18} />
       </motion.button>

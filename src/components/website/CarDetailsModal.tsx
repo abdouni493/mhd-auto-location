@@ -27,7 +27,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
       exit={{ opacity: 0 }}
       onClick={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(12px)' }}
+      style={{ background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(12px)' }}
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -37,9 +37,9 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
         onClick={e => e.stopPropagation()}
         className="relative rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         style={{
-          background: '#0D1220',
-          border: '1px solid rgba(34,211,238,0.25)',
-          boxShadow: '0 0 60px rgba(34,211,238,0.08), 0 25px 50px rgba(0,0,0,0.7)',
+          background: '#FFFFFF',
+          border: '1px solid rgba(220,38,38,0.2)',
+          boxShadow: '0 0 60px rgba(220,38,38,0.06), 0 25px 50px rgba(15,23,42,0.15)',
         }}
       >
         {/* Close Button */}
@@ -49,10 +49,10 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
           whileTap={{ scale: 0.9 }}
           className="absolute top-4 right-4 z-20 rounded-xl p-2 transition-all duration-200 text-vel-muted"
           style={{
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(15,23,42,0.06)',
+            border: '1px solid rgba(15,23,42,0.1)',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#22D3EE'; }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#DC2626'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; }}
         >
           <X size={20} />
@@ -74,13 +74,13 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
             background: 'linear-gradient(to top, rgba(13,18,32,0.95) 0%, rgba(13,18,32,0.3) 50%, transparent 100%)',
           }} />
 
-          {/* Car name on image */}
+          {/* Car name on image — le dégradé sombre reste, donc texte clair */}
           <div className="absolute bottom-6 left-6">
-            <h2 className="font-black text-4xl text-vel-white leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="font-black text-4xl text-white leading-none" style={{ fontFamily: 'var(--font-display)' }}>
               {car.brand}{' '}
-              <span style={{ color: '#22D3EE' }}>{car.model}</span>
+              <span style={{ color: '#F87171' }}>{car.model}</span>
             </h2>
-            <p className="text-vel-silver mt-1">
+            <p className="text-slate-200 mt-1">
               {car.registration} · {car.year}
               {car.vin && ` · ${car.vin}`}
             </p>
@@ -93,16 +93,16 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
           {/* Specs Grid */}
           <div>
             <h3 className="font-bold text-xs tracking-[0.2em] uppercase mb-4"
-              style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+              style={{ color: '#DC2626', fontFamily: 'var(--font-display)' }}>
               {{ fr: 'Caractéristiques', ar: 'الخصائص' }[lang]}
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {specs.map((spec, i) => (
                 <div key={i} className="vel-glass rounded-xl p-4 flex items-center gap-3">
-                  <spec.icon size={16} className="flex-shrink-0" style={{ color: '#22D3EE' }} />
+                  <spec.icon size={16} className="flex-shrink-0" style={{ color: '#DC2626' }} />
                   <div className="min-w-0">
                     <p className="text-vel-muted text-xs">{spec.label[lang]}</p>
-                    <p className="text-vel-white font-bold text-sm truncate">{spec.value}</p>
+                    <p className="text-vel-ink font-bold text-sm truncate">{spec.value}</p>
                   </div>
                 </div>
               ))}
@@ -112,12 +112,12 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
           {/* Pricing Section */}
           <div>
             <h3 className="font-bold text-xs tracking-[0.2em] uppercase mb-4"
-              style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+              style={{ color: '#DC2626', fontFamily: 'var(--font-display)' }}>
               {{ fr: 'Tarifs', ar: 'الأسعار' }[lang]}
             </h3>
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <div className="vel-glass-cyan rounded-xl p-4 text-center">
-                <p className="font-black text-2xl" style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+              <div className="vel-glass-accent rounded-xl p-4 text-center">
+                <p className="font-black text-2xl" style={{ color: '#DC2626', fontFamily: 'var(--font-display)' }}>
                   {car.priceDay.toLocaleString()}
                 </p>
                 <p className="text-vel-muted text-xs mt-1">
@@ -125,7 +125,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
                 </p>
               </div>
               <div className="vel-glass rounded-xl p-4 text-center">
-                <p className="font-black text-2xl text-vel-silver" style={{ fontFamily: 'var(--font-display)' }}>
+                <p className="font-black text-2xl text-vel-slate" style={{ fontFamily: 'var(--font-display)' }}>
                   {car.priceWeek.toLocaleString()}
                 </p>
                 <p className="text-vel-muted text-xs mt-1">
@@ -133,7 +133,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
                 </p>
               </div>
               <div className="vel-glass rounded-xl p-4 text-center">
-                <p className="font-black text-2xl text-vel-silver" style={{ fontFamily: 'var(--font-display)' }}>
+                <p className="font-black text-2xl text-vel-slate" style={{ fontFamily: 'var(--font-display)' }}>
                   {car.priceMonth.toLocaleString()}
                 </p>
                 <p className="text-vel-muted text-xs mt-1">
@@ -162,7 +162,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-4 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex gap-4 pt-2" style={{ borderTop: '1px solid rgba(15,23,42,0.08)' }}>
             <motion.button
               onClick={onClose}
               whileHover={{ scale: 1.02 }}
@@ -175,7 +175,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
               onClick={() => { onOrder(car); onClose(); }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="flex-1 btn-vel-cyan py-4"
+              className="flex-1 btn-vel-cta py-4"
             >
               {{ fr: 'Réserver Maintenant', ar: 'احجز الآن' }[lang]}
             </motion.button>

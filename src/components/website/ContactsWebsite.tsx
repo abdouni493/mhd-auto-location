@@ -82,10 +82,10 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
           className="text-center mb-20"
         >
           <p className="font-bold text-xs tracking-[0.25em] uppercase mb-4"
-            style={{ color: '#22D3EE', fontFamily: 'var(--font-display)' }}>
+            style={{ color: '#DC2626', fontFamily: 'var(--font-display)' }}>
             {{ fr: 'Parlons', ar: 'لنتحدث' }[lang]}
           </p>
-          <h1 className="font-black text-6xl text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="font-black text-6xl text-vel-ink" style={{ fontFamily: 'var(--font-display)' }}>
             {{ fr: 'Nous Contacter', ar: 'اتصل بنا' }[lang]}
           </h1>
           <p className="text-vel-muted text-lg mt-4 max-w-2xl mx-auto">
@@ -105,11 +105,11 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
             className="vel-glass rounded-2xl p-8 space-y-8"
           >
             <div>
-              <h2 className="font-black text-3xl text-vel-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+              <h2 className="font-black text-3xl text-vel-ink mb-2" style={{ fontFamily: 'var(--font-display)' }}>
                 {websiteSettings?.name || 'AutoLocation'}
               </h2>
               <div className="w-10 h-0.5 mb-4"
-                style={{ background: '#22D3EE', boxShadow: '0 0 8px rgba(34,211,238,0.6)' }} />
+                style={{ background: '#DC2626', boxShadow: '0 0 8px rgba(220,38,38,0.35)' }} />
               {websiteSettings?.description && (
                 <p className="text-vel-muted leading-relaxed">{websiteSettings.description}</p>
               )}
@@ -120,19 +120,19 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
                 const content = (
                   <div className="flex items-center gap-4 p-4 rounded-xl transition-all duration-300 group/item cursor-pointer"
                     style={{
-                      background: 'rgba(34,211,238,0.04)',
-                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'rgba(220,38,38,0.04)',
+                      border: '1px solid rgba(15,23,42,0.08)',
                       borderLeftWidth: '2px',
-                      borderLeftColor: '#22D3EE',
+                      borderLeftColor: '#DC2626',
                     }}
                   >
-                    <div className="w-10 h-10 rounded-lg vel-glass-cyan flex items-center justify-center flex-shrink-0">
-                      <method.icon size={18} style={{ color: '#22D3EE' }} />
+                    <div className="w-10 h-10 rounded-lg vel-glass-accent flex items-center justify-center flex-shrink-0">
+                      <method.icon size={18} style={{ color: '#DC2626' }} />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-vel-muted mb-0.5">{method.label[lang]}</p>
-                      <p className="text-vel-white font-bold truncate transition-colors"
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#22D3EE'; }}
+                      <p className="text-vel-ink font-bold truncate transition-colors"
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#DC2626'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; }}>
                         {method.value}
                       </p>
@@ -161,7 +161,7 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
                   className="flex items-center gap-4 p-4 rounded-xl block transition-all duration-300"
                   style={{
                     background: 'rgba(37,211,102,0.05)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(15,23,42,0.08)',
                     borderLeftWidth: '2px',
                     borderLeftColor: '#25D366',
                   }}
@@ -172,7 +172,7 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
                   </div>
                   <div>
                     <p className="text-xs font-bold text-vel-muted mb-0.5">WhatsApp</p>
-                    <p className="text-vel-white font-bold">{contactInfo.whatsapp}</p>
+                    <p className="text-vel-ink font-bold">{contactInfo.whatsapp}</p>
                   </div>
                   <ExternalLink size={14} className="text-vel-dim ml-auto" />
                 </motion.a>
@@ -189,10 +189,10 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
             className="vel-glass rounded-2xl p-8 space-y-8"
           >
             <div>
-              <h3 className="font-black text-2xl text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+              <h3 className="font-black text-2xl text-vel-ink" style={{ fontFamily: 'var(--font-display)' }}>
                 {{ fr: 'Suivez-nous', ar: 'تابعنا' }[lang]}
               </h3>
-              <div className="w-10 h-0.5 mt-2 mb-6" style={{ background: '#22D3EE' }} />
+              <div className="w-10 h-0.5 mt-2 mb-6" style={{ background: '#DC2626' }} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -211,7 +211,7 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
                   }}
                   onMouseLeave={e => {
                     (e.currentTarget as HTMLElement).style.boxShadow = 'none';
-                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(15,23,42,0.08)';
                   }}
                 >
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black"
@@ -223,7 +223,7 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
                     }}>
                     {social.shortLabel}
                   </div>
-                  <p className="font-bold text-vel-silver text-sm" style={{ fontFamily: 'var(--font-display)' }}>
+                  <p className="font-bold text-vel-slate text-sm" style={{ fontFamily: 'var(--font-display)' }}>
                     {social.label}
                   </p>
                 </motion.a>
@@ -246,10 +246,10 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
           transition={{ duration: 0.7, delay: 0.2 }}
           className="vel-glass rounded-2xl p-8 max-w-2xl mx-auto"
         >
-          <h3 className="font-black text-2xl text-vel-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <h3 className="font-black text-2xl text-vel-ink mb-2" style={{ fontFamily: 'var(--font-display)' }}>
             {{ fr: 'Envoyez-nous un message', ar: 'أرسل لنا رسالة' }[lang]}
           </h3>
-          <div className="w-10 h-0.5 mb-8" style={{ background: '#22D3EE' }} />
+          <div className="w-10 h-0.5 mb-8" style={{ background: '#DC2626' }} />
 
           <form className="space-y-5" onSubmit={e => e.preventDefault()}>
             {[
@@ -264,15 +264,15 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
                 </label>
                 <input
                   type={field.type}
-                  className="w-full rounded-xl px-4 py-3 outline-none transition-all text-vel-white placeholder:text-vel-dim font-medium"
-                  style={{ background: '#1A2235', border: '1px solid rgba(255,255,255,0.08)' }}
+                  className="w-full rounded-xl px-4 py-3 outline-none transition-all text-vel-ink placeholder:text-vel-dim font-medium"
+                  style={{ background: '#EEF2F7', border: '1px solid rgba(15,23,42,0.08)' }}
                   placeholder={field.placeholder[lang]}
                   onFocus={e => {
-                    (e.target as HTMLElement).style.borderColor = '#22D3EE';
-                    (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(34,211,238,0.3)';
+                    (e.target as HTMLElement).style.borderColor = '#DC2626';
+                    (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(220,38,38,0.25)';
                   }}
                   onBlur={e => {
-                    (e.target as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                    (e.target as HTMLElement).style.borderColor = 'rgba(15,23,42,0.08)';
                     (e.target as HTMLElement).style.boxShadow = 'none';
                   }}
                 />
@@ -286,15 +286,15 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
               </label>
               <textarea
                 rows={4}
-                className="w-full rounded-xl px-4 py-3 outline-none transition-all text-vel-white placeholder:text-vel-dim font-medium resize-none"
-                style={{ background: '#1A2235', border: '1px solid rgba(255,255,255,0.08)' }}
+                className="w-full rounded-xl px-4 py-3 outline-none transition-all text-vel-ink placeholder:text-vel-dim font-medium resize-none"
+                style={{ background: '#EEF2F7', border: '1px solid rgba(15,23,42,0.08)' }}
                 placeholder={{ fr: 'Votre message...', ar: 'رسالتك...' }[lang]}
                 onFocus={e => {
-                  (e.target as HTMLElement).style.borderColor = '#22D3EE';
-                  (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(34,211,238,0.3)';
+                  (e.target as HTMLElement).style.borderColor = '#DC2626';
+                  (e.target as HTMLElement).style.boxShadow = '0 0 0 1px rgba(220,38,38,0.25)';
                 }}
                 onBlur={e => {
-                  (e.target as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                  (e.target as HTMLElement).style.borderColor = 'rgba(15,23,42,0.08)';
                   (e.target as HTMLElement).style.boxShadow = 'none';
                 }}
               />
@@ -304,7 +304,7 @@ export const ContactsWebsite: React.FC<ContactsWebsiteProps> = ({
               type="submit"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="btn-vel-cyan w-full py-4"
+              className="btn-vel-cta w-full py-4"
             >
               {{ fr: 'Envoyer le message', ar: 'إرسال الرسالة' }[lang]}
             </motion.button>

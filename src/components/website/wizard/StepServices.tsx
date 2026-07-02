@@ -22,7 +22,7 @@ export const StepServices: React.FC = () => {
 
         {loadingServices ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 size={28} className="animate-spin" style={{ color: C.cyan }} />
+            <Loader2 size={28} className="animate-spin" style={{ color: C.accent }} />
           </div>
         ) : availableServices.length === 0 ? (
           <div className="text-center py-12 text-vel-dim">
@@ -48,29 +48,29 @@ export const StepServices: React.FC = () => {
                   })}
                   className="rounded-2xl p-5 cursor-pointer transition-all duration-300 relative overflow-hidden"
                   style={{
-                    background: isSelected ? 'rgba(34,211,238,0.06)' : C.elevated,
-                    border: isSelected ? '1px solid rgba(34,211,238,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                    boxShadow: isSelected ? '0 0 20px rgba(34,211,238,0.1)' : 'none',
+                    background: isSelected ? 'rgba(220,38,38,0.05)' : C.elevated,
+                    border: isSelected ? '1px solid rgba(220,38,38,0.25)' : '1px solid rgba(15,23,42,0.06)',
+                    boxShadow: isSelected ? '0 0 20px rgba(220,38,38,0.08)' : 'none',
                   }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-black text-vel-white text-sm" style={{ fontFamily: 'var(--font-display)' }}>
+                      <h4 className="font-black text-vel-ink text-sm" style={{ fontFamily: 'var(--font-display)' }}>
                         {service.name || service.service_name}
                       </h4>
                       {service.description && (
                         <p className="text-vel-muted text-xs mt-1 leading-relaxed">{service.description}</p>
                       )}
-                      <p className="font-black text-base mt-2" style={{ color: C.cyan }}>
+                      <p className="font-black text-base mt-2" style={{ color: C.accent }}>
                         {service.price.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
                       </p>
                     </div>
                     <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300"
                       style={{
-                        background: isSelected ? C.cyan : 'transparent',
-                        border: isSelected ? `2px solid ${C.cyan}` : '2px solid rgba(255,255,255,0.2)',
+                        background: isSelected ? C.accent : 'transparent',
+                        border: isSelected ? `2px solid ${C.accent}` : '2px solid rgba(15,23,42,0.15)',
                       }}>
-                      {isSelected && <Check size={12} color="#050B18" strokeWidth={3} />}
+                      {isSelected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
                     </div>
                   </div>
                 </motion.div>
@@ -88,20 +88,20 @@ export const StepServices: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
             className="rounded-2xl p-6 space-y-3"
-            style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)' }}
+            style={{ background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.16)' }}
           >
-            <h4 className="font-black text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+            <h4 className="font-black text-vel-ink" style={{ fontFamily: 'var(--font-display)' }}>
               🛒 {{ fr: 'Services sélectionnés', ar: 'الخدمات المختارة' }[lang]}
             </h4>
             {selectedServices.map(s => (
               <div key={s.id} className="flex justify-between items-center text-sm">
-                <span className="text-vel-silver">{s.name}</span>
-                <span className="font-bold" style={{ color: C.cyan }}>{s.price.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+                <span className="text-vel-slate">{s.name}</span>
+                <span className="font-bold" style={{ color: C.accent }}>{s.price.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
               </div>
             ))}
-            <div className="pt-3 flex justify-between items-center font-black text-base" style={{ borderTop: '1px solid rgba(34,211,238,0.2)' }}>
-              <span className="text-vel-white">{{ fr: 'Total services', ar: 'إجمالي الخدمات' }[lang]}</span>
-              <span style={{ color: C.cyan }}>{selectedServices.reduce((s, x) => s + x.price, 0).toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+            <div className="pt-3 flex justify-between items-center font-black text-base" style={{ borderTop: '1px solid rgba(220,38,38,0.16)' }}>
+              <span className="text-vel-ink">{{ fr: 'Total services', ar: 'إجمالي الخدمات' }[lang]}</span>
+              <span style={{ color: C.accent }}>{selectedServices.reduce((s, x) => s + x.price, 0).toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
             </div>
           </motion.div>
         )}

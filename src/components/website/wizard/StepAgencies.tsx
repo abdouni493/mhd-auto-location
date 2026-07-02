@@ -53,7 +53,7 @@ export const StepAgencies: React.FC = () => {
           <span
             className="relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors duration-300"
             style={{
-              background: differentReturnAgency ? C.cyan : 'rgba(255,255,255,0.12)',
+              background: differentReturnAgency ? C.accent : 'rgba(15,23,42,0.12)',
             }}
           >
             <motion.span
@@ -63,7 +63,7 @@ export const StepAgencies: React.FC = () => {
               style={{ left: differentReturnAgency ? 'calc(100% - 22px)' : '2px' }}
             />
           </span>
-          <span className="font-bold text-vel-silver text-sm group-hover:text-vel-white transition-colors">
+          <span className="font-bold text-vel-slate text-sm group-hover:text-vel-ink transition-colors">
             {{ fr: 'Agence de retour différente', ar: 'وكالة إرجاع مختلفة' }[lang]}
           </span>
         </button>
@@ -96,11 +96,11 @@ export const StepAgencies: React.FC = () => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="text-sm text-vel-muted px-4 py-3 rounded-xl"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                style={{ background: 'rgba(15,23,42,0.03)', border: '1px solid rgba(15,23,42,0.06)' }}
               >
                 {lang === 'fr'
-                  ? <>Le véhicule sera rendu à l'agence de départ : <span className="font-bold text-vel-silver">{departureAgencyName}</span></>
-                  : <>سيتم إرجاع السيارة إلى وكالة المغادرة: <span className="font-bold text-vel-silver">{departureAgencyName}</span></>}
+                  ? <>Le véhicule sera rendu à l'agence de départ : <span className="font-bold text-vel-slate">{departureAgencyName}</span></>
+                  : <>سيتم إرجاع السيارة إلى وكالة المغادرة: <span className="font-bold text-vel-slate">{departureAgencyName}</span></>}
               </motion.p>
             )
           )}

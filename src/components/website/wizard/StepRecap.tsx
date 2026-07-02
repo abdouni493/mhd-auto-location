@@ -29,9 +29,9 @@ export const StepRecap: React.FC = () => {
     <button
       onClick={() => goToStep(step)}
       className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors text-vel-muted"
-      style={{ border: '1px solid rgba(255,255,255,0.1)' }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = C.cyan; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(34,211,238,0.4)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)'; }}
+      style={{ border: '1px solid rgba(15,23,42,0.1)' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = C.accent; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(220,38,38,0.25)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(15,23,42,0.1)'; }}
     >
       <Pencil size={11} />
       {{ fr: 'Modifier', ar: 'تعديل' }[lang]}
@@ -39,7 +39,7 @@ export const StepRecap: React.FC = () => {
   );
 
   const summaryBlock = (title: string, editStep: number, rows: { label: string; value: string }[]) => (
-    <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+    <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(15,23,42,0.03)', border: '1px solid rgba(15,23,42,0.06)' }}>
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold text-vel-muted uppercase tracking-wider" style={{ fontFamily: 'var(--font-display)' }}>{title}</p>
         <EditButton step={editStep} />
@@ -47,7 +47,7 @@ export const StepRecap: React.FC = () => {
       {rows.map((r, i) => (
         <div key={i} className="flex justify-between items-baseline gap-4 text-sm">
           <span className="text-vel-muted">{r.label}</span>
-          <span className="font-bold text-vel-white text-right">{r.value}</span>
+          <span className="font-bold text-vel-ink text-right">{r.value}</span>
         </div>
       ))}
     </div>
@@ -99,22 +99,22 @@ export const StepRecap: React.FC = () => {
         <SectionTitle>💰 {{ fr: 'Tarification', ar: 'التسعير' }[lang]}</SectionTitle>
         <div className="space-y-3">
           <div className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'rgba(255,255,255,0.03)' }}>
-            <span className="text-vel-silver">
+            style={{ background: 'rgba(15,23,42,0.03)' }}>
+            <span className="text-vel-slate">
               {days} {{ fr: 'j ×', ar: 'يوم ×' }[lang]} {car.priceDay.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
             </span>
-            <span className="font-bold text-vel-white">{basePrice.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+            <span className="font-bold text-vel-ink">{basePrice.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
           </div>
 
           {/* Remise offre spéciale */}
           {promo && discount > 0 && (
             <div className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
               style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              <span className="text-vel-silver">
+              <span className="text-vel-slate">
                 🏷️ {promo.label || (lang === 'fr' ? 'Offre spéciale' : 'عرض خاص')}
                 {' '}({promo.newPrice.toLocaleString()} {{ fr: 'DA/j', ar: 'د.ج/ي' }[lang]})
               </span>
-              <span className="font-bold" style={{ color: '#F87171' }}>
+              <span className="font-bold" style={{ color: '#DC2626' }}>
                 −{discount.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
               </span>
             </div>
@@ -122,20 +122,20 @@ export const StepRecap: React.FC = () => {
 
           {selectedServices.map(s => (
             <div key={s.id} className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
-              style={{ background: 'rgba(139,92,246,0.04)', border: '1px solid rgba(139,92,246,0.1)' }}>
-              <span className="text-vel-silver">{s.name}</span>
-              <span className="font-bold" style={{ color: C.violet }}>{s.price.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+              style={{ background: 'rgba(217,119,6,0.05)', border: '1px solid rgba(217,119,6,0.1)' }}>
+              <span className="text-vel-slate">{s.name}</span>
+              <span className="font-bold" style={{ color: C.amber }}>{s.price.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
             </div>
           ))}
 
           <div className="flex justify-between items-center px-4 py-4 rounded-2xl"
-            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)' }}>
-            <span className="font-black text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+            style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)' }}>
+            <span className="font-black text-vel-ink" style={{ fontFamily: 'var(--font-display)' }}>
               {{ fr: 'TOTAL', ar: 'المجموع' }[lang]}
             </span>
-            <span className="font-black text-3xl" style={{ color: C.cyan, fontFamily: 'var(--font-display)', textShadow: '0 0 20px rgba(34,211,238,0.5)' }}>
+            <span className="font-black text-3xl" style={{ color: C.accent, fontFamily: 'var(--font-display)', textShadow: '0 0 20px rgba(220,38,38,0.2)' }}>
               {total.toLocaleString()}
-              <span className="text-base ml-1" style={{ color: 'rgba(34,211,238,0.65)' }}>{{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+              <span className="text-base ml-1" style={{ color: 'rgba(220,38,38,0.75)' }}>{{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
             </span>
           </div>
         </div>
@@ -160,14 +160,14 @@ export const StepRecap: React.FC = () => {
         >
           <span className="text-xl">⚠️</span>
           <div className="flex-1">
-            <p className="text-sm font-bold" style={{ color: '#F87171' }}>{submitError}</p>
+            <p className="text-sm font-bold" style={{ color: '#DC2626' }}>{submitError}</p>
           </div>
         </motion.div>
       )}
 
       {/* Bandeau confirmation */}
-      <div className="rounded-2xl p-6" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)' }}>
-        <h3 className="font-black text-vel-white text-lg mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+      <div className="rounded-2xl p-6" style={{ background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.16)' }}>
+        <h3 className="font-black text-vel-ink text-lg mb-2" style={{ fontFamily: 'var(--font-display)' }}>
           ✅ {{ fr: 'Prêt à confirmer ?', ar: 'جاهز للتأكيد؟' }[lang]}
         </h3>
         <p className="text-vel-muted text-sm">
@@ -189,7 +189,7 @@ export const StepRecap: React.FC = () => {
           disabled={isSubmitting}
           whileHover={isSubmitting ? {} : { scale: 1.02 }}
           whileTap={isSubmitting ? {} : { scale: 0.98 }}
-          className={`btn-vel-cyan flex-1 py-4 flex items-center justify-center gap-2 text-sm ${isSubmitting ? 'opacity-60 cursor-not-allowed' : ''}`}
+          className={`btn-vel-cta flex-1 py-4 flex items-center justify-center gap-2 text-sm ${isSubmitting ? 'opacity-60 cursor-not-allowed' : ''}`}
         >
           {isSubmitting ? (
             <><Loader2 size={18} className="animate-spin" /> {lang === 'fr' ? 'Enregistrement…' : 'جاري التسجيل…'}</>

@@ -86,12 +86,12 @@ export const CarBookingCalendar: React.FC<CarBookingCalendarProps> = ({
   return (
     <div className="space-y-4">
       <div className="wizard-calendar relative rounded-2xl p-4 sm:p-6 flex justify-center"
-        style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        style={{ background: 'rgba(15,23,42,0.02)', border: '1px solid rgba(15,23,42,0.08)' }}>
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl"
-            style={{ background: 'rgba(5,11,24,0.7)' }}>
-            <div className="flex items-center gap-2 text-vel-silver text-sm font-bold">
-              <Loader2 size={18} className="animate-spin" style={{ color: C.cyan }} />
+            style={{ background: 'rgba(248,250,252,0.8)' }}>
+            <div className="flex items-center gap-2 text-vel-slate text-sm font-bold">
+              <Loader2 size={18} className="animate-spin" style={{ color: C.accent }} />
               {lang === 'fr' ? 'Chargement des disponibilités…' : 'جاري تحميل التوفر…'}
             </div>
           </div>
@@ -122,7 +122,7 @@ export const CarBookingCalendar: React.FC<CarBookingCalendarProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex flex-wrap items-center gap-4 text-vel-muted font-medium">
           <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded" style={{ background: C.cyan }} />
+            <span className="w-3 h-3 rounded" style={{ background: C.accent }} />
             {lang === 'fr' ? 'Sélectionné' : 'محدد'}
           </span>
           <span className="flex items-center gap-1.5">
@@ -134,9 +134,9 @@ export const CarBookingCalendar: React.FC<CarBookingCalendarProps> = ({
           onClick={clearDates}
           disabled={!range.from}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-colors ${
-            range.from ? 'text-vel-silver hover:text-red-400' : 'text-vel-dim cursor-not-allowed'
+            range.from ? 'text-vel-slate hover:text-red-400' : 'text-vel-dim cursor-not-allowed'
           }`}
-          style={{ border: '1px solid rgba(255,255,255,0.1)' }}
+          style={{ border: '1px solid rgba(15,23,42,0.1)' }}
         >
           <Eraser size={13} />
           {lang === 'fr' ? 'Effacer les dates' : 'مسح التواريخ'}
@@ -152,7 +152,7 @@ export const CarBookingCalendar: React.FC<CarBookingCalendarProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             className="text-sm font-bold px-4 py-3 rounded-xl"
-            style={{ color: '#F87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}
+            style={{ color: '#DC2626', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}
           >
             ⚠️ {rangeError}
           </motion.p>

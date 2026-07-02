@@ -2,33 +2,41 @@
 
 @theme {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Syne", sans-serif;
+  --font-display: "Space Grotesk", "DM Sans", sans-serif;
 
-  /* === MIDNIGHT VELOCITY PALETTE === */
-  --color-vel-void:        #080C14;
-  --color-vel-abyss:       #0D1220;
-  --color-vel-deep:        #111827;
-  --color-vel-surface:     #1A2235;
-  --color-vel-elevated:    #1F2D42;
+  /* === PALETTE "AUTOMOTIVE LIGHT" ===
+     Source de vérité : design-system/auto_location/MASTER.md
+     Primary ardoise #1E293B · CTA rouge #DC2626 · fond #F8FAFC · texte #0F172A.
+     Les noms vel-* historiques sont conservés (échelle de profondeur) mais
+     pointent désormais vers des valeurs CLAIRES. */
+  --color-vel-void:        #F8FAFC;  /* fond de page */
+  --color-vel-abyss:       #F1F5F9;  /* bandes / placeholders d'image */
+  --color-vel-deep:        #E8EDF4;  /* creux plus profonds */
+  --color-vel-surface:     #FFFFFF;  /* cartes */
+  --color-vel-elevated:    #FFFFFF;  /* cartes / champs */
 
-  --color-vel-gold:        #F59E0B;
-  --color-vel-gold-light:  #FCD34D;
-  --color-vel-gold-dark:   #B45309;
-  --color-vel-gold-glow:   rgba(245, 158, 11, 0.15);
+  --color-vel-primary:     #1E293B;  /* ardoise premium (titres, nav) */
+  --color-vel-cta:         #DC2626;  /* rouge action (boutons, accents) */
 
-  --color-vel-red:         #EF4444;
-  --color-vel-red-dark:    #DC2626;
-  --color-vel-red-glow:    rgba(239, 68, 68, 0.15);
+  --color-vel-gold:        #B45309;  /* ambre lisible sur fond clair */
+  --color-vel-gold-light:  #D97706;
+  --color-vel-gold-dark:   #92400E;
+  --color-vel-gold-glow:   rgba(217, 119, 6, 0.12);
 
-  --color-vel-white:       #F8FAFC;
-  --color-vel-silver:      #CBD5E1;
-  --color-vel-muted:       #64748B;
-  --color-vel-dim:         #334155;
+  --color-vel-red:         #DC2626;
+  --color-vel-red-dark:    #B91C1C;
+  --color-vel-red-glow:    rgba(220, 38, 38, 0.12);
 
-  --color-vel-glass:       rgba(255, 255, 255, 0.04);
-  --color-vel-glass-gold:  rgba(245, 158, 11, 0.08);
-  --color-vel-border:      rgba(255, 255, 255, 0.08);
-  --color-vel-border-gold: rgba(245, 158, 11, 0.3);
+  /* Texte (ex vel-white/silver, renommés ink/slate) */
+  --color-vel-ink:         #0F172A;  /* texte principal */
+  --color-vel-slate:       #334155;  /* texte secondaire */
+  --color-vel-muted:       #64748B;  /* texte atténué */
+  --color-vel-dim:         #94A3B8;  /* texte discret */
+
+  --color-vel-glass:       #FFFFFF;
+  --color-vel-glass-gold:  rgba(217, 119, 6, 0.08);
+  --color-vel-border:      rgba(15, 23, 42, 0.08);
+  --color-vel-border-gold: rgba(217, 119, 6, 0.3);
 
   /* Legacy saas vars kept for admin compatibility */
   --color-saas-primary-start:   #1e3a8a;
@@ -51,143 +59,126 @@
 
 /* ── Global ── */
 body {
-  @apply bg-vel-void text-vel-white antialiased;
+  @apply bg-vel-void text-vel-ink antialiased;
   font-family: var(--font-sans);
 }
 
 .font-display { font-family: var(--font-display); }
 
-/* ── Glass card ── */
+/* ── Carte claire (ex "glass" sombre) ── */
 .vel-glass {
-  background: var(--color-vel-glass);
+  background: var(--color-vel-surface);
   border: 1px solid var(--color-vel-border);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 .vel-glass-gold {
   background: var(--color-vel-glass-gold);
   border: 1px solid var(--color-vel-border-gold);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
 }
 
-/* ── Cyan glass (landing palette) ── */
-.vel-glass-cyan {
-  background: rgba(34, 211, 238, 0.05);
-  border: 1px solid rgba(34, 211, 238, 0.15);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+/* ── Encart accent (ex glass-cyan) ── */
+.vel-glass-accent {
+  background: rgba(220, 38, 38, 0.04);
+  border: 1px solid rgba(220, 38, 38, 0.14);
 }
 
-/* ── Cyan CTA button ── */
-.btn-vel-cyan {
+/* ── Bouton CTA principal (rouge action) ── */
+.btn-vel-cta {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: #050B18;
+  color: #FFFFFF;
   border-radius: 0.75rem;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #22D3EE, #06B6D4);
-  box-shadow: 0 0 24px rgba(34, 211, 238, 0.35), 0 4px 16px rgba(0,0,0,0.4);
+  cursor: pointer;
+  background: linear-gradient(135deg, #DC2626, #B91C1C);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);
 }
-.btn-vel-cyan:hover {
-  box-shadow: 0 0 40px rgba(34, 211, 238, 0.6), 0 8px 24px rgba(0,0,0,0.5);
-  transform: translateY(-2px) scale(1.02);
+.btn-vel-cta:hover {
+  box-shadow: 0 8px 22px rgba(220, 38, 38, 0.32);
+  transform: translateY(-2px);
 }
-.btn-vel-cyan:active { transform: scale(0.97); }
+.btn-vel-cta:active { transform: scale(0.97); }
+.btn-vel-cta:focus-visible { outline: 2px solid #B91C1C; outline-offset: 2px; }
 
-/* ── Violet ghost button ── */
+/* ── Bouton contour ── */
 .btn-vel-outline-cyan {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: #CBD5E1;
+  color: #334155;
   border-radius: 0.75rem;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  background: #FFFFFF;
+  border: 1px solid rgba(15, 23, 42, 0.14);
 }
 .btn-vel-outline-cyan:hover {
-  border-color: rgba(34, 211, 238, 0.4);
-  color: #22D3EE;
-  background: rgba(34, 211, 238, 0.06);
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #DC2626;
+  background: rgba(220, 38, 38, 0.04);
 }
 .btn-vel-outline-cyan:active { transform: scale(0.97); }
 
-/* ── Cyan glow text ── */
-.text-glow-cyan {
-  text-shadow: 0 0 30px rgba(34, 211, 238, 0.8), 0 0 60px rgba(34, 211, 238, 0.4);
-}
-.text-glow-violet {
-  text-shadow: 0 0 30px rgba(139, 92, 246, 0.8), 0 0 60px rgba(139, 92, 246, 0.4);
-}
+/* ── Anciennes classes "glow" neutralisées (pas de néon en mode clair) ── */
+.text-glow-cyan, .text-glow-violet, .text-glow-gold, .text-glow-red { text-shadow: none; }
 
-/* ── Gold shimmer button ── */
+/* ── Bouton ambre ── */
 .btn-vel-gold {
   @apply relative overflow-hidden font-display font-bold tracking-wider
-         text-vel-void px-8 py-4 rounded-xl transition-all duration-300
-         active:scale-95 flex items-center justify-center gap-2;
-  background: linear-gradient(135deg, #F59E0B, #D97706, #F59E0B);
-  background-size: 200% 100%;
-  box-shadow: 0 0 24px rgba(245, 158, 11, 0.35), 0 4px 16px rgba(0,0,0,0.4);
+         text-white px-8 py-4 rounded-xl transition-all duration-200
+         active:scale-95 flex items-center justify-center gap-2 cursor-pointer;
+  background: linear-gradient(135deg, #D97706, #B45309);
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.25);
 }
 .btn-vel-gold:hover {
-  background-position: right center;
-  box-shadow: 0 0 40px rgba(245, 158, 11, 0.6), 0 8px 24px rgba(0,0,0,0.5);
-  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 22px rgba(217, 119, 6, 0.32);
+  transform: translateY(-2px);
 }
 
-/* ── Red CTA button ── */
+/* ── Bouton rouge (identique au CTA, conservé pour compat) ── */
 .btn-vel-red {
   @apply relative overflow-hidden font-display font-bold tracking-wider
-         text-white px-8 py-4 rounded-xl transition-all duration-300
-         active:scale-95 flex items-center justify-center gap-2;
-  background: linear-gradient(135deg, #EF4444, #DC2626);
-  box-shadow: 0 0 24px rgba(239, 68, 68, 0.35), 0 4px 16px rgba(0,0,0,0.4);
+         text-white px-8 py-4 rounded-xl transition-all duration-200
+         active:scale-95 flex items-center justify-center gap-2 cursor-pointer;
+  background: linear-gradient(135deg, #DC2626, #B91C1C);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);
 }
 .btn-vel-red:hover {
-  box-shadow: 0 0 40px rgba(239, 68, 68, 0.6), 0 8px 24px rgba(0,0,0,0.5);
-  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 22px rgba(220, 38, 38, 0.32);
+  transform: translateY(-2px);
 }
 
-/* ── Ghost button ── */
+/* ── Bouton fantôme ── */
 .btn-vel-ghost {
   @apply relative overflow-hidden font-display font-bold tracking-wider
-         text-vel-silver px-8 py-4 rounded-xl transition-all duration-300
-         active:scale-95 flex items-center justify-center gap-2;
-  background: transparent;
+         text-vel-slate px-8 py-4 rounded-xl transition-all duration-200
+         active:scale-95 flex items-center justify-center gap-2 cursor-pointer;
+  background: #FFFFFF;
   border: 1px solid var(--color-vel-border);
 }
 .btn-vel-ghost:hover {
-  border-color: var(--color-vel-border-gold);
-  color: var(--color-vel-gold);
-  background: var(--color-vel-glass-gold);
-}
-
-/* ── Neon glow text ── */
-.text-glow-gold {
-  text-shadow: 0 0 30px rgba(245, 158, 11, 0.8), 0 0 60px rgba(245, 158, 11, 0.4);
-}
-.text-glow-red {
-  text-shadow: 0 0 30px rgba(239, 68, 68, 0.8), 0 0 60px rgba(239, 68, 68, 0.4);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: var(--color-vel-cta);
+  background: rgba(220, 38, 38, 0.03);
 }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--color-vel-void); }
-::-webkit-scrollbar-thumb { background: var(--color-vel-dim); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-vel-gold-dark); }
+::-webkit-scrollbar-track { background: #F1F5F9; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
 /* ── RTL Support ── */
 [dir="rtl"] { font-family: 'Noto Sans Arabic', sans-serif; }
@@ -262,47 +253,47 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
 
-/* ── Calendrier du wizard de réservation (react-day-picker) ── */
+/* ── Calendrier du wizard de réservation (react-day-picker, thème clair) ── */
 .wizard-calendar .rdp-root {
-  --rdp-accent-color: #22D3EE;
-  --rdp-accent-background-color: rgba(34, 211, 238, 0.18);
+  --rdp-accent-color: #DC2626;
+  --rdp-accent-background-color: rgba(220, 38, 38, 0.10);
   --rdp-day-height: 42px;
   --rdp-day-width: 42px;
   --rdp-day_button-border-radius: 10px;
-  --rdp-today-color: #22D3EE;
-  --rdp-selected-border: 2px solid #22D3EE;
-  --rdp-range_start-color: #050B18;
-  --rdp-range_end-color: #050B18;
-  --rdp-range_start-background: linear-gradient(135deg, #22D3EE, #06B6D4);
-  --rdp-range_end-background: linear-gradient(135deg, #22D3EE, #06B6D4);
-  color: #CBD5E1;
+  --rdp-today-color: #DC2626;
+  --rdp-selected-border: 2px solid #DC2626;
+  --rdp-range_start-color: #FFFFFF;
+  --rdp-range_end-color: #FFFFFF;
+  --rdp-range_start-background: linear-gradient(135deg, #DC2626, #B91C1C);
+  --rdp-range_end-background: linear-gradient(135deg, #DC2626, #B91C1C);
+  color: #334155;
   font-family: var(--font-sans);
 }
 .wizard-calendar .rdp-month_caption,
 .wizard-calendar .rdp-caption_label {
-  color: #F8FAFC;
+  color: #0F172A;
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
 }
-.wizard-calendar .rdp-weekday { color: #64748B; font-size: 11px; }
-.wizard-calendar .rdp-chevron { fill: #22D3EE; }
+.wizard-calendar .rdp-weekday { color: #94A3B8; font-size: 11px; }
+.wizard-calendar .rdp-chevron { fill: #DC2626; }
 .wizard-calendar .rdp-day_button { cursor: pointer; transition: background 0.15s ease; }
 .wizard-calendar .rdp-day:not(.rdp-disabled) .rdp-day_button:hover {
-  background: rgba(34, 211, 238, 0.12);
+  background: rgba(220, 38, 38, 0.08);
 }
-.wizard-calendar .rdp-disabled { opacity: 0.35; }
+.wizard-calendar .rdp-disabled { opacity: 0.4; }
 .wizard-calendar .rdp-disabled .rdp-day_button { cursor: not-allowed; text-decoration: line-through; }
 /* Jours déjà réservés : rouge, distinct du simple passé */
 .wizard-calendar .wizard-day-blocked { opacity: 1; }
 .wizard-calendar .wizard-day-blocked .rdp-day_button {
-  background: rgba(239, 68, 68, 0.14);
-  color: rgba(248, 113, 113, 0.8);
+  background: rgba(220, 38, 38, 0.10);
+  color: rgba(185, 28, 28, 0.75);
   text-decoration: line-through;
   cursor: not-allowed;
 }
 /* Plage survolée entre le 1er et le 2e clic */
 .wizard-calendar .wizard-day-preview:not(.rdp-selected):not(.wizard-day-blocked) .rdp-day_button {
-  background: rgba(34, 211, 238, 0.10);
+  background: rgba(220, 38, 38, 0.07);
   border-radius: 0;
 }
 @media (prefers-reduced-motion: reduce) {
