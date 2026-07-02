@@ -6,7 +6,7 @@ import { Welcome } from './website/Welcome';
 import { OffersListing } from './website/OffersListing';
 import { SpecialOffersListing } from './website/SpecialOffersListing';
 import { ContactsWebsite } from './website/ContactsWebsite';
-import { OrdersPage } from './website/OrdersPage';
+import { ReservationWizard } from './website/wizard/ReservationWizard';
 
 interface WebsiteProps {
   lang: Language;
@@ -201,13 +201,15 @@ export const Website: React.FC<WebsiteProps> = ({
           <SpecialOffersListing lang={lang} specialOffers={specialOffers} onOrder={handleReserveClick} />
         )}
         {currentPage === 'orders' && (
-          <OrdersPage
+          <ReservationWizard
             lang={lang}
             cars={cars}
             specialOffers={specialOffers}
             agencies={agencies}
             isLoadingAgencies={isLoadingAgencies}
             selectedCar={selectedCar}
+            websiteSettings={websiteSettings}
+            onBackHome={() => { setSelectedCar(null); setCurrentPage('home'); }}
           />
         )}
         {currentPage === 'contacts' && (

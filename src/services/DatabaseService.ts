@@ -235,6 +235,41 @@ export class DatabaseService {
     if (error) throw error;
   }
 
+  /**
+   * Périodes déjà réservées (pending/confirmed/active) pour UNE voiture,
+   * au format YYYY-MM-DD — utilisées pour bloquer les dates du calendrier public.
+   * Essaie d'abord la RPC get_reserved_periods (SECURITY DEFINER, accessible aux
+   * visiteurs anonymes malgré la RLS), puis retombe sur une lecture directe.
+   */
+  static async getReservedDateRangesForCar(carId: string): Promise<{ from: string; to: string }[]> {
+    const mapRows = (rows: any[]) =>
+      (rows || [])
+        .filter(r => r.departure_date && r.return_date)
+        .map(r => ({
+          from: String(r.departure_date).substring(0, 10),
+          to: String(r.return_date).substring(0, 10),
+        }));
+
+    try {
+      const { data, error } = await supabase.rpc('get_reserved_periods', { p_car_id: carId });
+      if (!error && Array.isArray(data)) return mapRows(data);
+    } catch {
+      // RPC absente (migration non appliquée) — on tente la lecture directe
+    }
+
+    const { data, error } = await supabase
+      .from('reservations')
+      .select('departure_date, return_date')
+      .eq('car_id', carId)
+      .in('status', ['pending', 'confirmed', 'active']);
+
+    if (error) {
+      console.warn('getReservedDateRangesForCar failed:', error.message);
+      return [];
+    }
+    return mapRows(data || []);
+  }
+
   /** Masque / affiche une voiture sur le site public (colonne is_hidden_from_site). */
   static async setCarVisibility(id: string, isHidden: boolean): Promise<void> {
     const { error } = await supabase

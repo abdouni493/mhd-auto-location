@@ -195,7 +195,7 @@ export default function App() {
     loadWebsiteData();
   }, []); // Load once on mount
 
-  // fetch agencies for public website mode (used by OrdersPage)
+  // fetch agencies for public website mode (used by ReservationWizard)
   useEffect(() => {
     if (!isWebsiteMode) return;
 

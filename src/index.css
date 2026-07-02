@@ -261,3 +261,50 @@ body {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+
+/* ── Calendrier du wizard de réservation (react-day-picker) ── */
+.wizard-calendar .rdp-root {
+  --rdp-accent-color: #22D3EE;
+  --rdp-accent-background-color: rgba(34, 211, 238, 0.18);
+  --rdp-day-height: 42px;
+  --rdp-day-width: 42px;
+  --rdp-day_button-border-radius: 10px;
+  --rdp-today-color: #22D3EE;
+  --rdp-selected-border: 2px solid #22D3EE;
+  --rdp-range_start-color: #050B18;
+  --rdp-range_end-color: #050B18;
+  --rdp-range_start-background: linear-gradient(135deg, #22D3EE, #06B6D4);
+  --rdp-range_end-background: linear-gradient(135deg, #22D3EE, #06B6D4);
+  color: #CBD5E1;
+  font-family: var(--font-sans);
+}
+.wizard-calendar .rdp-month_caption,
+.wizard-calendar .rdp-caption_label {
+  color: #F8FAFC;
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+.wizard-calendar .rdp-weekday { color: #64748B; font-size: 11px; }
+.wizard-calendar .rdp-chevron { fill: #22D3EE; }
+.wizard-calendar .rdp-day_button { cursor: pointer; transition: background 0.15s ease; }
+.wizard-calendar .rdp-day:not(.rdp-disabled) .rdp-day_button:hover {
+  background: rgba(34, 211, 238, 0.12);
+}
+.wizard-calendar .rdp-disabled { opacity: 0.35; }
+.wizard-calendar .rdp-disabled .rdp-day_button { cursor: not-allowed; text-decoration: line-through; }
+/* Jours déjà réservés : rouge, distinct du simple passé */
+.wizard-calendar .wizard-day-blocked { opacity: 1; }
+.wizard-calendar .wizard-day-blocked .rdp-day_button {
+  background: rgba(239, 68, 68, 0.14);
+  color: rgba(248, 113, 113, 0.8);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+/* Plage survolée entre le 1er et le 2e clic */
+.wizard-calendar .wizard-day-preview:not(.rdp-selected):not(.wizard-day-blocked) .rdp-day_button {
+  background: rgba(34, 211, 238, 0.10);
+  border-radius: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wizard-calendar .rdp-day_button { transition: none; }
+}

@@ -1,0 +1,205 @@
+import React from 'react';
+import { motion } from 'motion/react';
+import { ChevronLeft, Loader2, Pencil, RefreshCcw } from 'lucide-react';
+import { useWizard } from './WizardContext';
+import { SectionCard, SectionTitle, FieldLabel, inputClass, inputStyle, focusInput, blurInput, C, fromYmd } from './wizardUi';
+
+/**
+ * Étape 5 — Récapitulatif + confirmation.
+ * Résumé complet, ventilation du prix (remise d'offre spéciale appliquée),
+ * bouton "Modifier" pour revenir à chaque étape, et confirmation protégée
+ * contre le double-clic. En cas d'erreur, les saisies sont conservées.
+ */
+export const StepRecap: React.FC = () => {
+  const {
+    lang, car, range, departureTime, returnTime,
+    agencies, departureAgency, returnAgency, differentReturnAgency,
+    personal, selectedServices, notes, setNotes,
+    days, promo, basePrice, discount, servicesTotal, total,
+    goToStep, prev, isSubmitting, submitError, submit,
+  } = useWizard();
+
+  if (!car) return null;
+
+  const agencyName = (id: string) => agencies.find(a => a.id === id)?.name || '—';
+  const effectiveReturnAgency = differentReturnAgency ? returnAgency : departureAgency;
+  const fmtDate = (s?: string) => (s ? fromYmd(s).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-DZ') : '—');
+
+  const EditButton: React.FC<{ step: number }> = ({ step }) => (
+    <button
+      onClick={() => goToStep(step)}
+      className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors text-vel-muted"
+      style={{ border: '1px solid rgba(255,255,255,0.1)' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = C.cyan; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(34,211,238,0.4)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ''; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)'; }}
+    >
+      <Pencil size={11} />
+      {{ fr: 'Modifier', ar: 'تعديل' }[lang]}
+    </button>
+  );
+
+  const summaryBlock = (title: string, editStep: number, rows: { label: string; value: string }[]) => (
+    <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-vel-muted uppercase tracking-wider" style={{ fontFamily: 'var(--font-display)' }}>{title}</p>
+        <EditButton step={editStep} />
+      </div>
+      {rows.map((r, i) => (
+        <div key={i} className="flex justify-between items-baseline gap-4 text-sm">
+          <span className="text-vel-muted">{r.label}</span>
+          <span className="font-bold text-vel-white text-right">{r.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Résumé */}
+      <SectionCard>
+        <SectionTitle>📋 {{ fr: 'Récapitulatif de la réservation', ar: 'ملخص الحجز' }[lang]}</SectionTitle>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {summaryBlock(
+            lang === 'fr' ? '🚗 Véhicule & dates' : '🚗 السيارة والتواريخ', 1,
+            [
+              { label: lang === 'fr' ? 'Véhicule' : 'السيارة', value: `${car.brand} ${car.model}` },
+              { label: lang === 'fr' ? 'Départ' : 'المغادرة', value: `${fmtDate(range.from)} · ${departureTime}` },
+              { label: lang === 'fr' ? 'Retour' : 'العودة', value: `${fmtDate(range.to)} · ${returnTime}` },
+              { label: lang === 'fr' ? 'Durée' : 'المدة', value: `${days} ${lang === 'fr' ? 'jour(s)' : 'يوم'}` },
+            ]
+          )}
+          {summaryBlock(
+            lang === 'fr' ? '🏢 Agences' : '🏢 الوكالات', 2,
+            [
+              { label: lang === 'fr' ? 'Agence de départ' : 'وكالة المغادرة', value: agencyName(departureAgency) },
+              { label: lang === 'fr' ? 'Agence de retour' : 'وكالة الإرجاع', value: agencyName(effectiveReturnAgency) },
+            ]
+          )}
+          {summaryBlock(
+            lang === 'fr' ? '👤 Client' : '👤 العميل', 3,
+            [
+              { label: lang === 'fr' ? 'Nom' : 'الاسم', value: `${personal.firstName} ${personal.lastName}` },
+              { label: lang === 'fr' ? 'Téléphone' : 'الهاتف', value: personal.phone },
+              { label: 'Email', value: personal.email },
+              { label: lang === 'fr' ? 'Wilaya' : 'الولاية', value: personal.wilaya },
+            ]
+          )}
+          {summaryBlock(
+            lang === 'fr' ? '🛎️ Services' : '🛎️ الخدمات', 4,
+            selectedServices.length > 0
+              ? selectedServices.map(s => ({ label: s.name, value: `${s.price.toLocaleString()} DA` }))
+              : [{ label: lang === 'fr' ? 'Aucun service sélectionné' : 'لم يتم اختيار خدمات', value: '' }]
+          )}
+        </div>
+      </SectionCard>
+
+      {/* Ventilation du prix */}
+      <SectionCard>
+        <SectionTitle>💰 {{ fr: 'Tarification', ar: 'التسعير' }[lang]}</SectionTitle>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
+            style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <span className="text-vel-silver">
+              {days} {{ fr: 'j ×', ar: 'يوم ×' }[lang]} {car.priceDay.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+            </span>
+            <span className="font-bold text-vel-white">{basePrice.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+          </div>
+
+          {/* Remise offre spéciale */}
+          {promo && discount > 0 && (
+            <div className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
+              style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <span className="text-vel-silver">
+                🏷️ {promo.label || (lang === 'fr' ? 'Offre spéciale' : 'عرض خاص')}
+                {' '}({promo.newPrice.toLocaleString()} {{ fr: 'DA/j', ar: 'د.ج/ي' }[lang]})
+              </span>
+              <span className="font-bold" style={{ color: '#F87171' }}>
+                −{discount.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+              </span>
+            </div>
+          )}
+
+          {selectedServices.map(s => (
+            <div key={s.id} className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
+              style={{ background: 'rgba(139,92,246,0.04)', border: '1px solid rgba(139,92,246,0.1)' }}>
+              <span className="text-vel-silver">{s.name}</span>
+              <span className="font-bold" style={{ color: C.violet }}>{s.price.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+            </div>
+          ))}
+
+          <div className="flex justify-between items-center px-4 py-4 rounded-2xl"
+            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)' }}>
+            <span className="font-black text-vel-white" style={{ fontFamily: 'var(--font-display)' }}>
+              {{ fr: 'TOTAL', ar: 'المجموع' }[lang]}
+            </span>
+            <span className="font-black text-3xl" style={{ color: C.cyan, fontFamily: 'var(--font-display)', textShadow: '0 0 20px rgba(34,211,238,0.5)' }}>
+              {total.toLocaleString()}
+              <span className="text-base ml-1" style={{ color: 'rgba(34,211,238,0.65)' }}>{{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+            </span>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Notes */}
+      <SectionCard>
+        <FieldLabel>{{ fr: 'Remarques (optionnel)', ar: 'ملاحظات (اختياري)' }[lang]}</FieldLabel>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)}
+          rows={3} className={`${inputClass} resize-none`} style={inputStyle}
+          placeholder={lang === 'fr' ? 'Une demande particulière ?' : 'طلب خاص؟'}
+          onFocus={focusInput} onBlur={blurInput} />
+      </SectionCard>
+
+      {/* Erreur de soumission — les saisies sont conservées, on peut réessayer */}
+      {submitError && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl p-5 flex items-start gap-3"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}
+        >
+          <span className="text-xl">⚠️</span>
+          <div className="flex-1">
+            <p className="text-sm font-bold" style={{ color: '#F87171' }}>{submitError}</p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Bandeau confirmation */}
+      <div className="rounded-2xl p-6" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)' }}>
+        <h3 className="font-black text-vel-white text-lg mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+          ✅ {{ fr: 'Prêt à confirmer ?', ar: 'جاهز للتأكيد؟' }[lang]}
+        </h3>
+        <p className="text-vel-muted text-sm">
+          {{ fr: 'Votre demande sera enregistrée en attente de confirmation — nous vous contacterons bientôt pour la valider.', ar: 'سيتم تسجيل طلبك في انتظار التأكيد — سنتصل بك قريبًا للتحقق منه.' }[lang]}
+        </p>
+      </div>
+
+      {/* Navigation finale */}
+      <div className="flex gap-4">
+        <button
+          onClick={prev}
+          disabled={isSubmitting}
+          className="btn-vel-ghost flex-1 py-4 flex items-center justify-center gap-2 text-sm font-bold"
+        >
+          <ChevronLeft size={18} /> {{ fr: 'Précédent', ar: 'السابق' }[lang]}
+        </button>
+        <motion.button
+          onClick={submit}
+          disabled={isSubmitting}
+          whileHover={isSubmitting ? {} : { scale: 1.02 }}
+          whileTap={isSubmitting ? {} : { scale: 0.98 }}
+          className={`btn-vel-cyan flex-1 py-4 flex items-center justify-center gap-2 text-sm ${isSubmitting ? 'opacity-60 cursor-not-allowed' : ''}`}
+        >
+          {isSubmitting ? (
+            <><Loader2 size={18} className="animate-spin" /> {lang === 'fr' ? 'Enregistrement…' : 'جاري التسجيل…'}</>
+          ) : submitError ? (
+            <><RefreshCcw size={16} /> {{ fr: 'Réessayer', ar: 'إعادة المحاولة' }[lang]}</>
+          ) : (
+            <>✅ {{ fr: 'Confirmer la réservation', ar: 'تأكيد الحجز' }[lang]}</>
+          )}
+        </motion.button>
+      </div>
+    </div>
+  );
+};
