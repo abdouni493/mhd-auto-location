@@ -23,6 +23,14 @@ import { generateConditionsPrintHTML, getConditionsTemplate } from '../constants
 const ltrPhone = (value: any): string =>
   `<span dir="ltr" style="unicode-bidi:bidi-override;direction:ltr;display:inline-block">${value ?? ''}</span>`;
 
+/**
+ * Force any latin/number value (car immatriculation, VIN, model, mileage, ...) to render
+ * strictly left-to-right so it keeps the same order as French even inside an RTL (Arabic)
+ * document. Without this, plate numbers like "01234-116-16" print inverted ("16-116-01234").
+ * Alias of {@link ltrPhone}; named separately for readability at call sites.
+ */
+const ltr = ltrPhone;
+
 interface PlannerPageProps {
   lang: Language;
   isAuthLoading?: boolean;
@@ -361,11 +369,11 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           <h3>${lang === 'fr' ? 'Véhicule' : 'المركبة'}</h3>
           <div class="detail">
             <span class="label">${lang === 'fr' ? 'Voiture:' : 'السيارة:'}</span>
-            <span>${reservation.car.brand} ${reservation.car.model}</span>
+            <span>${ltr((reservation.car.brand || '') + ' ' + (reservation.car.model || ''))}</span>
           </div>
           <div class="detail">
             <span class="label">${lang === 'fr' ? 'Immatriculation:' : 'رقم التسجيل:'}</span>
-            <span>${reservation.car.registration}</span>
+            <span>${ltr(reservation.car.registration)}</span>
           </div>
         </div>
         
@@ -2951,11 +2959,11 @@ export const PersonalizationModal: React.FC<{
             <div class="section-content">
               <div class="field">
                 <div class="field-label">${labels.model}</div>
-                <div class="field-value">${reservation?.car?.brand} ${reservation?.car?.model}</div>
+                <div class="field-value">${ltr((reservation?.car?.brand || '') + ' ' + (reservation?.car?.model || ''))}</div>
               </div>
               <div class="field">
                 <div class="field-label">${labels.registration}</div>
-                <div class="field-value">${reservation?.car?.registration || 'N/A'}</div>
+                <div class="field-value">${ltr(reservation?.car?.registration || 'N/A')}</div>
               </div>
               <div class="field">
                 <div class="field-label">${labels.color}</div>
@@ -2967,11 +2975,11 @@ export const PersonalizationModal: React.FC<{
               </div>
               <div class="field">
                 <div class="field-label">${labels.vin}</div>
-                <div class="field-value">${reservation?.car?.vin || 'N/A'}</div>
+                <div class="field-value">${ltr(reservation?.car?.vin || 'N/A')}</div>
               </div>
               <div class="field">
                 <div class="field-label">${labels.mileage}</div>
-                <div class="field-value">${reservation?.departureInspection?.mileage || 'N/A'} km</div>
+                <div class="field-value">${ltr((reservation?.departureInspection?.mileage || 'N/A') + ' km')}</div>
               </div>
             </div>
           </div>
@@ -3057,7 +3065,7 @@ export const PersonalizationModal: React.FC<{
           <div class="section-content full">
             <div class="field">
               <div class="field-label">📏 ${isFrench ? 'Kilométrage de Départ' : 'كيلومتراج البداية'}</div>
-              <div class="field-value">${reservation?.departureInspection?.mileage || 0} km</div>
+              <div class="field-value">${ltr((reservation?.departureInspection?.mileage || 0) + ' km')}</div>
             </div>
             <div class="field">
               <div class="field-label">⛽ ${isFrench ? 'Niveau de Carburant' : 'مستوى الوقود'}</div>
@@ -3455,13 +3463,13 @@ export const PersonalizationModal: React.FC<{
             </thead>
             <tbody>
               <tr>
-                <td>${reservation?.car?.brand || 'N/A'} ${reservation?.car?.model || ''}</td>
-                <td>${reservation?.car?.registration || 'N/A'}</td>
+                <td>${ltr((reservation?.car?.brand || 'N/A') + ' ' + (reservation?.car?.model || ''))}</td>
+                <td>${ltr(reservation?.car?.registration || 'N/A')}</td>
                 <td>${reservation?.car?.color || 'N/A'}</td>
-                <td>${reservation?.car?.model || 'N/A'}</td>
+                <td>${ltr(reservation?.car?.model || 'N/A')}</td>
                 <td>${reservation?.car?.energy || 'N/A'}</td>
-                <td>${reservation?.departureInspection?.mileage || reservation?.car?.mileage || '0'} km</td>
-                <td>${reservation?.car?.vin || 'N/A'}</td>
+                <td>${ltr((reservation?.departureInspection?.mileage || reservation?.car?.mileage || '0') + ' km')}</td>
+                <td>${ltr(reservation?.car?.vin || 'N/A')}</td>
               </tr>
             </tbody>
           </table>
@@ -3719,8 +3727,8 @@ export const PersonalizationModal: React.FC<{
           <tbody>
             <tr>
               <td>${reservation?.id ? reservation.id.toString().substring(0, 3).toUpperCase() : '001'}</td>
-              <td class="left">${reservation?.car?.brand || ''} ${reservation?.car?.model || ''}</td>
-              <td>${(reservation?.car as any)?.registration || (reservation?.car as any)?.plate_number || 'N/A'}</td>
+              <td class="left">${ltr((reservation?.car?.brand || '') + ' ' + (reservation?.car?.model || ''))}</td>
+              <td>${ltr((reservation?.car as any)?.registration || (reservation?.car as any)?.plate_number || 'N/A')}</td>
               <td>${departDate}</td>
               <td>${returnDate}</td>
               <td>${days}</td>
@@ -4034,11 +4042,11 @@ export const PersonalizationModal: React.FC<{
           <div class="vehicle-section">
             <div class="vehicle-header">🚗 ${labels.vehicleModel}</div>
             <div class="model-highlight">
-              ${reservation?.car?.brand || 'N/A'} ${reservation?.car?.model || 'N/A'}
+              ${ltr((reservation?.car?.brand || 'N/A') + ' ' + (reservation?.car?.model || 'N/A'))}
             </div>
             <div class="info-line" style="margin-top: 8px;">
               <span class="info-label">${labels.registration}</span>
-              <span class="info-value">${reservation?.car?.registration || 'N/A'}</span>
+              <span class="info-value">${ltr(reservation?.car?.registration || 'N/A')}</span>
             </div>
             <div class="info-line">
               <span class="info-label">${labels.rentalPeriod}</span>
@@ -4800,7 +4808,7 @@ export const PersonalizationModal: React.FC<{
           </div>
           <div class="info-box">
             <div class="info-label">🚗 ${isFrench ? 'Immatriculation' : 'التسجيل'}</div>
-            <div class="info-value">${reservation?.car?.registration || 'N/A'}</div>
+            <div class="info-value">${ltr(reservation?.car?.registration || 'N/A')}</div>
           </div>
         </div>
 
@@ -4833,15 +4841,15 @@ export const PersonalizationModal: React.FC<{
           <div class="details-grid">
             <div class="detail-item">
               <div class="detail-label">${labels.model}</div>
-              <div class="detail-value">${reservation?.car?.brand} ${reservation?.car?.model}</div>
+              <div class="detail-value">${ltr((reservation?.car?.brand || '') + ' ' + (reservation?.car?.model || ''))}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">${labels.registration}</div>
-              <div class="detail-value">${reservation?.car?.registration || 'N/A'}</div>
+              <div class="detail-value">${ltr(reservation?.car?.registration || 'N/A')}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">${labels.vin}</div>
-              <div class="detail-value">${reservation?.car?.vin || 'N/A'}</div>
+              <div class="detail-value">${ltr(reservation?.car?.vin || 'N/A')}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">${labels.color}</div>
@@ -4849,7 +4857,7 @@ export const PersonalizationModal: React.FC<{
             </div>
             <div class="detail-item">
               <div class="detail-label">${labels.mileage}</div>
-              <div class="detail-value">${inspectionData?.mileage || 'N/A'} km</div>
+              <div class="detail-value">${ltr((inspectionData?.mileage || 'N/A') + ' km')}</div>
             </div>
           </div>
         </div>

@@ -15,6 +15,15 @@ export class EmailService {
   }
 
   /**
+   * Force any latin/number value (car immatriculation, VIN, model, mileage, ...) to render
+   * strictly left-to-right so it keeps the same order as French even inside an RTL (Arabic)
+   * document. Without this, plate numbers like "01234-116-16" print inverted ("16-116-01234").
+   */
+  static ltr(value: any): string {
+    return `<span dir="ltr" style="unicode-bidi:bidi-override;direction:ltr;display:inline-block">${value ?? ''}</span>`;
+  }
+
+  /**
    * Convert HTML to PDF Buffer
    */
   static async htmlToPdf(htmlContent: string, fileName: string = 'document'): Promise<Blob> {
@@ -296,11 +305,11 @@ export class EmailService {
       <div class="section-title">🚗 ${labels.vehicle}</div>
       <div class="info-row">
         <div class="info-label">${templateLang === 'fr' ? 'Modèle:' : 'الموديل:'}:</div>
-        <div class="info-value">${reservation.car.brand} ${reservation.car.model}</div>
+        <div class="info-value">${this.ltr((reservation.car.brand || '') + ' ' + (reservation.car.model || ''))}</div>
       </div>
       <div class="info-row">
         <div class="info-label">${templateLang === 'fr' ? 'Plaque:' : 'اللوحة:'}:</div>
-        <div class="info-value">${reservation.car.registration}</div>
+        <div class="info-value">${this.ltr(reservation.car.registration)}</div>
       </div>
     </div>
     
@@ -688,7 +697,7 @@ export class EmailService {
       </div>
       <div class="ibox amber">
         <div class="ibox-label">🚗 ${labels.registration}</div>
-        <div class="ibox-value">${car.registration || 'N/A'}</div>
+        <div class="ibox-value">${this.ltr(car.registration || 'N/A')}</div>
       </div>
     </div>
 
@@ -720,7 +729,7 @@ export class EmailService {
         <div class="grid-2">
           <div class="field">
             <div class="field-label">${labels.model}</div>
-            <div class="field-value">${car.brand || ''} ${car.model || ''}</div>
+            <div class="field-value">${this.ltr((car.brand || '') + ' ' + (car.model || ''))}</div>
           </div>
           <div class="field">
             <div class="field-label">${labels.color}</div>
@@ -728,11 +737,11 @@ export class EmailService {
           </div>
           <div class="field">
             <div class="field-label">${labels.vin}</div>
-            <div class="field-value">${car.vin || 'N/A'}</div>
+            <div class="field-value">${this.ltr(car.vin || 'N/A')}</div>
           </div>
           <div class="field">
             <div class="field-label">${labels.mileage}</div>
-            <div class="field-value">${inspectionData?.mileage || car.mileage || 0} km</div>
+            <div class="field-value">${this.ltr((inspectionData?.mileage || car.mileage || 0) + ' km')}</div>
           </div>
           <div class="field">
             <div class="field-label">⛽ ${labels.fuelLevel}</div>
@@ -916,10 +925,10 @@ export class EmailService {
     <!-- Vehicle -->
     <div class="vehicle-box">
       <div class="vehicle-header">🚗 ${isFrench ? 'Modèle Véhicule' : 'موديل المركبة'}</div>
-      <div class="model-badge">${car.brand || ''} ${car.model || ''}</div>
+      <div class="model-badge">${this.ltr((car.brand || '') + ' ' + (car.model || ''))}</div>
       <div class="info-line" style="margin-top:8px;">
         <span class="info-label">${isFrench ? 'Immatriculation' : 'رقم التسجيل'}</span>
-        <span class="info-value">${car.registration || 'N/A'}</span>
+        <span class="info-value">${this.ltr(car.registration || 'N/A')}</span>
       </div>
       <div class="info-line">
         <span class="info-label">${isFrench ? 'Période de Location' : 'فترة الإيجار'}</span>
@@ -1051,7 +1060,7 @@ export class EmailService {
         </div>
         <div class="detail-item">
           <div class="det-label">🚗 ${isFrench ? 'Véhicule' : 'المركبة'}</div>
-          <div class="det-value">${reservation.car?.brand || ''} ${reservation.car?.model || ''}</div>
+          <div class="det-value">${this.ltr((reservation.car?.brand || '') + ' ' + (reservation.car?.model || ''))}</div>
         </div>
       </div>
     </div>
@@ -1371,11 +1380,11 @@ export class EmailService {
       <div class="grid-2">
         <div class="field">
           <div class="field-label">${isFrench ? 'Marque / Modèle' : 'الماركة / الموديل'}</div>
-          <div class="field-value">${car.brand || ''} ${car.model || ''}</div>
+          <div class="field-value">${this.ltr((car.brand || '') + ' ' + (car.model || ''))}</div>
         </div>
         <div class="field">
           <div class="field-label">${isFrench ? 'Immatriculation' : 'التسجيل'}</div>
-          <div class="field-value">${car.registration || 'N/A'}</div>
+          <div class="field-value">${this.ltr(car.registration || 'N/A')}</div>
         </div>
         <div class="field">
           <div class="field-label">${isFrench ? 'Couleur' : 'اللون'}</div>
@@ -1387,11 +1396,11 @@ export class EmailService {
         </div>
         <div class="field">
           <div class="field-label">VIN</div>
-          <div class="field-value">${car.vin || 'N/A'}</div>
+          <div class="field-value">${this.ltr(car.vin || 'N/A')}</div>
         </div>
         <div class="field">
           <div class="field-label">${isFrench ? 'Kilométrage' : 'الكيلومترات'}</div>
-          <div class="field-value">${car.mileage || 0} km</div>
+          <div class="field-value">${this.ltr((car.mileage || 0) + ' km')}</div>
         </div>
       </div>
     </div>
@@ -1726,11 +1735,11 @@ export class EmailService {
         <div class="section-content">
           <div class="field">
             <div class="field-label">${labels.model}</div>
-            <div class="field-value">${car.brand || ''} ${car.model || ''}</div>
+            <div class="field-value">${this.ltr((car.brand || '') + ' ' + (car.model || ''))}</div>
           </div>
           <div class="field">
             <div class="field-label">${labels.registration}</div>
-            <div class="field-value">${car.registration || 'N/A'}</div>
+            <div class="field-value">${this.ltr(car.registration || 'N/A')}</div>
           </div>
           <div class="field">
             <div class="field-label">${labels.color}</div>
@@ -1742,11 +1751,11 @@ export class EmailService {
           </div>
           <div class="field">
             <div class="field-label">${labels.vin}</div>
-            <div class="field-value">${car.vin || 'N/A'}</div>
+            <div class="field-value">${this.ltr(car.vin || 'N/A')}</div>
           </div>
           <div class="field">
             <div class="field-label">📏 km</div>
-            <div class="field-value">${reservation.departureInspection?.mileage || 'N/A'} km</div>
+            <div class="field-value">${this.ltr((reservation.departureInspection?.mileage || 'N/A') + ' km')}</div>
           </div>
         </div>
       </div>
@@ -2020,11 +2029,11 @@ export class EmailService {
         <div class="section-content">
           <div class="field">
             <div class="field-label">${labels.model}</div>
-            <div class="field-value">${car.brand || ''} ${car.model || ''}</div>
+            <div class="field-value">${this.ltr((car.brand || '') + ' ' + (car.model || ''))}</div>
           </div>
           <div class="field">
             <div class="field-label">${labels.registration}</div>
-            <div class="field-value">${car.registration || 'N/A'}</div>
+            <div class="field-value">${this.ltr(car.registration || 'N/A')}</div>
           </div>
           <div class="field">
             <div class="field-label">${labels.color}</div>

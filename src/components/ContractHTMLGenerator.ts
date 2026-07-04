@@ -7,6 +7,13 @@ import { ReservationDetails } from '../types';
 const ltrPhone = (value: any): string =>
   `<span dir="ltr" style="unicode-bidi:bidi-override;direction:ltr;display:inline-block">${value ?? ''}</span>`;
 
+/**
+ * Force any latin/number value (car immatriculation, VIN, model, mileage, ...) to render
+ * strictly left-to-right so it keeps the same order as French even inside an RTL (Arabic)
+ * document. Without this, plate numbers like "01234-116-16" print inverted ("16-116-01234").
+ */
+const ltr = ltrPhone;
+
 export const generateContractHTML = (
   reservation: ReservationDetails | null,
   agencySettings: any,
@@ -455,11 +462,11 @@ export const generateContractHTML = (
             <div class="card-title">🚗 ${labels.vehicleInfo}</div>
             <div class="field">
               <div class="field-label">${labels.model}</div>
-              <div class="field-value">${reservation?.car?.brand} ${reservation?.car?.model}</div>
+              <div class="field-value">${ltr((reservation?.car?.brand || '') + ' ' + (reservation?.car?.model || ''))}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.registration}</div>
-              <div class="field-value">${reservation?.car?.plateNumber || ''}</div>
+              <div class="field-value">${ltr(reservation?.car?.plateNumber || '')}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.color}</div>
@@ -467,11 +474,11 @@ export const generateContractHTML = (
             </div>
             <div class="field">
               <div class="field-label">${labels.vin}</div>
-              <div class="field-value">${reservation?.car?.vin || ''}</div>
+              <div class="field-value">${ltr(reservation?.car?.vin || '')}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.mileageStart}</div>
-              <div class="field-value">${reservation?.departureInspection?.mileage || 0} km</div>
+              <div class="field-value">${ltr((reservation?.departureInspection?.mileage || 0) + ' km')}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.fuelStart}</div>
