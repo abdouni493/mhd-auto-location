@@ -318,8 +318,8 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
               src={websiteSettings.landing_background}
               alt=""
               className="w-full h-full object-cover"
-              style={{ filter: 'blur(6px)', transform: 'scale(1.12)' }}
-              animate={{ scale: [1.12, 1.18, 1.12] }}
+              style={{ transform: 'scale(1.05)' }}
+              animate={{ scale: [1.05, 1.10, 1.05] }}
               transition={{ duration: 25, repeat: Infinity, ease: 'easeInOut' }}
               referrerPolicy="no-referrer"
             />
