@@ -138,10 +138,11 @@ function HeroVisual({ lang, logo }: { lang: Language; logo?: string }) {
 }
 
 // ─── Widget de réservation du hero (agences + période → voitures dispo) ─────
-function BookingSearchPanel({ lang, agencies, onSearch }: {
+function BookingSearchPanel({ lang, agencies, onSearch, hasBg }: {
   lang: Language;
   agencies: Agency[];
   onSearch: (criteria: WizardSearchCriteria) => void;
+  hasBg?: boolean;
 }) {
   const today = toYmd(new Date());
   const [departureAgencyId, setDepartureAgencyId] = useState('');
@@ -151,19 +152,16 @@ function BookingSearchPanel({ lang, agencies, onSearch }: {
 
   const isValid = !!departureAgencyId && !!from && !!to && from <= to && from >= today;
 
-  const selectStyle: React.CSSProperties = {
-    background: '#FFFFFF',
-    border: '1px solid rgba(15,23,42,0.12)',
-    color: '#0F172A',
-  };
+  const selectClass = "w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-900 outline-none hover:border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all duration-200 cursor-pointer shadow-sm";
+  const inputClass = "w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-900 outline-none hover:border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all duration-200 shadow-sm";
 
   const fields: { label: string; icon: React.ReactNode; el: React.ReactNode }[] = [
     {
       label: { fr: 'Agence de départ', ar: 'وكالة المغادرة' }[lang],
-      icon: <MapPin size={13} />,
+      icon: <MapPin size={13} className="text-red-500" />,
       el: (
         <select value={departureAgencyId} onChange={e => setDepartureAgencyId(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl outline-none text-sm font-medium cursor-pointer" style={selectStyle}>
+          className={selectClass}>
           <option value="">{{ fr: 'Sélectionner…', ar: 'اختر…' }[lang]}</option>
           {agencies.map(a => <option key={a.id} value={a.id}>{a.name} — {a.city}</option>)}
         </select>
@@ -171,10 +169,10 @@ function BookingSearchPanel({ lang, agencies, onSearch }: {
     },
     {
       label: { fr: 'Agence de retour', ar: 'وكالة الإرجاع' }[lang],
-      icon: <MapPin size={13} />,
+      icon: <MapPin size={13} className="text-red-500" />,
       el: (
         <select value={returnAgencyId} onChange={e => setReturnAgencyId(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl outline-none text-sm font-medium cursor-pointer" style={selectStyle}>
+          className={selectClass}>
           <option value="">{{ fr: 'Même agence', ar: 'نفس الوكالة' }[lang]}</option>
           {agencies.map(a => <option key={a.id} value={a.id}>{a.name} — {a.city}</option>)}
         </select>
@@ -182,20 +180,20 @@ function BookingSearchPanel({ lang, agencies, onSearch }: {
     },
     {
       label: { fr: 'Date de départ', ar: 'تاريخ البدء' }[lang],
-      icon: <CalendarDays size={13} />,
+      icon: <CalendarDays size={13} className="text-red-500" />,
       el: (
         <input type="date" value={from} min={today}
           onChange={e => { setFrom(e.target.value); if (to && e.target.value > to) setTo(''); }}
-          className="w-full px-3 py-2.5 rounded-xl outline-none text-sm font-medium" style={selectStyle} />
+          className={inputClass} />
       ),
     },
     {
       label: { fr: 'Date de retour', ar: 'تاريخ الإرجاع' }[lang],
-      icon: <CalendarDays size={13} />,
+      icon: <CalendarDays size={13} className="text-red-500" />,
       el: (
         <input type="date" value={to} min={from || today}
           onChange={e => setTo(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl outline-none text-sm font-medium" style={selectStyle} />
+          className={inputClass} />
       ),
     },
   ];
@@ -205,24 +203,24 @@ function BookingSearchPanel({ lang, agencies, onSearch }: {
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, delay: 0.75 }}
-      className="relative z-20 rounded-3xl p-5 sm:p-6"
+      className="relative z-20 rounded-3xl p-6 sm:p-8"
       style={{
-        background: 'rgba(255,255,255,0.92)',
-        border: '1px solid rgba(220,38,38,0.14)',
-        backdropFilter: 'blur(16px)',
-        boxShadow: '0 18px 50px rgba(15,23,42,0.12)',
+        background: 'rgba(255, 255, 255, 0.94)',
+        border: '1px solid rgba(255, 255, 255, 0.7)',
+        backdropFilter: 'blur(24px)',
+        boxShadow: '0 20px 60px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
       }}
     >
-      <p className="text-xs font-bold tracking-[0.2em] uppercase mb-4 flex items-center gap-2"
+      <p className="text-xs font-bold tracking-[0.2em] uppercase mb-5 flex items-center gap-2"
         style={{ color: C.accent, fontFamily: 'var(--font-display)' }}>
-        <Search size={14} />
+        <Search size={14} className="animate-pulse" />
         {{ fr: 'Trouvez votre voiture disponible', ar: 'اعثر على سيارتك المتاحة' }[lang]}
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-3 items-end">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-end">
         {fields.map((f, i) => (
           <div key={i}>
-            <label className="flex items-center gap-1.5 text-[11px] font-bold text-vel-muted uppercase tracking-wider mb-1.5"
+            <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"
               style={{ fontFamily: 'var(--font-display)' }}>
               {f.icon} {f.label}
             </label>
@@ -237,21 +235,21 @@ function BookingSearchPanel({ lang, agencies, onSearch }: {
             returnAgencyId: returnAgencyId || undefined,
           })}
           disabled={!isValid}
-          whileHover={isValid ? { scale: 1.03 } : {}}
+          whileHover={isValid ? { scale: 1.03, y: -1 } : {}}
           whileTap={isValid ? { scale: 0.97 } : {}}
-          className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap transition-all ${!isValid ? 'opacity-40 cursor-not-allowed' : ''}`}
+          className={`px-8 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap transition-all ${!isValid ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:shadow-red-500/20'}`}
           style={{
             fontFamily: 'var(--font-display)',
             background: `linear-gradient(135deg, ${C.accent}, #B91C1C)`,
             color: '#FFFFFF',
-            boxShadow: isValid ? '0 6px 18px rgba(220,38,38,0.28)' : 'none',
+            boxShadow: isValid ? '0 6px 20px rgba(220,38,38,0.25)' : 'none',
           }}
         >
           {{ fr: 'Suivant', ar: 'التالي' }[lang]} <ArrowRight size={16} />
         </motion.button>
       </div>
 
-      <p className="text-vel-muted text-[11px] mt-3">
+      <p className="text-slate-400 text-[11px] mt-4 font-medium">
         {{ fr: 'Nous afficherons uniquement les voitures disponibles sur la période choisie.',
            ar: 'سنعرض فقط السيارات المتاحة في الفترة المختارة.' }[lang]}
       </p>
@@ -280,6 +278,8 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
   const { scrollYProgress } = useScroll({ target: containerRef });
   const heroOpacity = useTransform(scrollYProgress, [0, 0.4], [1, 0]);
   const heroY = useTransform(scrollYProgress, [0, 0.4], [0, -80]);
+
+  const hasBg = !!websiteSettings?.landing_background;
 
   const stats = [
     { num: '#1', label: { fr: 'en Algérie', ar: 'في الجزائر' } },
@@ -311,19 +311,29 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
       {/* ══ HERO SECTION ══ */}
       <section className="relative min-h-screen flex items-center">
 
-        {/* Image de fond personnalisée (paramètres du site) — affichée FLOUTÉE
-            avec un voile clair pour garder le texte lisible */}
+        {/* Background image — subtle blur + cinematic dark overlay for readability */}
         {websiteSettings?.landing_background && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-            <img
+            <motion.img
               src={websiteSettings.landing_background}
               alt=""
               className="w-full h-full object-cover"
-              style={{ filter: 'blur(10px)', transform: 'scale(1.08)' }}
+              style={{ filter: 'blur(6px)', transform: 'scale(1.12)' }}
+              animate={{ scale: [1.12, 1.18, 1.12] }}
+              transition={{ duration: 25, repeat: Infinity, ease: 'easeInOut' }}
               referrerPolicy="no-referrer"
             />
+            {/* Multi-layer overlay: dark bottom for readability, lighter top to show image */}
             <div className="absolute inset-0" style={{
-              background: 'linear-gradient(180deg, rgba(248,250,252,0.78) 0%, rgba(248,250,252,0.86) 60%, rgba(248,250,252,0.97) 100%)',
+              background: `linear-gradient(180deg,
+                rgba(15,23,42,0.3) 0%,
+                rgba(15,23,42,0.2) 30%,
+                rgba(15,23,42,0.35) 60%,
+                rgba(15,23,42,0.7) 100%)`,
+            }} />
+            {/* Left-side text protection gradient */}
+            <div className="absolute inset-0" style={{
+              background: 'linear-gradient(90deg, rgba(15,23,42,0.5) 0%, rgba(15,23,42,0.1) 55%, transparent 100%)',
             }} />
           </div>
         )}
@@ -361,12 +371,16 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
                 initial={{ opacity: 0, x: -30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.6 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full"
-                style={{ border: `1px solid ${C.accent}40`, background: `${C.accent}10` }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border transition-all duration-300"
+                style={{
+                  borderColor: hasBg ? 'rgba(255, 255, 255, 0.25)' : `${C.accent}40`,
+                  background: hasBg ? 'rgba(255, 255, 255, 0.12)' : `${C.accent}10`,
+                  backdropFilter: hasBg ? 'blur(8px)' : 'none',
+                }}
               >
-                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: C.accent }} />
+                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: hasBg ? '#FFFFFF' : C.accent }} />
                 <span className="text-xs font-bold tracking-[0.2em] uppercase"
-                  style={{ color: C.accent, fontFamily: 'var(--font-display)' }}>
+                  style={{ color: hasBg ? '#FFFFFF' : C.accent, fontFamily: 'var(--font-display)' }}>
                   {{ fr: 'Location Premium · Algérie', ar: 'تأجير فاخر · الجزائر' }[lang]}
                 </span>
               </motion.div>
@@ -377,7 +391,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
                 className="text-sm font-bold tracking-[0.3em] uppercase"
-                style={{ color: C.amber, fontFamily: 'var(--font-display)' }}
+                style={{ color: hasBg ? '#FBBF24' : C.amber, fontFamily: 'var(--font-display)' }}
               >
                 {shortName(websiteSettings?.name)}
               </motion.p>
@@ -389,7 +403,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
                 transition={{ duration: 0.85, delay: 0.2 }}
               >
                 <h1 className="font-black leading-[0.92]" style={{ fontFamily: 'var(--font-display)' }}>
-                  <span className="block text-5xl sm:text-6xl xl:text-7xl text-vel-ink mb-1">
+                  <span className={`block text-5xl sm:text-6xl xl:text-7xl mb-1 ${hasBg ? 'text-white' : 'text-vel-ink'}`}>
                     {{ fr: 'Vitesse', ar: 'سرعة' }[lang]}
                   </span>
                   <span className="block text-5xl sm:text-6xl xl:text-7xl" style={{ color: C.accent }}>
@@ -403,7 +417,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.38 }}
-                className="text-vel-slate text-base leading-relaxed max-w-md"
+                className={`text-base leading-relaxed max-w-md ${hasBg ? 'text-slate-200' : 'text-vel-slate'}`}
               >
                 {websiteSettings?.description || (lang === 'fr'
                   ? "Des véhicules d'exception pour des expériences inoubliables. Réservez en quelques clics."
@@ -436,14 +450,14 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.8, delay: 0.65 }}
                 className="flex gap-8 pt-4"
-                style={{ borderTop: '1px solid rgba(15,23,42,0.07)' }}
+                style={{ borderTop: hasBg ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(15,23,42,0.07)' }}
               >
                 {stats.map((s, i) => (
                   <div key={i}>
-                    <p className="font-black text-2xl" style={{ color: C.accent, fontFamily: 'var(--font-display)' }}>
+                    <p className="font-black text-2xl" style={{ color: hasBg ? '#FFFFFF' : C.accent, fontFamily: 'var(--font-display)' }}>
                       {s.num}
                     </p>
-                    <p className="text-vel-muted text-xs">{s.label[lang]}</p>
+                    <p className={hasBg ? "text-slate-300 text-xs" : "text-vel-muted text-xs"}>{s.label[lang]}</p>
                   </div>
                 ))}
               </motion.div>
@@ -469,7 +483,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
 
           {/* ── Recherche de disponibilité : agences + période → étape suivante ── */}
           <div className="pb-24">
-            <BookingSearchPanel lang={lang} agencies={agencies} onSearch={onSearch} />
+            <BookingSearchPanel lang={lang} agencies={agencies} onSearch={onSearch} hasBg={hasBg} />
           </div>
         </div>
 
