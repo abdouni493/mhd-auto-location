@@ -1,5 +1,26 @@
 import { supabase } from '../supabase';
-import { ReservationDetails, VehicleInspection, Payment } from '../types';
+import { ReservationDetails, VehicleInspection, Payment, ProtectionAssurance } from '../types';
+
+// Mappe un forfait d'assurance de protection embarqué (avec ses items + statut).
+function mapProtectionAssurance(pa: any): ProtectionAssurance | undefined {
+  if (!pa) return undefined;
+  return {
+    id: pa.id,
+    name: pa.name,
+    pricePerDay: Math.round(Number(pa.price_per_day) || 0),
+    isActive: pa.is_active,
+    createdAt: pa.created_at,
+    items: (pa.protection_assurance_item_links || [])
+      .map((link: any) => ({
+        linkId: link.id,
+        itemId: link.item?.id || null,
+        name: link.item?.item_name || '',
+        status: !!link.status,
+        displayOrder: link.item?.display_order ?? 0,
+      }))
+      .sort((x: any, y: any) => (x.displayOrder ?? 0) - (y.displayOrder ?? 0)),
+  };
+}
 
 // =========================================
 // RESERVATIONS SERVICE
@@ -33,6 +54,9 @@ export class ReservationsService {
     euroRate?: number;
     assuranceEnabled?: boolean;
     assurancePercentage?: number;
+    protectionAssuranceId?: string | null;
+    protectionAssuranceName?: string | null;
+    protectionAssurancePrice?: number | null;
     createdBy?: string;
     createdByName?: string;
   }): Promise<{ id: string }> {
@@ -64,6 +88,9 @@ export class ReservationsService {
         euro_rate: data.euroRate || 145,
         assurance_enabled: data.assuranceEnabled || false,
         assurance_percentage: data.assurancePercentage || null,
+        protection_assurance_id: data.protectionAssuranceId || null,
+        protection_assurance_name: data.protectionAssuranceName || null,
+        protection_assurance_price: data.protectionAssurancePrice || 0,
         created_by: data.createdBy || null,
         created_by_name: data.createdByName || null,
       }])
@@ -109,7 +136,13 @@ export class ReservationsService {
           )
         ),
         reservation_services(*),
-        payments(*)
+        payments(*),
+        protection_assurance:protection_assurances!reservations_protection_assurance_fkey(
+          id, name, price_per_day, is_active, created_at,
+          protection_assurance_item_links(
+            id, status, item:protection_assurance_items(id, item_name, display_order)
+          )
+        )
       `);
 
     if (filters?.status) {
@@ -245,6 +278,11 @@ export class ReservationsService {
       euroRate: res.euro_rate || 145,
       assuranceEnabled: res.assurance_enabled || false,
       assurancePercentage: res.assurance_percentage,
+      // Forfait d'assurance de protection sélectionné
+      protectionAssuranceId: res.protection_assurance_id || undefined,
+      protectionAssuranceName: res.protection_assurance_name || undefined,
+      protectionAssurancePrice: res.protection_assurance_price != null ? Number(res.protection_assurance_price) : undefined,
+      protectionAssurance: mapProtectionAssurance(res.protection_assurance),
       departureInspection: (() => {
         const departureInspections = res.vehicle_inspections?.filter((i: any) => i.type === 'departure') || [];
         if (departureInspections.length === 0) return undefined;
@@ -344,7 +382,13 @@ export class ReservationsService {
           )
         ),
         reservation_services(*),
-        payments(*)
+        payments(*),
+        protection_assurance:protection_assurances!reservations_protection_assurance_fkey(
+          id, name, price_per_day, is_active, created_at,
+          protection_assurance_item_links(
+            id, status, item:protection_assurance_items(id, item_name, display_order)
+          )
+        )
       `)
       .eq('id', id)
       .single();
@@ -447,6 +491,12 @@ export class ReservationsService {
       completedAt: data.completed_at,
       notes: data.notes,
       conditions: data.conditions_text,
+      assuranceEnabled: data.assurance_enabled || false,
+      assurancePercentage: data.assurance_percentage,
+      protectionAssuranceId: data.protection_assurance_id || undefined,
+      protectionAssuranceName: data.protection_assurance_name || undefined,
+      protectionAssurancePrice: data.protection_assurance_price != null ? Number(data.protection_assurance_price) : undefined,
+      protectionAssurance: mapProtectionAssurance(data.protection_assurance),
       departureInspection: (() => {
         // Get latest departure inspection (most recent by created_at)
         const departureInspections = data.vehicle_inspections?.filter((i: any) => i.type === 'departure') || [];
@@ -547,6 +597,9 @@ export class ReservationsService {
     euroRate: number;
     assuranceEnabled: boolean;
     assurancePercentage: number;
+    protectionAssuranceId: string | null;
+    protectionAssuranceName: string | null;
+    protectionAssurancePrice: number | null;
   }>): Promise<void> {
     const updateData: any = {};
 
@@ -581,6 +634,9 @@ export class ReservationsService {
     if (updates.euroRate !== undefined) updateData.euro_rate = updates.euroRate;
     if (updates.assuranceEnabled !== undefined) updateData.assurance_enabled = updates.assuranceEnabled;
     if (updates.assurancePercentage !== undefined) updateData.assurance_percentage = updates.assurancePercentage;
+    if (updates.protectionAssuranceId !== undefined) updateData.protection_assurance_id = updates.protectionAssuranceId;
+    if (updates.protectionAssuranceName !== undefined) updateData.protection_assurance_name = updates.protectionAssuranceName;
+    if (updates.protectionAssurancePrice !== undefined) updateData.protection_assurance_price = updates.protectionAssurancePrice;
 
     // Remove caution_amount_dzd from updateData if it exists and is invalid, as it may not exist in the schema yet
     // The column should be added via migration first

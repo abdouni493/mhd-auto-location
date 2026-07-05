@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { Check, Car as CarIcon, MapPin, User, ConciergeBell, ClipboardCheck } from 'lucide-react';
+import { Check, Car as CarIcon, MapPin, User, ConciergeBell, ClipboardCheck, Shield } from 'lucide-react';
 import { Language, Car, Agency, SpecialOffer, WebsiteSettings } from '../../../types';
 import { ReservationWizardProvider, useWizard, WIZARD_STEP_COUNT } from './WizardContext';
 import { StepCarDates } from './StepCarDates';
 import { StepAgencies } from './StepAgencies';
+import { StepAssurance } from './StepAssurance';
 import { StepPersonalInfo } from './StepPersonalInfo';
 import { StepServices } from './StepServices';
 import { StepRecap } from './StepRecap';
@@ -14,8 +15,9 @@ import { ThankYouPage } from '../ThankYouPage';
 const STEP_META = [
   { icon: CarIcon,        label: { fr: 'Voiture & Dates', ar: 'السيارة والتواريخ' } },
   { icon: MapPin,         label: { fr: 'Agences', ar: 'الوكالات' } },
-  { icon: User,           label: { fr: 'Informations', ar: 'المعلومات' } },
+  { icon: Shield,         label: { fr: 'Assurance', ar: 'التأمين' } },
   { icon: ConciergeBell,  label: { fr: 'Services', ar: 'الخدمات' } },
+  { icon: User,           label: { fr: 'Informations', ar: 'المعلومات' } },
   { icon: ClipboardCheck, label: { fr: 'Récapitulatif', ar: 'الملخص' } },
 ];
 
@@ -67,7 +69,7 @@ const WizardShell: React.FC<{ websiteSettings?: WebsiteSettings | null; onBackHo
       </div>
 
       <div className="relative max-w-4xl mx-auto">
-        {/* ── Indicateur de progression : Étape 1..5 ── */}
+        {/* ── Indicateur de progression : Étape 1..6 ── */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -139,9 +141,10 @@ const WizardShell: React.FC<{ websiteSettings?: WebsiteSettings | null; onBackHo
           >
             {step === 1 && <StepCarDates />}
             {step === 2 && <StepAgencies />}
-            {step === 3 && <StepPersonalInfo />}
+            {step === 3 && <StepAssurance />}
             {step === 4 && <StepServices />}
-            {step === 5 && <StepRecap />}
+            {step === 5 && <StepPersonalInfo />}
+            {step === 6 && <StepRecap />}
           </motion.div>
         </AnimatePresence>
 

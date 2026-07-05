@@ -95,7 +95,7 @@ export const ShowcaseBand: React.FC<ShowcaseBandProps> = ({ lang, onReserve, ima
             whileTap={{ scale: 0.97 }}
             className="btn-vel-cta px-8 py-4 text-sm"
           >
-            {{ fr: 'Réserver maintenant', ar: 'احجز الآن' }[lang]}
+            {{ fr: 'Voir les voitures disponibles', ar: 'عرض السيارات المتاحة' }[lang]}
             <ArrowRight size={17} />
           </motion.button>
         </motion.div>

@@ -266,7 +266,8 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
                 )}
               </motion.p>
 
-              {/* CTA — primaire "Réserver" (wizard) + secondaire "Voir les voitures" (grille) */}
+              {/* CTA — un seul bouton : voir les voitures disponibles (la réservation
+                  démarre après avoir choisi une voiture, plus de réservation directe). */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -274,21 +275,13 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
                 className="flex flex-wrap gap-4"
               >
                 <motion.button
-                  onClick={onReserve}
+                  onClick={onStartRenting}
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.96 }}
                   className="btn-vel-cta px-8 py-4 text-sm"
                 >
-                  {{ fr: 'Réserver', ar: 'احجز' }[lang]}
+                  {{ fr: 'Voir les voitures disponibles', ar: 'عرض السيارات المتاحة' }[lang]}
                   <ArrowRight size={17} />
-                </motion.button>
-                <motion.button
-                  onClick={onStartRenting}
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.96 }}
-                  className="btn-vel-ghost px-8 py-4 text-sm"
-                >
-                  {{ fr: 'Voir les voitures', ar: 'عرض السيارات' }[lang]}
                 </motion.button>
               </motion.div>
 
@@ -406,7 +399,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
       </section>
 
       {/* ══ SHOWCASE BAND (voiture en arrière-plan + titre) ══ */}
-      <ShowcaseBand lang={lang} onReserve={onReserve} imageUrl={showcaseImage} />
+      <ShowcaseBand lang={lang} onReserve={onStartRenting} imageUrl={showcaseImage} />
 
       {/* ══ CTA BANNER ══ */}
       <section className="relative py-24 px-4 sm:px-6 lg:px-8 overflow-hidden" style={{ background: C.bg }}>

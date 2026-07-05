@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Language, Car, Agency, SpecialOffer, ReservationStep2, AdditionalService } from '../../../types';
+import { Language, Car, Agency, SpecialOffer, ReservationStep2, AdditionalService, ProtectionAssurance } from '../../../types';
 import { DatabaseService } from '../../../services/DatabaseService';
 import { ReservationsService } from '../../../services/ReservationsService';
 import { getCurrentSpecialOfferForCar } from '../../../utils/specialOffers';
@@ -13,7 +13,7 @@ export interface DateRangeSel {
   to?: string;   // YYYY-MM-DD
 }
 
-export const WIZARD_STEP_COUNT = 5;
+export const WIZARD_STEP_COUNT = 6;
 
 const emptyPersonal: ReservationStep2 = {
   photo: '',
@@ -44,7 +44,7 @@ interface WizardContextValue {
   isLoadingAgencies: boolean;
 
   // Navigation
-  step: number;                 // 1..5
+  step: number;                 // 1..6
   goToStep: (n: number) => void;
   next: () => void;
   prev: () => void;
@@ -70,9 +70,15 @@ interface WizardContextValue {
   returnAgency: string;
   setReturnAgency: (id: string) => void;
 
-  // Étape 3 — informations personnelles
+  // Étape 5 — informations personnelles
   personal: ReservationStep2;
   setPersonal: React.Dispatch<React.SetStateAction<ReservationStep2>>;
+
+  // Étape 3 — assurance de protection
+  availableAssurances: ProtectionAssurance[];
+  loadingAssurances: boolean;
+  selectedAssurance: ProtectionAssurance | null;
+  setSelectedAssurance: (a: ProtectionAssurance | null) => void;
 
   // Étape 4 — services
   availableServices: any[];
@@ -80,7 +86,7 @@ interface WizardContextValue {
   selectedServices: AdditionalService[];
   toggleService: (service: AdditionalService) => void;
 
-  // Étape 5 — récapitulatif
+  // Étape 6 — récapitulatif
   notes: string;
   setNotes: (n: string) => void;
 
@@ -90,6 +96,7 @@ interface WizardContextValue {
   basePrice: number;
   discount: number;
   servicesTotal: number;
+  assuranceTotal: number;
   total: number;
 
   // Soumission
@@ -136,8 +143,13 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
   const [differentReturnAgency, setDifferentReturnAgency] = useState(false);
   const [returnAgency, setReturnAgency] = useState('');
 
-  // Étape 3
+  // Étape 5
   const [personal, setPersonal] = useState<ReservationStep2>(emptyPersonal);
+
+  // Étape 3 — assurance de protection
+  const [availableAssurances, setAvailableAssurances] = useState<ProtectionAssurance[]>([]);
+  const [loadingAssurances, setLoadingAssurances] = useState(false);
+  const [selectedAssurance, setSelectedAssurance] = useState<ProtectionAssurance | null>(null);
 
   // Étape 4
   const [availableServices, setAvailableServices] = useState<any[]>([]);
@@ -190,6 +202,21 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     load();
   }, []);
 
+  // Charge les assurances de protection disponibles une fois
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoadingAssurances(true);
+        setAvailableAssurances(await DatabaseService.getProtectionAssurances());
+      } catch {
+        setAvailableAssurances([]);
+      } finally {
+        setLoadingAssurances(false);
+      }
+    };
+    load();
+  }, []);
+
   // Changer de voiture réinitialise les dates (les dates bloquées diffèrent par voiture)
   const selectCar = (newCar: Car | null) => {
     setCar(newCar);
@@ -211,11 +238,13 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
       case 2:
         return !!departureAgency && (!differentReturnAgency || !!returnAgency);
       case 3:
-        // Mêmes champs obligatoires que le flux existant
-        return !!(personal.firstName && personal.lastName && personal.phone && personal.email && personal.licenseNumber && personal.wilaya);
+        return true; // l'assurance de protection est optionnelle
       case 4:
         return true; // les services sont optionnels
       case 5:
+        // Informations personnelles — mêmes champs obligatoires que le flux existant
+        return !!(personal.firstName && personal.lastName && personal.phone && personal.email && personal.licenseNumber && personal.wilaya);
+      case 6:
         return true;
       default:
         return false;
@@ -247,7 +276,8 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
   const basePrice = car ? car.priceDay * days : 0;
   const discount = promo && car ? Math.max(0, (car.priceDay - promo.newPrice) * days) : 0;
   const servicesTotal = selectedServices.reduce((sum, s) => sum + s.price, 0);
-  const total = Math.max(0, basePrice - discount + servicesTotal);
+  const assuranceTotal = selectedAssurance ? selectedAssurance.pricePerDay * days : 0;
+  const total = Math.max(0, basePrice - discount + servicesTotal + assuranceTotal);
 
   // ─── Soumission (garde anti double-clic ; les saisies survivent à une erreur) ─
   const submit = async () => {
@@ -290,6 +320,10 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
         advancePayment: 0,
         remainingPayment: total,
         notes,
+        // Assurance de protection sélectionnée (snapshot nom + prix/jour)
+        protectionAssuranceId: selectedAssurance?.id || null,
+        protectionAssuranceName: selectedAssurance?.name || null,
+        protectionAssurancePrice: selectedAssurance?.pricePerDay ?? null,
         // La demande arrive "en attente de confirmation" — l'agence rappelle le client
         status: 'pending',
       });
@@ -318,9 +352,10 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     blockedRanges, loadingBlocked,
     departureAgency, setDepartureAgency, differentReturnAgency, setDifferentReturnAgency, returnAgency, setReturnAgency,
     personal, setPersonal,
+    availableAssurances, loadingAssurances, selectedAssurance, setSelectedAssurance,
     availableServices, loadingServices, selectedServices, toggleService,
     notes, setNotes,
-    days, promo, basePrice, discount, servicesTotal, total,
+    days, promo, basePrice, discount, servicesTotal, assuranceTotal, total,
     isSubmitting, submitError, submitted, submit,
   };
 

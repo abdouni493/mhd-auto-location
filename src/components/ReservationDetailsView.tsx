@@ -811,12 +811,24 @@ const FinancialTab: React.FC<{ lang: Language; reservation: ReservationDetails }
           <span className="font-bold">{lang === 'fr' ? 'Location de base' : 'التأجير الأساسي'}</span>
           <span className="font-bold">{(reservation.totalPrice - reservation.additionalFees).toLocaleString()} DA</span>
         </div>
-        {reservation.additionalServices.map((service) => (
+        {reservation.additionalServices.map((service: any) => (
           <div key={service.id} className="flex justify-between items-center py-2 border-b border-slate-200">
-            <span>{service.name}</span>
-            <span>{service.price.toLocaleString()} DA</span>
+            <span>🛎️ {service.name || service.service_name}</span>
+            <span>{Number(service.price).toLocaleString()} DA</span>
           </div>
         ))}
+        {(reservation.protectionAssurance || reservation.protectionAssuranceName) && (
+          <div className="flex justify-between items-center py-2 border-b border-slate-200">
+            <span>🛡️ {reservation.protectionAssurance?.name || reservation.protectionAssuranceName}
+              {reservation.protectionAssurancePrice != null && reservation.totalDays > 0 && (
+                <span className="text-slate-400 text-sm ml-1">
+                  ({(reservation.protectionAssurancePrice).toLocaleString()} DA/{lang === 'fr' ? 'j' : 'ي'} × {reservation.totalDays})
+                </span>
+              )}
+            </span>
+            <span>{Math.round((reservation.protectionAssurancePrice || 0) * (reservation.totalDays || 0)).toLocaleString()} DA</span>
+          </div>
+        )}
         {reservation.excessMileage > 0 && (
           <div className="flex justify-between items-center py-2 border-b border-slate-200 text-red-600">
             <span>{lang === 'fr' ? 'Kilométrage excédentaire' : 'عداد الكيلومترات الزائد'}</span>
@@ -882,6 +894,35 @@ const FinancialTab: React.FC<{ lang: Language; reservation: ReservationDetails }
         </div>
       )}
     </div>
+
+    {/* Assurance de protection sélectionnée (forfait + éléments) */}
+    {(reservation.protectionAssurance || reservation.protectionAssuranceName) && (
+      <div className="bg-red-50 rounded-2xl shadow-lg p-6 border border-red-200">
+        <h3 className="text-lg font-black text-red-900 mb-4">🛡️ {lang === 'fr' ? 'Assurance de Protection' : 'تأمين الحماية'}</h3>
+        <div className="flex justify-between items-center py-2 border-b border-red-200 mb-3">
+          <span className="font-black text-slate-900">{reservation.protectionAssurance?.name || reservation.protectionAssuranceName}</span>
+          <span className="font-black text-red-700">
+            {(reservation.protectionAssurancePrice || reservation.protectionAssurance?.pricePerDay || 0).toLocaleString()} DA/{lang === 'fr' ? 'jour' : 'يوم'}
+          </span>
+        </div>
+        {reservation.protectionAssurance && reservation.protectionAssurance.items.length > 0 ? (
+          <ul className="space-y-1.5">
+            {reservation.protectionAssurance.items.map((item) => (
+              <li key={item.linkId || item.itemId} className="flex items-center gap-2 text-sm">
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  item.status ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                }`}>
+                  {item.status ? '✓' : '✕'}
+                </span>
+                <span className={item.status ? 'text-slate-700' : 'text-slate-400 line-through'}>{item.name}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-slate-500 text-sm italic">{lang === 'fr' ? 'Détail des éléments indisponible' : 'تفاصيل العناصر غير متوفرة'}</p>
+        )}
+      </div>
+    )}
   </div>
 );
 

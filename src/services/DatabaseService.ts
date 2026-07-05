@@ -912,8 +912,18 @@ export class DatabaseService {
           additional_fees,
           status,
           created_at,
+          protection_assurance_id,
+          protection_assurance_name,
+          protection_assurance_price,
           client:clients(*),
-          car:cars(*)
+          car:cars(*),
+          reservation_services(*),
+          protection_assurance:protection_assurances!reservations_protection_assurance_fkey(
+            id, name, price_per_day, is_active, created_at,
+            protection_assurance_item_links(
+              id, status, item:protection_assurance_items(id, item_name, display_order)
+            )
+          )
         `)
         // load both new pending orders and those we've already accepted so they stay visible here
         .in('status', ['pending', 'accepted'])
@@ -929,8 +939,41 @@ export class DatabaseService {
 
       return data.map((reservation: any) => {
         const totalPrice = parseInt(reservation.total_price) || 0;
-        const additionalFees = parseInt(reservation.additional_fees) || 0;
-        
+        const totalDays = reservation.total_days || 0;
+
+        // Services supplémentaires attachés à la réservation
+        const additionalServices = (reservation.reservation_services || []).map((s: any) => ({
+          id: s.id,
+          category: s.category,
+          name: s.service_name,
+          description: s.description,
+          price: Math.round(Number(s.price) || 0),
+          selected: true,
+        }));
+        const servicesTotal = additionalServices.reduce((sum: number, s: any) => sum + s.price, 0);
+
+        // Assurance de protection sélectionnée
+        const pa = reservation.protection_assurance;
+        const protectionAssurance = pa ? {
+          id: pa.id,
+          name: pa.name,
+          pricePerDay: Math.round(Number(pa.price_per_day) || 0),
+          isActive: pa.is_active,
+          createdAt: pa.created_at,
+          items: (pa.protection_assurance_item_links || [])
+            .map((link: any) => ({
+              linkId: link.id,
+              itemId: link.item?.id || null,
+              name: link.item?.item_name || '',
+              status: !!link.status,
+              displayOrder: link.item?.display_order ?? 0,
+            }))
+            .sort((x: any, y: any) => (x.displayOrder ?? 0) - (y.displayOrder ?? 0)),
+        } : undefined;
+        const assuranceTotal = reservation.protection_assurance_price != null
+          ? Math.round(Number(reservation.protection_assurance_price) * totalDays)
+          : 0;
+
         return {
           id: reservation.id,
           carId: reservation.car_id,
@@ -958,12 +1001,15 @@ export class DatabaseService {
             scannedDocuments: reservation.client?.documents_urls || [],
           },
           step3: {
-            additionalServices: [],
+            additionalServices,
           },
-          totalDays: reservation.total_days || 0,
+          totalDays,
           totalPrice: totalPrice,
-          servicesTotal: additionalFees,
-          status: 'pending',
+          servicesTotal,
+          protectionAssurance,
+          protectionAssuranceName: reservation.protection_assurance_name || undefined,
+          assuranceTotal,
+          status: reservation.status || 'pending',
           createdAt: reservation.created_at,
           source: 'website',
         } as WebsiteOrder;
@@ -1705,5 +1751,158 @@ export class DatabaseService {
       payments: [],
       createdAt: worker.created_at,
     }));
+  }
+
+  // ========================================================================
+  // PROTECTION ASSURANCES (forfaits d'assurance de protection)
+  // ========================================================================
+
+  // Master list of reusable items (like inspection_checklist_items)
+  static async getProtectionAssuranceItems(): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('protection_assurance_items')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(it => ({
+      id: it.id,
+      name: it.item_name,
+      displayOrder: it.display_order,
+      createdAt: it.created_at,
+    }));
+  }
+
+  static async createProtectionAssuranceItem(itemName: string, displayOrder = 0): Promise<any> {
+    const { data, error } = await supabase
+      .from('protection_assurance_items')
+      .insert([{ item_name: itemName, display_order: displayOrder }])
+      .select()
+      .single();
+    if (error) throw error;
+    return { id: data.id, name: data.item_name, displayOrder: data.display_order, createdAt: data.created_at };
+  }
+
+  static async deleteProtectionAssuranceItem(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('protection_assurance_items')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  // Assurances with their linked items (status true/false)
+  static async getProtectionAssurances(includeInactive = false): Promise<any[]> {
+    let query = supabase
+      .from('protection_assurances')
+      .select(`
+        *,
+        protection_assurance_item_links(
+          id,
+          status,
+          item:protection_assurance_items(id, item_name, display_order)
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (!includeInactive) {
+      query = query.eq('is_active', true);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return (data || []).map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      pricePerDay: Math.round(Number(a.price_per_day) || 0),
+      isActive: a.is_active,
+      createdAt: a.created_at,
+      items: (a.protection_assurance_item_links || [])
+        .map((link: any) => ({
+          linkId: link.id,
+          itemId: link.item?.id || null,
+          name: link.item?.item_name || '',
+          status: !!link.status,
+          displayOrder: link.item?.display_order ?? 0,
+        }))
+        .sort((x: any, y: any) => x.displayOrder - y.displayOrder),
+    }));
+  }
+
+  // items: array of { itemId, status }
+  static async createProtectionAssurance(payload: {
+    name: string;
+    pricePerDay: number;
+    items?: { itemId: string; status: boolean }[];
+  }): Promise<any> {
+    const { data: assurance, error } = await supabase
+      .from('protection_assurances')
+      .insert([{ name: payload.name, price_per_day: payload.pricePerDay, is_active: true }])
+      .select()
+      .single();
+    if (error) throw error;
+
+    const items = payload.items || [];
+    if (items.length > 0) {
+      const links = items.map(it => ({
+        assurance_id: assurance.id,
+        item_id: it.itemId,
+        status: it.status,
+      }));
+      const { error: linkError } = await supabase
+        .from('protection_assurance_item_links')
+        .insert(links);
+      if (linkError) throw linkError;
+    }
+    return { id: assurance.id };
+  }
+
+  static async updateProtectionAssurance(id: string, payload: {
+    name?: string;
+    pricePerDay?: number;
+    isActive?: boolean;
+    items?: { itemId: string; status: boolean }[];
+  }): Promise<void> {
+    const updates: any = {};
+    if (payload.name !== undefined) updates.name = payload.name;
+    if (payload.pricePerDay !== undefined) updates.price_per_day = payload.pricePerDay;
+    if (payload.isActive !== undefined) updates.is_active = payload.isActive;
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from('protection_assurances')
+        .update(updates)
+        .eq('id', id);
+      if (error) throw error;
+    }
+
+    // Replace links when items are provided
+    if (payload.items) {
+      const { error: delError } = await supabase
+        .from('protection_assurance_item_links')
+        .delete()
+        .eq('assurance_id', id);
+      if (delError) throw delError;
+
+      if (payload.items.length > 0) {
+        const links = payload.items.map(it => ({
+          assurance_id: id,
+          item_id: it.itemId,
+          status: it.status,
+        }));
+        const { error: insError } = await supabase
+          .from('protection_assurance_item_links')
+          .insert(links);
+        if (insError) throw insError;
+      }
+    }
+  }
+
+  static async deleteProtectionAssurance(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('protection_assurances')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
   }
 }

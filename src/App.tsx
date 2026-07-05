@@ -13,6 +13,7 @@ import { ExpensesPage } from './components/ExpensesPage';
 import { ConfigPage } from './components/ConfigPage';
 import { WebsiteManagementPage } from './components/WebsiteManagementPage';
 import { WebsiteOrders } from './components/WebsiteOrders';
+import { ProtectionServicesPage } from './components/ProtectionServicesPage';
 import { PlannerPage } from './components/PlannerPage';
 import { Website } from './components/Website';
 import { DashboardPage } from './components/DashboardPage';
@@ -75,6 +76,7 @@ export default function App() {
       '/depenses': 'expenses',
       '/website-management': 'web-mgmt',
       '/website-commandes': 'web-orders',
+      '/protection-services': 'protection-services',
       '/reservations': 'reservations',
       '/rapports': 'reports',
       '/configuration': 'config',
@@ -116,6 +118,7 @@ export default function App() {
       'expenses': '/depenses',
       'web-mgmt': '/website-management',
       'web-orders': '/website-commandes',
+      'protection-services': '/protection-services',
       'reservations': '/reservations',
       'reports': '/rapports',
       'config': '/configuration',
@@ -476,6 +479,8 @@ export default function App() {
           return <WebsiteManagementPage lang={lang} />;
         case 'web-orders':
           return <WebsiteOrders lang={lang} />;
+        case 'protection-services':
+          return <ProtectionServicesPage lang={lang} />;
         case 'reservations':
           return <ReservationsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
         case 'reports':
@@ -661,6 +666,7 @@ export default function App() {
       <Route path="/depenses" element={<ProtectedRoute />} />
       <Route path="/website-management" element={<ProtectedRoute />} />
       <Route path="/website-commandes" element={<ProtectedRoute />} />
+      <Route path="/protection-services" element={<ProtectedRoute />} />
       <Route path="/reservations" element={<ProtectedRoute />} />
       <Route path="/rapports" element={<ProtectedRoute />} />
       <Route path="/configuration" element={<ProtectedRoute />} />

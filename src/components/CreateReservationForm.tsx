@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Language, ReservationDetails, Client, Car, VehicleInspection, Payment, AdditionalService } from '../types';
+import { Language, ReservationDetails, Client, Car, VehicleInspection, Payment, AdditionalService, ProtectionAssurance } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, ArrowRight, Calendar, Clock, MapPin, Car as CarIcon, User, CreditCard, CheckCircle, Plus, Search, X, Camera, Fuel, AlertTriangle, Check, Upload, PenTool } from 'lucide-react';
 import { AGENCIES, CAR_IMAGES } from '../constants';
@@ -264,38 +264,41 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
     }
   });
 
+  const totalSteps = 7;
   const steps = altFlow ? [
     { id: 1, title: lang === 'fr' ? 'Dates & Lieux' : 'التواريخ والأماكن', icon: '📅' },
     { id: 2, title: lang === 'fr' ? 'Sélection Véhicule' : 'اختيار المركبة', icon: '🚗' },
     { id: 3, title: lang === 'fr' ? 'Tarification Finale' : 'التسعير النهائي', icon: '💰' },
     { id: 4, title: lang === 'fr' ? 'Client' : 'العميل', icon: '👤' },
-    { id: 5, title: lang === 'fr' ? 'Services Supplémentaires' : 'الخدمات الإضافية', icon: '🛠️' },
-    { id: 6, title: lang === 'fr' ? 'Inspection Départ' : 'فحص المغادرة', icon: '🔍' }
+    { id: 5, title: lang === 'fr' ? 'Assurance de Protection' : 'تأمين الحماية', icon: '🛡️' },
+    { id: 6, title: lang === 'fr' ? 'Services Supplémentaires' : 'الخدمات الإضافية', icon: '🛠️' },
+    { id: 7, title: lang === 'fr' ? 'Inspection Départ' : 'فحص المغادرة', icon: '🔍' }
   ] : [
     { id: 1, title: lang === 'fr' ? 'Dates & Lieux' : 'التواريخ والأماكن', icon: '📅' },
     { id: 2, title: lang === 'fr' ? 'Sélection Véhicule' : 'اختيار المركبة', icon: '🚗' },
     { id: 3, title: lang === 'fr' ? 'Inspection Départ' : 'فحص المغادرة', icon: '🔍' },
     { id: 4, title: lang === 'fr' ? 'Client' : 'العميل', icon: '👤' },
-    { id: 5, title: lang === 'fr' ? 'Services Supplémentaires' : 'الخدمات الإضافية', icon: '🛠️' },
-    { id: 6, title: lang === 'fr' ? 'Tarification Finale' : 'التسعير النهائي', icon: '💰' }
+    { id: 5, title: lang === 'fr' ? 'Assurance de Protection' : 'تأمين الحماية', icon: '🛡️' },
+    { id: 6, title: lang === 'fr' ? 'Services Supplémentaires' : 'الخدمات الإضافية', icon: '🛠️' },
+    { id: 7, title: lang === 'fr' ? 'Tarification Finale' : 'التسعير النهائي', icon: '💰' }
   ];
 
   const handleNext = () => {
     if (inspectionMode && currentStep === 3) {
-      // In inspection mode: step 3 (inspection) -> step 5 (services)
-      setCurrentStep(5);
-    } else if (currentStep < 6) {
+      // In inspection mode: step 3 (inspection) -> step 6 (services), skip client & assurance
+      setCurrentStep(6);
+    } else if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     }
   };
 
   const handlePrevious = () => {
-    if (inspectionMode && currentStep === 5) {
+    if (inspectionMode && currentStep === 6) {
       // Go back to step 3 (inspection) when in inspection mode from services
       setCurrentStep(3);
-    } else if (inspectionMode && currentStep === 6) {
-      // Go back to step 5 (services) from pricing in inspection mode
-      setCurrentStep(5);
+    } else if (inspectionMode && currentStep === 7) {
+      // Go back to step 6 (services) from pricing in inspection mode
+      setCurrentStep(6);
     } else if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
@@ -422,11 +425,15 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
             cautionCurrency: (formData.step6 as any)?.cautionCurrency || 'DZD',
             euroRate: (formData.step6 as any)?.euroRate || 145,
             assuranceEnabled: (formData.step6 as any)?.assuranceEnabled || false,
-            assurancePercentage: (formData.step6 as any)?.assuranceEnabled 
-              ? (formData.step6 as any)?.assurancePercentage !== '' 
-                ? Number((formData.step6 as any)?.assurancePercentage) 
+            assurancePercentage: (formData.step6 as any)?.assuranceEnabled
+              ? (formData.step6 as any)?.assurancePercentage !== ''
+                ? Number((formData.step6 as any)?.assurancePercentage)
                 : 0
               : 0,
+            // Assurance de protection sélectionnée (snapshot nom + prix/jour)
+            protectionAssuranceId: formData.protectionAssurance?.id || null,
+            protectionAssuranceName: formData.protectionAssurance?.name || null,
+            protectionAssurancePrice: formData.protectionAssurance?.pricePerDay ?? null,
             // Creator info - Only save name since User object doesn't have ID
             createdBy: null,  // No user ID available in current auth system
             createdByName: workerFullName || null,
@@ -614,7 +621,7 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div
             className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${inspectionMode ? (currentStep === 3 ? 33 : currentStep === 5 ? 66 : 100) : (currentStep / 6) * 100}%` }}
+            style={{ width: `${inspectionMode ? (currentStep === 3 ? 33 : currentStep === 6 ? 66 : 100) : (currentStep / totalSteps) * 100}%` }}
           />
         </div>
       </div>
@@ -632,13 +639,14 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           <div className="p-8">
             {altFlow ? (
               <>
-                {/* Alternative order: Dates → Véhicule → Tarification (sans client) → Client → Services → Inspection */}
+                {/* Alternative order: Dates → Véhicule → Tarification (sans client) → Client → Assurance → Services → Inspection */}
                 {currentStep === 1 && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} inspectionMode={inspectionMode} initialData={initialData} />}
                 {currentStep === 2 && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
                 {currentStep === 3 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} inspectionMode={inspectionMode} initialData={initialData} agencies={agencies} hideClientInfo={true} />}
                 {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
-                {currentStep === 5 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
-                {currentStep === 6 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 5 && <Step5ProtectionAssurance lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 6 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 7 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
               </>
             ) : (
               <>
@@ -646,8 +654,9 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
                 {currentStep === 2 && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
                 {currentStep === 3 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
                 {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
-                {currentStep === 5 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
-                {currentStep === 6 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} inspectionMode={inspectionMode} initialData={initialData} agencies={agencies} />}
+                {currentStep === 5 && <Step5ProtectionAssurance lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 6 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 7 && <Step6FinalPricing lang={lang} formData={formData} setFormData={setFormData} inspectionMode={inspectionMode} initialData={initialData} agencies={agencies} />}
               </>
             )}
           </div>
@@ -669,7 +678,7 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           {lang === 'fr' ? 'Précédent' : 'السابق'}
         </button>
 
-        {currentStep < 6 ? (
+        {currentStep < totalSteps ? (
           <button
             onClick={handleNext}
             className="btn-saas-primary"
@@ -2160,6 +2169,141 @@ export const Step4ClientSelection: React.FC<{
   );
 };
 
+// Step: Protection Assurance selection (before Services)
+export const Step5ProtectionAssurance: React.FC<{
+  lang: Language;
+  formData: Partial<ReservationDetails>;
+  setFormData: React.Dispatch<React.SetStateAction<Partial<ReservationDetails>>>;
+}> = ({ lang, formData, setFormData }) => {
+  const [assurances, setAssurances] = useState<ProtectionAssurance[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        setAssurances(await DatabaseService.getProtectionAssurances());
+      } catch (err) {
+        console.error('Error loading protection assurances:', err);
+        setAssurances([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const selected = formData.protectionAssurance || null;
+
+  // Nombre de jours (pour afficher le coût total du forfait)
+  const days = (() => {
+    const d1 = formData.step1?.departureDate;
+    const d2 = formData.step1?.returnDate;
+    if (!d1 || !d2) return 0;
+    return Math.max(0, Math.ceil((new Date(d2).getTime() - new Date(d1).getTime()) / (1000 * 60 * 60 * 24)));
+  })();
+
+  const selectAssurance = (a: ProtectionAssurance | null) => {
+    setFormData(prev => ({ ...prev, protectionAssurance: a || undefined }));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-2xl font-black text-slate-900">
+          🛡️ {lang === 'fr' ? 'Assurance de Protection' : 'تأمين الحماية'}
+        </h3>
+        <p className="text-slate-500 text-sm mt-1">
+          {lang === 'fr'
+            ? 'Sélectionnez un forfait de protection (optionnel) — chaque élément couvert est affiché avec son statut'
+            : 'اختر باقة حماية (اختياري) — يتم عرض كل عنصر مشمول مع حالته'}
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : assurances.length === 0 ? (
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-10 text-center">
+          <div className="text-5xl opacity-30 mb-3">🛡️</div>
+          <p className="font-bold text-slate-700">{lang === 'fr' ? 'Aucune assurance de protection disponible' : 'لا يوجد تأمين حماية متاح'}</p>
+          <p className="text-slate-500 text-sm mt-1">
+            {lang === 'fr' ? 'Créez-en dans « Protection & Services »' : 'أنشئها في «الحماية والخدمات»'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {/* Option "aucune assurance" */}
+          <button
+            type="button"
+            onClick={() => selectAssurance(null)}
+            className={`text-left rounded-2xl p-5 border-2 transition-all ${
+              !selected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-black text-slate-900">{lang === 'fr' ? 'Sans assurance' : 'بدون تأمين'}</span>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center ${!selected ? 'bg-indigo-500 text-white' : 'border-2 border-slate-300'}`}>
+                {!selected && <Check size={14} strokeWidth={3} />}
+              </span>
+            </div>
+            <p className="text-slate-500 text-sm mt-2">{lang === 'fr' ? 'Aucun forfait de protection' : 'لا باقة حماية'}</p>
+          </button>
+
+          {assurances.map(a => {
+            const isSel = selected?.id === a.id;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => selectAssurance(a)}
+                className={`text-left rounded-2xl p-5 border-2 transition-all flex flex-col ${
+                  isSel ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <h4 className="font-black text-slate-900 truncate">{a.name}</h4>
+                    <p className="text-indigo-600 font-black text-sm">
+                      {a.pricePerDay.toLocaleString()} DA/{lang === 'fr' ? 'jour' : 'يوم'}
+                    </p>
+                  </div>
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${isSel ? 'bg-indigo-500 text-white' : 'border-2 border-slate-300'}`}>
+                    {isSel && <Check size={14} strokeWidth={3} />}
+                  </span>
+                </div>
+
+                {a.items.length > 0 && (
+                  <ul className="space-y-1.5 flex-1">
+                    {a.items.map(item => (
+                      <li key={item.linkId || item.itemId} className="flex items-center gap-2 text-sm">
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          item.status ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'
+                        }`}>
+                          {item.status ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
+                        </span>
+                        <span className={item.status ? 'text-slate-700' : 'text-slate-400 line-through'}>{item.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {days > 0 && (
+                  <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between text-xs">
+                    <span className="text-slate-500">{days} {lang === 'fr' ? 'jour(s)' : 'يوم'}</span>
+                    <span className="font-black text-indigo-600">{(a.pricePerDay * days).toLocaleString()} DA</span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Step 5: Additional Services
 export const Step5AdditionalServices: React.FC<{
   lang: Language;
@@ -2841,7 +2985,11 @@ export const Step6FinalPricing: React.FC<{
   }
 
   const servicesTotal = formData.step5?.additionalServices?.reduce((sum, s) => sum + s.price, 0) || 0;
-  const subtotal = calculatedBasePrice + servicesTotal;
+  // Assurance de protection : prix/jour × nombre de jours
+  const protectionAssuranceCost = formData.protectionAssurance
+    ? Math.round((formData.protectionAssurance.pricePerDay || 0) * days)
+    : 0;
+  const subtotal = calculatedBasePrice + servicesTotal + protectionAssuranceCost;
   const tvaAmount = tvaEnabled ? (subtotal * tvaRate) / 100 : 0;
   const computedPrice = Math.max(0, Math.round(subtotal + tvaAmount));
   const deposit = editedDeposit !== '' ? Number(editedDeposit) : (selectedCar?.deposit || 0);
@@ -3178,6 +3326,39 @@ export const Step6FinalPricing: React.FC<{
                   <span>{lang === 'fr' ? 'Total Services' : 'إجمالي الخدمات'}</span>
                   <span>{servicesTotal.toLocaleString()} DA</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Assurance de protection sélectionnée */}
+          {formData.protectionAssurance && (
+            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+              <h5 className="font-bold text-red-900 mb-3 flex items-center gap-2">
+                🛡️ {lang === 'fr' ? 'Assurance de Protection' : 'تأمين الحماية'}
+              </h5>
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-bold">{formData.protectionAssurance.name}</span>
+                <span className="text-sm text-red-700">
+                  {(formData.protectionAssurance.pricePerDay || 0).toLocaleString()} DA/{lang === 'fr' ? 'j' : 'ي'} × {days}
+                </span>
+              </div>
+              {formData.protectionAssurance.items && formData.protectionAssurance.items.length > 0 && (
+                <div className="space-y-1 mb-2">
+                  {formData.protectionAssurance.items.map((item) => (
+                    <div key={item.linkId || item.itemId} className="flex items-center gap-2 text-sm">
+                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 ${
+                        item.status ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-700'
+                      }`}>
+                        {item.status ? '✓' : '✕'}
+                      </span>
+                      <span className={item.status ? 'text-slate-700' : 'text-slate-400 line-through'}>{item.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-between items-center border-t border-red-300 pt-2 font-bold">
+                <span>{lang === 'fr' ? 'Total Assurance' : 'إجمالي التأمين'}</span>
+                <span>{protectionAssuranceCost.toLocaleString()} DA</span>
               </div>
             </div>
           )}

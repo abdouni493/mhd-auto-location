@@ -5,7 +5,7 @@ import { uploadClientProfilePhoto, uploadClientDocument } from '../../../service
 import { SectionCard, SectionTitle, FieldLabel, inputClass, inputStyle, focusInput, blurInput, C, ALGERIAN_WILAYAS } from './wizardUi';
 
 /**
- * Étape 3 — Informations personnelles.
+ * Étape 5 — Informations personnelles.
  * Reprend exactement les champs, libellés et validations du flux existant
  * (photo, identité, permis, document additionnel, documents scannés, adresse).
  */

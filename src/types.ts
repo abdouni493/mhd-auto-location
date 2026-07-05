@@ -343,6 +343,25 @@ export interface AdditionalService {
   selected: boolean;
 }
 
+// Un item d'un forfait d'assurance de protection (avec son statut vrai/faux).
+export interface ProtectionAssuranceItem {
+  linkId?: string;
+  itemId: string;
+  name: string;
+  status: boolean;
+  displayOrder?: number;
+}
+
+// Un forfait d'assurance de protection (nom + prix/jour + liste d'items).
+export interface ProtectionAssurance {
+  id: string;
+  name: string;
+  pricePerDay: number;
+  isActive: boolean;
+  createdAt: string;
+  items: ProtectionAssuranceItem[];
+}
+
 export interface ReservationDetails {
   id: string;
   clientId: string;
@@ -360,6 +379,11 @@ export interface ReservationDetails {
   advancePayment: number;
   remainingPayment: number;
   status: 'pending' | 'accepted' | 'confirmed' | 'active' | 'completed' | 'cancelled';
+  // Forfait d'assurance de protection sélectionné (snapshot + référence).
+  protectionAssuranceId?: string;
+  protectionAssuranceName?: string;
+  protectionAssurancePrice?: number; // prix/jour au moment de la réservation
+  protectionAssurance?: ProtectionAssurance; // détail (items) chargé pour l'affichage
   departureInspection?: VehicleInspection;
   returnInspection?: VehicleInspection;
   payments: Payment[];
@@ -440,6 +464,10 @@ export interface WebsiteOrder {
   totalDays: number;
   totalPrice: number;
   servicesTotal: number;
+  // Assurance de protection sélectionnée
+  protectionAssurance?: ProtectionAssurance;
+  protectionAssuranceName?: string;
+  assuranceTotal?: number;
   status: 'pending' | 'accepted' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
   createdAt: string;
   source: 'website';
