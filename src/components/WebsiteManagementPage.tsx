@@ -436,11 +436,7 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
     try {
       const uploaded = await uploadWebsiteImage(file, 'background');
       if (!uploaded.success || !uploaded.url) {
-        throw new Error(
-          uploaded.error
-            ? `${uploaded.error} — exécutez la migration supabase/migrations/20260706_website_updates.sql (bucket "website").`
-            : 'Upload impossible'
-        );
+        throw new Error(uploaded.error || 'Upload impossible');
       }
       setSettings(prev => ({ ...prev, landing_background: uploaded.url }));
       await DatabaseService.updateWebsiteSettings({ ...settings, landing_background: uploaded.url });

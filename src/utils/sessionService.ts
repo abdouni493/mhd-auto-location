@@ -454,6 +454,70 @@ class SessionService {
   }
 
   /**
+   * Ensure the Supabase SDK holds a valid authenticated session before a
+   * request restricted by RLS to the "authenticated" role (storage uploads,
+   * etc.). With persistSession/autoRefreshToken disabled, the SDK can lose its
+   * in-memory session (page refresh, expired token) and silently fall back to
+   * the anon key — RLS then rejects the request with
+   * "new row violates row-level security policy".
+   * Returns true if an authenticated session is active after this call.
+   */
+  async ensureSupabaseSession(): Promise<boolean> {
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const { data: { session: sdkSession } } = await supabase.auth.getSession();
+      if (sdkSession && (sdkSession.expires_at || 0) > now + 30) {
+        return true;
+      }
+
+      // Read localStorage directly (not getCurrentSession) so an expired
+      // access token doesn't get purged before we can use its refresh token.
+      const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!raw) {
+        console.warn('[SessionService] ensureSupabaseSession: no stored session');
+        return false;
+      }
+
+      const stored: SessionData = JSON.parse(raw);
+      if (stored.accessToken.startsWith('worker_token_')) {
+        // Worker sessions have no Supabase auth token
+        console.warn('[SessionService] ensureSupabaseSession: worker session cannot authenticate with Supabase');
+        return false;
+      }
+
+      // setSession auto-refreshes with the refresh token if the access token expired
+      const { data, error } = await supabase.auth.setSession({
+        access_token: stored.accessToken,
+        refresh_token: stored.refreshToken || ''
+      });
+
+      if (error || !data.session) {
+        console.warn('[SessionService] ensureSupabaseSession: restore failed:', error?.message);
+        return false;
+      }
+
+      // Persist rotated tokens so the next restore keeps working
+      if (data.session.access_token !== stored.accessToken) {
+        await this.createSession(
+          data.session.access_token,
+          data.session.refresh_token || stored.refreshToken,
+          data.session.expires_at || stored.expiresAt,
+          stored.userId,
+          stored.email,
+          stored.role,
+          stored.name
+        );
+      }
+
+      console.log('[SessionService] ensureSupabaseSession: session restored');
+      return true;
+    } catch (error) {
+      console.warn('[SessionService] ensureSupabaseSession error:', error);
+      return false;
+    }
+  }
+
+  /**
    * Get auth headers for requests
    */
   getAuthHeaders(): Record<string, string> {

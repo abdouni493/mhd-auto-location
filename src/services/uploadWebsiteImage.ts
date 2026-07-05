@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { sessionService } from '../utils/sessionService'
 
 export interface WebsiteImageUploadResult {
   success: boolean
@@ -26,6 +27,16 @@ export async function uploadWebsiteImage(
       return { success: false, error: 'File size must be less than 5MB' }
     }
 
+    // Le bucket "website" n'accepte que le rôle "authenticated" : sans session
+    // Supabase active, le SDK envoie la clé anon et l'upload est rejeté par RLS.
+    const hasAuth = await sessionService.ensureSupabaseSession()
+    if (!hasAuth) {
+      return {
+        success: false,
+        error: 'Session administrateur expirée — déconnectez-vous puis reconnectez-vous, et réessayez.'
+      }
+    }
+
     const fileExt = file.name.split('.').pop()
     const fileName = `${prefix}-${Date.now()}.${fileExt}`
 
@@ -35,6 +46,18 @@ export async function uploadWebsiteImage(
 
     if (error) {
       console.error('Website image upload error:', error)
+      if (error.message?.includes('row-level security')) {
+        return {
+          success: false,
+          error: 'Accès refusé (RLS) : reconnectez-vous en tant qu\'administrateur puis réessayez.'
+        }
+      }
+      if (error.message?.includes('Bucket not found')) {
+        return {
+          success: false,
+          error: 'Bucket "website" introuvable — exécutez supabase/migrations/20260706_website_updates.sql dans le SQL Editor de Supabase.'
+        }
+      }
       return { success: false, error: error.message }
     }
 
