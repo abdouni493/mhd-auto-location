@@ -434,12 +434,22 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
 
     setUploadingBackground(true);
     try {
+      let bgValue: string | null = null;
       const uploaded = await uploadWebsiteImage(file, 'background');
-      if (!uploaded.success || !uploaded.url) {
-        throw new Error(uploaded.error || 'Upload impossible');
+      if (uploaded.success && uploaded.url) {
+        bgValue = uploaded.url;
+      } else {
+        // Fallback: store as data URL (same pattern as logo upload)
+        console.warn('Background storage upload failed, falling back to data URL:', uploaded.error);
+        bgValue = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = ev => resolve(ev.target?.result as string);
+          reader.onerror = () => reject(new Error('read error'));
+          reader.readAsDataURL(file);
+        });
       }
-      setSettings(prev => ({ ...prev, landing_background: uploaded.url }));
-      await DatabaseService.updateWebsiteSettings({ ...settings, landing_background: uploaded.url });
+      setSettings(prev => ({ ...prev, landing_background: bgValue! }));
+      await DatabaseService.updateWebsiteSettings({ ...settings, landing_background: bgValue! });
       notify('success', lang === 'fr' ? 'Image de fond enregistrée ! Elle apparaît floutée sur le landing.' : 'تم حفظ صورة الخلفية! ستظهر مموهة على الصفحة الرئيسية.');
     } catch (error: any) {
       console.error('Error saving background:', error);

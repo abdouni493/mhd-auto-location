@@ -492,7 +492,37 @@ class SessionService {
       });
 
       if (error || !data.session) {
-        console.warn('[SessionService] ensureSupabaseSession: restore failed:', error?.message);
+        console.warn('[SessionService] ensureSupabaseSession: setSession failed:', error?.message);
+
+        // Fallback: try refreshSession directly with the refresh token.
+        // setSession can reject an expired JWT even when the refresh token
+        // is still valid — refreshSession handles this case correctly.
+        if (stored.refreshToken) {
+          console.log('[SessionService] ensureSupabaseSession: trying refreshSession fallback…');
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
+            refresh_token: stored.refreshToken
+          });
+
+          if (refreshError || !refreshData.session) {
+            console.warn('[SessionService] ensureSupabaseSession: refreshSession also failed:', refreshError?.message);
+            return false;
+          }
+
+          // Persist the new tokens
+          await this.createSession(
+            refreshData.session.access_token,
+            refreshData.session.refresh_token || stored.refreshToken,
+            refreshData.session.expires_at || stored.expiresAt,
+            stored.userId,
+            stored.email,
+            stored.role,
+            stored.name
+          );
+
+          console.log('[SessionService] ensureSupabaseSession: session restored via refreshSession');
+          return true;
+        }
+
         return false;
       }
 
