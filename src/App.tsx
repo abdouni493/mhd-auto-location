@@ -445,6 +445,7 @@ export default function App() {
         '/depenses': 'expenses',
         '/website-management': 'web-mgmt',
         '/website-commandes': 'web-orders',
+        '/protection-services': 'protection-services',
         '/reservations': 'reservations',
         '/rapports': 'reports',
         '/configuration': 'config',
