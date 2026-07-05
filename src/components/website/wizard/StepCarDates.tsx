@@ -1,32 +1,38 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, CalendarCheck, Loader2 } from 'lucide-react';
 import { Car } from '../../../types';
 import { useWizard } from './WizardContext';
 import { CarBookingCalendar } from './CarBookingCalendar';
-import { SectionCard, SectionTitle, FieldLabel, inputClass, inputStyle, focusInput, blurInput, C } from './wizardUi';
+import { SectionCard, SectionTitle, FieldLabel, inputClass, inputStyle, focusInput, blurInput, C, fromYmd } from './wizardUi';
 
 /**
  * Étape 1 — Choisir une voiture + dates.
  * Sans voiture choisie : grille de sélection (avec recherche).
+ * Si une recherche de disponibilité vient du landing : seules les voitures
+ * DISPONIBLES sur la période choisie sont proposées (dates pré-remplies).
  * Avec voiture : calendrier aux dates réservées bloquées + heures de départ/retour.
  */
 export const StepCarDates: React.FC = () => {
   const {
-    lang, cars, car, selectCar, range, setRange,
+    lang, car, selectCar, range, setRange,
     departureTime, setDepartureTime, returnTime, setReturnTime,
     blockedRanges, loadingBlocked, days, promo, total,
+    search, availableCars, loadingAvailability, agencies,
   } = useWizard();
 
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredCars = searchQuery.trim()
-    ? cars.filter(c =>
+    ? availableCars.filter(c =>
         c.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.registration.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : cars;
+    : availableCars;
+
+  const fmt = (s: string) => fromYmd(s).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-DZ');
+  const agencyName = (id?: string) => agencies.find(a => a.id === id)?.name;
 
   // ─── Sélection de voiture ────────────────────────────────────────────────────
   if (!car) {
@@ -34,12 +40,42 @@ export const StepCarDates: React.FC = () => {
       <div className="space-y-8">
         <div className="text-center">
           <h1 className="font-black text-3xl sm:text-4xl text-vel-ink mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-            {{ fr: 'Choisissez votre voiture', ar: 'اختر سيارتك' }[lang]}
+            {search
+              ? { fr: 'Voitures disponibles', ar: 'السيارات المتاحة' }[lang]
+              : { fr: 'Choisissez votre voiture', ar: 'اختر سيارتك' }[lang]}
           </h1>
           <p className="text-vel-muted">
             {{ fr: 'Cliquez sur un véhicule pour commencer votre réservation', ar: 'انقر على سيارة لبدء الحجز' }[lang]}
           </p>
         </div>
+
+        {/* Bandeau récapitulatif de la recherche lancée depuis l'accueil */}
+        {search && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-2xl mx-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-3.5 rounded-2xl text-sm"
+            style={{ background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.16)' }}
+          >
+            <span className="flex items-center gap-2 font-bold" style={{ color: C.accent }}>
+              <CalendarCheck size={15} />
+              {fmt(search.from)} → {fmt(search.to)}
+            </span>
+            {agencyName(search.departureAgencyId) && (
+              <span className="text-vel-slate">
+                🛫 {agencyName(search.departureAgencyId)}
+                {search.returnAgencyId && search.returnAgencyId !== search.departureAgencyId && (
+                  <> · 🛬 {agencyName(search.returnAgencyId)}</>
+                )}
+              </span>
+            )}
+            <span className="text-vel-muted text-xs">
+              {loadingAvailability
+                ? { fr: 'Vérification des disponibilités…', ar: 'جاري التحقق من التوفر…' }[lang]
+                : `${filteredCars.length} ${{ fr: 'voiture(s) disponible(s)', ar: 'سيارة متاحة' }[lang]}`}
+            </span>
+          </motion.div>
+        )}
 
         {/* Recherche */}
         <div className="relative flex items-center max-w-xl mx-auto">
@@ -55,11 +91,17 @@ export const StepCarDates: React.FC = () => {
           />
         </div>
 
-        {filteredCars.length === 0 ? (
+        {loadingAvailability ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 size={30} className="animate-spin" style={{ color: C.accent }} />
+          </div>
+        ) : filteredCars.length === 0 ? (
           <div className="text-center py-16">
             <span className="text-5xl block mb-4">🚗</span>
             <p className="text-vel-muted font-bold">
-              {{ fr: 'Aucun véhicule disponible', ar: 'لا توجد سيارات متاحة' }[lang]}
+              {search
+                ? { fr: 'Aucune voiture disponible sur cette période — modifiez vos dates', ar: 'لا توجد سيارات متاحة في هذه الفترة — غيّر التواريخ' }[lang]
+                : { fr: 'Aucun véhicule disponible', ar: 'لا توجد سيارات متاحة' }[lang]}
             </p>
           </div>
         ) : (

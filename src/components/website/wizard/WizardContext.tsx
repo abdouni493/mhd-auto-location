@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Language, Car, Agency, SpecialOffer, ReservationStep2, AdditionalService, ProtectionAssurance } from '../../../types';
 import { DatabaseService } from '../../../services/DatabaseService';
-import { ReservationsService } from '../../../services/ReservationsService';
 import { getCurrentSpecialOfferForCar } from '../../../utils/specialOffers';
 import { fromYmd } from './wizardUi';
 
@@ -11,6 +10,14 @@ import { fromYmd } from './wizardUi';
 export interface DateRangeSel {
   from?: string; // YYYY-MM-DD
   to?: string;   // YYYY-MM-DD
+}
+
+/** Critères de recherche pré-remplis depuis le landing (agences + période). */
+export interface WizardSearchCriteria {
+  from: string;               // YYYY-MM-DD
+  to: string;                 // YYYY-MM-DD
+  departureAgencyId: string;
+  returnAgencyId?: string;    // absent = même agence qu'au départ
 }
 
 export const WIZARD_STEP_COUNT = 6;
@@ -37,6 +44,8 @@ const emptyPersonal: ReservationStep2 = {
   scannedDocuments: [],
 };
 
+export type PromoStatus = 'idle' | 'checking' | 'valid' | 'invalid';
+
 interface WizardContextValue {
   lang: Language;
   cars: Car[];
@@ -61,6 +70,11 @@ interface WizardContextValue {
   setReturnTime: (t: string) => void;
   blockedRanges: { from: string; to: string }[];
   loadingBlocked: boolean;
+
+  // Recherche de disponibilité lancée depuis le landing
+  search: WizardSearchCriteria | null;
+  availableCars: Car[];          // = cars filtrées si recherche active, sinon toutes
+  loadingAvailability: boolean;
 
   // Étape 2 — agences
   departureAgency: string;
@@ -90,6 +104,14 @@ interface WizardContextValue {
   notes: string;
   setNotes: (n: string) => void;
 
+  // Code promo (vérifié côté serveur, consommé à la création)
+  promoInput: string;
+  setPromoInput: (v: string) => void;
+  promoStatus: PromoStatus;
+  promoDiscountPct: number;     // % appliqué si promoStatus === 'valid'
+  verifyPromo: () => Promise<void>;
+  clearPromo: () => void;
+
   // Tarification (remise d'offre spéciale appliquée si présente)
   days: number;
   promo: SpecialOffer | undefined;
@@ -97,6 +119,7 @@ interface WizardContextValue {
   discount: number;
   servicesTotal: number;
   assuranceTotal: number;
+  promoDiscount: number;        // remise en DA du code promo
   total: number;
 
   // Soumission
@@ -121,27 +144,41 @@ interface ProviderProps {
   isLoadingAgencies: boolean;
   specialOffers: SpecialOffer[];
   initialCar?: Car | null;
+  /** Recherche lancée depuis le landing : pré-remplit dates + agences et filtre les voitures disponibles. */
+  initialSearch?: WizardSearchCriteria | null;
   children: React.ReactNode;
 }
 
 export const ReservationWizardProvider: React.FC<ProviderProps> = ({
-  lang, cars, agencies, isLoadingAgencies, specialOffers, initialCar, children,
+  lang, cars, agencies, isLoadingAgencies, specialOffers, initialCar, initialSearch, children,
 }) => {
+  const search = initialSearch || null;
+
   // Navigation
   const [step, setStep] = useState(1);
 
   // Étape 1
   const [car, setCar] = useState<Car | null>(initialCar || null);
-  const [range, setRange] = useState<DateRangeSel>({});
+  const [range, setRange] = useState<DateRangeSel>(
+    search ? { from: search.from, to: search.to } : {}
+  );
   const [departureTime, setDepartureTime] = useState('10:00');
   const [returnTime, setReturnTime] = useState('10:00');
   const [blockedRanges, setBlockedRanges] = useState<{ from: string; to: string }[]>([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
 
+  // Disponibilité (recherche landing) : ids des voitures indisponibles
+  const [unavailableIds, setUnavailableIds] = useState<string[] | null>(null);
+  const [loadingAvailability, setLoadingAvailability] = useState(!!search);
+
   // Étape 2
-  const [departureAgency, setDepartureAgency] = useState('');
-  const [differentReturnAgency, setDifferentReturnAgency] = useState(false);
-  const [returnAgency, setReturnAgency] = useState('');
+  const [departureAgency, setDepartureAgency] = useState(search?.departureAgencyId || '');
+  const [differentReturnAgency, setDifferentReturnAgency] = useState(
+    !!(search?.returnAgencyId && search.returnAgencyId !== search.departureAgencyId)
+  );
+  const [returnAgency, setReturnAgency] = useState(
+    search?.returnAgencyId && search.returnAgencyId !== search.departureAgencyId ? search.returnAgencyId : ''
+  );
 
   // Étape 5
   const [personal, setPersonal] = useState<ReservationStep2>(emptyPersonal);
@@ -156,8 +193,13 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
   const [loadingServices, setLoadingServices] = useState(false);
   const [selectedServices, setSelectedServices] = useState<AdditionalService[]>([]);
 
-  // Étape 5
+  // Étape 6
   const [notes, setNotes] = useState('');
+
+  // Code promo
+  const [promoInput, setPromoInput] = useState('');
+  const [promoStatus, setPromoStatus] = useState<PromoStatus>('idle');
+  const [promoDiscountPct, setPromoDiscountPct] = useState(0);
 
   // Soumission
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -186,6 +228,25 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     load();
     return () => { cancelled = true; };
   }, [car]);
+
+  // Recherche du landing : charge les voitures indisponibles sur la période
+  useEffect(() => {
+    if (!search) return;
+    let cancelled = false;
+    const load = async () => {
+      setLoadingAvailability(true);
+      try {
+        const ids = await DatabaseService.getUnavailableCarIds(search.from, search.to);
+        if (!cancelled) setUnavailableIds(ids); // null = RPC absente → toutes affichées
+      } catch {
+        if (!cancelled) setUnavailableIds(null);
+      } finally {
+        if (!cancelled) setLoadingAvailability(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [search?.from, search?.to]);
 
   // Charge les services une fois
   useEffect(() => {
@@ -217,10 +278,22 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     load();
   }, []);
 
-  // Changer de voiture réinitialise les dates (les dates bloquées diffèrent par voiture)
+  // Voitures proposées à l'étape 1 : filtrées par la recherche du landing
+  const availableCars = useMemo(() => {
+    if (!search || !unavailableIds) return cars;
+    return cars.filter(c => !unavailableIds.includes(c.id));
+  }, [cars, search, unavailableIds]);
+
+  // Changer de voiture réinitialise les dates (les dates bloquées diffèrent par
+  // voiture) — SAUF quand la période vient de la recherche du landing : les
+  // voitures affichées sont déjà disponibles sur cette période.
   const selectCar = (newCar: Car | null) => {
     setCar(newCar);
-    setRange({});
+    if (search && newCar) {
+      setRange({ from: search.from, to: search.to });
+    } else {
+      setRange({});
+    }
   };
 
   const toggleService = (service: AdditionalService) => {
@@ -277,60 +350,107 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
   const discount = promo && car ? Math.max(0, (car.priceDay - promo.newPrice) * days) : 0;
   const servicesTotal = selectedServices.reduce((sum, s) => sum + s.price, 0);
   const assuranceTotal = selectedAssurance ? selectedAssurance.pricePerDay * days : 0;
-  const total = Math.max(0, basePrice - discount + servicesTotal + assuranceTotal);
+  const subtotal = Math.max(0, basePrice - discount + servicesTotal + assuranceTotal);
+  // Le code promo (en %) s'applique sur le sous-total final
+  const promoDiscount = promoStatus === 'valid' && promoDiscountPct > 0
+    ? Math.round(subtotal * (promoDiscountPct / 100))
+    : 0;
+  const total = Math.max(0, subtotal - promoDiscount);
 
-  // ─── Soumission (garde anti double-clic ; les saisies survivent à une erreur) ─
+  // ─── Code promo : vérification serveur (RPC, sans exposer la table) ─────────
+  const verifyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code) return;
+    setPromoStatus('checking');
+    try {
+      const res = await DatabaseService.verifyPromoCode(code);
+      if (res.valid && res.discountPercentage) {
+        setPromoDiscountPct(res.discountPercentage);
+        setPromoStatus('valid');
+      } else {
+        setPromoDiscountPct(0);
+        setPromoStatus('invalid');
+      }
+    } catch {
+      setPromoDiscountPct(0);
+      setPromoStatus('invalid');
+    }
+  };
+
+  const clearPromo = () => {
+    setPromoInput('');
+    setPromoStatus('idle');
+    setPromoDiscountPct(0);
+  };
+
+  // ─── Soumission via RPC SECURITY DEFINER (fix RLS pour le rôle anon) ─────────
+  // Client + réservation + services + consommation du code promo : une seule
+  // transaction serveur. Garde anti double-clic ; les saisies survivent à une erreur.
   const submit = async () => {
     if (!car || isSubmitting || submitted) return;
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const clientPayload: any = {
-        firstName: personal.firstName, lastName: personal.lastName, phone: personal.phone, email: personal.email,
-        dateOfBirth: personal.dateOfBirth, placeOfBirth: personal.placeOfBirth,
-        idCardNumber: personal.additionalDocType === 'id_card' ? (personal.additionalDocNumber || '') : '',
-        licenseNumber: personal.licenseNumber, licenseExpirationDate: personal.licenseExpiration,
-        licenseDeliveryDate: personal.licenseDelivery, licenseDeliveryPlace: personal.licenseDeliveryPlace,
-        documentType: personal.additionalDocType, documentNumber: personal.additionalDocNumber,
-        documentDeliveryDate: personal.additionalDocDelivery, documentExpirationDate: personal.additionalDocExpiration,
-        documentDeliveryAddress: personal.additionalDocDeliveryAddress,
-        wilaya: personal.wilaya, completeAddress: personal.completeAddress,
-        profilePhoto: personal.photo, scannedDocuments: personal.scannedDocuments,
+      const clientPayload = {
+        first_name: personal.firstName,
+        last_name: personal.lastName,
+        phone: personal.phone,
+        email: personal.email,
+        date_of_birth: personal.dateOfBirth,
+        place_of_birth: personal.placeOfBirth,
+        id_card_number: personal.additionalDocType === 'id_card' ? (personal.additionalDocNumber || '') : '',
+        license_number: personal.licenseNumber,
+        license_expiration_date: personal.licenseExpiration,
+        license_delivery_date: personal.licenseDelivery,
+        license_delivery_place: personal.licenseDeliveryPlace,
+        document_type: personal.additionalDocType,
+        document_number: personal.additionalDocNumber,
+        document_delivery_date: personal.additionalDocDelivery,
+        document_expiration_date: personal.additionalDocExpiration,
+        document_delivery_address: personal.additionalDocDeliveryAddress,
+        wilaya: personal.wilaya,
+        complete_address: personal.completeAddress,
+        profile_photo: personal.photo,
+        scanned_documents: personal.scannedDocuments || [],
       };
 
-      const createdClient = await DatabaseService.createClient(clientPayload);
-
-      const reservationRes = await ReservationsService.createReservation({
-        clientId: createdClient.id,
-        carId: car.id,
-        departureDate: range.from!,
-        departureTime,
-        departureAgencyId: departureAgency,
-        returnDate: range.to!,
-        returnTime,
-        returnAgencyId: differentReturnAgency ? returnAgency : departureAgency,
-        pricePerDay: car.priceDay,
-        priceWeek: car.priceWeek,
-        priceMonth: car.priceMonth,
-        totalDays: days,
-        totalPrice: total,
+      const reservationPayload = {
+        car_id: car.id,
+        departure_date: range.from!,
+        departure_time: departureTime,
+        departure_agency_id: departureAgency,
+        return_date: range.to!,
+        return_time: returnTime,
+        return_agency_id: differentReturnAgency ? returnAgency : departureAgency,
+        price_per_day: car.priceDay,
+        price_week: car.priceWeek ?? '',
+        price_month: car.priceMonth ?? '',
+        total_days: days,
+        total_price: total,
         deposit: car.deposit,
-        discountAmount: discount,
-        discountType: 'fixed',
-        advancePayment: 0,
-        remainingPayment: total,
+        discount_amount: discount + promoDiscount,
+        discount_type: 'fixed',
         notes,
         // Assurance de protection sélectionnée (snapshot nom + prix/jour)
-        protectionAssuranceId: selectedAssurance?.id || null,
-        protectionAssuranceName: selectedAssurance?.name || null,
-        protectionAssurancePrice: selectedAssurance?.pricePerDay ?? null,
-        // La demande arrive "en attente de confirmation" — l'agence rappelle le client
-        status: 'pending',
+        protection_assurance_id: selectedAssurance?.id || '',
+        protection_assurance_name: selectedAssurance?.name || '',
+        protection_assurance_price: selectedAssurance?.pricePerDay ?? 0,
+      };
+
+      const servicesPayload = selectedServices.map(s => ({
+        category: (s as any).category || 'service',
+        service_name: (s as any).name || (s as any).service_name || '',
+        description: (s as any).description || '',
+        price: s.price,
+      }));
+
+      await DatabaseService.createWebsiteReservation({
+        client: clientPayload,
+        reservation: reservationPayload,
+        services: servicesPayload,
+        promoCode: promoStatus === 'valid' ? promoInput.trim() : null,
       });
 
-      if (selectedServices.length > 0) {
-        await ReservationsService.updateReservationServices(reservationRes.id, selectedServices);
-      }
       setSubmitted(true);
     } catch (err: any) {
       console.error('Reservation submit failed:', err);
@@ -350,12 +470,14 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     car, selectCar, range, setRange,
     departureTime, setDepartureTime, returnTime, setReturnTime,
     blockedRanges, loadingBlocked,
+    search, availableCars, loadingAvailability,
     departureAgency, setDepartureAgency, differentReturnAgency, setDifferentReturnAgency, returnAgency, setReturnAgency,
     personal, setPersonal,
     availableAssurances, loadingAssurances, selectedAssurance, setSelectedAssurance,
     availableServices, loadingServices, selectedServices, toggleService,
     notes, setNotes,
-    days, promo, basePrice, discount, servicesTotal, assuranceTotal, total,
+    promoInput, setPromoInput, promoStatus, promoDiscountPct, verifyPromo, clearPromo,
+    days, promo, basePrice, discount, servicesTotal, assuranceTotal, promoDiscount, total,
     isSubmitting, submitError, submitted, submit,
   };
 

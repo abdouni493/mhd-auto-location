@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Loader2, Pencil, RefreshCcw } from 'lucide-react';
+import { ChevronLeft, Loader2, Pencil, RefreshCcw, Ticket, CheckCircle2, XCircle, X } from 'lucide-react';
 import { useWizard } from './WizardContext';
 import { SectionCard, SectionTitle, FieldLabel, inputClass, inputStyle, focusInput, blurInput, C, fromYmd } from './wizardUi';
 
@@ -16,6 +16,7 @@ export const StepRecap: React.FC = () => {
     agencies, departureAgency, returnAgency, differentReturnAgency,
     personal, selectedServices, selectedAssurance, notes, setNotes,
     days, promo, basePrice, discount, servicesTotal, assuranceTotal, total,
+    promoInput, setPromoInput, promoStatus, promoDiscountPct, promoDiscount, verifyPromo, clearPromo,
     goToStep, prev, isSubmitting, submitError, submit,
   } = useWizard();
 
@@ -147,6 +148,90 @@ export const StepRecap: React.FC = () => {
               <span className="font-bold" style={{ color: C.amber }}>{s.price.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
             </div>
           ))}
+
+          {/* ── Code promo : saisie + vérification serveur + remise appliquée ── */}
+          <div className="px-4 py-4 rounded-xl space-y-3"
+            style={{ background: 'rgba(15,23,42,0.03)', border: '1px dashed rgba(220,38,38,0.25)' }}>
+            <p className="flex items-center gap-2 text-xs font-bold text-vel-muted uppercase tracking-wider"
+              style={{ fontFamily: 'var(--font-display)' }}>
+              <Ticket size={14} style={{ color: C.accent }} />
+              {{ fr: 'Code promo (optionnel)', ar: 'رمز الخصم (اختياري)' }[lang]}
+            </p>
+
+            {promoStatus === 'valid' ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl"
+                style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.35)' }}
+              >
+                <span className="flex items-center gap-2 text-sm font-bold" style={{ color: '#16A34A' }}>
+                  <CheckCircle2 size={16} />
+                  {promoInput.trim().toUpperCase()} — −{promoDiscountPct}%
+                </span>
+                <button onClick={clearPromo} disabled={isSubmitting}
+                  className="p-1.5 rounded-lg transition-colors text-vel-muted hover:text-vel-ink"
+                  aria-label={lang === 'fr' ? 'Retirer le code' : 'إزالة الرمز'}>
+                  <X size={15} />
+                </button>
+              </motion.div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={promoInput}
+                    onChange={e => setPromoInput(e.target.value.toUpperCase())}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); verifyPromo(); } }}
+                    placeholder={lang === 'fr' ? 'Ex : A7KP93QD' : 'مثال: A7KP93QD'}
+                    className={`${inputClass} flex-1 font-mono font-bold tracking-widest uppercase`}
+                    style={inputStyle}
+                    onFocus={focusInput} onBlur={blurInput}
+                    disabled={promoStatus === 'checking'}
+                  />
+                  <button
+                    onClick={verifyPromo}
+                    disabled={!promoInput.trim() || promoStatus === 'checking'}
+                    className="px-5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: 'rgba(220,38,38,0.08)',
+                      border: '1px solid rgba(220,38,38,0.3)',
+                      color: C.accent,
+                      fontFamily: 'var(--font-display)',
+                    }}
+                  >
+                    {promoStatus === 'checking'
+                      ? <Loader2 size={15} className="animate-spin" />
+                      : <>{{ fr: 'Vérifier', ar: 'تحقق' }[lang]}</>}
+                  </button>
+                </div>
+                {promoStatus === 'invalid' && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-1.5 text-xs font-bold"
+                    style={{ color: '#DC2626' }}
+                  >
+                    <XCircle size={13} />
+                    {{ fr: 'Code invalide, déjà utilisé ou désactivé.', ar: 'رمز غير صالح أو مستخدم أو معطل.' }[lang]}
+                  </motion.p>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Remise du code promo */}
+          {promoStatus === 'valid' && promoDiscount > 0 && (
+            <div className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
+              style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)' }}>
+              <span className="text-vel-slate">
+                🎟️ {{ fr: 'Code promo', ar: 'رمز الخصم' }[lang]} {promoInput.trim().toUpperCase()} (−{promoDiscountPct}%)
+              </span>
+              <span className="font-bold" style={{ color: '#16A34A' }}>
+                −{promoDiscount.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+              </span>
+            </div>
+          )}
 
           <div className="flex justify-between items-center px-4 py-4 rounded-2xl"
             style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)' }}>

@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { Check, Car as CarIcon, MapPin, User, ConciergeBell, ClipboardCheck, Shield } from 'lucide-react';
 import { Language, Car, Agency, SpecialOffer, WebsiteSettings } from '../../../types';
-import { ReservationWizardProvider, useWizard, WIZARD_STEP_COUNT } from './WizardContext';
+import { ReservationWizardProvider, useWizard, WIZARD_STEP_COUNT, WizardSearchCriteria } from './WizardContext';
 import { StepCarDates } from './StepCarDates';
 import { StepAgencies } from './StepAgencies';
 import { StepAssurance } from './StepAssurance';
@@ -28,13 +28,15 @@ interface ReservationWizardProps {
   isLoadingAgencies?: boolean;
   specialOffers: SpecialOffer[];
   selectedCar?: Car | null;
+  /** Recherche de disponibilité lancée depuis le landing (agences + période). */
+  initialSearch?: WizardSearchCriteria | null;
   websiteSettings?: WebsiteSettings | null;
   onBackHome: () => void;
 }
 
 /** Assistant de réservation public en 5 étapes guidées. */
 export const ReservationWizard: React.FC<ReservationWizardProps> = ({
-  lang, cars, agencies, isLoadingAgencies = false, specialOffers, selectedCar, websiteSettings, onBackHome,
+  lang, cars, agencies, isLoadingAgencies = false, specialOffers, selectedCar, initialSearch, websiteSettings, onBackHome,
 }) => (
   <ReservationWizardProvider
     lang={lang}
@@ -43,6 +45,7 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
     isLoadingAgencies={isLoadingAgencies}
     specialOffers={specialOffers}
     initialCar={selectedCar}
+    initialSearch={initialSearch}
   >
     <WizardShell websiteSettings={websiteSettings} onBackHome={onBackHome} />
   </ReservationWizardProvider>

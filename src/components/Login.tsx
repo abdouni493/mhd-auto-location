@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Mail, Lock, UserIcon, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, UserIcon, Eye, EyeOff, Globe } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Language, UserRole, User } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -24,6 +25,7 @@ interface AgencyBranding {
 
 export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
   const t = TRANSLATIONS[lang];
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -521,6 +523,21 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
               )}
             </motion.button>
           </motion.form>
+
+          {/* Voir le site public sans se connecter */}
+          <motion.button
+            type="button"
+            onClick={() => navigate('/website')}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.55, duration: 0.8 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via hover:text-saas-primary-via transition-colors"
+          >
+            <Globe size={17} />
+            {lang === 'fr' ? 'Voir le site web' : 'مشاهدة الموقع الإلكتروني'}
+          </motion.button>
 
           {/* Sign up link */}
           {!adminExists && !isSigningUp && (

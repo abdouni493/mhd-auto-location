@@ -1989,17 +1989,21 @@ export const Step4ClientSelection: React.FC<{
 }> = ({ lang, formData, setFormData }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
+  // Sans recherche : seulement les 6 derniers clients créés.
+  // Avec recherche : interrogation serveur sur TOUTE la base clients.
+  const [recentClients, setRecentClients] = useState<Client[]>([]);
+  const [searchResults, setSearchResults] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load clients from database
+  // Load the last 6 clients from database
   useEffect(() => {
     const loadClients = async () => {
       setLoading(true);
       try {
-        const list = await DatabaseService.getClients();
-        setClients(list);
+        const list = await DatabaseService.getRecentClients(6);
+        setRecentClients(list);
         setError(null);
       } catch (err: any) {
         console.error('Failed to load clients:', err);
@@ -2011,17 +2015,37 @@ export const Step4ClientSelection: React.FC<{
     loadClients();
   }, []);
 
-  const filteredClients = clients.filter(client =>
-    client.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.phone.includes(searchQuery)
-  );
+  // Recherche serveur avec debounce (couvre les clients hors des 6 récents)
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await DatabaseService.searchClients(q);
+        setSearchResults(results);
+      } catch (err) {
+        console.error('Client search failed:', err);
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const isSearchMode = searchQuery.trim().length > 0;
+  const filteredClients = isSearchMode ? searchResults : recentClients;
 
   const handleSaveClient = async (clientData: Partial<Client>): Promise<void> => {
     try {
       const created = await DatabaseService.createClient(clientData as Omit<Client, 'id' | 'createdAt'>);
-      setClients(prev => [...prev, created]);
-      
+      setRecentClients(prev => [created, ...prev].slice(0, 6));
+
       // Auto-select the newly created client and close modal
       setFormData(prev => ({
         ...prev,
@@ -2072,8 +2096,17 @@ export const Step4ClientSelection: React.FC<{
         </button>
       </div>
 
+      {/* Indication : 6 derniers clients ou résultats de recherche */}
+      {!loading && (
+        <p className="text-xs font-bold uppercase tracking-widest text-saas-text-muted">
+          {isSearchMode
+            ? (lang === 'fr' ? `🔎 Résultats de recherche (${filteredClients.length})` : `🔎 نتائج البحث (${filteredClients.length})`)
+            : (lang === 'fr' ? '🕒 Les 6 derniers clients — utilisez la recherche pour trouver les autres' : '🕒 آخر 6 عملاء — استخدم البحث للعثور على الآخرين')}
+        </p>
+      )}
+
       {/* Loading State */}
-      {loading ? (
+      {loading || searching ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-saas-primary-via"></div>
         </div>

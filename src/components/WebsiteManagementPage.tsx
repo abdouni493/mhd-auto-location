@@ -1,16 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Language, Car, SpecialOffer, ContactInfo, WebsiteSettings } from '../types';
+import { Language, Car, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Eye, EyeOff, Tag, Calendar } from 'lucide-react';
+import { X, Eye, EyeOff, Tag, Calendar, Ticket, RefreshCw, Trash2, Copy, Loader2, ImageIcon } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
+import { uploadWebsiteImage } from '../services/uploadWebsiteImage';
 import { CarCard } from './CarCard';
 
 interface WebsiteManagementPageProps {
   lang: Language;
 }
 
+/** Code aléatoire lisible (sans 0/O/1/I) pour les codes promo. */
+const generateRandomPromoCode = (length = 8): string => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  const rand = new Uint32Array(length);
+  crypto.getRandomValues(rand);
+  for (let i = 0; i < length; i++) code += alphabet[rand[i] % alphabet.length];
+  return code;
+};
+
 export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ lang }) => {
-  const [activeTab, setActiveTab] = useState<'offers' | 'special' | 'contacts' | 'settings'>('offers');
+  const [activeTab, setActiveTab] = useState<'offers' | 'special' | 'promo' | 'contacts' | 'settings'>('offers');
 
   // OFFERS TAB — les voitures existantes s'affichent automatiquement
   // (même source de données que l'interface Voitures : la table cars).
@@ -38,10 +49,27 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
     name: '',
     description: '',
     logo: '',
+    landing_background: '',
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // SETTINGS — uploads (logo + image de fond, même bucket "website")
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBackground, setUploadingBackground] = useState(false);
+
+  // PROMO CODES STATE
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [newPromoCode, setNewPromoCode] = useState(generateRandomPromoCode());
+  const [newPromoPct, setNewPromoPct] = useState('10');
+  const [creatingPromo, setCreatingPromo] = useState(false);
+
+  const notify = (type: 'success' | 'error', message: string, ms = 4000) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), ms);
+  };
 
   // Load data from database
   useEffect(() => {
@@ -61,6 +89,16 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
         setContacts(contactsData);
         setSettings(settingsData);
         setError(null);
+
+        // Codes promo chargés à part : si la table n'existe pas encore
+        // (migration non appliquée), le reste de la page fonctionne quand même.
+        try {
+          setPromoCodes(await DatabaseService.getPromoCodes());
+          setPromoError(null);
+        } catch (promoErr: any) {
+          console.warn('Promo codes unavailable:', promoErr);
+          setPromoError(promoErr.message || 'Table promo_codes indisponible');
+        }
       } catch (error: any) {
         console.error('Error loading website data:', error);
         if (error.message?.includes('JWT') || error.message?.includes('auth') || error.code === 'PGRST301') {
@@ -75,6 +113,60 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
 
     loadData();
   }, []);
+
+  // ─── CODES PROMO ────────────────────────────────────────────────────────────
+  const handleCreatePromo = async () => {
+    const pct = parseFloat(newPromoPct);
+    const code = (newPromoCode || '').trim().toUpperCase();
+    if (!code) {
+      notify('error', lang === 'fr' ? 'Générez ou saisissez un code' : 'قم بإنشاء أو إدخال رمز');
+      return;
+    }
+    if (!pct || pct <= 0 || pct > 100) {
+      notify('error', lang === 'fr' ? 'Le pourcentage doit être entre 1 et 100' : 'يجب أن تكون النسبة بين 1 و 100');
+      return;
+    }
+    setCreatingPromo(true);
+    try {
+      const created = await DatabaseService.createPromoCode(code, pct);
+      setPromoCodes(prev => [created, ...prev]);
+      setNewPromoCode(generateRandomPromoCode());
+      setPromoError(null);
+      notify('success', lang === 'fr' ? `Code ${created.code} créé (−${created.discountPercentage}%)` : `تم إنشاء الرمز ${created.code} (−${created.discountPercentage}%)`);
+    } catch (err: any) {
+      notify('error', err.message || (lang === 'fr' ? 'Erreur lors de la création du code' : 'خطأ في إنشاء الرمز'), 6000);
+    } finally {
+      setCreatingPromo(false);
+    }
+  };
+
+  const handleDeletePromo = async (promo: PromoCode) => {
+    if (!confirm(lang === 'fr' ? `Supprimer le code ${promo.code} ?` : `حذف الرمز ${promo.code}؟`)) return;
+    try {
+      await DatabaseService.deletePromoCode(promo.id);
+      setPromoCodes(prev => prev.filter(p => p.id !== promo.id));
+    } catch (err: any) {
+      notify('error', err.message || (lang === 'fr' ? 'Erreur lors de la suppression' : 'خطأ في الحذف'));
+    }
+  };
+
+  const handleTogglePromoActive = async (promo: PromoCode) => {
+    try {
+      await DatabaseService.setPromoCodeActive(promo.id, !promo.isActive);
+      setPromoCodes(prev => prev.map(p => p.id === promo.id ? { ...p, isActive: !promo.isActive } : p));
+    } catch (err: any) {
+      notify('error', err.message || (lang === 'fr' ? 'Erreur lors du changement de statut' : 'خطأ في تغيير الحالة'));
+    }
+  };
+
+  const handleCopyPromo = async (promo: PromoCode) => {
+    try {
+      await navigator.clipboard.writeText(promo.code);
+      notify('success', lang === 'fr' ? `Code ${promo.code} copié !` : `تم نسخ الرمز ${promo.code}!`, 2000);
+    } catch {
+      /* clipboard indisponible : ignorer */
+    }
+  };
 
   // OFFERS TAB — toggle masquer/afficher une voiture sur le site
   // (mise à jour optimiste avec rollback si l'écriture échoue).
@@ -255,11 +347,12 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
     try {
       // Ensure settings are properly prepared for saving
       const settingsToSave = {
+        ...settings,
         name: settings.name || '',
         description: settings.description || '',
         logo: settings.logo || '',
       };
-      
+
       await DatabaseService.updateWebsiteSettings(settingsToSave);
       
       // Reload settings after save to confirm
@@ -286,48 +379,87 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
     setContacts(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const validateImageFile = (file: File): boolean => {
+    if (!file.type.startsWith('image/')) {
+      notify('error', lang === 'fr' ? 'Veuillez sélectionner une image valide' : 'يرجى تحديد صورة صحيحة');
+      return false;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notify('error', lang === 'fr' ? 'La taille du fichier ne doit pas dépasser 5MB' : 'حجم الملف لا يجب أن يتجاوز 5MB');
+      return false;
+    }
+    return true;
+  };
+
+  // Logo : téléversé dans le bucket "website" (repli base64 si le bucket
+  // n'existe pas encore), puis sauvegarde immédiate des paramètres.
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setNotification({ type: 'error', message: lang === 'fr' ? 'Veuillez sélectionner une image valide' : 'يرجى تحديد صورة صحيحة' });
-        setTimeout(() => setNotification(null), 4000);
-        return;
-      }
+    e.target.value = '';
+    if (!file || !validateImageFile(file)) return;
 
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setNotification({ type: 'error', message: lang === 'fr' ? 'La taille du fichier ne doit pas dépasser 5MB' : 'حجم الملف لا يجب أن يتجاوز 5MB' });
-        setTimeout(() => setNotification(null), 4000);
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const imageData = event.target?.result as string;
-        setSettings(prev => ({
-          ...prev,
-          logo: imageData,
-        }));
-        
-        // Auto-save after logo upload
-        const settingsToSave = {
-          name: settings.name || '',
-          description: settings.description || '',
-          logo: imageData,
-        };
-        
-        DatabaseService.updateWebsiteSettings(settingsToSave).then(() => {
-          setNotification({ type: 'success', message: lang === 'fr' ? 'Logo enregistré avec succès!' : 'تم حفظ الشعار بنجاح!' });
-          setTimeout(() => setNotification(null), 3000);
-        }).catch(error => {
-          console.error('Error auto-saving logo:', error);
-          setNotification({ type: 'error', message: lang === 'fr' ? 'Erreur lors de la sauvegarde du logo' : 'خطأ في حفظ الشعار' });
-          setTimeout(() => setNotification(null), 4000);
+    setUploadingLogo(true);
+    try {
+      let logoValue: string | null = null;
+      const uploaded = await uploadWebsiteImage(file, 'logo');
+      if (uploaded.success && uploaded.url) {
+        logoValue = uploaded.url;
+      } else {
+        // Repli : ancien comportement (data URL) si le bucket manque
+        logoValue = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = ev => resolve(ev.target?.result as string);
+          reader.onerror = () => reject(new Error('read error'));
+          reader.readAsDataURL(file);
         });
-      };
-      reader.readAsDataURL(file);
+      }
+
+      setSettings(prev => ({ ...prev, logo: logoValue! }));
+      await DatabaseService.updateWebsiteSettings({ ...settings, logo: logoValue! });
+      notify('success', lang === 'fr' ? 'Logo enregistré avec succès!' : 'تم حفظ الشعار بنجاح!', 3000);
+    } catch (error: any) {
+      console.error('Error auto-saving logo:', error);
+      notify('error', error.message || (lang === 'fr' ? 'Erreur lors de la sauvegarde du logo' : 'خطأ في حفظ الشعار'));
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  // Image de fond du landing : MÊME bucket que le logo ("website"),
+  // affichée floutée derrière le hero du site public.
+  const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !validateImageFile(file)) return;
+
+    setUploadingBackground(true);
+    try {
+      const uploaded = await uploadWebsiteImage(file, 'background');
+      if (!uploaded.success || !uploaded.url) {
+        throw new Error(
+          uploaded.error
+            ? `${uploaded.error} — exécutez la migration supabase/migrations/20260706_website_updates.sql (bucket "website").`
+            : 'Upload impossible'
+        );
+      }
+      setSettings(prev => ({ ...prev, landing_background: uploaded.url }));
+      await DatabaseService.updateWebsiteSettings({ ...settings, landing_background: uploaded.url });
+      notify('success', lang === 'fr' ? 'Image de fond enregistrée ! Elle apparaît floutée sur le landing.' : 'تم حفظ صورة الخلفية! ستظهر مموهة على الصفحة الرئيسية.');
+    } catch (error: any) {
+      console.error('Error saving background:', error);
+      notify('error', error.message || (lang === 'fr' ? 'Erreur lors de la sauvegarde de l\'image de fond' : 'خطأ في حفظ صورة الخلفية'), 7000);
+    } finally {
+      setUploadingBackground(false);
+    }
+  };
+
+  const handleRemoveBackground = async () => {
+    try {
+      setSettings(prev => ({ ...prev, landing_background: '' }));
+      await DatabaseService.updateWebsiteSettings({ ...settings, landing_background: '' });
+      notify('success', lang === 'fr' ? 'Image de fond retirée.' : 'تمت إزالة صورة الخلفية.');
+    } catch (error: any) {
+      notify('error', error.message || (lang === 'fr' ? 'Erreur' : 'خطأ'));
     }
   };
 
@@ -411,48 +543,27 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-4"
+              className="mb-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
             >
-              <button
-                onClick={() => setActiveTab('offers')}
-                className={`py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
-                  activeTab === 'offers'
-                    ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
-                    : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
-                }`}
-              >
-                🎁 {{fr: 'Offres', ar: 'العروض'}[lang]}
-              </button>
-              <button
-                onClick={() => setActiveTab('special')}
-                className={`py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
-                  activeTab === 'special'
-                    ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
-                    : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
-                }`}
-              >
-                ⭐ {{fr: 'Spéciales', ar: 'خاصة'}[lang]}
-              </button>
-              <button
-                onClick={() => setActiveTab('contacts')}
-                className={`py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
-                  activeTab === 'contacts'
-                    ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
-                    : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
-                }`}
-              >
-                📞 {{fr: 'Contacts', ar: 'جهات الاتصال'}[lang]}
-              </button>
-              <button
-                onClick={() => setActiveTab('settings')}
-                className={`py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
-                  activeTab === 'settings'
-                    ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
-                    : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
-                }`}
-              >
-                ⚙️ {{fr: 'Paramètres', ar: 'المعاملات'}[lang]}
-              </button>
+              {([
+                { id: 'offers',   label: { fr: '🎁 Offres', ar: '🎁 العروض' } },
+                { id: 'special',  label: { fr: '⭐ Spéciales', ar: '⭐ خاصة' } },
+                { id: 'promo',    label: { fr: '🎟️ Codes Promo', ar: '🎟️ رموز الخصم' } },
+                { id: 'contacts', label: { fr: '📞 Contacts', ar: '📞 جهات الاتصال' } },
+                { id: 'settings', label: { fr: '⚙️ Paramètres', ar: '⚙️ الإعدادات' } },
+              ] as const).map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
+                    activeTab === tab.id
+                      ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
+                      : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
+                  }`}
+                >
+                  {tab.label[lang]}
+                </button>
+              ))}
             </motion.div>
 
             <AnimatePresence mode="wait">
@@ -951,6 +1062,163 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
             </motion.div>
           )}
 
+          {/* PROMO CODES TAB */}
+          {activeTab === 'promo' && (
+            <motion.div
+              key="promo"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              <div>
+                <h2 className="text-2xl font-black uppercase tracking-tighter text-saas-text-main flex items-center gap-3">
+                  🎟️ {{fr: 'Codes Promo', ar: 'رموز الخصم'}[lang]}
+                </h2>
+                <p className="text-saas-text-muted text-sm mt-1">
+                  {{fr: 'Générez des codes de réduction à usage unique. Le client les saisit à la dernière étape de la réservation sur le site — le code devient "Utilisé" automatiquement.',
+                    ar: 'أنشئ رموز خصم للاستخدام مرة واحدة. يدخلها العميل في الخطوة الأخيرة من الحجز على الموقع — يصبح الرمز "مستخدمًا" تلقائيًا.'}[lang]}
+                </p>
+              </div>
+
+              {/* Migration manquante */}
+              {promoError && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-800 text-sm font-medium">
+                  ⚠️ {promoError}
+                </div>
+              )}
+
+              {/* Créer un code */}
+              <div className="bg-white rounded-2xl shadow-lg border border-saas-border p-6 space-y-4">
+                <h3 className="text-xs font-black text-saas-primary-via uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Ticket size={16} /> {{fr: 'Nouveau code', ar: 'رمز جديد'}[lang]}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto] gap-4 items-end">
+                  <div className="space-y-2">
+                    <label className="label-saas">{{fr: 'Code', ar: 'الرمز'}[lang]}</label>
+                    <input
+                      type="text"
+                      value={newPromoCode}
+                      onChange={e => setNewPromoCode(e.target.value.toUpperCase())}
+                      className="input-saas font-mono font-bold tracking-widest"
+                      placeholder="EX: A7KP93QD"
+                      maxLength={20}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewPromoCode(generateRandomPromoCode())}
+                    className="btn-saas-secondary py-3 px-4 flex items-center gap-2 whitespace-nowrap"
+                    title={lang === 'fr' ? 'Générer un code aléatoire' : 'إنشاء رمز عشوائي'}
+                  >
+                    <RefreshCw size={16} />
+                    {{fr: 'Aléatoire', ar: 'عشوائي'}[lang]}
+                  </button>
+                  <div className="space-y-2">
+                    <label className="label-saas">{{fr: 'Réduction (%)', ar: 'الخصم (%)'}[lang]}</label>
+                    <input
+                      type="number"
+                      value={newPromoPct}
+                      onChange={e => setNewPromoPct(e.target.value)}
+                      className="input-saas"
+                      min={1}
+                      max={100}
+                      placeholder="10"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCreatePromo}
+                    disabled={creatingPromo}
+                    className="btn-saas-primary py-3 px-8 whitespace-nowrap disabled:opacity-50"
+                  >
+                    {creatingPromo
+                      ? <Loader2 size={16} className="animate-spin" />
+                      : <>➕ {{fr: 'Créer le code', ar: 'إنشاء الرمز'}[lang]}</>}
+                  </button>
+                </div>
+              </div>
+
+              {/* Liste des codes */}
+              {promoCodes.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-saas-border">
+                  <div className="text-5xl opacity-20 mb-3">🎟️</div>
+                  <p className="text-saas-text-muted font-medium">
+                    {{fr: 'Aucun code promo pour le moment.', ar: 'لا توجد رموز خصم بعد.'}[lang]}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {promoCodes.map(promo => (
+                    <motion.div
+                      key={promo.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className={`bg-white rounded-2xl shadow-md border p-5 space-y-3 ${
+                        promo.isUsed ? 'border-slate-200 opacity-70' : promo.isActive ? 'border-green-200' : 'border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-mono font-black text-lg tracking-[0.2em] text-saas-text-main">{promo.code}</p>
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
+                          promo.isUsed
+                            ? 'bg-slate-100 text-slate-600'
+                            : promo.isActive
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {promo.isUsed
+                            ? {fr: '✔ Utilisé', ar: '✔ مستخدم'}[lang]
+                            : promo.isActive
+                              ? {fr: '● Actif', ar: '● نشط'}[lang]
+                              : {fr: '⏸ Désactivé', ar: '⏸ معطل'}[lang]}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <p className="font-black text-3xl text-saas-primary-via">−{promo.discountPercentage}%</p>
+                        <div className="text-right text-xs text-saas-text-muted">
+                          <p>{{fr: 'Créé le', ar: 'أنشئ في'}[lang]} {new Date(promo.createdAt).toLocaleDateString('fr-FR')}</p>
+                          {promo.isUsed && promo.usedAt && (
+                            <p className="font-bold">{{fr: 'Utilisé le', ar: 'استخدم في'}[lang]} {new Date(promo.usedAt).toLocaleDateString('fr-FR')}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-2 border-t border-saas-border">
+                        <button
+                          onClick={() => handleCopyPromo(promo)}
+                          className="flex-1 bg-saas-bg hover:bg-slate-100 text-saas-text-main font-bold py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Copy size={13} /> {{fr: 'Copier', ar: 'نسخ'}[lang]}
+                        </button>
+                        {!promo.isUsed && (
+                          <button
+                            onClick={() => handleTogglePromoActive(promo)}
+                            className={`flex-1 font-bold py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                              promo.isActive
+                                ? 'bg-amber-100 hover:bg-amber-200 text-amber-700'
+                                : 'bg-green-100 hover:bg-green-200 text-green-700'
+                            }`}
+                          >
+                            {promo.isActive ? <EyeOff size={13} /> : <Eye size={13} />}
+                            {promo.isActive ? {fr: 'Désactiver', ar: 'تعطيل'}[lang] : {fr: 'Activer', ar: 'تفعيل'}[lang]}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeletePromo(promo)}
+                          className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Trash2 size={13} /> {{fr: 'Supprimer', ar: 'حذف'}[lang]}
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {/* CONTACTS TAB */}
           {activeTab === 'contacts' && (
             <motion.div
@@ -1133,8 +1401,10 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
                           accept="image/*"
                           onChange={handleLogoUpload}
                           className="hidden"
+                          disabled={uploadingLogo}
                         />
-                        <span className="btn-saas-primary px-6 py-3 inline-block cursor-pointer">
+                        <span className={`btn-saas-primary px-6 py-3 inline-flex items-center gap-2 cursor-pointer ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {uploadingLogo && <Loader2 size={15} className="animate-spin" />}
                           {{fr: 'Changer le logo', ar: 'تغيير الشعار'}[lang]}
                         </span>
                       </label>
@@ -1142,6 +1412,65 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
                         {{fr: 'Format recommandé: PNG ou JPG (500x500px)', ar: 'الصيغة الموصى بها: PNG أو JPG (500x500px)'}[lang]}
                       </p>
                     </div>
+                  </div>
+                </div>
+
+                {/* Image de fond du landing (même bucket "website" que le logo) */}
+                <div className="space-y-4">
+                  <label className="label-saas flex items-center gap-2">
+                    <ImageIcon size={15} /> {{fr: 'Image de fond du landing', ar: 'صورة خلفية الصفحة الرئيسية'}[lang]}
+                  </label>
+                  <div className="rounded-2xl overflow-hidden border-2 border-saas-border bg-saas-bg relative h-44">
+                    {settings.landing_background ? (
+                      <>
+                        {/* Aperçu flouté = rendu réel sur le site */}
+                        <img
+                          src={settings.landing_background}
+                          alt="Background"
+                          className="w-full h-full object-cover"
+                          style={{ filter: 'blur(6px)', transform: 'scale(1.08)' }}
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-white/30" />
+                        <span className="absolute bottom-2 left-3 text-[10px] font-bold uppercase tracking-widest bg-white/85 text-saas-text-main px-2 py-1 rounded-lg">
+                          {{fr: 'Aperçu flouté (comme sur le site)', ar: 'معاينة مموهة (كما في الموقع)'}[lang]}
+                        </span>
+                      </>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-saas-text-muted gap-2">
+                        <ImageIcon size={32} className="opacity-30" />
+                        <p className="text-xs font-medium">
+                          {{fr: 'Aucune image de fond — le landing garde son fond par défaut', ar: 'لا توجد صورة خلفية — تحتفظ الصفحة بخلفيتها الافتراضية'}[lang]}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="block">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBackgroundUpload}
+                        className="hidden"
+                        disabled={uploadingBackground}
+                      />
+                      <span className={`btn-saas-primary px-6 py-3 inline-flex items-center gap-2 cursor-pointer ${uploadingBackground ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {uploadingBackground && <Loader2 size={15} className="animate-spin" />}
+                        {{fr: 'Charger une image de fond', ar: 'تحميل صورة خلفية'}[lang]}
+                      </span>
+                    </label>
+                    {settings.landing_background && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveBackground}
+                        className="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-3 px-5 rounded-lg text-sm transition-colors"
+                      >
+                        🗑️ {{fr: 'Retirer', ar: 'إزالة'}[lang]}
+                      </button>
+                    )}
+                    <p className="text-xs text-saas-text-muted">
+                      {{fr: 'Enregistrée dans le même bucket que le logo, affichée floutée derrière le hero.', ar: 'تُحفظ في نفس مساحة تخزين الشعار وتُعرض مموهة خلف الواجهة.'}[lang]}
+                    </p>
                   </div>
                 </div>
 

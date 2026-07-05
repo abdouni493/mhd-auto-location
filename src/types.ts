@@ -272,6 +272,20 @@ export interface WebsiteSettings {
   bank_number?: string;
   address?: string;
   phone?: string;
+  /** Image de fond du landing du site public (URL storage, affichée floutée). */
+  landing_background?: string;
+}
+
+// Code promo utilisable sur la réservation du site public
+export interface PromoCode {
+  id: string;
+  code: string;
+  discountPercentage: number;
+  isActive: boolean;
+  isUsed: boolean;
+  usedAt?: string | null;
+  reservationId?: string | null;
+  createdAt: string;
 }
 
 // Planner Types

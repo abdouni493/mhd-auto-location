@@ -1,10 +1,12 @@
-import React, { useRef } from 'react';
-import { Language } from '../../types';
+import React, { useRef, useState } from 'react';
+import { Language, Agency } from '../../types';
 import { motion, useScroll, useTransform } from 'motion/react';
-import { ChevronDown, Shield, Zap, Star, ArrowRight, Trophy, Car as CarIcon } from 'lucide-react';
+import { ChevronDown, Shield, Zap, Star, ArrowRight, Trophy, Car as CarIcon, MapPin, CalendarDays, Search } from 'lucide-react';
 import { Hero3D } from './Hero3D';
 import { ShowcaseBand } from './ShowcaseBand';
 import { HERO_SPLINE_SCENE_URL } from '../../constants';
+import { WizardSearchCriteria } from './wizard/WizardContext';
+import { toYmd } from './wizard/wizardUi';
 
 // ─── Colour tokens for this page ───────────────────────────────────────────
 const C = {
@@ -135,19 +137,145 @@ function HeroVisual({ lang, logo }: { lang: Language; logo?: string }) {
   );
 }
 
+// ─── Widget de réservation du hero (agences + période → voitures dispo) ─────
+function BookingSearchPanel({ lang, agencies, onSearch }: {
+  lang: Language;
+  agencies: Agency[];
+  onSearch: (criteria: WizardSearchCriteria) => void;
+}) {
+  const today = toYmd(new Date());
+  const [departureAgencyId, setDepartureAgencyId] = useState('');
+  const [returnAgencyId, setReturnAgencyId] = useState('');   // '' = même agence
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const isValid = !!departureAgencyId && !!from && !!to && from <= to && from >= today;
+
+  const selectStyle: React.CSSProperties = {
+    background: '#FFFFFF',
+    border: '1px solid rgba(15,23,42,0.12)',
+    color: '#0F172A',
+  };
+
+  const fields: { label: string; icon: React.ReactNode; el: React.ReactNode }[] = [
+    {
+      label: { fr: 'Agence de départ', ar: 'وكالة المغادرة' }[lang],
+      icon: <MapPin size={13} />,
+      el: (
+        <select value={departureAgencyId} onChange={e => setDepartureAgencyId(e.target.value)}
+          className="w-full px-3 py-2.5 rounded-xl outline-none text-sm font-medium cursor-pointer" style={selectStyle}>
+          <option value="">{{ fr: 'Sélectionner…', ar: 'اختر…' }[lang]}</option>
+          {agencies.map(a => <option key={a.id} value={a.id}>{a.name} — {a.city}</option>)}
+        </select>
+      ),
+    },
+    {
+      label: { fr: 'Agence de retour', ar: 'وكالة الإرجاع' }[lang],
+      icon: <MapPin size={13} />,
+      el: (
+        <select value={returnAgencyId} onChange={e => setReturnAgencyId(e.target.value)}
+          className="w-full px-3 py-2.5 rounded-xl outline-none text-sm font-medium cursor-pointer" style={selectStyle}>
+          <option value="">{{ fr: 'Même agence', ar: 'نفس الوكالة' }[lang]}</option>
+          {agencies.map(a => <option key={a.id} value={a.id}>{a.name} — {a.city}</option>)}
+        </select>
+      ),
+    },
+    {
+      label: { fr: 'Date de départ', ar: 'تاريخ البدء' }[lang],
+      icon: <CalendarDays size={13} />,
+      el: (
+        <input type="date" value={from} min={today}
+          onChange={e => { setFrom(e.target.value); if (to && e.target.value > to) setTo(''); }}
+          className="w-full px-3 py-2.5 rounded-xl outline-none text-sm font-medium" style={selectStyle} />
+      ),
+    },
+    {
+      label: { fr: 'Date de retour', ar: 'تاريخ الإرجاع' }[lang],
+      icon: <CalendarDays size={13} />,
+      el: (
+        <input type="date" value={to} min={from || today}
+          onChange={e => setTo(e.target.value)}
+          className="w-full px-3 py-2.5 rounded-xl outline-none text-sm font-medium" style={selectStyle} />
+      ),
+    },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8, delay: 0.75 }}
+      className="relative z-20 rounded-3xl p-5 sm:p-6"
+      style={{
+        background: 'rgba(255,255,255,0.92)',
+        border: '1px solid rgba(220,38,38,0.14)',
+        backdropFilter: 'blur(16px)',
+        boxShadow: '0 18px 50px rgba(15,23,42,0.12)',
+      }}
+    >
+      <p className="text-xs font-bold tracking-[0.2em] uppercase mb-4 flex items-center gap-2"
+        style={{ color: C.accent, fontFamily: 'var(--font-display)' }}>
+        <Search size={14} />
+        {{ fr: 'Trouvez votre voiture disponible', ar: 'اعثر على سيارتك المتاحة' }[lang]}
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-3 items-end">
+        {fields.map((f, i) => (
+          <div key={i}>
+            <label className="flex items-center gap-1.5 text-[11px] font-bold text-vel-muted uppercase tracking-wider mb-1.5"
+              style={{ fontFamily: 'var(--font-display)' }}>
+              {f.icon} {f.label}
+            </label>
+            {f.el}
+          </div>
+        ))}
+
+        <motion.button
+          onClick={() => isValid && onSearch({
+            from, to,
+            departureAgencyId,
+            returnAgencyId: returnAgencyId || undefined,
+          })}
+          disabled={!isValid}
+          whileHover={isValid ? { scale: 1.03 } : {}}
+          whileTap={isValid ? { scale: 0.97 } : {}}
+          className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap transition-all ${!isValid ? 'opacity-40 cursor-not-allowed' : ''}`}
+          style={{
+            fontFamily: 'var(--font-display)',
+            background: `linear-gradient(135deg, ${C.accent}, #B91C1C)`,
+            color: '#FFFFFF',
+            boxShadow: isValid ? '0 6px 18px rgba(220,38,38,0.28)' : 'none',
+          }}
+        >
+          {{ fr: 'Suivant', ar: 'التالي' }[lang]} <ArrowRight size={16} />
+        </motion.button>
+      </div>
+
+      <p className="text-vel-muted text-[11px] mt-3">
+        {{ fr: 'Nous afficherons uniquement les voitures disponibles sur la période choisie.',
+           ar: 'سنعرض فقط السيارات المتاحة في الفترة المختارة.' }[lang]}
+      </p>
+    </motion.div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 interface WelcomeProps {
   lang: Language;
   websiteSettings: any;
+  /** Agences pour le widget de recherche de disponibilité. */
+  agencies: Agency[];
   /** Ouvre la grille des voitures ("Voir les voitures"). */
   onStartRenting: () => void;
   /** Lance le wizard de réservation ("Réserver"). */
   onReserve: () => void;
+  /** Recherche de disponibilité : ouvre le wizard pré-rempli (agences + dates). */
+  onSearch: (criteria: WizardSearchCriteria) => void;
   /** Photo d'une voiture de la flotte pour la bande vitrine. */
   showcaseImage?: string;
 }
 
-export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStartRenting, onReserve, showcaseImage }) => {
+export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencies, onStartRenting, onReserve, onSearch, showcaseImage }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: containerRef });
   const heroOpacity = useTransform(scrollYProgress, [0, 0.4], [1, 0]);
@@ -183,6 +311,23 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
       {/* ══ HERO SECTION ══ */}
       <section className="relative min-h-screen flex items-center">
 
+        {/* Image de fond personnalisée (paramètres du site) — affichée FLOUTÉE
+            avec un voile clair pour garder le texte lisible */}
+        {websiteSettings?.landing_background && (
+          <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+            <img
+              src={websiteSettings.landing_background}
+              alt=""
+              className="w-full h-full object-cover"
+              style={{ filter: 'blur(10px)', transform: 'scale(1.08)' }}
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0" style={{
+              background: 'linear-gradient(180deg, rgba(248,250,252,0.78) 0%, rgba(248,250,252,0.86) 60%, rgba(248,250,252,0.97) 100%)',
+            }} />
+          </div>
+        )}
+
         {/* Fine diagonal grid */}
         <div className="absolute inset-0 opacity-[0.04]" style={{
           backgroundImage: `linear-gradient(${C.accent} 1px, transparent 1px), linear-gradient(90deg, ${C.accent} 1px, transparent 1px)`,
@@ -206,7 +351,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
         }} />
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-screen py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center pt-28 pb-10">
 
             {/* LEFT: Text */}
             <motion.div style={{ opacity: heroOpacity, y: heroY }} className="space-y-8">
@@ -320,6 +465,11 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, onStart
                 fallback={<HeroVisual lang={lang} logo={websiteSettings?.logo} />}
               />
             </motion.div>
+          </div>
+
+          {/* ── Recherche de disponibilité : agences + période → étape suivante ── */}
+          <div className="pb-24">
+            <BookingSearchPanel lang={lang} agencies={agencies} onSearch={onSearch} />
           </div>
         </div>
 

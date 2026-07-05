@@ -7,6 +7,7 @@ import { OffersListing } from './website/OffersListing';
 import { SpecialOffersListing } from './website/SpecialOffersListing';
 import { ContactsWebsite } from './website/ContactsWebsite';
 import { ReservationWizard } from './website/wizard/ReservationWizard';
+import { WizardSearchCriteria } from './website/wizard/WizardContext';
 
 interface WebsiteProps {
   lang: Language;
@@ -33,6 +34,8 @@ export const Website: React.FC<WebsiteProps> = ({
   const [currentPage, setCurrentPage] = useState<'home' | 'offers' | 'special' | 'contacts' | 'orders'>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
+  // Recherche de disponibilité lancée depuis le landing (agences + période)
+  const [searchCriteria, setSearchCriteria] = useState<WizardSearchCriteria | null>(null);
 
   // Limit displayed agency name to first 3 words
   const shortName = (name: string | undefined) =>
@@ -40,6 +43,14 @@ export const Website: React.FC<WebsiteProps> = ({
 
   const handleReserveClick = (car: Car) => {
     setSelectedCar(car);
+    setSearchCriteria(null);
+    setCurrentPage('orders');
+  };
+
+  // Landing → wizard pré-rempli avec agences + dates, voitures filtrées par dispo
+  const handleAvailabilitySearch = (criteria: WizardSearchCriteria) => {
+    setSelectedCar(null);
+    setSearchCriteria(criteria);
     setCurrentPage('orders');
   };
 
@@ -195,8 +206,10 @@ export const Website: React.FC<WebsiteProps> = ({
           <Welcome
             lang={lang}
             websiteSettings={websiteSettings}
+            agencies={agencies}
             onStartRenting={() => setCurrentPage('offers')}
             onReserve={() => { setSelectedCar(null); setCurrentPage('orders'); }}
+            onSearch={handleAvailabilitySearch}
             showcaseImage={cars[0]?.images?.[0]}
           />
         )}
@@ -208,14 +221,19 @@ export const Website: React.FC<WebsiteProps> = ({
         )}
         {currentPage === 'orders' && (
           <ReservationWizard
+            // Nouvelle recherche / nouvelle voiture = wizard réinitialisé
+            key={searchCriteria
+              ? `search-${searchCriteria.from}-${searchCriteria.to}-${searchCriteria.departureAgencyId}-${searchCriteria.returnAgencyId || ''}`
+              : selectedCar ? `car-${selectedCar.id}` : 'default'}
             lang={lang}
             cars={cars}
             specialOffers={specialOffers}
             agencies={agencies}
             isLoadingAgencies={isLoadingAgencies}
             selectedCar={selectedCar}
+            initialSearch={searchCriteria}
             websiteSettings={websiteSettings}
-            onBackHome={() => { setSelectedCar(null); setCurrentPage('home'); }}
+            onBackHome={() => { setSelectedCar(null); setSearchCriteria(null); setCurrentPage('home'); }}
           />
         )}
         {currentPage === 'contacts' && (

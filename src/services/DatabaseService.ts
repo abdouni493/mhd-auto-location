@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings } from '../types';
+import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode } from '../types';
 
 // Generic database service functions
 export class DatabaseService {
@@ -350,6 +350,66 @@ export class DatabaseService {
     throw lastError;
   }
 
+
+  /** Mappe une ligne clients (snake_case) vers le modèle Client (camelCase). */
+  private static mapClientRow(client: any): Client {
+    return {
+      id: client.id,
+      firstName: client.first_name,
+      lastName: client.last_name,
+      phone: client.phone,
+      email: client.email,
+      dateOfBirth: client.date_of_birth,
+      placeOfBirth: client.place_of_birth,
+      idCardNumber: client.id_card_number,
+      licenseNumber: client.license_number,
+      licenseExpirationDate: client.license_expiration_date,
+      licenseDeliveryDate: client.license_delivery_date,
+      licenseDeliveryPlace: client.license_delivery_place,
+      documentType: client.document_type,
+      documentNumber: client.document_number,
+      documentDeliveryDate: client.document_delivery_date,
+      documentExpirationDate: client.document_expiration_date,
+      documentDeliveryAddress: client.document_delivery_address,
+      wilaya: client.wilaya,
+      completeAddress: client.complete_address,
+      profilePhoto: client.profile_photo,
+      scannedDocuments: client.scanned_documents,
+      createdAt: client.created_at,
+      agencyId: client.agency_id,
+    } as Client;
+  }
+
+  /** Les N derniers clients créés (affichage initial de la sélection client). */
+  static async getRecentClients(limit: number = 6): Promise<Client[]> {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return (data || []).map(c => this.mapClientRow(c));
+  }
+
+  /** Recherche serveur (nom, prénom ou téléphone) sur TOUTE la base clients. */
+  static async searchClients(query: string, limit: number = 30): Promise<Client[]> {
+    const q = query.trim();
+    if (!q) return [];
+    // Échappe les caractères spéciaux du pattern PostgREST
+    const safe = q.replace(/[%_,()]/g, ' ').trim();
+    if (!safe) return [];
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,phone.ilike.%${safe}%`)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return (data || []).map(c => this.mapClientRow(c));
+  }
 
   static async createClient(client: Omit<Client, 'id' | 'createdAt'>): Promise<Client> {
     // Map camelCase to snake_case for database
@@ -1431,6 +1491,7 @@ export class DatabaseService {
           bank_number: data[0].bank_number,
           address: data[0].address,
           phone: data[0].phone,
+          landing_background: data[0].landing_background,
         };
       }
     } catch (e: any) {
@@ -1445,11 +1506,26 @@ export class DatabaseService {
       phone_number_2: '',
       bank_number: '',
       address: '',
-      phone: ''
+      phone: '',
+      landing_background: '',
     };
   }
 
   static async updateWebsiteSettings(settings: WebsiteSettings): Promise<WebsiteSettings> {
+    // Les appels partiels (ConfigPage, upload de logo…) ne doivent pas effacer
+    // les champs non fournis : on fusionne avec l'enregistrement existant.
+    const current = await this.getWebsiteSettings();
+    const merged = {
+      name: settings.name ?? current.name,
+      description: settings.description ?? current.description,
+      logo: settings.logo ?? current.logo,
+      phone_number_2: settings.phone_number_2 ?? current.phone_number_2,
+      bank_number: settings.bank_number ?? current.bank_number,
+      address: settings.address ?? current.address,
+      phone: settings.phone ?? current.phone,
+      landing_background: settings.landing_background ?? current.landing_background,
+    };
+
     // First, delete all existing records to ensure only one record exists
     await supabase
       .from('website_settings')
@@ -1457,20 +1533,28 @@ export class DatabaseService {
       .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all records
 
     // Then insert the new record
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('website_settings')
       .insert([{
-        name: settings.name,
-        description: settings.description,
-        logo: settings.logo,
-        phone_number_2: settings.phone_number_2,
-        bank_number: settings.bank_number,
-        address: settings.address,
-        phone: settings.phone,
+        ...merged,
         updated_at: new Date().toISOString(),
       }])
       .select()
       .single();
+
+    // Colonne landing_background absente (migration 20260706 non appliquée) :
+    // on réessaie sans la colonne pour ne pas bloquer la sauvegarde des autres champs.
+    if (error && (error.message || '').includes('landing_background')) {
+      const { landing_background: _lb, ...withoutBackground } = merged;
+      ({ data, error } = await supabase
+        .from('website_settings')
+        .insert([{
+          ...withoutBackground,
+          updated_at: new Date().toISOString(),
+        }])
+        .select()
+        .single());
+    }
 
     if (error) throw error;
 
@@ -1482,6 +1566,7 @@ export class DatabaseService {
       bank_number: data.bank_number,
       address: data.address,
       phone: data.phone,
+      landing_background: data.landing_background,
     };
   }
 
@@ -1904,5 +1989,158 @@ export class DatabaseService {
       .delete()
       .eq('id', id);
     if (error) throw error;
+  }
+
+  // ==========================================================================
+  // CODES PROMO (gérés par l'admin, consommés par le site public)
+  // ==========================================================================
+
+  private static mapPromoCodeRow(row: any): PromoCode {
+    return {
+      id: row.id,
+      code: row.code,
+      discountPercentage: Number(row.discount_percentage),
+      isActive: !!row.is_active,
+      isUsed: !!row.is_used,
+      usedAt: row.used_at,
+      reservationId: row.reservation_id,
+      createdAt: row.created_at,
+    };
+  }
+
+  private static promoCodesMissingError(error: any): Error | null {
+    const msg = error?.message || '';
+    if (msg.includes('promo_codes') || error?.code === '42P01') {
+      return new Error(
+        "La table promo_codes n'existe pas encore. Exécutez la migration supabase/migrations/20260706_website_updates.sql dans le SQL Editor de Supabase."
+      );
+    }
+    return null;
+  }
+
+  static async getPromoCodes(): Promise<PromoCode[]> {
+    const { data, error } = await supabase
+      .from('promo_codes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw this.promoCodesMissingError(error) || error;
+    return (data || []).map(r => this.mapPromoCodeRow(r));
+  }
+
+  static async createPromoCode(code: string, discountPercentage: number): Promise<PromoCode> {
+    const { data, error } = await supabase
+      .from('promo_codes')
+      .insert([{
+        code: code.trim().toUpperCase(),
+        discount_percentage: discountPercentage,
+        is_active: true,
+        is_used: false,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      if ((error.message || '').includes('promo_codes_code_unique') || error.code === '23505') {
+        throw new Error('Ce code existe déjà — générez-en un autre.');
+      }
+      throw this.promoCodesMissingError(error) || error;
+    }
+    return this.mapPromoCodeRow(data);
+  }
+
+  static async setPromoCodeActive(id: string, isActive: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('promo_codes')
+      .update({ is_active: isActive })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  static async deletePromoCode(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('promo_codes')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  /**
+   * Vérifie un code promo côté serveur (RPC SECURITY DEFINER, accessible en
+   * anonyme sans exposer la table). Retourne le pourcentage si valide.
+   */
+  static async verifyPromoCode(code: string): Promise<{ valid: boolean; discountPercentage?: number; reason?: string }> {
+    const { data, error } = await supabase.rpc('verify_promo_code', { p_code: code });
+    if (error) {
+      if ((error.message || '').includes('verify_promo_code')) {
+        return { valid: false, reason: 'missing_rpc' };
+      }
+      throw error;
+    }
+    return {
+      valid: !!data?.valid,
+      discountPercentage: data?.discount_percentage != null ? Number(data.discount_percentage) : undefined,
+      reason: data?.reason,
+    };
+  }
+
+  // ==========================================================================
+  // SITE PUBLIC — création de réservation + disponibilité (RPC anti-RLS)
+  // ==========================================================================
+
+  /**
+   * Crée client + réservation + services (+ consommation du code promo) en une
+   * seule transaction via la RPC SECURITY DEFINER create_website_reservation.
+   * C'est le SEUL chemin d'écriture du site public (le rôle anon n'a aucun
+   * droit INSERT direct sur clients/reservations).
+   */
+  static async createWebsiteReservation(payload: {
+    client: Record<string, any>;
+    reservation: Record<string, any>;
+    services?: { category: string; service_name: string; description?: string; price: number }[];
+    promoCode?: string | null;
+  }): Promise<{ reservationId: string; clientId: string }> {
+    const { data, error } = await supabase.rpc('create_website_reservation', {
+      p_client: payload.client,
+      p_reservation: payload.reservation,
+      p_services: payload.services || [],
+      p_promo_code: payload.promoCode || null,
+    });
+
+    if (error) {
+      const msg = error.message || '';
+      if (msg.includes('create_website_reservation')) {
+        throw new Error(
+          "La fonction create_website_reservation n'existe pas encore. Exécutez la migration supabase/migrations/20260706_website_updates.sql dans le SQL Editor de Supabase."
+        );
+      }
+      if (msg.includes('PROMO_CODE_INVALID')) {
+        throw new Error('Le code promo est invalide ou a déjà été utilisé.');
+      }
+      if (msg.includes('CAR_UNAVAILABLE')) {
+        throw new Error('Cette voiture vient d\'être réservée sur ces dates. Choisissez d\'autres dates.');
+      }
+      throw error;
+    }
+
+    return {
+      reservationId: data?.reservation_id,
+      clientId: data?.client_id,
+    };
+  }
+
+  /**
+   * IDs des voitures INDISPONIBLES sur une période (réservations pending/
+   * accepted/confirmed/active qui chevauchent). Retourne null si la RPC
+   * n'est pas encore installée (l'appelant affiche alors toutes les voitures).
+   */
+  static async getUnavailableCarIds(from: string, to: string): Promise<string[] | null> {
+    try {
+      const { data, error } = await supabase.rpc('get_unavailable_car_ids', { p_from: from, p_to: to });
+      if (error) return null;
+      return (data || []).map((r: any) => (typeof r === 'string' ? r : r.get_unavailable_car_ids || r.id)).filter(Boolean);
+    } catch {
+      return null;
+    }
   }
 }
