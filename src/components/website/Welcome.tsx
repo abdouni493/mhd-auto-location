@@ -136,11 +136,11 @@ function BookingSearchPanel({ lang, agencies, onSearch, hasBg }: {
       transition={{ duration: 0.8, delay: 0.75 }}
       className="relative z-20 rounded-3xl p-6 sm:p-8"
       style={{
-        background: 'rgba(255, 255, 255, 0.55)',
-        border: '1px solid rgba(255, 255, 255, 0.55)',
-        backdropFilter: 'blur(28px) saturate(150%)',
-        WebkitBackdropFilter: 'blur(28px) saturate(150%)',
-        boxShadow: '0 20px 60px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
+        background: 'rgba(255, 255, 255, 0.12)',
+        border: '1px solid rgba(255, 255, 255, 0.35)',
+        backdropFilter: 'blur(20px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+        boxShadow: '0 20px 60px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.4)',
       }}
     >
       <p className="text-xs font-bold tracking-[0.2em] uppercase mb-5 flex items-center gap-2"
