@@ -106,6 +106,8 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
   const [customEndDate, setCustomEndDate] = useState(todayStr);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  // Filtre par origine : 'all' | 'website' (site public) | 'agency' (agence)
+  const [filterSource, setFilterSource] = useState<'all' | 'website' | 'agency'>('all');
 
   // ── Debt modal
   const [showDebtModal, setShowDebtModal] = useState(false);
@@ -153,9 +155,12 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
     [reservations, startDate, endDate]
   );
 
-  /** After text search filter */
+  /** After text search + source filter */
   const filteredReservations = useMemo(() => {
     let list = periodReservations;
+    if (filterSource !== 'all') {
+      list = list.filter(r => (r.source || 'agency') === filterSource);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(r => {
@@ -165,7 +170,7 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
       });
     }
     return list;
-  }, [periodReservations, searchQuery]);
+  }, [periodReservations, searchQuery, filterSource]);
 
   // ── Stats
   const totalGains = useMemo(
@@ -316,6 +321,18 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
           />
         </div>
 
+        {/* Filtre par origine (site web / agence) */}
+        <select
+          value={filterSource}
+          onChange={e => setFilterSource(e.target.value as 'all' | 'website' | 'agency')}
+          className="px-4 py-2.5 bg-white border border-saas-border rounded-xl text-sm font-bold text-saas-text-main outline-none focus:border-saas-primary-via transition-all cursor-pointer"
+          title={T('Filtrer par origine', 'تصفية حسب المصدر', lang)}
+        >
+          <option value="all">{T('Toutes origines', 'كل المصادر', lang)}</option>
+          <option value="website">{T('🌐 Site web', '🌐 الموقع', lang)}</option>
+          <option value="agency">{T('🏢 Agence', '🏢 الوكالة', lang)}</option>
+        </select>
+
         {/* Statut badge — toujours "Terminée" */}
         <div className="px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl text-xs font-black text-violet-700 uppercase tracking-wider">
           ✅ {T('Terminées', 'منتهية', lang)}
@@ -435,7 +452,16 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
                       >
                         {/* Client */}
                         <td className="px-4 py-3 font-semibold text-saas-text-main whitespace-nowrap">
-                          {r.client ? `${r.client.firstName} ${r.client.lastName}` : '—'}
+                          <div className="flex items-center gap-2">
+                            <span>{r.client ? `${r.client.firstName} ${r.client.lastName}` : '—'}</span>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-md ${
+                              r.source === 'website' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {r.source === 'website'
+                                ? (lang === 'fr' ? '🌐 Site' : '🌐 موقع')
+                                : (lang === 'fr' ? '🏢 Agence' : '🏢 وكالة')}
+                            </span>
+                          </div>
                           <div className="text-[10px] text-saas-text-muted font-normal">{r.client?.phone || ''}</div>
                         </td>
                         {/* Véhicule */}

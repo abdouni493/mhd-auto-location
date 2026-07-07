@@ -71,10 +71,10 @@ export const StepRecap: React.FC = () => {
             ]
           )}
           {summaryBlock(
-            lang === 'fr' ? '🏢 Agences' : '🏢 الوكالات', 2,
+            lang === 'fr' ? '🏢 Lieux' : '🏢 الأماكن', 2,
             [
-              { label: lang === 'fr' ? 'Agence de départ' : 'وكالة المغادرة', value: agencyName(departureAgency) },
-              { label: lang === 'fr' ? 'Agence de retour' : 'وكالة الإرجاع', value: agencyName(effectiveReturnAgency) },
+              { label: lang === 'fr' ? 'Lieu de départ' : 'مكان المغادرة', value: agencyName(departureAgency) },
+              { label: lang === 'fr' ? 'Lieu de retour' : 'مكان الإرجاع', value: agencyName(effectiveReturnAgency) },
             ]
           )}
           {summaryBlock(

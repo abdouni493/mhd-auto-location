@@ -412,6 +412,8 @@ export interface ReservationDetails {
   completedAt?: string;
   createdBy?: string;
   createdByName?: string;
+  /** Origine de la réservation : 'website' (site public) ou 'agency' (admin). */
+  source?: 'website' | 'agency';
 }
 
 export interface Invoice {

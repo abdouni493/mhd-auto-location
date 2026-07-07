@@ -355,6 +355,10 @@ export class ReservationsService {
       missingFuel: res.missing_fuel,
       createdBy: res.created_by,
       createdByName: res.created_by_name,
+      // Origine : 'website' (site public) ou 'agency' (admin, défaut).
+      // Colonne ajoutée par la migration 20260708_reservation_source.sql ;
+      // absente = ancienne base → traitée comme 'agency'.
+      source: (res.source === 'website' ? 'website' : 'agency') as 'website' | 'agency',
     })).map(mapped => {
       console.log('✅ Mapped reservation:', {
         id: mapped.id,
@@ -567,6 +571,7 @@ export class ReservationsService {
       })(),
       createdBy: data.created_by,
       createdByName: data.created_by_name,
+      source: (data.source === 'website' ? 'website' : 'agency') as 'website' | 'agency',
     };
   }
 

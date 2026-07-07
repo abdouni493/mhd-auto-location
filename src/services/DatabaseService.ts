@@ -987,97 +987,128 @@ export class DatabaseService {
         `)
         // load both new pending orders and those we've already accepted so they stay visible here
         .in('status', ['pending', 'accepted'])
+        // seules les commandes provenant du site public (source='website') —
+        // pas les réservations créées par l'agence qui seraient encore 'pending'.
+        // Colonne ajoutée par 20260708_reservation_source.sql.
+        .eq('source', 'website')
         .order('created_at', { ascending: false });
 
       if (error) {
         console.warn('Error fetching website orders:', error);
+        // Repli si la colonne source n'existe pas encore (migration non appliquée) :
+        // on retente sans le filtre pour ne pas casser l'affichage des commandes.
+        if (error.code === '42703' || /column .*source.* does not exist/i.test(error.message || '')) {
+          const retry = await supabase
+            .from('reservations')
+            .select(`
+              id, client_id, car_id,
+              departure_date, departure_time, departure_agency_id,
+              return_date, return_time, return_agency_id,
+              total_days, total_price, additional_fees, status, created_at,
+              protection_assurance_id, protection_assurance_name, protection_assurance_price,
+              client:clients(*), car:cars(*), reservation_services(*),
+              protection_assurance:protection_assurances!reservations_protection_assurance_fkey(
+                id, name, price_per_day, is_active, created_at,
+                protection_assurance_item_links(
+                  id, status, item:protection_assurance_items(id, item_name, display_order)
+                )
+              )
+            `)
+            .in('status', ['pending', 'accepted'])
+            .order('created_at', { ascending: false });
+          if (retry.error) { console.warn('Website orders retry failed:', retry.error); return []; }
+          return this.mapWebsiteOrders(retry.data || []);
+        }
         return [];
       }
 
       // Transform reservations to WebsiteOrder format
-      if (!data) return [];
-
-      return data.map((reservation: any) => {
-        const totalPrice = parseInt(reservation.total_price) || 0;
-        const totalDays = reservation.total_days || 0;
-
-        // Services supplémentaires attachés à la réservation
-        const additionalServices = (reservation.reservation_services || []).map((s: any) => ({
-          id: s.id,
-          category: s.category,
-          name: s.service_name,
-          description: s.description,
-          price: Math.round(Number(s.price) || 0),
-          selected: true,
-        }));
-        const servicesTotal = additionalServices.reduce((sum: number, s: any) => sum + s.price, 0);
-
-        // Assurance de protection sélectionnée
-        const pa = reservation.protection_assurance;
-        const protectionAssurance = pa ? {
-          id: pa.id,
-          name: pa.name,
-          pricePerDay: Math.round(Number(pa.price_per_day) || 0),
-          isActive: pa.is_active,
-          createdAt: pa.created_at,
-          items: (pa.protection_assurance_item_links || [])
-            .map((link: any) => ({
-              linkId: link.id,
-              itemId: link.item?.id || null,
-              name: link.item?.item_name || '',
-              status: !!link.status,
-              displayOrder: link.item?.display_order ?? 0,
-            }))
-            .sort((x: any, y: any) => (x.displayOrder ?? 0) - (y.displayOrder ?? 0)),
-        } : undefined;
-        const assuranceTotal = reservation.protection_assurance_price != null
-          ? Math.round(Number(reservation.protection_assurance_price) * totalDays)
-          : 0;
-
-        return {
-          id: reservation.id,
-          carId: reservation.car_id,
-          car: reservation.car || {},
-          step1: {
-            carId: reservation.car_id,
-            departureDate: reservation.departure_date,
-            departureTime: reservation.departure_time,
-            departureAgency: reservation.departure_agency_id,
-            returnDate: reservation.return_date,
-            returnTime: reservation.return_time,
-            returnAgency: reservation.return_agency_id,
-            differentReturnAgency: reservation.departure_agency_id !== reservation.return_agency_id,
-          },
-          step2: {
-            firstName: reservation.client?.first_name || '',
-            lastName: reservation.client?.last_name || '',
-            phone: reservation.client?.phone || '',
-            email: reservation.client?.email || '',
-            licenseNumber: reservation.client?.license_number || '',
-            wilaya: reservation.client?.wilaya || '',
-            completeAddress: reservation.client?.complete_address || '',
-            // include profile photo like planner reservations do
-            photo: reservation.client?.profile_photo || '',
-            scannedDocuments: reservation.client?.documents_urls || [],
-          },
-          step3: {
-            additionalServices,
-          },
-          totalDays,
-          totalPrice: totalPrice,
-          servicesTotal,
-          protectionAssurance,
-          protectionAssuranceName: reservation.protection_assurance_name || undefined,
-          assuranceTotal,
-          status: reservation.status || 'pending',
-          createdAt: reservation.created_at,
-          source: 'website',
-        } as WebsiteOrder;
-      });
+      return DatabaseService.mapWebsiteOrders(data || []);
     } catch (err) {
       console.warn('Exception fetching website orders:', err);
       return [];
     }
+  }
+
+  /** Transforme des lignes `reservations` en objets WebsiteOrder pour l'UI. */
+  private static mapWebsiteOrders(rows: any[]): WebsiteOrder[] {
+    return (rows || []).map((reservation: any) => {
+      const totalPrice = parseInt(reservation.total_price) || 0;
+      const totalDays = reservation.total_days || 0;
+
+      // Services supplémentaires attachés à la réservation
+      const additionalServices = (reservation.reservation_services || []).map((s: any) => ({
+        id: s.id,
+        category: s.category,
+        name: s.service_name,
+        description: s.description,
+        price: Math.round(Number(s.price) || 0),
+        selected: true,
+      }));
+      const servicesTotal = additionalServices.reduce((sum: number, s: any) => sum + s.price, 0);
+
+      // Assurance de protection sélectionnée
+      const pa = reservation.protection_assurance;
+      const protectionAssurance = pa ? {
+        id: pa.id,
+        name: pa.name,
+        pricePerDay: Math.round(Number(pa.price_per_day) || 0),
+        isActive: pa.is_active,
+        createdAt: pa.created_at,
+        items: (pa.protection_assurance_item_links || [])
+          .map((link: any) => ({
+            linkId: link.id,
+            itemId: link.item?.id || null,
+            name: link.item?.item_name || '',
+            status: !!link.status,
+            displayOrder: link.item?.display_order ?? 0,
+          }))
+          .sort((x: any, y: any) => (x.displayOrder ?? 0) - (y.displayOrder ?? 0)),
+      } : undefined;
+      const assuranceTotal = reservation.protection_assurance_price != null
+        ? Math.round(Number(reservation.protection_assurance_price) * totalDays)
+        : 0;
+
+      return {
+        id: reservation.id,
+        carId: reservation.car_id,
+        car: reservation.car || {},
+        step1: {
+          carId: reservation.car_id,
+          departureDate: reservation.departure_date,
+          departureTime: reservation.departure_time,
+          departureAgency: reservation.departure_agency_id,
+          returnDate: reservation.return_date,
+          returnTime: reservation.return_time,
+          returnAgency: reservation.return_agency_id,
+          differentReturnAgency: reservation.departure_agency_id !== reservation.return_agency_id,
+        },
+        step2: {
+          firstName: reservation.client?.first_name || '',
+          lastName: reservation.client?.last_name || '',
+          phone: reservation.client?.phone || '',
+          email: reservation.client?.email || '',
+          licenseNumber: reservation.client?.license_number || '',
+          wilaya: reservation.client?.wilaya || '',
+          completeAddress: reservation.client?.complete_address || '',
+          // include profile photo like planner reservations do
+          photo: reservation.client?.profile_photo || '',
+          scannedDocuments: reservation.client?.documents_urls || [],
+        },
+        step3: {
+          additionalServices,
+        },
+        totalDays,
+        totalPrice: totalPrice,
+        servicesTotal,
+        protectionAssurance,
+        protectionAssuranceName: reservation.protection_assurance_name || undefined,
+        assuranceTotal,
+        status: reservation.status || 'pending',
+        createdAt: reservation.created_at,
+        source: 'website',
+      } as WebsiteOrder;
+    });
   }
 
   static async createWebsiteOrder(order: Omit<WebsiteOrder, 'id' | 'created_at'>): Promise<WebsiteOrder> {

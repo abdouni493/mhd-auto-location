@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardStats, MaintenanceAlert, Language, Car, ReservationDetails, VehicleExpense, User } from '../types';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, DollarSign, Wrench, Shield, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
 import { getCars } from '../services/carService';
@@ -466,6 +466,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
 
   const reservationAlerts = getReservationAlerts(reservations);
 
+  // Commandes du site public en attente d'acceptation par l'agence.
+  const pendingWebOrdersCount = reservations.filter(
+    r => r.source === 'website' && r.status === 'pending'
+  ).length;
+
   // Apply alert filter
   let visibleAlerts = maintenanceAlerts;
   let visibleResAlerts = reservationAlerts;
@@ -522,6 +527,42 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
 
   return (
     <div className="space-y-8">
+      {/* Alerte : nouvelles commandes du site web en attente d'acceptation */}
+      <AnimatePresence>
+        {pendingWebOrdersCount > 0 && (
+          <motion.button
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            onClick={() => navigate('/planner', { state: { openWebOrders: true } })}
+            className="w-full flex items-center gap-4 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 rounded-3xl px-6 py-5 text-left text-white shadow-xl shadow-indigo-500/20 transition-all"
+          >
+            <motion.span
+              animate={{ scale: [1, 1.2, 1], rotate: [0, -8, 8, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="text-3xl flex-shrink-0"
+            >
+              🔔
+            </motion.span>
+            <div className="flex-1">
+              <p className="font-black text-lg uppercase tracking-tight">
+                {lang === 'fr'
+                  ? `${pendingWebOrdersCount} nouvelle${pendingWebOrdersCount > 1 ? 's' : ''} commande${pendingWebOrdersCount > 1 ? 's' : ''} du site web`
+                  : `${pendingWebOrdersCount} طلب جديد من الموقع`}
+              </p>
+              <p className="text-indigo-100 text-sm font-medium">
+                {lang === 'fr'
+                  ? 'En attente de votre acceptation — cliquez pour les traiter dans le planificateur'
+                  : 'في انتظار موافقتك — انقر لمعالجتها في المخطط'}
+              </p>
+            </div>
+            <span className="px-5 py-2.5 bg-white/20 backdrop-blur border border-white/30 font-bold rounded-xl text-sm whitespace-nowrap">
+              {lang === 'fr' ? 'Traiter →' : 'معالجة →'}
+            </span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* Alert Filter Controls - Simple & Clean Design */}
       <div className="space-y-3">
         <h3 className="text-sm font-bold text-saas-text-main uppercase tracking-widest">

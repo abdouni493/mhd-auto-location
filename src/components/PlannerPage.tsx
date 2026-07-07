@@ -10,6 +10,7 @@ import { ActivationModal, CompletionModal } from './ReservationDetailsView';
 import { ReservationTimelineView } from './ReservationTimelineView';
 import { ConditionsPersonalizer } from './ConditionsPersonalizer';
 import { SendContractModal } from './SendContractModal';
+import { WebsiteOrders } from './WebsiteOrders';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { getCars } from '../services/carService';
@@ -39,11 +40,13 @@ interface PlannerPageProps {
 
 export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
   const location = useLocation();
-  const [currentView, setCurrentView] = useState<'list' | 'calendar' | 'create' | 'create-alt' | 'details' | 'edit'>('list');
+  const [currentView, setCurrentView] = useState<'list' | 'calendar' | 'create' | 'create-alt' | 'details' | 'edit' | 'web-orders'>('list');
   const [displayMode, setDisplayMode] = useState<'grid' | 'calendar'>('grid');
   const [selectedReservation, setSelectedReservation] = useState<ReservationDetails | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  // Filtre par origine : 'all' | 'website' (site public) | 'agency' (agence)
+  const [filterSource, setFilterSource] = useState<'all' | 'website' | 'agency'>('all');
   const [carAvailabilityFilter, setCarAvailabilityFilter] = useState<'all' | 'disponible' | 'louer'>('all');
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [selectedReservationForActivation, setSelectedReservationForActivation] = useState<ReservationDetails | null>(null);
@@ -176,6 +179,12 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   // Handle navigation from dashboard alert card with location state
   useEffect(() => {
     const state = location.state as any;
+    // Ouverture directe des commandes du site (depuis l'alerte du dashboard)
+    if (state && state.openWebOrders) {
+      setCurrentView('web-orders');
+      window.history.replaceState({}, document.title);
+      return;
+    }
     // Guard: only proceed if state has a valid non-empty selectedReservationId string
     if (
       state &&
@@ -428,6 +437,15 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   const filteredReservations = reservations.filter(reservation => {
     if (!reservation.client || !reservation.car) return false;
 
+    // Les commandes du site public ne rejoignent le planificateur qu'une fois
+    // ACCEPTÉES par l'agence : on masque les 'pending' (en attente d'acceptation)
+    // et les 'cancelled' (refusées). Les réservations de l'agence ne sont pas
+    // concernées (elles s'affichent dès leur création).
+    if (reservation.source === 'website' &&
+        (reservation.status === 'pending' || reservation.status === 'cancelled')) {
+      return false;
+    }
+
     const isTerminated =
       reservation.status === 'completed' || reservation.status === 'terminated';
 
@@ -445,14 +463,31 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
 
     const matchesFilter = filterStatus === 'all' || reservation.status === filterStatus;
 
+    const matchesSource = filterSource === 'all' || (reservation.source || 'agency') === filterSource;
+
     const resPaid = (reservation.payments && reservation.payments.length > 0)
       ? reservation.payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
       : (Number(reservation.advancePayment) || 0);
     const resRemaining = Math.max(0, (Number(reservation.totalPrice) || 0) - resPaid);
     const matchesDebt = !filterDebtOnly || resRemaining > 0;
 
-    return matchesSearch && matchesFilter && matchesDebt;
+    return matchesSearch && matchesFilter && matchesSource && matchesDebt;
   });
+
+  // Nombre de commandes du site public en attente d'acceptation (pour l'alerte).
+  const pendingWebOrdersCount = reservations.filter(
+    r => r.source === 'website' && r.status === 'pending'
+  ).length;
+
+  // Recharge les réservations (après acceptation/annulation d'une commande site).
+  const reloadReservations = async () => {
+    try {
+      const data = await ReservationsService.getReservations();
+      setReservations(data);
+    } catch (err) {
+      console.error('Error reloading reservations:', err);
+    }
+  };
 
       const terminatedCount = isSearching
     ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
@@ -523,17 +558,38 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   }
 
   if (currentView === 'edit' && selectedReservation) {
-    return <EditReservationForm 
-      lang={lang} 
-      reservation={selectedReservation} 
+    return <EditReservationForm
+      lang={lang}
+      reservation={selectedReservation}
       onBack={() => {
         localStorage.removeItem('plannerViewState');
         setCurrentView(displayMode === 'calendar' ? 'calendar' : 'list');
-      }} 
+      }}
       onUpdate={updateReservation}
       agencies={agencies}
       isLoadingAgencies={isLoadingAgencies}
     />;
+  }
+
+  // ── Vue "Commandes du site web" (intégrée au planificateur) ──
+  if (currentView === 'web-orders') {
+    return (
+      <div className="space-y-6">
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={async () => {
+            setCurrentView('list');
+            // Les acceptations/annulations peuvent avoir changé le planning.
+            await reloadReservations();
+          }}
+          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-saas-border rounded-xl hover:border-saas-primary-via text-saas-text-main font-bold transition-all"
+        >
+          ← {lang === 'fr' ? 'Retour au planificateur' : 'العودة إلى المخطط'}
+        </motion.button>
+        <WebsiteOrders lang={lang} onOrdersChanged={reloadReservations} />
+      </div>
+    );
   }
 
   return (
@@ -575,6 +631,18 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
             <option value="confirmed">{lang === 'fr' ? 'Confirmé' : 'مؤكد'}</option>
             <option value="active">{lang === 'fr' ? 'Actif' : 'نشط'}</option>
             <option value="cancelled">{lang === 'fr' ? 'Annulé' : 'ملغي'}</option>
+          </select>
+
+          {/* Source Filter (site web / agence) */}
+          <select
+            value={filterSource}
+            onChange={(e) => setFilterSource(e.target.value as 'all' | 'website' | 'agency')}
+            className="px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            title={lang === 'fr' ? 'Filtrer par origine' : 'تصفية حسب المصدر'}
+          >
+            <option value="all">{lang === 'fr' ? 'Toutes origines' : 'كل المصادر'}</option>
+            <option value="website">{lang === 'fr' ? '🌐 Site web' : '🌐 الموقع'}</option>
+            <option value="agency">{lang === 'fr' ? '🏢 Agence' : '🏢 الوكالة'}</option>
           </select>
 
           {/* Debt Filter Toggle */}
@@ -623,7 +691,59 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           <Plus className="w-4 h-4" />
           {lang === 'fr' ? 'Réservation (Tarif. d\'abord)' : 'حجز (التسعير أولا)'}
         </button>
+
+        {/* Commandes du site web (avec compteur de nouvelles commandes) */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setCurrentView('web-orders')}
+          className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold rounded-lg transition-all"
+          title={lang === 'fr' ? 'Commandes reçues du site web' : 'الطلبات الواردة من الموقع'}
+        >
+          🌐 {lang === 'fr' ? 'Commandes Site' : 'طلبات الموقع'}
+          {pendingWebOrdersCount > 0 && (
+            <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center bg-red-500 text-white text-xs font-black rounded-full border-2 border-white shadow-lg animate-pulse">
+              {pendingWebOrdersCount}
+            </span>
+          )}
+        </motion.button>
       </div>
+
+      {/* Alerte : nouvelles commandes du site web en attente d'acceptation */}
+      <AnimatePresence>
+        {pendingWebOrdersCount > 0 && (
+          <motion.button
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            onClick={() => setCurrentView('web-orders')}
+            className="w-full flex items-center gap-4 bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-200 hover:border-indigo-400 rounded-2xl px-5 py-4 text-left transition-all"
+          >
+            <motion.span
+              animate={{ scale: [1, 1.15, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="text-2xl"
+            >
+              🔔
+            </motion.span>
+            <div className="flex-1">
+              <p className="font-black text-indigo-800">
+                {lang === 'fr'
+                  ? `${pendingWebOrdersCount} nouvelle${pendingWebOrdersCount > 1 ? 's' : ''} commande${pendingWebOrdersCount > 1 ? 's' : ''} du site web`
+                  : `${pendingWebOrdersCount} طلب جديد من الموقع`}
+              </p>
+              <p className="text-indigo-600 text-sm font-medium">
+                {lang === 'fr'
+                  ? 'En attente de votre acceptation — cliquez pour les traiter'
+                  : 'في انتظار موافقتك — انقر للمعالجة'}
+              </p>
+            </div>
+            <span className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl text-sm whitespace-nowrap">
+              {lang === 'fr' ? 'Voir →' : 'عرض →'}
+            </span>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
             {/* Banner showing terminated results when searching */}
       <AnimatePresence>
@@ -947,8 +1067,8 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   <span className="text-2xl">👤</span>
                 )}
               </div>
-              {/* Status Badge */}
-              <div className="absolute top-4 left-4">
+              {/* Status + Source Badges */}
+              <div className="absolute top-4 left-4 flex flex-col items-start gap-2">
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                   reservation.status === 'confirmed' ? 'bg-green-100 text-green-800' :
                   reservation.status === 'accepted' ? 'bg-teal-100 text-teal-800' :
@@ -963,6 +1083,16 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                    reservation.status === 'completed' ? '🏁 Terminé' :
                    reservation.status === 'terminated' ? '🛑 Terminée' :
                    '⏳ En attente'}
+                </span>
+                {/* Origine : site web vs agence */}
+                <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${
+                  reservation.source === 'website'
+                    ? 'bg-indigo-100 text-indigo-800'
+                    : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {reservation.source === 'website'
+                    ? (lang === 'fr' ? '🌐 Site web' : '🌐 الموقع')
+                    : (lang === 'fr' ? '🏢 Agence' : '🏢 الوكالة')}
                 </span>
               </div>
             </div>

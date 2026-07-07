@@ -13,10 +13,11 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   alertsCount?: number;
+  webOrdersCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  lang, isVisible, setIsVisible, onLogout, activeTab, setActiveTab, alertsCount = 0
+  lang, isVisible, setIsVisible, onLogout, activeTab, setActiveTab, alertsCount = 0, webOrdersCount = 0
 }) => {
   const isRtl = lang === 'ar';
   const [agencyData, setAgencyData] = useState({
@@ -140,7 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {/* Inner glowing dot */}
                     <motion.div
                       className="w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-orange-500 rounded-full shadow-lg shadow-red-500/80"
-                      animate={{ 
+                      animate={{
                         scale: [1, 1.2, 1],
                         boxShadow: [
                           '0 0 8px rgba(239, 68, 68, 0.8)',
@@ -148,13 +149,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           '0 0 8px rgba(239, 68, 68, 0.8)'
                         ]
                       }}
-                      transition={{ 
-                        duration: 1.5, 
+                      transition={{
+                        duration: 1.5,
                         repeat: Infinity,
                         ease: "easeInOut"
                       }}
                     />
                   </motion.div>
+                )}
+
+                {/* Compteur des nouvelles commandes du site (onglet Planificateur) */}
+                {item.id === 'planner' && webOrdersCount > 0 && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [1, 1.15, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-blue-600 text-white text-[10px] font-black rounded-full shadow-lg shadow-indigo-500/50"
+                    title={lang === 'fr' ? 'Nouvelles commandes du site' : 'طلبات جديدة من الموقع'}
+                  >
+                    {webOrdersCount}
+                  </motion.span>
                 )}
               </button>
             ))}

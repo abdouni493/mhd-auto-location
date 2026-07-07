@@ -51,6 +51,7 @@ export default function App() {
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [isLoadingAgenciesForWebsite, setIsLoadingAgenciesForWebsite] = useState(true);
   const [maintenanceAlertsCount, setMaintenanceAlertsCount] = useState(0);
+  const [webOrdersCount, setWebOrdersCount] = useState(0);
   
   // Refs to prevent multiple listener initialization (especially important in StrictMode dev environment)
   const authListenerInitialized = useRef(false);
@@ -146,6 +147,14 @@ export default function App() {
       } catch (err) {
         console.error('Error loading alerts:', err);
         setMaintenanceAlertsCount(0);
+      }
+      // Commandes du site en attente d'acceptation (badge planificateur)
+      try {
+        const orders = await DatabaseService.getWebsiteOrders();
+        setWebOrdersCount(orders.filter(o => o.status === 'pending').length);
+      } catch (err) {
+        console.error('Error loading website orders count:', err);
+        setWebOrdersCount(0);
       }
     };
 
@@ -544,6 +553,7 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={handleTabChange}
           alertsCount={maintenanceAlertsCount}
+          webOrdersCount={webOrdersCount}
         />
         
         <div className="flex-1 flex flex-col min-w-0">

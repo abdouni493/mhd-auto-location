@@ -24,7 +24,7 @@ export const StepAgencies: React.FC = () => {
       <SectionCard>
         <SectionTitle>🛫 {{ fr: 'Départ', ar: 'المغادرة' }[lang]}</SectionTitle>
         <div>
-          <FieldLabel>{{ fr: 'Agence de départ *', ar: 'وكالة المغادرة *' }[lang]}</FieldLabel>
+          <FieldLabel>{{ fr: 'Lieu de départ *', ar: 'مكان المغادرة *' }[lang]}</FieldLabel>
           <select value={departureAgency}
             onChange={e => setDepartureAgency(e.target.value)}
             disabled={isLoadingAgencies}
@@ -64,7 +64,7 @@ export const StepAgencies: React.FC = () => {
             />
           </span>
           <span className="font-bold text-vel-slate text-sm group-hover:text-vel-ink transition-colors">
-            {{ fr: 'Agence de retour différente', ar: 'وكالة إرجاع مختلفة' }[lang]}
+            {{ fr: 'Lieu de retour différent', ar: 'مكان إرجاع مختلف' }[lang]}
           </span>
         </button>
 
@@ -78,7 +78,7 @@ export const StepAgencies: React.FC = () => {
               transition={{ duration: 0.3, ease: 'easeOut' }}
               className="overflow-hidden"
             >
-              <FieldLabel>{{ fr: 'Agence de retour *', ar: 'وكالة الإرجاع *' }[lang]}</FieldLabel>
+              <FieldLabel>{{ fr: 'Lieu de retour *', ar: 'مكان الإرجاع *' }[lang]}</FieldLabel>
               <select value={returnAgency}
                 onChange={e => setReturnAgency(e.target.value)}
                 disabled={isLoadingAgencies}
@@ -99,8 +99,8 @@ export const StepAgencies: React.FC = () => {
                 style={{ background: 'rgba(15,23,42,0.03)', border: '1px solid rgba(15,23,42,0.06)' }}
               >
                 {lang === 'fr'
-                  ? <>Le véhicule sera rendu à l'agence de départ : <span className="font-bold text-vel-slate">{departureAgencyName}</span></>
-                  : <>سيتم إرجاع السيارة إلى وكالة المغادرة: <span className="font-bold text-vel-slate">{departureAgencyName}</span></>}
+                  ? <>Le véhicule sera rendu au lieu de départ : <span className="font-bold text-vel-slate">{departureAgencyName}</span></>
+                  : <>سيتم إرجاع السيارة إلى مكان المغادرة: <span className="font-bold text-vel-slate">{departureAgencyName}</span></>}
               </motion.p>
             )
           )}

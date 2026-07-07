@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Language, Agency } from '../../types';
 import { motion, useScroll, useTransform } from 'motion/react';
-import { ChevronDown, Shield, Zap, Star, ArrowRight, Trophy, Car as CarIcon, MapPin, CalendarDays, Search } from 'lucide-react';
+import { ChevronDown, Shield, Zap, Star, ArrowRight, Car as CarIcon, MapPin, CalendarDays, Search } from 'lucide-react';
 import { Hero3D } from './Hero3D';
 import { ShowcaseBand } from './ShowcaseBand';
 import { HERO_SPLINE_SCENE_URL } from '../../constants';
@@ -22,32 +22,8 @@ const C = {
 const shortName = (name: string | undefined) =>
   name ? name.split(/\s+/).slice(0, 3).join(' ') : 'AutoLocation';
 
-// ─── Pure CSS + Framer Motion hero visual ───────────────────────────────────
-function HeroVisual({ lang, logo }: { lang: Language; logo?: string }) {
-  const floatingCards = [
-    {
-      icon: Trophy,
-      value: '#1',
-      label: { fr: 'en Algérie', ar: 'في الجزائر' },
-      delay: 0,
-      className: 'top-6 right-0',
-    },
-    {
-      icon: Star,
-      value: '4.9/5',
-      label: { fr: 'Note moyenne', ar: 'التقييم' },
-      delay: 0.8,
-      className: 'top-1/2 -left-2',
-    },
-    {
-      icon: Zap,
-      value: '< 5 min',
-      label: { fr: 'Réservation', ar: 'وقت الحجز' },
-      delay: 1.6,
-      className: 'bottom-10 right-6',
-    },
-  ];
-
+// ─── Pure CSS + Framer Motion hero visual (anneaux animés uniquement) ────────
+function HeroVisual() {
   return (
     <div className="relative w-full h-[500px] flex items-center justify-center">
 
@@ -81,51 +57,6 @@ function HeroVisual({ lang, logo }: { lang: Language; logo?: string }) {
         style={{ border: '1px solid rgba(220,38,38,0.3)' }}
       />
 
-      {/* Center glowing element */}
-      <motion.div
-        animate={{ y: [0, -10, 0] }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-        className="relative w-32 h-32 rounded-3xl flex items-center justify-center z-10"
-        style={{
-          background: `linear-gradient(135deg, rgba(220,38,38,0.09), rgba(217,119,6,0.1))`,
-          border: `1px solid rgba(220,38,38,0.3)`,
-          boxShadow: `0 0 50px rgba(220,38,38,0.16), 0 0 100px rgba(220,38,38,0.06)`,
-        }}
-      >
-        {logo ? (
-          <img src={logo} alt="Logo" className="w-full h-full object-cover rounded-3xl" referrerPolicy="no-referrer" />
-        ) : (
-          <CarIcon size={56} style={{ color: C.accent }} />
-        )}
-      </motion.div>
-
-      {/* Floating stat cards */}
-      {floatingCards.map((card, i) => (
-        <motion.div
-          key={i}
-          animate={{ y: [0, -7, 0] }}
-          transition={{ delay: card.delay, duration: 3 + i * 0.5, repeat: Infinity, ease: 'easeInOut' }}
-          className={`absolute ${card.className} px-4 py-3 rounded-2xl z-20`}
-          style={{
-            background: 'rgba(255,255,255,0.95)',
-            border: '1px solid rgba(220,38,38,0.14)',
-            backdropFilter: 'blur(14px)',
-            boxShadow: '0 8px 32px rgba(15,23,42,0.08)',
-          }}
-        >
-          <div className="flex items-center gap-2.5">
-            <card.icon size={20} style={{ color: C.amber }} />
-            <div>
-              <p className="font-black text-base leading-none mb-0.5"
-                style={{ color: C.accent, fontFamily: 'var(--font-display)' }}>
-                {card.value}
-              </p>
-              <p className="text-vel-muted text-[11px]">{card.label[lang]}</p>
-            </div>
-          </div>
-        </motion.div>
-      ))}
-
       {/* Corner accent dots */}
       <div className="absolute top-8 left-8 w-1.5 h-1.5 rounded-full opacity-60"
         style={{ background: C.amber }} />
@@ -157,7 +88,7 @@ function BookingSearchPanel({ lang, agencies, onSearch, hasBg }: {
 
   const fields: { label: string; icon: React.ReactNode; el: React.ReactNode }[] = [
     {
-      label: { fr: 'Agence de départ', ar: 'وكالة المغادرة' }[lang],
+      label: { fr: 'Lieu de départ', ar: 'مكان المغادرة' }[lang],
       icon: <MapPin size={13} className="text-red-500" />,
       el: (
         <select value={departureAgencyId} onChange={e => setDepartureAgencyId(e.target.value)}
@@ -168,12 +99,12 @@ function BookingSearchPanel({ lang, agencies, onSearch, hasBg }: {
       ),
     },
     {
-      label: { fr: 'Agence de retour', ar: 'وكالة الإرجاع' }[lang],
+      label: { fr: 'Lieu de retour', ar: 'مكان الإرجاع' }[lang],
       icon: <MapPin size={13} className="text-red-500" />,
       el: (
         <select value={returnAgencyId} onChange={e => setReturnAgencyId(e.target.value)}
           className={selectClass}>
-          <option value="">{{ fr: 'Même agence', ar: 'نفس الوكالة' }[lang]}</option>
+          <option value="">{{ fr: 'Même lieu', ar: 'نفس المكان' }[lang]}</option>
           {agencies.map(a => <option key={a.id} value={a.id}>{a.name} — {a.city}</option>)}
         </select>
       ),
@@ -205,10 +136,11 @@ function BookingSearchPanel({ lang, agencies, onSearch, hasBg }: {
       transition={{ duration: 0.8, delay: 0.75 }}
       className="relative z-20 rounded-3xl p-6 sm:p-8"
       style={{
-        background: 'rgba(255, 255, 255, 0.94)',
-        border: '1px solid rgba(255, 255, 255, 0.7)',
-        backdropFilter: 'blur(24px)',
-        boxShadow: '0 20px 60px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
+        background: 'rgba(255, 255, 255, 0.55)',
+        border: '1px solid rgba(255, 255, 255, 0.55)',
+        backdropFilter: 'blur(28px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(28px) saturate(150%)',
+        boxShadow: '0 20px 60px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
       }}
     >
       <p className="text-xs font-bold tracking-[0.2em] uppercase mb-5 flex items-center gap-2"
@@ -280,12 +212,6 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
   const heroY = useTransform(scrollYProgress, [0, 0.4], [0, -80]);
 
   const hasBg = !!websiteSettings?.landing_background;
-
-  const stats = [
-    { num: '#1', label: { fr: 'en Algérie', ar: 'في الجزائر' } },
-    { num: '10K+', label: { fr: 'Clients', ar: 'عملاء' } },
-    { num: '99%',  label: { fr: 'Satisfaction', ar: 'رضا العملاء' } },
-  ];
 
   const features = [
     {
@@ -444,23 +370,6 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
                 </motion.button>
               </motion.div>
 
-              {/* Stats */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.8, delay: 0.65 }}
-                className="flex gap-8 pt-4"
-                style={{ borderTop: hasBg ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(15,23,42,0.07)' }}
-              >
-                {stats.map((s, i) => (
-                  <div key={i}>
-                    <p className="font-black text-2xl" style={{ color: hasBg ? '#FFFFFF' : C.accent, fontFamily: 'var(--font-display)' }}>
-                      {s.num}
-                    </p>
-                    <p className={hasBg ? "text-slate-300 text-xs" : "text-vel-muted text-xs"}>{s.label[lang]}</p>
-                  </div>
-                ))}
-              </motion.div>
             </motion.div>
 
             {/* RIGHT: 3D (Spline) avec repli sur le visuel CSS statique */}
@@ -476,7 +385,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
               }} />
               <Hero3D
                 sceneUrl={HERO_SPLINE_SCENE_URL}
-                fallback={<HeroVisual lang={lang} logo={websiteSettings?.logo} />}
+                fallback={<HeroVisual />}
               />
             </motion.div>
           </div>

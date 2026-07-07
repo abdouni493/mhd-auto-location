@@ -7,9 +7,12 @@ import { ReservationsService } from '../services/ReservationsService';
 
 interface WebsiteOrdersProps {
   lang: Language;
+  /** Appelé après acceptation / annulation / suppression d'une commande,
+   *  pour permettre au planificateur de se rafraîchir. */
+  onOrdersChanged?: () => void;
 }
 
-export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
+export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChanged }) => {
   const [orders, setOrders] = useState<WebsiteOrder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('pending');
@@ -70,6 +73,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
         setSelectedOrder(prev => prev ? { ...prev, status: 'accepted' } : null);
       }
 
+      onOrdersChanged?.();
       console.log(`Order ${orderId} accepted and will appear in Planner as accepted`);
     } catch (err) {
       console.error('Error accepting order:', err);
@@ -95,6 +99,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
         setSelectedOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);
       }
 
+      onOrdersChanged?.();
       console.log(`Order ${orderId} cancelled`);
     } catch (err) {
       console.error('Error cancelling order:', err);
@@ -124,6 +129,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang }) => {
           setSelectedOrder(null);
           setShowOrderDetails(false);
         }
+        onOrdersChanged?.();
       } catch (err) {
         console.error('Error deleting order:', err);
         alert(lang === 'fr' ? 'Erreur lors de la suppression de la commande' : 'خطأ في حذف الطلب');
