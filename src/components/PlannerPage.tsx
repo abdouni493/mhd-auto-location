@@ -474,11 +474,6 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     return matchesSearch && matchesFilter && matchesSource && matchesDebt;
   });
 
-  // Nombre de commandes du site public en attente d'acceptation (pour l'alerte).
-  const pendingWebOrdersCount = reservations.filter(
-    r => r.source === 'website' && r.status === 'pending'
-  ).length;
-
   // Recharge les réservations (après acceptation/annulation d'une commande site).
   const reloadReservations = async () => {
     try {
@@ -633,17 +628,34 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
             <option value="cancelled">{lang === 'fr' ? 'Annulé' : 'ملغي'}</option>
           </select>
 
-          {/* Source Filter (site web / agence) */}
-          <select
-            value={filterSource}
-            onChange={(e) => setFilterSource(e.target.value as 'all' | 'website' | 'agency')}
-            className="px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            title={lang === 'fr' ? 'Filtrer par origine' : 'تصفية حسب المصدر'}
-          >
-            <option value="all">{lang === 'fr' ? 'Toutes origines' : 'كل المصادر'}</option>
-            <option value="website">{lang === 'fr' ? '🌐 Site web' : '🌐 الموقع'}</option>
-            <option value="agency">{lang === 'fr' ? '🏢 Agence' : '🏢 الوكالة'}</option>
-          </select>
+          {/* Filtres par origine (boutons) : commandes du site web / réservations agence */}
+          <div className="flex items-center gap-2">
+            {/* Commandes du site web uniquement */}
+            <button
+              onClick={() => setFilterSource(s => (s === 'website' ? 'all' : 'website'))}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+                filterSource === 'website'
+                  ? 'bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30'
+                  : 'bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100'
+              }`}
+              title={lang === 'fr' ? 'Afficher uniquement les réservations issues du site web' : 'عرض الحجوزات القادمة من الموقع فقط'}
+            >
+              🌐 {lang === 'fr' ? 'Site web' : 'الموقع'}
+            </button>
+
+            {/* Réservations créées à l'agence uniquement */}
+            <button
+              onClick={() => setFilterSource(s => (s === 'agency' ? 'all' : 'agency'))}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+                filterSource === 'agency'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30'
+                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+              title={lang === 'fr' ? "Afficher uniquement les réservations créées à l'agence" : 'عرض الحجوزات المنشأة في الوكالة فقط'}
+            >
+              🏢 {lang === 'fr' ? 'Agence' : 'الوكالة'}
+            </button>
+          </div>
 
           {/* Debt Filter Toggle */}
           <button
@@ -692,58 +704,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           {lang === 'fr' ? 'Réservation (Tarif. d\'abord)' : 'حجز (التسعير أولا)'}
         </button>
 
-        {/* Commandes du site web (avec compteur de nouvelles commandes) */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setCurrentView('web-orders')}
-          className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold rounded-lg transition-all"
-          title={lang === 'fr' ? 'Commandes reçues du site web' : 'الطلبات الواردة من الموقع'}
-        >
-          🌐 {lang === 'fr' ? 'Commandes Site' : 'طلبات الموقع'}
-          {pendingWebOrdersCount > 0 && (
-            <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center bg-red-500 text-white text-xs font-black rounded-full border-2 border-white shadow-lg animate-pulse">
-              {pendingWebOrdersCount}
-            </span>
-          )}
-        </motion.button>
       </div>
-
-      {/* Alerte : nouvelles commandes du site web en attente d'acceptation */}
-      <AnimatePresence>
-        {pendingWebOrdersCount > 0 && (
-          <motion.button
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            onClick={() => setCurrentView('web-orders')}
-            className="w-full flex items-center gap-4 bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-200 hover:border-indigo-400 rounded-2xl px-5 py-4 text-left transition-all"
-          >
-            <motion.span
-              animate={{ scale: [1, 1.15, 1] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-              className="text-2xl"
-            >
-              🔔
-            </motion.span>
-            <div className="flex-1">
-              <p className="font-black text-indigo-800">
-                {lang === 'fr'
-                  ? `${pendingWebOrdersCount} nouvelle${pendingWebOrdersCount > 1 ? 's' : ''} commande${pendingWebOrdersCount > 1 ? 's' : ''} du site web`
-                  : `${pendingWebOrdersCount} طلب جديد من الموقع`}
-              </p>
-              <p className="text-indigo-600 text-sm font-medium">
-                {lang === 'fr'
-                  ? 'En attente de votre acceptation — cliquez pour les traiter'
-                  : 'في انتظار موافقتك — انقر للمعالجة'}
-              </p>
-            </div>
-            <span className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl text-sm whitespace-nowrap">
-              {lang === 'fr' ? 'Voir →' : 'عرض →'}
-            </span>
-          </motion.button>
-        )}
-      </AnimatePresence>
 
             {/* Banner showing terminated results when searching */}
       <AnimatePresence>

@@ -108,67 +108,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {item.label[lang]}
                 </span>
                 
-                {/* Animated alert indicator for dashboard - Modern spinning design */}
+                {/* Compteur d'alertes de maintenance (onglet Tableau de bord) */}
                 {item.id === 'dashboard' && alertsCount > 0 && (
-                  <motion.div
-                    className="absolute right-3.5 top-1/2 transform -translate-y-1/2 flex items-center justify-center"
+                  <span
+                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center"
+                    title={lang === 'fr' ? `${alertsCount} alerte(s) de maintenance` : `${alertsCount} تنبيه صيانة`}
                   >
-                    {/* Outer rotating ring */}
-                    <motion.div
-                      className="absolute w-6 h-6 rounded-full border-2 border-transparent border-t-red-500 border-r-red-400"
-                      animate={{ rotate: 360 }}
-                      transition={{ 
-                        duration: 2, 
-                        repeat: Infinity,
-                        ease: "linear"
-                      }}
+                    {/* Halo pulsant */}
+                    <motion.span
+                      className="absolute inline-flex h-6 w-6 rounded-full bg-red-500/40"
+                      animate={{ scale: [1, 1.8, 1], opacity: [0.6, 0, 0.6] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
                     />
-                    
-                    {/* Middle pulsing ring */}
-                    <motion.div
-                      className="absolute w-4 h-4 rounded-full border border-red-500/50"
-                      animate={{ 
-                        scale: [1, 1.3, 1],
-                        opacity: [1, 0.4, 1]
-                      }}
-                      transition={{ 
-                        duration: 1.5, 
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
-                    />
-                    
-                    {/* Inner glowing dot */}
-                    <motion.div
-                      className="w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-orange-500 rounded-full shadow-lg shadow-red-500/80"
-                      animate={{
-                        scale: [1, 1.2, 1],
-                        boxShadow: [
-                          '0 0 8px rgba(239, 68, 68, 0.8)',
-                          '0 0 16px rgba(239, 68, 68, 1)',
-                          '0 0 8px rgba(239, 68, 68, 0.8)'
-                        ]
-                      }}
-                      transition={{
-                        duration: 1.5,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
-                    />
-                  </motion.div>
+                    {/* Pastille avec le nombre */}
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                      className="relative min-w-[22px] h-[22px] px-1.5 flex items-center justify-center bg-gradient-to-br from-red-500 to-orange-500 text-white text-[11px] font-black rounded-full shadow-lg shadow-red-500/50 ring-2 ring-white"
+                    >
+                      {alertsCount > 99 ? '99+' : alertsCount}
+                    </motion.span>
+                  </span>
                 )}
 
-                {/* Compteur des nouvelles commandes du site (onglet Planificateur) */}
-                {item.id === 'planner' && webOrdersCount > 0 && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: [1, 1.15, 1] }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-blue-600 text-white text-[10px] font-black rounded-full shadow-lg shadow-indigo-500/50"
-                    title={lang === 'fr' ? 'Nouvelles commandes du site' : 'طلبات جديدة من الموقع'}
+                {/* Compteur des nouvelles commandes du site (onglet Website commandes) */}
+                {item.id === 'web-orders' && webOrdersCount > 0 && (
+                  <span
+                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center"
+                    title={lang === 'fr' ? 'Nouvelles commandes du site en attente' : 'طلبات جديدة من الموقع في الانتظار'}
                   >
-                    {webOrdersCount}
-                  </motion.span>
+                    {/* Halo pulsant */}
+                    <motion.span
+                      className="absolute inline-flex h-6 w-6 rounded-full bg-indigo-500/40"
+                      animate={{ scale: [1, 1.8, 1], opacity: [0.6, 0, 0.6] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    {/* Pastille avec le nombre */}
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                      className="relative min-w-[22px] h-[22px] px-1.5 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-blue-600 text-white text-[11px] font-black rounded-full shadow-lg shadow-indigo-500/50 ring-2 ring-white"
+                    >
+                      {webOrdersCount > 99 ? '99+' : webOrdersCount}
+                    </motion.span>
+                  </span>
                 )}
               </button>
             ))}

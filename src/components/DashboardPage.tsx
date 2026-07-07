@@ -534,29 +534,49 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            onClick={() => navigate('/planner', { state: { openWebOrders: true } })}
-            className="w-full flex items-center gap-4 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 rounded-3xl px-6 py-5 text-left text-white shadow-xl shadow-indigo-500/20 transition-all"
+            onClick={() => navigate('/website-commandes')}
+            className="group relative w-full flex items-center gap-4 sm:gap-5 overflow-hidden bg-gradient-to-r from-indigo-500 via-blue-600 to-blue-700 rounded-3xl px-5 sm:px-6 py-5 text-left text-white shadow-xl shadow-indigo-500/30 transition-all hover:shadow-2xl hover:shadow-indigo-500/40"
           >
+            {/* Reflet animé qui balaie la carte */}
             <motion.span
-              animate={{ scale: [1, 1.2, 1], rotate: [0, -8, 8, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-              className="text-3xl flex-shrink-0"
-            >
-              🔔
-            </motion.span>
-            <div className="flex-1">
-              <p className="font-black text-lg uppercase tracking-tight">
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 skew-x-[-20deg] bg-white/10"
+              animate={{ x: ['0%', '400%'] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.4 }}
+            />
+
+            {/* Cloche + pastille du nombre */}
+            <span className="relative flex-shrink-0">
+              <motion.span
+                className="absolute -inset-2 rounded-full bg-white/25"
+                animate={{ scale: [1, 1.6, 1], opacity: [0.5, 0, 0.5] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <motion.span
+                animate={{ rotate: [0, -12, 12, -8, 8, 0] }}
+                transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 0.6 }}
+                className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-3xl backdrop-blur"
+              >
+                🔔
+              </motion.span>
+              <span className="absolute -top-1.5 -right-1.5 min-w-[24px] h-6 px-1.5 flex items-center justify-center bg-red-500 text-white text-xs font-black rounded-full ring-2 ring-white shadow-lg">
+                {pendingWebOrdersCount > 99 ? '99+' : pendingWebOrdersCount}
+              </span>
+            </span>
+
+            <div className="relative flex-1 min-w-0">
+              <p className="font-black text-base sm:text-lg uppercase tracking-tight">
                 {lang === 'fr'
                   ? `${pendingWebOrdersCount} nouvelle${pendingWebOrdersCount > 1 ? 's' : ''} commande${pendingWebOrdersCount > 1 ? 's' : ''} du site web`
                   : `${pendingWebOrdersCount} طلب جديد من الموقع`}
               </p>
-              <p className="text-indigo-100 text-sm font-medium">
+              <p className="text-indigo-100 text-xs sm:text-sm font-medium">
                 {lang === 'fr'
-                  ? 'En attente de votre acceptation — cliquez pour les traiter dans le planificateur'
-                  : 'في انتظار موافقتك — انقر لمعالجتها في المخطط'}
+                  ? 'En attente de votre acceptation — cliquez pour les traiter'
+                  : 'في انتظار موافقتك — انقر لمعالجتها'}
               </p>
             </div>
-            <span className="px-5 py-2.5 bg-white/20 backdrop-blur border border-white/30 font-bold rounded-xl text-sm whitespace-nowrap">
+            <span className="relative px-4 sm:px-5 py-2.5 bg-white/20 backdrop-blur border border-white/30 font-bold rounded-xl text-sm whitespace-nowrap transition-transform group-hover:translate-x-1">
               {lang === 'fr' ? 'Traiter →' : 'معالجة →'}
             </span>
           </motion.button>

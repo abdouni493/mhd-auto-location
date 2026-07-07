@@ -13,6 +13,7 @@ export const HERO_SPLINE_SCENE_URL = '';
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'dashboard', label: { fr: 'Tableau de bord', ar: 'لوحة القيادة' }, icon: '📊' },
   { id: 'planner', label: { fr: 'Planificateur', ar: 'المخطط' }, icon: '📅' },
+  { id: 'web-orders', label: { fr: 'Website commandes', ar: 'طلبات الموقع' }, icon: '🛒' },
   { id: 'reservations', label: { fr: 'Contrats', ar: 'العقود' }, icon: '🧾' },
   { id: 'protection-services', label: { fr: 'Protection & Services', ar: 'الحماية والخدمات' }, icon: '🛡️' },
   { id: 'vehicles', label: { fr: 'Véhicules', ar: 'المركبات' }, icon: '🚗' },
@@ -23,7 +24,6 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'personalization', label: { fr: 'Personalisation', ar: 'التخصيص' }, icon: '🎨' },
   { id: 'expenses', label: { fr: 'Dépenses', ar: 'المصاريف' }, icon: '📉' },
   { id: 'web-mgmt', label: { fr: 'Website management', ar: 'إدارة الموقع' }, icon: '🌐' },
-  { id: 'web-orders', label: { fr: 'Website commandes', ar: 'طلبات الموقع' }, icon: '🛒' },
   { id: 'car-gains', label: { fr: 'Gains par Véhicule', ar: 'الأرباح حسب المركبة' }, icon: '💰' },
   { id: 'reports', label: { fr: 'Rapports', ar: 'التقارير' }, icon: '📄' },
   { id: 'config', label: { fr: 'Configuration', ar: 'الإعدادات' }, icon: '🛠️' },
