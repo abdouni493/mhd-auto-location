@@ -148,10 +148,11 @@ export default function App() {
         console.error('Error loading alerts:', err);
         setMaintenanceAlertsCount(0);
       }
-      // Commandes du site en attente d'acceptation (badge planificateur)
+      // Commandes du site en attente d'acceptation (badge planificateur) :
+      // statut dédié 'website_reservation', avant que l'agence ne les accepte.
       try {
         const orders = await DatabaseService.getWebsiteOrders();
-        setWebOrdersCount(orders.filter(o => o.status === 'pending').length);
+        setWebOrdersCount(orders.filter(o => o.status === 'website_reservation').length);
       } catch (err) {
         console.error('Error loading website orders count:', err);
         setWebOrdersCount(0);
@@ -164,6 +165,17 @@ export default function App() {
     const interval = setInterval(loadAlerts, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [user, isAuthLoading]);
+
+  // Rafraîchit le badge « nouvelles commandes du site » (sidebar) après
+  // qu'une commande a été acceptée / annulée dans « Commandes Website ».
+  const refreshWebOrdersCount = async () => {
+    try {
+      const orders = await DatabaseService.getWebsiteOrders();
+      setWebOrdersCount(orders.filter(o => o.status === 'website_reservation').length);
+    } catch (err) {
+      console.error('Error refreshing website orders count:', err);
+    }
+  };
 
   // Load cars from database. La table cars est lisible en anonyme (RLS),
   // ce qui permet au site public d'afficher les vraies voitures sans connexion.
@@ -488,7 +500,7 @@ export default function App() {
         case 'web-mgmt':
           return <WebsiteManagementPage lang={lang} />;
         case 'web-orders':
-          return <WebsiteOrders lang={lang} />;
+          return <WebsiteOrders lang={lang} onOrdersChanged={refreshWebOrdersCount} />;
         case 'protection-services':
           return <ProtectionServicesPage lang={lang} />;
         case 'reservations':

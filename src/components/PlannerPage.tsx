@@ -438,11 +438,12 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     if (!reservation.client || !reservation.car) return false;
 
     // Les commandes du site public ne rejoignent le planificateur qu'une fois
-    // ACCEPTÉES par l'agence : on masque les 'pending' (en attente d'acceptation)
-    // et les 'cancelled' (refusées). Les réservations de l'agence ne sont pas
-    // concernées (elles s'affichent dès leur création).
+    // ACCEPTÉES par l'agence : on masque celles encore en attente
+    // ('website_reservation') et celles refusées ('cancelled'). Une fois
+    // acceptée, la commande passe 'pending' et s'affiche ici (avec le badge
+    // « 🌐 Site web »). Les réservations de l'agence s'affichent dès leur création.
     if (reservation.source === 'website' &&
-        (reservation.status === 'pending' || reservation.status === 'cancelled')) {
+        (reservation.status === 'website_reservation' || reservation.status === 'cancelled')) {
       return false;
     }
 

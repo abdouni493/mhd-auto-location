@@ -392,7 +392,9 @@ export interface ReservationDetails {
   discountType: 'percentage' | 'fixed';
   advancePayment: number;
   remainingPayment: number;
-  status: 'pending' | 'accepted' | 'confirmed' | 'active' | 'completed' | 'cancelled';
+  // 'website_reservation' : commande brute reçue du site public, en attente
+  // d'acceptation par l'agence (n'apparaît PAS dans le planificateur).
+  status: 'website_reservation' | 'pending' | 'accepted' | 'confirmed' | 'active' | 'completed' | 'cancelled';
   // Forfait d'assurance de protection sélectionné (snapshot + référence).
   protectionAssuranceId?: string;
   protectionAssuranceName?: string;
@@ -484,7 +486,8 @@ export interface WebsiteOrder {
   protectionAssurance?: ProtectionAssurance;
   protectionAssuranceName?: string;
   assuranceTotal?: number;
-  status: 'pending' | 'accepted' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
+  // 'website_reservation' : nouvelle commande en attente d'acceptation par l'agence.
+  status: 'website_reservation' | 'pending' | 'accepted' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
   createdAt: string;
   source: 'website';
 }

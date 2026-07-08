@@ -985,10 +985,13 @@ export class DatabaseService {
             )
           )
         `)
-        // load both new pending orders and those we've already accepted so they stay visible here
-        .in('status', ['pending', 'accepted'])
+        // Commandes du site EN ATTENTE d'acceptation ('website_reservation') +
+        // celles refusées ('cancelled') que l'on garde visibles ici. Une fois
+        // ACCEPTÉE, la commande passe 'pending' et migre vers le planificateur
+        // (elle disparaît donc de cette liste).
+        .in('status', ['website_reservation', 'cancelled'])
         // seules les commandes provenant du site public (source='website') —
-        // pas les réservations créées par l'agence qui seraient encore 'pending'.
+        // pas les réservations créées par l'agence.
         // Colonne ajoutée par 20260708_reservation_source.sql.
         .eq('source', 'website')
         .order('created_at', { ascending: false });
@@ -1014,7 +1017,9 @@ export class DatabaseService {
                 )
               )
             `)
-            .in('status', ['pending', 'accepted'])
+            // Sans colonne source, seul 'website_reservation' identifie de façon
+            // fiable une commande du site (statut jamais utilisé par l'agence).
+            .eq('status', 'website_reservation')
             .order('created_at', { ascending: false });
           if (retry.error) { console.warn('Website orders retry failed:', retry.error); return []; }
           return this.mapWebsiteOrders(retry.data || []);
@@ -1104,7 +1109,7 @@ export class DatabaseService {
         protectionAssurance,
         protectionAssuranceName: reservation.protection_assurance_name || undefined,
         assuranceTotal,
-        status: reservation.status || 'pending',
+        status: reservation.status || 'website_reservation',
         createdAt: reservation.created_at,
         source: 'website',
       } as WebsiteOrder;
@@ -1125,7 +1130,9 @@ export class DatabaseService {
       total_days: order.totalDays,
       total_price: order.totalPrice,
       additional_fees: order.servicesTotal,
-      status: 'pending',
+      // Nouvelle commande site = statut 'website_reservation' (en attente d'accept.)
+      status: 'website_reservation',
+      source: 'website',
     };
 
     const { data, error } = await supabase
@@ -1138,7 +1145,7 @@ export class DatabaseService {
     return order;
   }
 
-  static async updateWebsiteOrderStatus(orderId: string, status: 'pending' | 'accepted' | 'confirmed' | 'processing' | 'completed' | 'cancelled'): Promise<void> {
+  static async updateWebsiteOrderStatus(orderId: string, status: 'website_reservation' | 'pending' | 'accepted' | 'confirmed' | 'processing' | 'completed' | 'cancelled'): Promise<void> {
     // Update reservation status (website orders are reservations)
     const { error } = await supabase
       .from('reservations')

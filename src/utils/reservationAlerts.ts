@@ -22,6 +22,11 @@ export interface ReservationAlert {
 export const getReservationAlert = (
   reservation: ReservationDetails
 ): ReservationAlert | null => {
+  // Les commandes du site en attente d'acceptation ('website_reservation') ne
+  // sont pas encore des réservations opérationnelles : aucune alerte (retard,
+  // départ imminent…) tant que l'agence ne les a pas acceptées.
+  if (reservation.status === 'website_reservation') return null;
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 

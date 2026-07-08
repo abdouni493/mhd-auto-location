@@ -466,9 +466,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
 
   const reservationAlerts = getReservationAlerts(reservations);
 
-  // Commandes du site public en attente d'acceptation par l'agence.
+  // Commandes du site public en attente d'acceptation par l'agence
+  // (statut dédié 'website_reservation', avant acceptation).
   const pendingWebOrdersCount = reservations.filter(
-    r => r.source === 'website' && r.status === 'pending'
+    r => r.source === 'website' && r.status === 'website_reservation'
   ).length;
 
   // Apply alert filter

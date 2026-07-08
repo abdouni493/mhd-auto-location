@@ -59,6 +59,8 @@ export class ReservationsService {
     protectionAssurancePrice?: number | null;
     createdBy?: string;
     createdByName?: string;
+    // Origine : 'agency' (créée par l'admin, défaut) ou 'website' (site public).
+    source?: 'website' | 'agency';
   }): Promise<{ id: string }> {
     const { data: reservation, error } = await supabase
       .from('reservations')
@@ -93,6 +95,9 @@ export class ReservationsService {
         protection_assurance_price: data.protectionAssurancePrice || 0,
         created_by: data.createdBy || null,
         created_by_name: data.createdByName || null,
+        // Réservations créées ici = origine agence par défaut. Marquée
+        // explicitement pour que le planificateur affiche « 🏢 Agence ».
+        source: data.source || 'agency',
       }])
       .select()
       .single();
