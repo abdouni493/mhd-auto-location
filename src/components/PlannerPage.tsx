@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Language, ReservationDetails, Client, Car } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, MoreVertical, Grid3x3, CalendarDays, X, Zap, Gauge, Heart, ChevronDown } from 'lucide-react';
+import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, Grid3x3, CalendarDays, X, Zap, Gauge, Heart, ChevronDown } from 'lucide-react';
 import { ReservationDetailsView } from './ReservationDetailsView';
 import { CreateReservationForm } from './CreateReservationForm';
 import { EditReservationForm } from './EditReservationForm';
@@ -1140,194 +1140,187 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => handleViewDetails(reservation)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-3 rounded-lg transition-colors"
-                >
-                  👁️ {lang === 'fr' ? 'Détails' : 'التفاصيل'}
-                </button>
-                <button
-                  onClick={() => handleEdit(reservation)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 font-bold py-2 px-3 rounded-lg transition-colors"
-                >
-                  ✏️ {lang === 'fr' ? 'Modifier' : 'تعديل'}
-                </button>
-                <button
-                  onClick={() => handleDelete(reservation)}
-                  className="flex items-center justify-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-3 rounded-lg transition-colors"
-                >
-                  🗑️
-                </button>
-              </div>
-
-              {/* Special Actions Row */}
-              <div className="flex gap-2 items-center flex-wrap">
-                {/* Pending Status - Start Inspection */}
+              <div className="space-y-2">
+                {/* Action principale selon le statut */}
                 {reservation.status === 'pending' && (
                   <button
                     onClick={() => {
-                      // Open inspection mode for pending reservation
                       setSelectedReservation(reservation);
                       setShowInspectionMode(true);
                       setCurrentView('create');
                     }}
-                    className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
                   >
                     📋 {lang === 'fr' ? 'Inspection' : 'الفحص'}
                   </button>
                 )}
 
-                {/* Accepted Status - Start Inspection (same as pending) */}
                 {reservation.status === 'accepted' && (
                   <button
                     onClick={() => {
-                      // Open inspection mode for accepted reservation in edit mode
                       setSelectedReservation({ ...reservation });
                       setShowInspectionMode(true);
                       setCurrentView('edit');
                     }}
-                    className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
                   >
                     📋 {lang === 'fr' ? 'Inspection' : 'الفحص'}
                   </button>
                 )}
 
-                {/* Confirmed Status - Activate Button */}
                 {reservation.status === 'confirmed' && (
                   <button
                     onClick={() => handleActivate(reservation)}
-                    className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
                   >
                     ✅ {lang === 'fr' ? 'Activer' : 'تفعيل'}
                   </button>
                 )}
 
-                {/* Active Status - Complete Button */}
                 {reservation.status === 'active' && (
                   <button
                     onClick={() => handleComplete(reservation)}
-                    className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
                   >
                     🏁 {lang === 'fr' ? 'Terminer' : 'إنهاء'}
                   </button>
                 )}
 
-                {/* Completed Status - Convert to Active Button */}
-                {reservation.status === 'completed' && (
+                {(reservation.status === 'completed' || reservation.status === 'terminated') && (
                   <button
                     onClick={() => handleActivate(reservation)}
-                    className="flex-1 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
                   >
                     🔄 {lang === 'fr' ? 'Réactiver' : 'إعادة تفعيل'}
                   </button>
                 )}
 
-                {/* Terminated Status - Convert to Active Button */}
-                {reservation.status === 'terminated' && (
-                  <button
-                    onClick={() => handleActivate(reservation)}
-                    className="flex-1 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
-                  >
-                    🔄 {lang === 'fr' ? 'Réactiver' : 'إعادة تفعيل'}
-                  </button>
-                )}
-
-                {/* Pay Debt Button - only when remaining > 0 */}
+                {/* Paiement de la dette (si solde dû) */}
                 {remainingAmount > 0 && (
                   <button
                     onClick={() => setShowDebtModal({ reservation })}
-                    className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm flex items-center justify-center gap-2"
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
                   >
-                    💰 {lang === 'fr' ? 'Payer dette' : 'سداد الدين'}
+                    💰 {lang === 'fr' ? 'Payer la dette' : 'سداد الدين'}
                   </button>
                 )}
 
-                {/* Print Menu Button */}
-                <div className="relative">
+                {/* Actions utilitaires (rangée uniforme) */}
+                <div className="grid grid-cols-4 gap-2 pt-1">
                   <button
-                    ref={el => (buttonRefs.current[reservation.id] = el)}
-                    onClick={() => {
-                      const btn = buttonRefs.current[reservation.id];
-                      if (btn) {
-                        const rect = btn.getBoundingClientRect();
-                        const card = btn.closest('.bg-white.rounded-2xl');
-                        if (card instanceof HTMLElement) {
-                          const cardRect = card.getBoundingClientRect();
-                          const spaceRight = cardRect.right - rect.right;
-                          const menuWidth = 200; // approximate
-                          setMenuDirections(prev => ({
-                            ...prev,
-                            [reservation.id]: spaceRight < menuWidth ? 'left' : 'right'
-                          }));
-                        }
-                      }
-                      setOpenPrintMenu(openPrintMenu === reservation.id ? null : reservation.id);
-                    }}
-                    className="p-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg transition-colors flex items-center gap-1"
-                    title={lang === 'fr' ? 'Plus d\'options' : 'خيارات أكثر'}
+                    onClick={() => handleViewDetails(reservation)}
+                    className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-saas-bg border border-saas-border text-saas-text-muted hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all"
+                    title={lang === 'fr' ? 'Détails' : 'التفاصيل'}
                   >
-                    <MoreVertical className="w-4 h-4" />
+                    <Eye className="w-4 h-4" />
+                    <span className="text-[9px] font-bold uppercase tracking-wide">{lang === 'fr' ? 'Détails' : 'تفاصيل'}</span>
                   </button>
-                  
-                  {/* Dropdown Menu */}
-                  <AnimatePresence>
-                    {openPrintMenu === reservation.id && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 5 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 5 }}
-                        transition={{ duration: 0.2 }}
-                        className={`absolute bottom-12 bg-white rounded-lg shadow-2xl border border-saas-border z-50 min-w-max overflow-hidden ${menuDirections[reservation.id] === 'left' ? 'right-0' : 'left-0'}` }
-                      >
-                        <button
-                          onClick={() => handlePrint(reservation, 'quote')}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+
+                  <button
+                    onClick={() => handleEdit(reservation)}
+                    className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-saas-bg border border-saas-border text-saas-text-muted hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-all"
+                    title={lang === 'fr' ? 'Modifier' : 'تعديل'}
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="text-[9px] font-bold uppercase tracking-wide">{lang === 'fr' ? 'Modifier' : 'تعديل'}</span>
+                  </button>
+
+                  {/* Documents / impression */}
+                  <div className="relative">
+                    <button
+                      ref={el => (buttonRefs.current[reservation.id] = el)}
+                      onClick={() => {
+                        const btn = buttonRefs.current[reservation.id];
+                        if (btn) {
+                          const rect = btn.getBoundingClientRect();
+                          const card = btn.closest('.bg-white.rounded-2xl');
+                          if (card instanceof HTMLElement) {
+                            const cardRect = card.getBoundingClientRect();
+                            const spaceRight = cardRect.right - rect.right;
+                            const menuWidth = 200; // approximate
+                            setMenuDirections(prev => ({
+                              ...prev,
+                              [reservation.id]: spaceRight < menuWidth ? 'left' : 'right'
+                            }));
+                          }
+                        }
+                        setOpenPrintMenu(openPrintMenu === reservation.id ? null : reservation.id);
+                      }}
+                      className="w-full flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-saas-bg border border-saas-border text-saas-text-muted hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all"
+                      title={lang === 'fr' ? 'Documents' : 'وثائق'}
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span className="text-[9px] font-bold uppercase tracking-wide">{lang === 'fr' ? 'Docs' : 'وثائق'}</span>
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    <AnimatePresence>
+                      {openPrintMenu === reservation.id && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: 5 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                          transition={{ duration: 0.2 }}
+                          className={`absolute bottom-full mb-2 bg-white rounded-lg shadow-2xl border border-saas-border z-50 min-w-max overflow-hidden ${menuDirections[reservation.id] === 'left' ? 'right-0' : 'left-0'}`}
                         >
-                          📋 {lang === 'fr' ? 'Devis' : 'عرض أسعار'}
-                        </button>
-                        <button
-                          onClick={() => handlePrint(reservation, 'contract')}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
-                        >
-                          📄 {lang === 'fr' ? 'Contrat' : 'عقد'}
-                        </button>
-                        <button
-                          onClick={() => handlePrint(reservation, 'invoice')}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
-                        >
-                          🧾 {lang === 'fr' ? 'Facture' : 'الفاتورة'}
-                        </button>
-                        <button
-                          onClick={() => handlePrint(reservation, 'versement')}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
-                        >
-                          💳 {lang === 'fr' ? 'Reçu' : 'إيصال'}
-                        </button>
-                        <button
-                          onClick={() => handlePrint(reservation, 'engagement')}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
-                        >
-                          🤝 {lang === 'fr' ? 'Engagement' : 'التزام'}
-                        </button>
-                        <button
-                          onClick={() => handlePrint(reservation, 'inspection')}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
-                        >
-                          🔍 {lang === 'fr' ? 'Inspection' : 'فحص المركبة'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowSendContractModal(reservation);
-                            setOpenPrintMenu(null);
-                          }}
-                          className="w-full text-left px-4 py-3 hover:bg-green-50 text-saas-text-main font-bold flex items-center gap-2 transition-colors"
-                        >
-                          📧 {lang === 'fr' ? 'Envoyer par Email' : 'إرسال بالبريد الإلكتروني'}
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                          <button
+                            onClick={() => handlePrint(reservation, 'quote')}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                          >
+                            📋 {lang === 'fr' ? 'Devis' : 'عرض أسعار'}
+                          </button>
+                          <button
+                            onClick={() => handlePrint(reservation, 'contract')}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                          >
+                            📄 {lang === 'fr' ? 'Contrat' : 'عقد'}
+                          </button>
+                          <button
+                            onClick={() => handlePrint(reservation, 'invoice')}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                          >
+                            🧾 {lang === 'fr' ? 'Facture' : 'الفاتورة'}
+                          </button>
+                          <button
+                            onClick={() => handlePrint(reservation, 'versement')}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                          >
+                            💳 {lang === 'fr' ? 'Reçu' : 'إيصال'}
+                          </button>
+                          <button
+                            onClick={() => handlePrint(reservation, 'engagement')}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                          >
+                            🤝 {lang === 'fr' ? 'Engagement' : 'التزام'}
+                          </button>
+                          <button
+                            onClick={() => handlePrint(reservation, 'inspection')}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                          >
+                            🔍 {lang === 'fr' ? 'Inspection' : 'فحص المركبة'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowSendContractModal(reservation);
+                              setOpenPrintMenu(null);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-green-50 text-saas-text-main font-bold flex items-center gap-2 transition-colors"
+                          >
+                            📧 {lang === 'fr' ? 'Envoyer par Email' : 'إرسال بالبريد الإلكتروني'}
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  <button
+                    onClick={() => handleDelete(reservation)}
+                    className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-saas-bg border border-saas-border text-saas-text-muted hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-all"
+                    title={lang === 'fr' ? 'Supprimer' : 'حذف'}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="text-[9px] font-bold uppercase tracking-wide">{lang === 'fr' ? 'Suppr.' : 'حذف'}</span>
+                  </button>
                 </div>
               </div>
             </div>
