@@ -40,6 +40,10 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChan
   };
 
   const filteredOrders = orders.filter(order => {
+    // Sécurité : cette page n'affiche QUE les commandes issues du site public
+    // (source = 'website'). Les réservations créées à l'agence n'y figurent jamais.
+    if (order.source !== 'website') return false;
+
     const matchesSearch =
       order.step2.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.step2.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
