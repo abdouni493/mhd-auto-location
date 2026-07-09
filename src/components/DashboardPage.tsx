@@ -528,6 +528,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
 
   return (
     <div className="space-y-8">
+
       {/* Alerte : nouvelles commandes du site web en attente d'acceptation */}
       <AnimatePresence>
         {pendingWebOrdersCount > 0 && (
@@ -584,54 +585,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
         )}
       </AnimatePresence>
 
-      {/* Alert Filter Controls - Simple & Clean Design */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-bold text-saas-text-main uppercase tracking-widest">
+      {/* Alert Filter Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white rounded-2xl border border-saas-border shadow-sm p-4">
+        <h3 className="text-xs font-bold text-saas-text-muted uppercase tracking-widest sm:mr-1">
           {lang === 'fr' ? 'Filtrer les alertes' : 'تصفية التنبيهات'}
         </h3>
-        
-        <div className="flex flex-wrap gap-3">
-          <motion.button
-            whileHover={{ y: -2, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setAlertFilter('all')}
-            className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wide transition-all duration-300 flex items-center gap-2 border-2 ${
-              alertFilter === 'all'
-                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-transparent shadow-lg shadow-blue-500/30'
-                : 'bg-white/5 border-blue-200/30 text-blue-100 hover:bg-white/10 hover:border-blue-300/50'
-            }`}
-          >
-            <span className="text-xl">📋</span>
-            <span>{lang === 'fr' ? 'Toutes' : 'الجميع'}</span>
-          </motion.button>
-          
-          <motion.button
-            whileHover={{ y: -2, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setAlertFilter('maintenance')}
-            className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wide transition-all duration-300 flex items-center gap-2 border-2 ${
-              alertFilter === 'maintenance'
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-transparent shadow-lg shadow-emerald-500/30'
-                : 'bg-white/5 border-emerald-200/30 text-emerald-100 hover:bg-white/10 hover:border-emerald-300/50'
-            }`}
-          >
-            <span className="text-xl">🔧</span>
-            <span>{lang === 'fr' ? 'Maintenance' : 'الصيانة'}</span>
-          </motion.button>
-          
-          <motion.button
-            whileHover={{ y: -2, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setAlertFilter('reservations')}
-            className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wide transition-all duration-300 flex items-center gap-2 border-2 ${
-              alertFilter === 'reservations'
-                ? 'bg-gradient-to-r from-cyan-500 to-sky-600 text-white border-transparent shadow-lg shadow-cyan-500/30'
-                : 'bg-white/5 border-cyan-200/30 text-cyan-100 hover:bg-white/10 hover:border-cyan-300/50'
-            }`}
-          >
-            <span className="text-xl">📅</span>
-            <span>{lang === 'fr' ? 'Réservations' : 'الحجوزات'}</span>
-          </motion.button>
+
+        <div className="flex flex-wrap gap-2">
+          {([
+            { key: 'all',          fr: 'Toutes',       ar: 'الجميع',  emoji: '📋', active: 'from-blue-500 to-indigo-600 shadow-blue-500/30' },
+            { key: 'maintenance',  fr: 'Maintenance',  ar: 'الصيانة', emoji: '🔧', active: 'from-emerald-500 to-teal-600 shadow-emerald-500/30' },
+            { key: 'reservations', fr: 'Réservations', ar: 'الحجوزات', emoji: '📅', active: 'from-cyan-500 to-sky-600 shadow-cyan-500/30' },
+          ] as const).map(opt => (
+            <motion.button
+              key={opt.key}
+              whileHover={{ y: -1, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setAlertFilter(opt.key)}
+              className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wide transition-all duration-300 flex items-center gap-2 border ${
+                alertFilter === opt.key
+                  ? `bg-gradient-to-r ${opt.active} text-white border-transparent shadow-lg`
+                  : 'bg-saas-bg border-saas-border text-saas-text-muted hover:text-saas-text-main hover:border-saas-primary-via/40'
+              }`}
+            >
+              <span className="text-base">{opt.emoji}</span>
+              <span>{lang === 'fr' ? opt.fr : opt.ar}</span>
+            </motion.button>
+          ))}
         </div>
       </div>
 
@@ -1512,200 +1492,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
           </div>
         </motion.div>
       </div>
-
-      {/* Enhanced Maintenance Alerts */}
-      <motion.div
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1 }}
-        className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 p-8 rounded-3xl border border-slate-200 shadow-xl"
-      >
-        <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-slate-400/10 to-gray-500/10 rounded-full -translate-y-20 translate-x-20"></div>
-
-        <div className="relative">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <motion.div
-                animate={{ rotate: [0, 15, -15, 0] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="text-4xl"
-              >
-                🔧
-              </motion.div>
-              <div>
-                <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">
-                  {lang === 'fr' ? 'Alertes de Maintenance' : 'تنبيهات الصيانة'}
-                </h3>
-                <p className="text-slate-600 text-sm font-medium mt-1">
-                  {lang === 'fr' ? 'Suivi des véhicules et interventions' : 'متابعة المركبات والتدخلات'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              {criticalAlerts.length > 0 && (
-                <motion.div
-                  animate={{ scale: [1, 1.05, 1] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full text-sm font-bold uppercase shadow-lg"
-                >
-                  <span className="text-lg">🚨</span>
-                  {criticalAlerts.length} {lang === 'fr' ? 'Critiques' : 'حرجة'}
-                </motion.div>
-              )}
-              {highAlerts.length > 0 && (
-                <motion.div
-                  animate={{ scale: [1, 1.03, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-full text-sm font-bold uppercase shadow-lg"
-                >
-                  <span className="text-lg">⚠️</span>
-                  {highAlerts.length} {lang === 'fr' ? 'Élevées' : 'مرتفعة'}
-                </motion.div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Critical alerts first */}
-            {criticalAlerts.slice(0, 3).map((alert, index) => (
-              <motion.button
-                key={alert.id}
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ delay: 1.1 + index * 0.1 }}
-                whileHover={{ scale: 1.02 }}
-                onClick={() => handleAlertClick(alert)}
-                className="relative text-left overflow-hidden bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-2xl border-2 border-red-200 shadow-lg hover:shadow-red-500/25 transition-all active:scale-95"
-              >
-                <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/10 rounded-full -translate-y-8 translate-x-8"></div>
-                <div className="relative">
-                  <div className="flex items-start gap-3 mb-4">
-                    <motion.div
-                      animate={{ rotate: [0, 10, -10, 0] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className="text-3xl"
-                    >
-                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : alert.type === 'controle' ? '🔍' : '⛓️'}
-                    </motion.div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-red-800 uppercase tracking-tighter text-sm mb-1">
-                        {alert.title}
-                      </h4>
-                      <p className="text-red-700 text-sm">{alert.message}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-red-600">
-                    <span className="font-medium">{alert.carInfo ? alert.carInfo.split(' - ')[0] : 'N/A'}</span>
-                    <span className={`font-bold ${alert.isExpired ? 'text-red-800' : ''}`}>
-                      {alert.isExpired
-                        ? (lang === 'fr' ? 'Expiré' : 'منتهي الصلاحية')
-                        : (lang === 'fr' ? `${alert.daysUntilDue} jours` : `${alert.daysUntilDue} أيام`)
-                      }
-                    </span>
-                  </div>
-                </div>
-              </motion.button>
-            ))}
-
-            {/* High priority alerts */}
-            {highAlerts.slice(0, 3).map((alert, index) => (
-              <motion.button
-                key={alert.id}
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ delay: 1.2 + index * 0.1 }}
-                whileHover={{ scale: 1.02 }}
-                onClick={() => handleAlertClick(alert)}
-                className="relative text-left overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-2xl border-2 border-orange-200 shadow-lg hover:shadow-orange-500/25 transition-all active:scale-95"
-              >
-                <div className="absolute top-0 right-0 w-16 h-16 bg-orange-500/10 rounded-full -translate-y-8 translate-x-8"></div>
-                <div className="relative">
-                  <div className="flex items-start gap-3 mb-4">
-                    <motion.div
-                      animate={{ scale: [1, 1.1, 1] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                      className="text-3xl"
-                    >
-                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : alert.type === 'controle' ? '🔍' : '⛓️'}
-                    </motion.div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-orange-800 uppercase tracking-tighter text-sm mb-1">
-                        {alert.title}
-                      </h4>
-                      <p className="text-orange-700 text-sm">{alert.message}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-orange-600">
-                    <span className="font-medium">{alert.carInfo ? alert.carInfo.split(' - ')[0] : 'N/A'}</span>
-                    <span className="font-bold">
-                      {lang === 'fr' ? `${alert.daysUntilDue} jours` : `${alert.daysUntilDue} أيام`}
-                    </span>
-                  </div>
-                </div>
-              </motion.button>
-            ))}
-
-            {/* Other alerts */}
-            {otherAlerts.slice(0, 3).map((alert, index) => (
-              <motion.button
-                key={alert.id}
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ delay: 1.3 + index * 0.1 }}
-                whileHover={{ scale: 1.02 }}
-                onClick={() => handleAlertClick(alert)}
-                className="relative text-left overflow-hidden bg-gradient-to-br from-green-50 to-emerald-100 p-6 rounded-2xl border-2 border-green-200 shadow-lg hover:shadow-green-500/25 transition-all active:scale-95"
-              >
-                <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/10 rounded-full -translate-y-8 translate-x-8"></div>
-                <div className="relative">
-                  <div className="flex items-start gap-3 mb-4">
-                    <motion.div
-                      animate={{ scale: [1, 1.08, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className="text-3xl"
-                    >
-                      {alert.type === 'vidange' ? '🛢️' : alert.type === 'assurance' ? '🛡️' : alert.type === 'controle' ? '🔍' : '⛓️'}
-                    </motion.div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-green-800 uppercase tracking-tighter text-sm mb-1">
-                        {alert.title}
-                      </h4>
-                      <p className="text-green-700 text-sm">{alert.message}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-green-600">
-                    <span className="font-medium">{alert.carInfo ? alert.carInfo.split(' - ')[0] : 'N/A'}</span>
-                    <span className="font-bold">
-                      {lang === 'fr' ? `${alert.daysUntilDue} jours` : `${alert.daysUntilDue} أيام`}
-                    </span>
-                  </div>
-                </div>
-              </motion.button>
-            ))}
-          </div>
-
-          {alerts.length > 9 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.5 }}
-              className="text-center mt-8"
-            >
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-8 py-3 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-2xl hover:from-slate-700 hover:to-slate-800 transition-all font-bold uppercase tracking-widest text-sm shadow-lg"
-              >
-                👁️ {lang === 'fr' ? 'Voir Toutes les Alertes' : 'عرض جميع التنبيهات'}
-              </motion.button>
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
 
       {/* Enhanced Quick Actions */}
       <motion.div
