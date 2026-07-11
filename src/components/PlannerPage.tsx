@@ -2610,7 +2610,7 @@ export const PersonalizationModal: React.FC<{
     }
   };
 
-  const generateContractHTML = (templateLang: 'fr' | 'ar'): string => {
+  const generateContractHTML = (templateLang: 'fr' | 'ar', societe?: { conducteur: string; rc: string; art: string; nis: string; nif: string; email: string } | null): string => {
     const isFrench = templateLang === 'fr';
     const textDir = isFrench ? 'ltr' : 'rtl';
     
@@ -2658,7 +2658,11 @@ export const PersonalizationModal: React.FC<{
       : ['رخصة قيادة سارية', 'تأمين شامل', 'ضمان الإيداع', 'خزان ممتلئ', 'حالة المركبة مقبولة', 'لا توجد أضرار إضافية'];
 
     const hasSecondConductor = !!secondConductor;
-    const baseFontSize = hasSecondConductor ? 17 : 18;
+    const hasSociete = !!societe;
+    // Compact the layout whenever there is an extra block to fit (second
+    // conductor and/or the société card) so everything stays on one page.
+    const compact = hasSecondConductor || hasSociete;
+    const baseFontSize = compact ? 17 : 18;
     const scaleFactor = 1;
 
     const html = `
@@ -2671,7 +2675,7 @@ export const PersonalizationModal: React.FC<{
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
           font-family: 'Segoe UI', Arial, sans-serif;
-          line-height: ${hasSecondConductor ? '1.4' : '1.45'};
+          line-height: ${compact ? '1.4' : '1.45'};
           color: #222;
           background: white;
           direction: ${textDir};
@@ -2682,7 +2686,7 @@ export const PersonalizationModal: React.FC<{
         .page {
           width: 210mm;
           height: 297mm;
-          padding: ${hasSecondConductor ? '2mm' : '2.5mm'};
+          padding: ${compact ? '2mm' : '2.5mm'};
           margin: 0 auto;
           background: white;
           display: flex;
@@ -2693,15 +2697,15 @@ export const PersonalizationModal: React.FC<{
         }
         .header {
           border-bottom: 3px solid #1a3a8a;
-          padding-bottom: ${hasSecondConductor ? '2px' : '3px'};
-          margin-bottom: ${hasSecondConductor ? '3px' : '4px'};
+          padding-bottom: ${compact ? '2px' : '3px'};
+          margin-bottom: ${compact ? '3px' : '4px'};
           display: flex;
           align-items: center;
           gap: 8px;
         }
         .logo {
-          width: ${hasSecondConductor ? '30px' : '35px'};
-          height: ${hasSecondConductor ? '30px' : '35px'};
+          width: ${compact ? '30px' : '35px'};
+          height: ${compact ? '30px' : '35px'};
           object-fit: contain;
           flex-shrink: 0;
         }
@@ -2709,14 +2713,14 @@ export const PersonalizationModal: React.FC<{
           flex: 1;
         }
         .agency-name {
-          font-size: ${hasSecondConductor ? '18px' : '20px'};
+          font-size: ${compact ? '18px' : '20px'};
           font-weight: bold;
           color: #1a3a8a;
           text-align: center;
           margin: 0 0 2px 0;
         }
         .agency-contact {
-          font-size: ${hasSecondConductor ? '7px' : '8px'};
+          font-size: ${compact ? '7px' : '8px'};
           color: #555;
           text-align: center;
           line-height: 1.2;
@@ -2737,7 +2741,7 @@ export const PersonalizationModal: React.FC<{
           display: none;
         }
         .contract-title {
-          font-size: ${hasSecondConductor ? '12px' : '14px'};
+          font-size: ${compact ? '12px' : '14px'};
           color: #555;
           text-align: center;
           margin-top: 1px;
@@ -2745,13 +2749,13 @@ export const PersonalizationModal: React.FC<{
         .header-info {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
-          gap: ${hasSecondConductor ? '2px' : '3px'};
-          margin-bottom: ${hasSecondConductor ? '3px' : '4px'};
+          gap: ${compact ? '2px' : '3px'};
+          margin-bottom: ${compact ? '3px' : '4px'};
         }
         .info-box {
-          padding: ${hasSecondConductor ? '3px 4px' : '4px 5px'};
+          padding: ${compact ? '3px 4px' : '4px 5px'};
           border-radius: 3px;
-          font-size: ${hasSecondConductor ? '11px' : '12px'};
+          font-size: ${compact ? '11px' : '12px'};
           line-height: 1.3;
         }
         .info-box.blue {
@@ -2770,16 +2774,16 @@ export const PersonalizationModal: React.FC<{
           font-weight: 600;
           color: #222;
           margin-bottom: 1px;
-          font-size: ${hasSecondConductor ? '10px' : '11px'};
+          font-size: ${compact ? '10px' : '11px'};
         }
         .info-value {
           color: #333;
-          font-size: ${hasSecondConductor ? '11px' : '12px'};
+          font-size: ${compact ? '11px' : '12px'};
         }
         .section {
-          margin-bottom: ${hasSecondConductor ? '3px' : '4px'};
+          margin-bottom: ${compact ? '3px' : '4px'};
           page-break-inside: avoid;
-          padding: ${hasSecondConductor ? '3px 4px' : '4px 5px'};
+          padding: ${compact ? '3px 4px' : '4px 5px'};
           border-radius: 4px;
           border: 1px solid #e5e7eb;
         }
@@ -2804,37 +2808,37 @@ export const PersonalizationModal: React.FC<{
           border: 1px solid #e9d5ff;
         }
         .section-title {
-          font-size: ${hasSecondConductor ? '11px' : '12px'};
+          font-size: ${compact ? '11px' : '12px'};
           font-weight: 700;
           background-color: #f0f1f3;
-          padding: ${hasSecondConductor ? '2px 3px' : '3px 4px'};
+          padding: ${compact ? '2px 3px' : '3px 4px'};
           border-radius: 2px;
-          margin-bottom: ${hasSecondConductor ? '2px' : '3px'};
+          margin-bottom: ${compact ? '2px' : '3px'};
           border-left: 4px solid #2563eb;
           color: #1a3a8a;
         }
         .section-content {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${hasSecondConductor ? '6px 5px' : '9px 7px'};
-          font-size: ${hasSecondConductor ? '14px' : '15px'};
+          gap: ${compact ? '6px 5px' : '9px 7px'};
+          font-size: ${compact ? '14px' : '15px'};
         }
         .section-content.full {
           grid-template-columns: 1fr 1fr 1fr;
         }
         .field {
-          padding: ${hasSecondConductor ? '1px 0' : '2px 0'};
+          padding: ${compact ? '1px 0' : '2px 0'};
           border-bottom: 0.5px solid #ddd;
         }
         .field-label {
           font-weight: 600;
           color: #1a3a8a;
-          font-size: ${hasSecondConductor ? '13px' : '14px'};
+          font-size: ${compact ? '13px' : '14px'};
         }
         .field-value {
           color: #444;
           margin-top: 0px;
-          font-size: ${hasSecondConductor ? '14px' : '15px'};
+          font-size: ${compact ? '14px' : '15px'};
         }
         .pricing-table {
           width: 100%;
@@ -2845,34 +2849,34 @@ export const PersonalizationModal: React.FC<{
         .pricing-row {
           display: flex;
           justify-content: space-between;
-          padding: ${hasSecondConductor ? '1px 0' : '2px 0'};
+          padding: ${compact ? '1px 0' : '2px 0'};
           border-bottom: 0.5px solid #ddd;
         }
         .pricing-row.total {
           border-top: 1px solid #222;
           font-weight: 600;
           margin-top: 1px;
-          padding-top: ${hasSecondConductor ? '1px' : '2px'};
+          padding-top: ${compact ? '1px' : '2px'};
         }
         .pricing-row.grand-total {
-          font-size: ${hasSecondConductor ? '13px' : '14px'};
+          font-size: ${compact ? '13px' : '14px'};
           font-weight: 700;
           color: #1a3a8a;
           border-top: 2px solid #1a3a8a;
-          padding-top: ${hasSecondConductor ? '1px' : '2px'};
+          padding-top: ${compact ? '1px' : '2px'};
         }
         .conditions-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${hasSecondConductor ? '4px 5px' : '5px 6px'};
-          font-size: ${hasSecondConductor ? '13px' : '14px'};
-          margin-bottom: ${hasSecondConductor ? '3px' : '4px'};
+          gap: ${compact ? '4px 5px' : '5px 6px'};
+          font-size: ${compact ? '13px' : '14px'};
+          margin-bottom: ${compact ? '3px' : '4px'};
         }
         .condition-item {
           display: flex;
           align-items: center;
           gap: 3px;
-          line-height: ${hasSecondConductor ? '1.2' : '1.25'};
+          line-height: ${compact ? '1.2' : '1.25'};
         }
         .checkbox {
           width: 12px;
@@ -2887,27 +2891,64 @@ export const PersonalizationModal: React.FC<{
         .signatures {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${hasSecondConductor ? '13px' : '20px'};
+          gap: ${compact ? '13px' : '20px'};
           margin-top: auto;
-          font-size: ${hasSecondConductor ? '13px' : '14px'};
-          padding-top: ${hasSecondConductor ? '3px' : '4px'};
+          font-size: ${compact ? '13px' : '14px'};
+          padding-top: ${compact ? '3px' : '4px'};
         }
         .signature-block {
           text-align: center;
         }
         .signature-line {
           border-top: 1px solid #333;
-          margin-bottom: ${hasSecondConductor ? '1px' : '2px'};
-          height: ${hasSecondConductor ? '20px' : '25px'};
+          margin-bottom: ${compact ? '1px' : '2px'};
+          height: ${compact ? '20px' : '25px'};
         }
         .signature-label {
           font-weight: 600;
-          font-size: ${hasSecondConductor ? '12px' : '13px'};
+          font-size: ${compact ? '12px' : '13px'};
         }
         .date-sig {
-          font-size: ${hasSecondConductor ? '9px' : '10px'};
+          font-size: ${compact ? '9px' : '10px'};
           color: #666;
           margin-top: 1px;
+        }
+        /* Société / Entreprise card (shown above vehicle info) */
+        .societe-card {
+          margin-bottom: ${compact ? '3px' : '4px'};
+          padding: ${compact ? '3px 5px' : '4px 6px'};
+          border-radius: 4px;
+          border: 1px solid #c7d2fe;
+          border-left: 4px solid #1a3a8a;
+          background-color: #eef2ff;
+          page-break-inside: avoid;
+        }
+        .societe-card-title {
+          font-size: ${compact ? '11px' : '12px'};
+          font-weight: 700;
+          color: #1a3a8a;
+          margin-bottom: ${compact ? '2px' : '3px'};
+        }
+        .societe-card-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: ${compact ? '3px 8px' : '4px 10px'};
+        }
+        .societe-card-field {
+          display: flex;
+          flex-direction: column;
+          border-bottom: 0.5px solid #c7d2fe;
+          padding: ${compact ? '1px 0' : '2px 0'};
+        }
+        .societe-card-label {
+          font-weight: 600;
+          color: #1a3a8a;
+          font-size: ${compact ? '10px' : '11px'};
+        }
+        .societe-card-value {
+          color: #333;
+          font-size: ${compact ? '12px' : '13px'};
+          word-break: break-word;
         }
         /* =============================================================
            PRINT STYLES - FIXES FOR A4 CENTERED LAYOUT
@@ -2954,7 +2995,7 @@ export const PersonalizationModal: React.FC<{
             border: 2px solid black;
             left: 0;
             right: 0;
-            transform: scale(1.15);
+            transform: scale(${hasSociete ? '1.08' : '1.15'});
             transform-origin: top center;
           }
           
@@ -3025,6 +3066,21 @@ export const PersonalizationModal: React.FC<{
             </div>
           </div>
         </div>
+
+        ${societe ? `
+        <!-- Société / Entreprise Card (above vehicle info) -->
+        <div class="societe-card">
+          <div class="societe-card-title">🏢 ${isFrench ? 'Informations Société' : 'معلومات الشركة'}</div>
+          <div class="societe-card-grid">
+            ${societe.conducteur ? `<div class="societe-card-field"><span class="societe-card-label">${isFrench ? 'Conducteur' : 'المسؤول'}</span><span class="societe-card-value">${societe.conducteur}</span></div>` : ''}
+            ${societe.rc ? `<div class="societe-card-field"><span class="societe-card-label">RC</span><span class="societe-card-value">${ltr(societe.rc)}</span></div>` : ''}
+            ${societe.art ? `<div class="societe-card-field"><span class="societe-card-label">ART</span><span class="societe-card-value">${ltr(societe.art)}</span></div>` : ''}
+            ${societe.nis ? `<div class="societe-card-field"><span class="societe-card-label">NIS</span><span class="societe-card-value">${ltr(societe.nis)}</span></div>` : ''}
+            ${societe.nif ? `<div class="societe-card-field"><span class="societe-card-label">NIF</span><span class="societe-card-value">${ltr(societe.nif)}</span></div>` : ''}
+            ${societe.email ? `<div class="societe-card-field"><span class="societe-card-label">Email</span><span class="societe-card-value">${ltr(societe.email)}</span></div>` : ''}
+          </div>
+        </div>
+        ` : ''}
 
         <!-- Driver & Vehicle Info (2 columns) -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -5047,7 +5103,7 @@ export const PersonalizationModal: React.FC<{
     } else if (type === 'inspection') {
       content = generateInspectionHTML(selectedTemplate);
     } else {
-      content = generateContractHTML(selectedTemplate);
+      content = generateContractHTML(selectedTemplate, isSociete ? societeData : null);
     }
     
     setTimeout(() => {
@@ -5103,7 +5159,7 @@ export const PersonalizationModal: React.FC<{
     } else if (typeKey === 'inspection') {
       return generateInspectionHTML(selectedTemplate);
     } else {
-      return generateContractHTML(selectedTemplate);
+      return generateContractHTML(selectedTemplate, isSociete ? societeData : null);
     }
   };
 
@@ -5166,8 +5222,8 @@ export const PersonalizationModal: React.FC<{
           {/* Content Area with Preview */}
           <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-50 to-white p-8">
 
-            {/* Société Option - Only for invoice/facture */}
-            {(type === 'invoice' || type === 'facture') && (
+            {/* Société Option - for invoice/facture and contract */}
+            {(type === 'invoice' || type === 'facture' || type === 'contract') && (
               <div className="mb-5 border-2 border-amber-300 rounded-xl overflow-hidden">
                 {/* Checkbox header */}
                 <label className="flex items-center gap-3 px-4 py-3 bg-amber-50 cursor-pointer select-none hover:bg-amber-100 transition-colors">
@@ -5180,10 +5236,14 @@ export const PersonalizationModal: React.FC<{
                   <span className="text-xl">&#x1F3E2;</span>
                   <div className="flex-1">
                     <div className="font-bold text-amber-800 text-sm">
-                      {lang === 'fr' ? 'Facturation Société' : 'فاتورة شركة'}
+                      {type === 'contract'
+                        ? (lang === 'fr' ? 'Contrat Société' : 'عقد شركة')
+                        : (lang === 'fr' ? 'Facturation Société' : 'فاتورة شركة')}
                     </div>
                     <div className="text-xs text-amber-600">
-                      {lang === 'fr' ? 'Cochez pour ajouter les informations de la société sur la facture' : 'حدد لإضافة معلومات الشركة إلى الفاتورة'}
+                      {type === 'contract'
+                        ? (lang === 'fr' ? 'Cochez pour ajouter les informations de la société sur le contrat' : 'حدد لإضافة معلومات الشركة إلى العقد')
+                        : (lang === 'fr' ? 'Cochez pour ajouter les informations de la société sur la facture' : 'حدد لإضافة معلومات الشركة إلى الفاتورة')}
                     </div>
                   </div>
                   {isSociete && (
@@ -5198,8 +5258,8 @@ export const PersonalizationModal: React.FC<{
                   <div className="p-4 bg-white border-t border-amber-200 space-y-3">
                     <p className="text-xs text-amber-600 font-semibold">
                       {lang === 'fr'
-                        ? 'Remplissez les champs voulus — seuls les champs remplis apparaitront sur la facture.'
-                        : 'ملأ الحقول المطلوبة — ستظهر فقط الحقول المملوئة على الفاتورة.'}
+                        ? `Remplissez les champs voulus — seuls les champs remplis apparaitront sur ${type === 'contract' ? 'le contrat' : 'la facture'}.`
+                        : `ملأ الحقول المطلوبة — ستظهر فقط الحقول المملوئة على ${type === 'contract' ? 'العقد' : 'الفاتورة'}.`}
                     </p>
                     <div className="grid grid-cols-2 gap-3">
 
