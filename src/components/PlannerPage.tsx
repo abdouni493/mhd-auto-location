@@ -1261,6 +1261,16 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                             📄 {lang === 'fr' ? 'Contrat' : 'عقد'}
                           </button>
                           <button
+                            onClick={() => {
+                              setOpenPrintMenu(null);
+                              setConditionsLanguage('ar');
+                              setShowConditionsModal(true);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                          >
+                            📋 {lang === 'fr' ? 'Conditions' : 'الشروط'}
+                          </button>
+                          <button
                             onClick={() => handlePrint(reservation, 'invoice')}
                             className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
                           >
@@ -1283,16 +1293,6 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                             className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
                           >
                             🔍 {lang === 'fr' ? 'Inspection' : 'فحص المركبة'}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setOpenPrintMenu(null);
-                              setConditionsLanguage('ar');
-                              setShowConditionsModal(true);
-                            }}
-                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
-                          >
-                            📋 {lang === 'fr' ? 'Conditions' : 'الشروط'}
                           </button>
                           <button
                             onClick={() => {
