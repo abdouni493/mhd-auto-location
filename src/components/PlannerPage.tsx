@@ -58,7 +58,6 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   const buttonRefs = useRef<{[id: string]: HTMLButtonElement | null}>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<ReservationDetails | null>(null);
   const [openPrintMenu, setOpenPrintMenu] = useState<string | null>(null);
-  const [showPrintModal, setShowPrintModal] = useState<{reservation: ReservationDetails, type: string} | null>(null);
   const [showPersonalization, setShowPersonalization] = useState<{reservation: ReservationDetails, type: string} | null>(null);
   const [showSendContractModal, setShowSendContractModal] = useState<ReservationDetails | null>(null);
   const [showInspectionMode, setShowInspectionMode] = useState(false);
@@ -308,22 +307,8 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
 
   const handlePrint = (reservation: ReservationDetails, type: 'quote' | 'contract' | 'invoice' | 'payment' | 'engagement' | 'versement' | 'inspection') => {
     setOpenPrintMenu(null);
-    setShowPrintModal({reservation, type});
-  };
-
-  const handlePrintChoice = async (choice: 'same' | 'personalise') => {
-    if (!showPrintModal) return;
-
-    if (choice === 'same') {
-      // Print same template using the professional contract template from PersonalizationModal
-      setShowPersonalization({
-        reservation: showPrintModal.reservation,
-        type: showPrintModal.type
-      });
-    } else {
-      setShowPersonalization(showPrintModal);
-    }
-    setShowPrintModal(null);
+    // Go straight to the print preview (no personalisation choice step)
+    setShowPersonalization({ reservation, type });
   };
 
   const generatePrintContent = (reservation: ReservationDetails, type: string) => {
@@ -1301,6 +1286,16 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                           </button>
                           <button
                             onClick={() => {
+                              setOpenPrintMenu(null);
+                              setConditionsLanguage('ar');
+                              setShowConditionsModal(true);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                          >
+                            📋 {lang === 'fr' ? 'Conditions' : 'الشروط'}
+                          </button>
+                          <button
+                            onClick={() => {
                               setShowSendContractModal(reservation);
                               setOpenPrintMenu(null);
                             }}
@@ -1381,70 +1376,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
         )}
       </AnimatePresence>
 
-      {/* Print Choice Modal */}
-      <AnimatePresence>
-        {showPrintModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="glass-card max-w-md w-full p-6 border border-saas-border"
-            >
-              <h3 className="text-xl font-black text-saas-text-main mb-6">
-                🖨️ {lang === 'fr' ? 'Options d\'Impression' : 'خيارات الطباعة'}
-              </h3>
-              <p className="text-saas-text-muted mb-6">
-                {lang === 'fr' ? 'Choisissez le mode d\'impression :' : 'اختر وضع الطباعة:'}
-              </p>
-              <div className="flex gap-3 mb-4">
-                <button
-                  onClick={() => handlePrintChoice('same')}
-                  className="flex-1 bg-saas-primary-start hover:bg-saas-primary-end text-white font-bold py-3 px-4 rounded-lg transition-all"
-                >
-                  📄 {lang === 'fr' ? 'Même Modèle' : 'نفس النموذج'}
-                </button>
-                <button
-                  onClick={() => handlePrintChoice('personalise')}
-                  className="flex-1 bg-saas-secondary-start hover:bg-saas-secondary-end text-white font-bold py-3 px-4 rounded-lg transition-all"
-                >
-                  🎨 {lang === 'fr' ? 'Personnaliser' : 'تخصيص'}
-            </button>
-          </div>
-          {showPrintModal?.type === 'contract' && (
-            <>
-              <button
-                onClick={() => {
-                  setShowPrintModal(null);
-                  setShowConditionsPersonalizer(showPrintModal?.reservation || null);
-                }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all mb-3"
-              >
-                📋 {lang === 'fr' ? 'Personnaliser les Conditions' : 'تخصيص الشروط'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowPrintModal(null);
-                  setShowConditionsModal(true);
-                  setConditionsLanguage('ar'); // Reset to Arabic when opening
-                }}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all"
-              >
-                🖨️ {lang === 'fr' ? 'Imprimer les Conditions' : 'طباعة الشروط'}
-              </button>
-            </>
-          )}
-        </motion.div>
-      </motion.div>
-    )}
-  </AnimatePresence>
-
-  {/* Pay Debt Modal */}
+      {/* Pay Debt Modal */}
   <AnimatePresence>
     {showDebtModal && (
       <PayDebtModal
@@ -2476,6 +2408,7 @@ export const PersonalizationModal: React.FC<{
   // Société (company client) state
   const [isSociete, setIsSociete] = useState(false);
   const [societeData, setSocieteData] = useState({
+    entreprise: '',
     conducteur: '',
     rc: '',
     art: '',
@@ -2610,7 +2543,7 @@ export const PersonalizationModal: React.FC<{
     }
   };
 
-  const generateContractHTML = (templateLang: 'fr' | 'ar', societe?: { conducteur: string; rc: string; art: string; nis: string; nif: string; email: string } | null): string => {
+  const generateContractHTML = (templateLang: 'fr' | 'ar', societe?: { entreprise: string; conducteur: string; rc: string; art: string; nis: string; nif: string; email: string } | null): string => {
     const isFrench = templateLang === 'fr';
     const textDir = isFrench ? 'ltr' : 'rtl';
     
@@ -3072,12 +3005,11 @@ export const PersonalizationModal: React.FC<{
         <div class="societe-card">
           <div class="societe-card-title">🏢 ${isFrench ? 'Informations Société' : 'معلومات الشركة'}</div>
           <div class="societe-card-grid">
-            ${societe.conducteur ? `<div class="societe-card-field"><span class="societe-card-label">${isFrench ? 'Conducteur' : 'المسؤول'}</span><span class="societe-card-value">${societe.conducteur}</span></div>` : ''}
+            ${societe.entreprise ? `<div class="societe-card-field"><span class="societe-card-label">${isFrench ? 'Entreprise' : 'اسم الشركة'}</span><span class="societe-card-value">${societe.entreprise}</span></div>` : ''}
             ${societe.rc ? `<div class="societe-card-field"><span class="societe-card-label">RC</span><span class="societe-card-value">${ltr(societe.rc)}</span></div>` : ''}
             ${societe.art ? `<div class="societe-card-field"><span class="societe-card-label">ART</span><span class="societe-card-value">${ltr(societe.art)}</span></div>` : ''}
             ${societe.nis ? `<div class="societe-card-field"><span class="societe-card-label">NIS</span><span class="societe-card-value">${ltr(societe.nis)}</span></div>` : ''}
             ${societe.nif ? `<div class="societe-card-field"><span class="societe-card-label">NIF</span><span class="societe-card-value">${ltr(societe.nif)}</span></div>` : ''}
-            ${societe.email ? `<div class="societe-card-field"><span class="societe-card-label">Email</span><span class="societe-card-value">${ltr(societe.email)}</span></div>` : ''}
           </div>
         </div>
         ` : ''}
@@ -5263,14 +5195,25 @@ export const PersonalizationModal: React.FC<{
                     </p>
                     <div className="grid grid-cols-2 gap-3">
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1F464; {lang === 'fr' ? 'Conducteur' : 'المسؤول'}</label>
-                        <input type="text" value={societeData.conducteur}
-                          onChange={e => setSocieteData(prev => ({ ...prev, conducteur: e.target.value }))}
-                          placeholder={lang === 'fr' ? 'Nom du conducteur' : 'اسم المسؤول'}
-                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
-                        />
-                      </div>
+                      {type === 'contract' ? (
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1F3E2; {lang === 'fr' ? 'Entreprise' : 'اسم الشركة'}</label>
+                          <input type="text" value={societeData.entreprise}
+                            onChange={e => setSocieteData(prev => ({ ...prev, entreprise: e.target.value }))}
+                            placeholder={lang === 'fr' ? "Nom de l'entreprise" : 'اسم الشركة'}
+                            className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1F464; {lang === 'fr' ? 'Conducteur' : 'المسؤول'}</label>
+                          <input type="text" value={societeData.conducteur}
+                            onChange={e => setSocieteData(prev => ({ ...prev, conducteur: e.target.value }))}
+                            placeholder={lang === 'fr' ? 'Nom du conducteur' : 'اسم المسؤول'}
+                            className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                          />
+                        </div>
+                      )}
 
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x1F4CB; RC</label>
@@ -5308,14 +5251,16 @@ export const PersonalizationModal: React.FC<{
                         />
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x2709;&#xFE0F; Email</label>
-                        <input type="email" value={societeData.email}
-                          onChange={e => setSocieteData(prev => ({ ...prev, email: e.target.value }))}
-                          placeholder="societe@example.com"
-                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
-                        />
-                      </div>
+                      {type !== 'contract' && (
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-amber-700 uppercase tracking-wide block">&#x2709;&#xFE0F; Email</label>
+                          <input type="email" value={societeData.email}
+                            onChange={e => setSocieteData(prev => ({ ...prev, email: e.target.value }))}
+                            placeholder="societe@example.com"
+                            className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                          />
+                        </div>
+                      )}
 
                     </div>
                   </div>
