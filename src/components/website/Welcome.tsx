@@ -18,10 +18,6 @@ const C = {
   surface:   '#FFFFFF',
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-const shortName = (name: string | undefined) =>
-  name ? name.split(/\s+/).slice(0, 3).join(' ') : 'AutoLocation';
-
 // ─── Pure CSS + Framer Motion hero visual (anneaux animés uniquement) ────────
 function HeroVisual() {
   return (
@@ -287,97 +283,39 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
         }} />
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center pt-28 pb-10">
+          <div className="flex flex-col items-center pt-28 pb-24">
 
-            {/* LEFT: Text */}
-            <motion.div style={{ opacity: heroOpacity, y: heroY }} className="space-y-8">
+            {/* ── Carte de réservation : centrée en haut de la page ── */}
+            <div className="w-full max-w-5xl">
+              <BookingSearchPanel lang={lang} agencies={agencies} onSearch={onSearch} hasBg={hasBg} />
+            </div>
 
-              {/* Badge pill */}
-              <motion.div
-                initial={{ opacity: 0, x: -30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border transition-all duration-300"
-                style={{
-                  borderColor: hasBg ? 'rgba(255, 255, 255, 0.25)' : `${C.accent}40`,
-                  background: hasBg ? 'rgba(255, 255, 255, 0.12)' : `${C.accent}10`,
-                  backdropFilter: hasBg ? 'blur(8px)' : 'none',
-                }}
+            {/* CTA — un seul bouton : voir les voitures disponibles (la réservation
+                démarre après avoir choisi une voiture, plus de réservation directe). */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.9 }}
+              className="mt-10"
+            >
+              <motion.button
+                onClick={onStartRenting}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                className="btn-vel-cta px-8 py-4 text-sm"
               >
-                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: hasBg ? '#FFFFFF' : C.accent }} />
-                <span className="text-xs font-bold tracking-[0.2em] uppercase"
-                  style={{ color: hasBg ? '#FFFFFF' : C.accent, fontFamily: 'var(--font-display)' }}>
-                  {{ fr: 'Location Premium · Algérie', ar: 'تأجير فاخر · الجزائر' }[lang]}
-                </span>
-              </motion.div>
-
-              {/* Agency name */}
-              <motion.p
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                className="text-sm font-bold tracking-[0.3em] uppercase"
-                style={{ color: hasBg ? '#FBBF24' : C.amber, fontFamily: 'var(--font-display)' }}
-              >
-                {shortName(websiteSettings?.name)}
-              </motion.p>
-
-              {/* Main headline */}
-              <motion.div
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.85, delay: 0.2 }}
-              >
-                <h1 className="font-black leading-[0.92]" style={{ fontFamily: 'var(--font-display)' }}>
-                  <span className={`block text-5xl sm:text-6xl xl:text-7xl mb-1 ${hasBg ? 'text-white' : 'text-vel-ink'}`}>
-                    {{ fr: 'Vitesse', ar: 'سرعة' }[lang]}
-                  </span>
-                  <span className="block text-5xl sm:text-6xl xl:text-7xl" style={{ color: C.accent }}>
-                    {{ fr: '& Prestige', ar: '& فخامة' }[lang]}
-                  </span>
-                </h1>
-              </motion.div>
-
-              {/* Description */}
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.38 }}
-                className={`text-base leading-relaxed max-w-md ${hasBg ? 'text-slate-200' : 'text-vel-slate'}`}
-              >
-                {websiteSettings?.description || (lang === 'fr'
-                  ? "Des véhicules d'exception pour des expériences inoubliables. Réservez en quelques clics."
-                  : 'مركبات استثنائية لتجارب لا تُنسى. احجز بنقرات قليلة.'
-                )}
-              </motion.p>
-
-              {/* CTA — un seul bouton : voir les voitures disponibles (la réservation
-                  démarre après avoir choisi une voiture, plus de réservation directe). */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.5 }}
-                className="flex flex-wrap gap-4"
-              >
-                <motion.button
-                  onClick={onStartRenting}
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.96 }}
-                  className="btn-vel-cta px-8 py-4 text-sm"
-                >
-                  {{ fr: 'Voir les voitures disponibles', ar: 'عرض السيارات المتاحة' }[lang]}
-                  <ArrowRight size={17} />
-                </motion.button>
-              </motion.div>
-
+                {{ fr: 'Voir les voitures disponibles', ar: 'عرض السيارات المتاحة' }[lang]}
+                <ArrowRight size={17} />
+              </motion.button>
             </motion.div>
 
-            {/* RIGHT: 3D (Spline) avec repli sur le visuel CSS statique */}
+            {/* Visuel 3D (Spline) avec repli sur le visuel CSS statique */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ scale: 0.85 }}
+              animate={{ scale: 1 }}
               transition={{ duration: 1.1, delay: 0.25, ease: 'easeOut' }}
-              className="relative"
+              style={{ opacity: heroOpacity, y: heroY }}
+              className="relative w-full max-w-3xl"
             >
               {/* Glow halo */}
               <div className="absolute inset-0 pointer-events-none rounded-full" style={{
@@ -388,11 +326,6 @@ export const Welcome: React.FC<WelcomeProps> = ({ lang, websiteSettings, agencie
                 fallback={<HeroVisual />}
               />
             </motion.div>
-          </div>
-
-          {/* ── Recherche de disponibilité : agences + période → étape suivante ── */}
-          <div className="pb-24">
-            <BookingSearchPanel lang={lang} agencies={agencies} onSearch={onSearch} hasBg={hasBg} />
           </div>
         </div>
 

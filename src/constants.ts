@@ -10,6 +10,9 @@ import { SidebarItem, Agency, Car } from './types';
  */
 export const HERO_SPLINE_SCENE_URL = '';
 
+/** Nom commercial affiché sur le site public (navbar, footer, pages vitrine). */
+export const SITE_NAME = 'MHD AUTO';
+
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'dashboard', label: { fr: 'Tableau de bord', ar: 'لوحة القيادة' }, icon: '📊' },
   { id: 'planner', label: { fr: 'Planificateur', ar: 'المخطط' }, icon: '📅' },

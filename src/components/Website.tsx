@@ -8,6 +8,7 @@ import { SpecialOffersListing } from './website/SpecialOffersListing';
 import { ContactsWebsite } from './website/ContactsWebsite';
 import { ReservationWizard } from './website/wizard/ReservationWizard';
 import { WizardSearchCriteria } from './website/wizard/WizardContext';
+import { SITE_NAME } from '../constants';
 
 interface WebsiteProps {
   lang: Language;
@@ -36,10 +37,6 @@ export const Website: React.FC<WebsiteProps> = ({
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
   // Recherche de disponibilité lancée depuis le landing (agences + période)
   const [searchCriteria, setSearchCriteria] = useState<WizardSearchCriteria | null>(null);
-
-  // Limit displayed agency name to first 3 words
-  const shortName = (name: string | undefined) =>
-    name ? name.split(/\s+/).slice(0, 3).join(' ') : 'AutoLocation';
 
   const handleReserveClick = (car: Car) => {
     setSelectedCar(car);
@@ -88,14 +85,14 @@ export const Website: React.FC<WebsiteProps> = ({
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-vel-void text-xl font-black"
                     style={{ background: 'linear-gradient(135deg, #DC2626, #B91C1C)', fontFamily: 'var(--font-display)' }}>
-                    A
+                    M
                   </div>
                 )}
               </div>
               <div className="hidden sm:block">
                 <h1 className="font-black text-xl text-vel-ink transition-colors"
                   style={{ fontFamily: 'var(--font-display)' }}>
-                  {shortName(websiteSettings?.name)}
+                  {SITE_NAME}
                 </h1>
                 <p className="text-[10px] font-bold tracking-[0.2em] uppercase"
                   style={{ color: '#DC2626', fontFamily: 'var(--font-display)' }}>
@@ -249,7 +246,7 @@ export const Website: React.FC<WebsiteProps> = ({
             <div>
               <h3 className="font-black text-2xl text-vel-ink mb-2"
                 style={{ fontFamily: 'var(--font-display)' }}>
-                {shortName(websiteSettings?.name)}
+                {SITE_NAME}
               </h3>
               <div className="w-12 h-0.5 mb-4" style={{ background: '#DC2626', boxShadow: '0 0 8px rgba(220,38,38,0.35)' }} />
               <p className="text-vel-muted text-sm leading-relaxed">{websiteSettings?.description}</p>
@@ -339,13 +336,13 @@ export const Website: React.FC<WebsiteProps> = ({
           <div className="mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4"
             style={{ borderTop: '1px solid rgba(15,23,42,0.08)' }}>
             <p className="text-vel-dim text-sm">
-              © {new Date().getFullYear()} {shortName(websiteSettings?.name)}.{' '}
+              © {new Date().getFullYear()} {SITE_NAME}.{' '}
               <span className="text-vel-muted">{{ fr: 'Tous droits réservés.', ar: 'جميع الحقوق محفوظة.' }[lang]}</span>
             </p>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#DC2626' }} />
               <span className="text-vel-dim text-xs tracking-wider" style={{ fontFamily: 'var(--font-display)' }}>
-                POWERED BY AUTO LOCATION
+                POWERED BY {SITE_NAME}
               </span>
             </div>
           </div>
