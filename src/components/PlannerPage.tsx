@@ -2576,6 +2576,8 @@ export const PersonalizationModal: React.FC<{
       pricing: isFrench ? 'Tarification' : 'التسعير',
       pricePerDay: isFrench ? 'Prix par Jour' : 'السعر في اليوم',
       numberOfDays: isFrench ? 'Nombre de Jours' : 'عدد الأيام',
+      protectionAssurance: isFrench ? 'Assurance de Protection' : 'تأمين الحماية',
+      perDayShort: isFrench ? 'j' : 'ي',
       totalHT: isFrench ? 'Montant HT' : 'المبلغ غير ضريبي',
       tva: isFrench ? 'TVA 19%' : 'الضريبة 19%',
       totalTTC: isFrench ? 'TOTAL TTC' : 'الإجمالي',
@@ -2592,6 +2594,13 @@ export const PersonalizationModal: React.FC<{
 
     const hasSecondConductor = !!secondConductor;
     const hasSociete = !!societe;
+    // Assurance de protection : affichée uniquement si un forfait a été choisi
+    // à la création de la réservation.
+    const hasProtectionAssurance = !!(reservation?.protectionAssurance || reservation?.protectionAssuranceName);
+    const protectionAssuranceName = reservation?.protectionAssurance?.name || reservation?.protectionAssuranceName || '';
+    const protectionAssurancePerDay = reservation?.protectionAssurancePrice || reservation?.protectionAssurance?.pricePerDay || 0;
+    // Déjà inclus dans totalPrice : ligne de détail uniquement, pas de nouveau cumul.
+    const protectionAssuranceTotal = Math.round(protectionAssurancePerDay * (reservation?.totalDays || 0));
     // Compact the layout whenever there is an extra block to fit (second
     // conductor and/or the société card) so everything stays on one page.
     const compact = hasSecondConductor || hasSociete;
@@ -3126,6 +3135,12 @@ export const PersonalizationModal: React.FC<{
                 <span>${labels.numberOfDays}:</span>
                 <span>${reservation?.totalDays || 0}</span>
               </div>
+              ${hasProtectionAssurance ? `
+              <div class="pricing-row">
+                <span>🛡️ ${labels.protectionAssurance}${protectionAssuranceName ? ` (${protectionAssuranceName})` : ''}${protectionAssurancePerDay > 0 && (reservation?.totalDays || 0) > 0 ? ` — ${protectionAssurancePerDay} DA/${labels.perDayShort} × ${reservation?.totalDays}` : ''}:</span>
+                <span>${protectionAssuranceTotal.toFixed(2)} DA</span>
+              </div>
+              ` : ''}
               <div class="pricing-row total">
                 <span>${labels.totalHT}:</span>
                 <span>${(reservation?.totalPrice || 0).toFixed(2)} DA</span>
