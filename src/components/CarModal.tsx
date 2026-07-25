@@ -141,12 +141,15 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
   );
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+    // Ancré en haut, centré horizontalement : le formulaire étant long, un
+    // centrage vertical le faisait déborder hors de l'écran sur petits écrans.
+    // `overflow-y-auto` sur le calque permet de faire défiler la fenêtre entière.
+    <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto p-4 sm:pt-8 sm:pb-8 bg-slate-900/50 backdrop-blur-sm">
       <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 20 }}
+        initial={{ opacity: 0, scale: 0.97, y: -16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className="bg-white w-full max-w-5xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-saas-border"
+        className="bg-white w-full max-w-5xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-4rem)] border border-saas-border my-auto sm:my-0"
       >
         <div className="p-8 border-b border-saas-border flex items-center justify-between bg-[#0F172A] text-white">
           <div>

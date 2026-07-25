@@ -11,12 +11,17 @@ export type ThemeMode = 'light' | 'dark';
 
 const STORAGE_KEY = 'mhd-auto-theme';
 
-/** Thème enregistré, sinon la préférence système, sinon clair. */
+/**
+ * Thème enregistré, sinon CLAIR.
+ *
+ * Le mode clair est le défaut de l'application : la préférence système n'est
+ * volontairement PAS consultée. Le mode sombre ne s'applique que si
+ * l'utilisateur l'a explicitement activé via le bouton de la navbar.
+ */
 export function getStoredTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'light';
   const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (saved === 'dark' || saved === 'light') return saved;
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return saved === 'dark' ? 'dark' : 'light';
 }
 
 /** Applique le thème au document (sans l'enregistrer). */

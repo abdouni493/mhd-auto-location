@@ -169,7 +169,13 @@
 }
 
 /* ── Global ── */
-html { transition: background-color 0.35s ease, color 0.35s ease; }
+/* Mode clair par défaut : la préférence système du navigateur n'est jamais
+   consultée. Seule la classe `.dark`, posée explicitement par l'utilisateur
+   depuis le bouton de la navbar, bascule l'application en sombre. */
+html {
+  color-scheme: light;
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
 
 body {
   @apply bg-vel-void text-vel-ink antialiased;
