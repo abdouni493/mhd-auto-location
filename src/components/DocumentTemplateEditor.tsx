@@ -408,7 +408,7 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 overflow-y-auto sm:py-8">
         <div className="bg-white rounded-lg p-8">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-700">Loading templates...</p>
@@ -422,13 +422,13 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto sm:py-8"
     >
       <motion.div
         initial={{ scale: 0.95 }}
         animate={{ scale: 1 }}
         exit={{ scale: 0.95 }}
-        className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg max-w-6xl w-full max-h-[calc(100vh-4rem)] overflow-y-auto"
       >
         <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
           <div>
@@ -818,7 +818,7 @@ export const DocumentTemplateEditor: React.FC<DocumentTemplateEditorProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-[60] overflow-y-auto sm:py-8"
           >
             <motion.div
               initial={{ scale: 0.95 }}

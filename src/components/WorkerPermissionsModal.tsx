@@ -112,7 +112,7 @@ export const WorkerPermissionsModal: React.FC<{
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[75] bg-slate-900/55 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[75] bg-slate-900/55 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto sm:py-8"
       onClick={onClose}
     >
       <motion.div
@@ -121,7 +121,7 @@ export const WorkerPermissionsModal: React.FC<{
         exit={{ opacity: 0, scale: 0.96, y: 18 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         onClick={e => e.stopPropagation()}
-        className="bg-saas-bg w-full max-w-4xl rounded-3xl shadow-2xl border border-saas-border overflow-hidden flex flex-col max-h-[93vh]"
+        className="bg-saas-bg w-full max-w-4xl rounded-3xl shadow-2xl border border-saas-border overflow-hidden flex flex-col max-h-[calc(100vh-4rem)]"
       >
         {/* En-tête */}
         <div className="relative overflow-hidden bg-[#0F172A] text-white px-8 py-6 shrink-0">

@@ -570,11 +570,11 @@ export const BillingPage: React.FC<BillingPageProps> = ({ lang }) => {
 
       {/* Invoice Details Modal */}
       {isDetailsModalOpen && selectedInvoice && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto sm:py-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+            className="bg-white rounded-3xl max-w-4xl w-full max-h-[calc(100vh-4rem)] overflow-hidden shadow-2xl"
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
@@ -816,13 +816,13 @@ export const BillingPage: React.FC<BillingPageProps> = ({ lang }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto sm:py-8"
           >
             <motion.div
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto p-6"
+              className="bg-white rounded-lg max-w-6xl w-full max-h-[calc(100vh-4rem)] overflow-y-auto p-6"
             >
               <DocumentTemplateEditor
                 documentType={editingDocumentType}
@@ -850,13 +850,13 @@ export const BillingPage: React.FC<BillingPageProps> = ({ lang }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto sm:py-8"
           >
             <motion.div
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
-              className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6"
+              className="bg-white rounded-lg max-w-4xl w-full max-h-[calc(100vh-4rem)] overflow-y-auto p-6"
             >
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">

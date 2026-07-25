@@ -32,8 +32,44 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
   const [selectedExpenseType, setSelectedExpenseType] = useState<'vidange' | 'chaine' | 'assurance' | 'controle' | 'autre'>('vidange');
   const [prefilledExpense, setPrefilledExpense] = useState<Partial<VehicleExpense> | undefined>(undefined);
+  const [expenseError, setExpenseError] = useState<string | null>(null);
+  const [savingExpense, setSavingExpense] = useState(false);
 
   const isRtl = lang === 'ar';
+
+  /**
+   * Ouvre TOUJOURS le formulaire en CRÉATION.
+   *
+   * Le gabarit renvoyé ne porte jamais d'`id` : la fenêtre affiche donc
+   * « Nouvelle dépense » et l'enregistrement insère une nouvelle ligne. Le
+   * gabarit est reconstruit à chaque ouverture, ce qui évite de retrouver les
+   * valeurs de la dépense précédemment saisie.
+   */
+  const openNewExpense = (
+    car: Car,
+    type: 'vidange' | 'chaine' | 'assurance' | 'controle' | 'autre'
+  ) => {
+    const today = new Date().toISOString().split('T')[0];
+    const inOneYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const isMileageBased = type === 'vidange' || type === 'chaine';
+
+    setSelectedCar(car);
+    setSelectedExpenseType(type);
+    setExpenseError(null);
+    setPrefilledExpense({
+      // Pas d'`id` : création, jamais édition.
+      carId: car.id,
+      type,
+      cost: 0,
+      note: '',
+      date: today,
+      currentMileage: car.mileage,
+      ...(isMileageBased
+        ? { nextVidangeKm: 10000 }
+        : { expirationDate: inOneYear }),
+    });
+    setIsExpenseModalOpen(true);
+  };
 
   // Load cars data
   const loadCarsData = async () => {
@@ -100,9 +136,9 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
       // Find the car with the given ID
       const car = cars.find(c => c.id === state.selectedCarId);
       if (car) {
-        setSelectedCar(car);
-        setSelectedExpenseType(state.expenseType);
-        setIsExpenseModalOpen(true);
+        // Même chemin que les boutons de la carte : gabarit neuf, jamais un
+        // reste de la saisie précédente.
+        openNewExpense(car, state.expenseType);
         // Clear the location state immediately to prevent re-triggering
         window.history.replaceState({}, document.title);
       }
@@ -154,89 +190,61 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
     }
   };
 
-  const handleVidangeClick = (car: Car) => {
-    setSelectedCar(car);
-    setSelectedExpenseType('vidange');
-    const expense: Partial<VehicleExpense> = {
-      carId: car.id,
-      type: 'vidange',
-      date: new Date().toISOString().split('T')[0],
-      currentMileage: car.mileage,
-      nextVidangeKm: car.mileage + 10000,
-    };
-    setPrefilledExpense(expense);
-    setIsExpenseModalOpen(true);
-  };
+  const handleVidangeClick = (car: Car) => openNewExpense(car, 'vidange');
+  const handleChaineClick = (car: Car) => openNewExpense(car, 'chaine');
+  const handleAssuranceClick = (car: Car) => openNewExpense(car, 'assurance');
+  const handleControleClick = (car: Car) => openNewExpense(car, 'controle');
 
-  const handleChaineClick = (car: Car) => {
-    setSelectedCar(car);
-    setSelectedExpenseType('chaine');
-    const expense: Partial<VehicleExpense> = {
-      carId: car.id,
-      type: 'chaine',
-      date: new Date().toISOString().split('T')[0],
-      currentMileage: car.mileage,
-      nextVidangeKm: car.mileage + 10000,
-    };
-    setPrefilledExpense(expense);
-    setIsExpenseModalOpen(true);
-  };
-
-  const handleAssuranceClick = (car: Car) => {
-    setSelectedCar(car);
-    setSelectedExpenseType('assurance');
-    const expense: Partial<VehicleExpense> = {
-      carId: car.id,
-      type: 'assurance',
-      date: new Date().toISOString().split('T')[0],
-      expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    };
-    setPrefilledExpense(expense);
-    setIsExpenseModalOpen(true);
-  };
-
-  const handleControleClick = (car: Car) => {
-    setSelectedCar(car);
-    setSelectedExpenseType('controle');
-    const expense: Partial<VehicleExpense> = {
-      carId: car.id,
-      type: 'controle',
-      date: new Date().toISOString().split('T')[0],
-      expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    };
-    setPrefilledExpense(expense);
-    setIsExpenseModalOpen(true);
-  };
-
+  /**
+   * Enregistre une NOUVELLE dépense en base (table `vehicle_expenses`).
+   * On reprend le véhicule et le type réellement choisis dans le formulaire —
+   * l'utilisateur peut les changer après l'ouverture.
+   */
   const handleSaveExpense = async (expenseData: any) => {
-    try {
-      if (selectedCar) {
-        const expense = {
-          carId: selectedCar.id,
-          type: selectedExpenseType,
-          cost: expenseData.cost || 0,
-          date: expenseData.date || new Date().toISOString().split('T')[0],
-          note: expenseData.note || '',
-          currentMileage: expenseData.currentMileage || selectedCar.mileage,
-          nextVidangeKm: expenseData.nextVidangeKm || null,
-          expirationDate: expenseData.expirationDate || null,
-          expenseName: expenseData.expenseName || '',
-          oilFilterChanged: expenseData.oilFilterChanged || false,
-          airFilterChanged: expenseData.airFilterChanged || false,
-          fuelFilterChanged: expenseData.fuelFilterChanged || false,
-          acFilterChanged: expenseData.acFilterChanged || false,
-        };
+    const carId = expenseData.carId || selectedCar?.id;
+    if (!carId) {
+      setExpenseError(lang === 'fr' ? 'Sélectionnez un véhicule.' : 'اختر مركبة.');
+      return;
+    }
 
-        const result = await addVehicleExpense(expense);
-        if (result.success) {
-          // Reload maintenance data
-          await loadCarsData();
-          setIsExpenseModalOpen(false);
-          setSelectedCar(null);
-        }
+    setSavingExpense(true);
+    setExpenseError(null);
+    try {
+      const expense = {
+        carId,
+        type: expenseData.type || selectedExpenseType,
+        cost: Number(expenseData.cost) || 0,
+        date: expenseData.date || new Date().toISOString().split('T')[0],
+        note: expenseData.note || '',
+        currentMileage: expenseData.currentMileage ?? selectedCar?.mileage ?? 0,
+        nextVidangeKm: expenseData.nextVidangeKm || null,
+        expirationDate: expenseData.expirationDate || null,
+        expenseName: expenseData.expenseName || '',
+        oilFilterChanged: expenseData.oilFilterChanged || false,
+        airFilterChanged: expenseData.airFilterChanged || false,
+        fuelFilterChanged: expenseData.fuelFilterChanged || false,
+        acFilterChanged: expenseData.acFilterChanged || false,
+      };
+
+      const result = await addVehicleExpense(expense);
+      if (!result.success) {
+        throw new Error(result.error || 'Insertion refusée');
       }
-    } catch (err) {
+
+      // Recharge la liste complète des dépenses depuis la base : les cartes de
+      // maintenance reflètent immédiatement la nouvelle ligne enregistrée.
+      await loadCarsData();
+      setIsExpenseModalOpen(false);
+      setSelectedCar(null);
+      setPrefilledExpense(undefined);
+    } catch (err: any) {
       console.error('Error saving expense:', err);
+      setExpenseError(
+        (lang === 'fr' ? "La dépense n'a pas pu être enregistrée : " : 'تعذر حفظ النفقة: ')
+        + (err?.message || 'erreur inconnue')
+      );
+    } finally {
+      setSavingExpense(false);
     }
   };
 
@@ -311,6 +319,39 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Retour d'enregistrement d'une dépense */}
+      <AnimatePresence>
+        {savingExpense && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="flex items-center gap-3 bg-saas-bg border border-saas-border rounded-2xl p-4"
+          >
+            <Loader2 className="w-5 h-5 animate-spin text-saas-primary-via shrink-0" />
+            <p className="text-sm font-semibold text-saas-text-main">
+              {lang === 'fr' ? 'Enregistrement de la dépense…' : 'جاري حفظ النفقة…'}
+            </p>
+          </motion.div>
+        )}
+        {expenseError && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="flex items-start justify-between gap-4 bg-red-50 border border-red-200 rounded-2xl p-4"
+          >
+            <p className="text-sm font-semibold text-red-700">⚠️ {expenseError}</p>
+            <button
+              onClick={() => setExpenseError(null)}
+              className="text-xs font-black uppercase tracking-wider text-red-700 hover:underline cursor-pointer shrink-0"
+            >
+              {lang === 'fr' ? 'Fermer' : 'إغلاق'}
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filter Buttons */}
       <motion.div
@@ -416,6 +457,8 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
       <AnimatePresence>
         {isExpenseModalOpen && selectedCar && (
           <VehicleExpenseModal
+            // Remonté à chaque ouverture : le formulaire repart toujours vierge.
+            key={`${selectedCar.id}-${selectedExpenseType}`}
             isOpen={isExpenseModalOpen}
             onClose={() => {
               setIsExpenseModalOpen(false);
@@ -423,8 +466,8 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
               setPrefilledExpense(undefined);
             }}
             onSave={handleSaveExpense}
-            expense={prefilledExpense as any}
-            cars={[selectedCar]}
+            expense={prefilledExpense}
+            cars={cars.length > 0 ? cars : [selectedCar]}
             lang={lang}
           />
         )}

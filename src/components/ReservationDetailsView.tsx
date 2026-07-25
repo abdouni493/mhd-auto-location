@@ -768,7 +768,7 @@ const PaymentsTab: React.FC<{ lang: Language; reservation: ReservationDetails; o
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto sm:py-8"
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
@@ -962,7 +962,7 @@ const PaymentModal: React.FC<{ lang: Language; reservation: ReservationDetails; 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto sm:py-8"
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
@@ -1291,14 +1291,14 @@ export const ActivationModal: React.FC<{ lang: Language; reservation: Reservatio
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-slate-900/55 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/55 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto sm:py-8"
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className="bg-saas-bg rounded-3xl shadow-2xl max-w-5xl w-full max-h-[93vh] flex flex-col overflow-hidden border border-saas-border"
+        className="bg-saas-bg rounded-3xl shadow-2xl max-w-5xl w-full max-h-[calc(100vh-4rem)] flex flex-col overflow-hidden border border-saas-border"
       >
         {/* En-tête */}
         <div className="relative overflow-hidden bg-[#0F172A] text-white px-8 py-6 shrink-0">
@@ -1729,14 +1729,14 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-slate-900/55 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/55 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto sm:py-8"
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className="bg-saas-bg rounded-3xl shadow-2xl max-w-6xl w-full max-h-[93vh] flex flex-col overflow-hidden border border-saas-border"
+        className="bg-saas-bg rounded-3xl shadow-2xl max-w-6xl w-full max-h-[calc(100vh-4rem)] flex flex-col overflow-hidden border border-saas-border"
       >
         {/* En-tête */}
         <div className="relative overflow-hidden bg-[#0F172A] text-white px-8 py-6 shrink-0">

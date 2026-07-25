@@ -70,7 +70,7 @@ export const EntrepriseModal: React.FC<{
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[70] bg-slate-900/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto sm:py-8"
       onClick={onClose}
     >
       <motion.div
@@ -79,7 +79,7 @@ export const EntrepriseModal: React.FC<{
         exit={{ opacity: 0, scale: 0.96, y: 16 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         onClick={e => e.stopPropagation()}
-        className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-saas-border overflow-hidden flex flex-col max-h-[92vh]"
+        className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-saas-border overflow-hidden flex flex-col max-h-[calc(100vh-4rem)]"
       >
         <div className="px-8 py-6 bg-[#0F172A] text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -186,7 +186,7 @@ const EntrepriseHistoryModal: React.FC<{
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[70] bg-slate-900/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto sm:py-8"
       onClick={onClose}
     >
       <motion.div
@@ -195,7 +195,7 @@ const EntrepriseHistoryModal: React.FC<{
         exit={{ opacity: 0, scale: 0.96, y: 16 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         onClick={e => e.stopPropagation()}
-        className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-saas-border overflow-hidden flex flex-col max-h-[92vh]"
+        className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-saas-border overflow-hidden flex flex-col max-h-[calc(100vh-4rem)]"
       >
         <div className="px-8 py-6 bg-[#0F172A] text-white flex items-center justify-between">
           <div>
@@ -510,7 +510,7 @@ export const EntreprisesPage: React.FC<{ lang: Language }> = ({ lang }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto sm:py-8"
             onClick={() => setConfirmDelete(null)}
           >
             <motion.div

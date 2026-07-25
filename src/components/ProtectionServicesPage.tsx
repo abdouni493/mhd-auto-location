@@ -736,12 +736,12 @@ const ServiceFormModal: React.FC<{
 const ModalShell: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({ onClose, children }) => (
   <motion.div
     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-    className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+    className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 z-50 overflow-y-auto sm:py-8"
     onClick={onClose}
   >
     <motion.div
       initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-      className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 custom-scrollbar"
+      className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[calc(100vh-4rem)] overflow-y-auto p-6 custom-scrollbar"
       onClick={e => e.stopPropagation()}
     >
       {children}
@@ -757,7 +757,7 @@ const ConfirmDeleteModal: React.FC<{
 }> = ({ lang, message, onCancel, onConfirm }) => (
   <motion.div
     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-    className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+    className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 z-50 overflow-y-auto sm:py-8"
     onClick={onCancel}
   >
     <motion.div

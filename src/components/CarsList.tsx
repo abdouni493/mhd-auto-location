@@ -77,7 +77,7 @@ const CarsList: React.FC = () => {
       )}
 
       {showAddForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 overflow-y-auto sm:py-8">
           <AddCarForm
             onCarAdded={handleCarAdded}
             onClose={() => setShowAddForm(false)}

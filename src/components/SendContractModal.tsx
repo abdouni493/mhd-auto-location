@@ -185,9 +185,9 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto sm:py-8"
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-saas-border flex flex-col max-h-[90vh]">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-saas-border flex flex-col max-h-[calc(100vh-4rem)]">
           {/* Header */}
           <div className="bg-linear-to-r from-blue-600 via-purple-600 to-pink-600 text-white p-8 flex items-center justify-between border-b border-white/10">
             <div>

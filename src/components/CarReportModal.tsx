@@ -166,13 +166,13 @@ export const CarReportModal: React.FC<CarReportModalProps> = ({
   const carImage = car.images?.[0] || 'https://picsum.photos/seed/car/400/300';
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-start justify-center p-3 bg-black/50 backdrop-blur-sm overflow-y-auto sm:py-8">
       <motion.div
         initial={{ opacity: 0, scale: 0.93, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.93 }}
         transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-        className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden"
+        className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[calc(100vh-4rem)] overflow-hidden"
       >
         {/* ── Header ── */}
         <div className="relative overflow-hidden flex-shrink-0">

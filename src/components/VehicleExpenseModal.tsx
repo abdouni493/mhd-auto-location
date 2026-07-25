@@ -7,7 +7,12 @@ interface VehicleExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: Partial<VehicleExpense>) => void;
-  expense?: VehicleExpense;
+  /**
+   * Dépense à éditer OU simple gabarit de pré-remplissage.
+   * C'est la présence d'un `id` qui fait la différence : sans `id`, on est
+   * TOUJOURS en création, même si les champs arrivent pré-remplis.
+   */
+  expense?: Partial<VehicleExpense>;
   cars: Car[];
   lang: Language;
 }
@@ -20,6 +25,8 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
   cars,
   lang,
 }) => {
+  // Édition uniquement si la dépense existe déjà en base (elle porte un id).
+  const isEditing = !!expense?.id;
   const [formData, setFormData] = useState({
     carId: '',
     type: 'vidange' as const,
@@ -40,10 +47,12 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
   useEffect(() => {
     if (expense) {
       setFormData({
-        carId: expense.carId,
-        type: expense.type,
-        cost: expense.cost,
-        date: expense.date,
+        carId: expense.carId || (cars.length > 0 ? cars[0].id : ''),
+        type: (expense.type || 'vidange') as any,
+        // Un gabarit de création n'apporte ni coût ni note : on repart de zéro
+        // pour ne jamais laisser croire qu'on modifie une dépense existante.
+        cost: expense.cost ?? 0,
+        date: expense.date || new Date().toISOString().split('T')[0],
         note: expense.note || '',
         currentMileage: expense.currentMileage || 0,
         nextVidangeKm: expense.nextVidangeKm || 0,
@@ -174,17 +183,24 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto sm:py-8">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border border-saas-border max-h-[90vh]"
+        className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border border-saas-border max-h-[calc(100vh-4rem)]"
       >
         <div className="p-6 border-b border-saas-border flex items-center justify-between bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white">
-          <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-            🚗 {{fr: 'Dépense Véhicule', ar: 'نفقة المركبة'}[lang]}
-          </h2>
-          <button onClick={onClose} className="p-2.5 hover:bg-white/20 rounded-xl transition-colors">
+          <div>
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              {isEditing
+                ? <>✏️ {{ fr: 'Modifier la dépense', ar: 'تعديل النفقة' }[lang]}</>
+                : <>➕ {{ fr: 'Nouvelle dépense', ar: 'نفقة جديدة' }[lang]}</>}
+            </h2>
+            <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mt-1">
+              {{ fr: 'Dépense véhicule', ar: 'نفقة المركبة' }[lang]}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2.5 hover:bg-white/20 rounded-xl transition-colors cursor-pointer">
             <X size={24} />
           </button>
         </div>
@@ -633,7 +649,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
             onClick={handleSubmit}
             className="flex-1 btn-saas-primary py-3"
           >
-            {{fr: expense ? 'Modifier' : 'Ajouter', ar: expense ? 'تعديل' : 'إضافة'}[lang]}
+            {{fr: isEditing ? 'Modifier' : 'Ajouter', ar: isEditing ? 'تعديل' : 'إضافة'}[lang]}
           </button>
         </div>
       </motion.div>

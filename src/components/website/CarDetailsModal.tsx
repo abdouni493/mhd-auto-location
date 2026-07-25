@@ -26,7 +26,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto sm:py-8"
       style={{ background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(12px)' }}
     >
       <motion.div
@@ -35,7 +35,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={e => e.stopPropagation()}
-        className="relative rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        className="relative rounded-3xl max-w-3xl w-full max-h-[calc(100vh-4rem)] overflow-y-auto"
         style={{
           background: '#FFFFFF',
           border: '1px solid rgba(220,38,38,0.2)',

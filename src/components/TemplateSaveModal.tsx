@@ -57,7 +57,7 @@ export const TemplateSaveModal: React.FC<TemplateSaveModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 overflow-y-auto sm:py-8">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
