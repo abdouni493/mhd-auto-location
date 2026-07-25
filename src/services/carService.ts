@@ -24,6 +24,13 @@ export interface Car {
   mileage?: number
   fuel_level?: 'full' | 'half' | 'quarter' | 'eighth' | 'empty'
   is_hidden_from_site?: boolean
+  // Propriété du véhicule
+  owner_type?: 'personal' | 'third_party'
+  owner_name?: string | null
+  owner_phone?: string | null
+  agency_share_per_day?: number
+  // Devises secondaires activées (JSONB)
+  currencies?: Record<string, { enabled: boolean; rate: number }>
 }
 
 export interface AddCarData {
@@ -46,6 +53,13 @@ export interface AddCarData {
   price_month?: number
   deposit?: number
   mileage?: number
+  // Propriété du véhicule
+  owner_type?: 'personal' | 'third_party'
+  owner_name?: string | null
+  owner_phone?: string | null
+  agency_share_per_day?: number
+  // Devises secondaires activées (JSONB)
+  currencies?: Record<string, { enabled: boolean; rate: number }>
 }
 
 /**
@@ -90,6 +104,11 @@ export async function addCar(carData: AddCarData): Promise<{ success: boolean; c
         price_month: carData.price_month,
         deposit: carData.deposit,
         mileage: carData.mileage,
+        owner_type: carData.owner_type || 'personal',
+        owner_name: carData.owner_name ?? null,
+        owner_phone: carData.owner_phone ?? null,
+        agency_share_per_day: carData.agency_share_per_day ?? 0,
+        currencies: carData.currencies ?? {},
       })
       .select()
       .single()

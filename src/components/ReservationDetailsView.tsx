@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Language, ReservationDetails, Payment, VehicleInspection, InspectionItem, Agency } from '../types';
+import { Language, ReservationDetails, Payment, VehicleInspection, InspectionItem, Agency, RentalSettings } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Calendar, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, CheckCircle, XCircle, Plus, Trash2, Edit, Eye, Car as CarIcon, User, Phone, Mail, CreditCard as CardIcon, Shield, Wrench, Sofa, Sparkles, Droplets } from 'lucide-react';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { supabase } from '../supabase';
+import { uploadInspectionImage } from '../services/uploadInspectionImage';
+import {
+  InspectionChecklist, InspectionPhotoUploader, FuelLevelPicker,
+  InspectionPhoto, FUEL_ORDER, fuelLabel,
+} from './InspectionChecklist';
 
 interface ReservationDetailsViewProps {
   lang: Language;
@@ -1142,355 +1147,375 @@ const SignaturePad: React.FC<{ lang: Language; onSignatureChange: (signature: st
   );
 };
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ACTIVER LA LOCATION
+   Reprend exactement la check-list et les zones photo de l'étape
+   « Inspection Départ » de la création de réservation (composants partagés).
+   ══════════════════════════════════════════════════════════════════════════ */
 export const ActivationModal: React.FC<{ lang: Language; reservation: ReservationDetails; onClose: () => void; onActivate?: (reservation: ReservationDetails) => void }> = ({ lang, reservation, onClose, onActivate }) => {
-  const [mileage, setMileage] = useState(reservation.departureInspection?.mileage?.toString() || '');
-  const [location, setLocation] = useState(reservation.step1?.departureLocation || '');
-  const [fuelLevel, setFuelLevel] = useState<'full' | 'half' | 'quarter' | 'eighth' | 'empty'>('full');
-  const [notes, setNotes] = useState('');
+  const [mileage, setMileage] = useState(reservation.departureInspection?.mileage?.toString() || String(reservation.car?.mileage ?? ''));
+  const [location, setLocation] = useState((reservation.step1 as any)?.departureLocation || '');
+  const [fuelLevel, setFuelLevel] = useState<'full' | 'half' | 'quarter' | 'eighth' | 'empty'>(
+    reservation.departureInspection?.fuelLevel || 'full'
+  );
+  const [notes, setNotes] = useState(reservation.departureInspection?.notes || '');
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>(
     reservation.departureInspection?.inspectionItems || []
   );
+  const [checklistMaster, setChecklistMaster] = useState<any[]>([]);
+  const [responses, setResponses] = useState<Record<string, boolean>>({});
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
-  
-  // Load agencies on component mount
+  const [isLoadingChecklist, setIsLoadingChecklist] = useState(true);
+  const [photos, setPhotos] = useState<InspectionPhoto[]>([]);
+  const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   useEffect(() => {
-    const loadAgencies = async () => {
+    (async () => {
       try {
-        setIsLoadingAgencies(true);
-        const data = await DatabaseService.getAgencies();
-        setAgencies(data || []);
+        setAgencies((await DatabaseService.getAgencies()) || []);
       } catch (err) {
         console.error('Error loading agencies:', err);
-        setAgencies([]);
       } finally {
         setIsLoadingAgencies(false);
       }
-    };
+    })();
 
-    loadAgencies();
-  }, []);
+    (async () => {
+      try {
+        const master = await DatabaseService.getInspectionChecklistItems();
+        setChecklistMaster(master || []);
+        // Pré-remplit avec l'inspection déjà saisie à la création, si elle existe
+        const saved = reservation.departureInspection?.inspectionItems || [];
+        const next: Record<string, boolean> = {};
+        (master || []).forEach((m: any) => {
+          const hit = saved.find((s: any) => s.id === m.id || s.name === m.item_name);
+          next[m.id] = hit ? !!hit.checked : false;
+        });
+        setResponses(next);
+      } catch (err) {
+        console.error('Error loading checklist:', err);
+      } finally {
+        setIsLoadingChecklist(false);
+      }
+    })();
+  }, [reservation.id]);
 
-
-  const fuelLevels = [
-    { value: 'full', label: 'PLEIN' },
-    { value: 'half', label: '1/2' },
-    { value: 'quarter', label: '1/4' },
-    { value: 'eighth', label: '1/8' },
-    { value: 'empty', label: 'VIDE' }
+  // Photos déjà prises lors de l'inspection de départ (consultation)
+  const existingPhotos: InspectionPhoto[] = [
+    ...(reservation.departureInspection?.exteriorPhotos || []).map(url => ({ url, type: 'exterior_front' })),
+    ...(reservation.departureInspection?.interiorPhotos || []).map(url => ({ url, type: 'interior' })),
   ];
 
-  const securityItems = inspectionItems.filter(i => i.category === 'security');
-  const equipmentItems = inspectionItems.filter(i => i.category === 'equipment');
-  const comfortItems = inspectionItems.filter(i => i.category === 'comfort' || i.category === 'cleanliness');
+  const toggleItem = (itemId: string) => setResponses(prev => ({ ...prev, [itemId]: !prev[itemId] }));
 
-  const handleInspectionItemToggle = (itemId: string) => {
-    setInspectionItems(prev =>
-      prev.map(item =>
-        item.id === itemId ? { ...item, checked: !item.checked } : item
-      )
-    );
+  const handlePhotoUpload = async (file: File, type: string) => {
+    setUploadingType(type);
+    try {
+      const result = await uploadInspectionImage(file, reservation.id, type);
+      if (result.success && result.url) {
+        setPhotos(prev => [...prev, { url: result.url!, type }]);
+      } else {
+        setErrorMessage(result.error || (lang === 'fr' ? 'Erreur lors du téléchargement' : 'خطأ في التحميل'));
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Upload error');
+    } finally {
+      setUploadingType(null);
+    }
   };
 
-  
+  const handleActivate = async () => {
+    if (!mileage || isNaN(parseInt(mileage))) {
+      setErrorMessage(lang === 'fr' ? 'Le kilométrage de départ est obligatoire.' : 'عداد المغادرة مطلوب.');
+      return;
+    }
+    setErrorMessage(null);
+    setSaving(true);
+    try {
+      const items = checklistMaster.map((m: any) => ({
+        id: m.id,
+        name: m.item_name,
+        checked: !!responses[m.id],
+        category: m.category === 'securite' ? 'security'
+          : m.category === 'equipements' ? 'equipment'
+          : m.category === 'confort' ? 'comfort' : 'cleanliness',
+      })) as InspectionItem[];
+
+      await ReservationsService.activateReservationWithInspection({
+        reservationId: reservation.id,
+        carId: reservation.car.id,
+        mileage: parseInt(mileage),
+        fuelLevel,
+        location,
+        notes,
+        inspectionItems: items.length > 0 ? items : inspectionItems,
+        departureAgencyId: reservation.step1?.departureAgency,
+      });
+
+      await supabase.from('cars').update({ mileage: parseInt(mileage), fuel_level: fuelLevel }).eq('id', reservation.car.id);
+
+      onActivate?.({
+        ...reservation,
+        status: 'active' as const,
+        activatedAt: new Date().toISOString(),
+        departureInspection: {
+          id: `departure-${reservation.id}`,
+          reservationId: reservation.id,
+          type: 'departure' as const,
+          mileage: parseInt(mileage),
+          fuelLevel,
+          location,
+          date: new Date().toISOString().split('T')[0],
+          time: new Date().toTimeString().split(' ')[0],
+          interiorPhotos: photos.filter(p => p.type === 'interior').map(p => p.url),
+          exteriorPhotos: photos.filter(p => p.type !== 'interior').map(p => p.url),
+          inspectionItems: items,
+          notes,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      onClose();
+    } catch (error: any) {
+      console.error('Error activating reservation:', error);
+      setErrorMessage(error?.message || (lang === 'fr' ? "Erreur lors de l'activation" : 'خطأ في التفعيل'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/55 backdrop-blur-sm flex items-center justify-center z-50 p-4"
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 max-h-[95vh] overflow-y-auto"
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        className="bg-saas-bg rounded-3xl shadow-2xl max-w-5xl w-full max-h-[93vh] flex flex-col overflow-hidden border border-saas-border"
       >
-        <h3 className="text-2xl font-black text-saas-text-main mb-6">
-          ✅ {lang === 'fr' ? 'Activer la Location' : 'تفعيل التأجير'}
-        </h3>
-
-        <div className="space-y-8">
-          {/* CAR INFORMATION SECTION */}
-          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
-            <h4 className="text-lg font-black text-saas-text-main mb-4">
-              🚗 {lang === 'fr' ? 'Informations du Véhicule' : 'معلومات المركبة'}
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* En-tête */}
+        <div className="relative overflow-hidden bg-[#0F172A] text-white px-8 py-6 shrink-0">
+          <div className="absolute -right-16 -top-20 w-56 h-56 rounded-full bg-emerald-500/20 blur-3xl" />
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <span className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                <CheckCircle className="w-6 h-6" />
+              </span>
               <div>
-                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-1">
-                  {lang === 'fr' ? 'Marque & Modèle' : 'الماركة والموديل'}
-                </p>
-                <p className="text-lg font-bold text-saas-text-main">
-                  {reservation.car.brand} {reservation.car.model}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-1">
-                  {lang === 'fr' ? 'Couleur' : 'اللون'}
-                </p>
-                <p className="text-lg font-bold text-saas-text-main">
-                  {reservation.car.color}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-1">
-                  {lang === 'fr' ? 'Immatriculation' : 'لوحة الترخيص'}
-                </p>
-                <p className="text-lg font-bold text-saas-text-main font-mono">
-                  {reservation.car.registration}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-1">
-                  {lang === 'fr' ? 'VIN' : 'رقم VIN'}
-                </p>
-                <p className="text-lg font-bold text-saas-text-main font-mono">
-                  {reservation.car.vin || 'N/A'}
+                <h3 className="text-2xl font-black uppercase tracking-tighter">
+                  {lang === 'fr' ? 'Activer la location' : 'تفعيل التأجير'}
+                </h3>
+                <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.25em] mt-1">
+                  {reservation.car.brand} {reservation.car.model} · {reservation.car.registration}
                 </p>
               </div>
             </div>
+            <button onClick={onClose} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer">
+              <XCircle className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
 
-            {/* Car Images Display */}
-            {reservation.car.images && reservation.car.images.length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs font-bold text-saas-text-muted uppercase tracking-widest mb-3">
-                  {lang === 'fr' ? 'Photos du Véhicule' : 'صور المركبة'}
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {reservation.car.images.slice(0, 4).map((image, idx) => (
-                    <img
-                      key={idx}
-                      src={image}
-                      alt={`Car ${idx + 1}`}
-                      className="w-full h-24 object-cover rounded-lg border border-blue-200"
-                    />
-                  ))}
-                </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-7 space-y-6">
+          {/* Véhicule + client */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="rounded-2xl border border-saas-border bg-white overflow-hidden lg:col-span-2">
+              <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+                <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-lg bg-[#0F172A] text-white flex items-center justify-center">
+                    <CarIcon className="w-4 h-4" />
+                  </span>
+                  {lang === 'fr' ? 'Véhicule remis' : 'المركبة المسلمة'}
+                </h4>
               </div>
-            )}
-          </div>
-
-          {/* DEPARTURE INSPECTION DETAILS */}
-          <div className="text-center bg-gradient-to-r from-saas-primary-start/10 to-saas-primary-end/10 rounded-xl p-4 border border-saas-primary-start/20">
-            <h4 className="text-lg font-black text-saas-text-main mb-2">
-              🧭 {lang === 'fr' ? 'Détails du Départ' : 'تفاصيل المغادرة'}
-            </h4>
-            <p className="text-saas-text-muted">
-              {lang === 'fr' ? 'Confirmez les informations de départ du véhicule' : 'تأكيد معلومات مغادرة المركبة'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block font-bold text-saas-text-main mb-2">
-                🧭 {lang === 'fr' ? 'Kilométrage au départ' : 'عداد الكيلومترات عند المغادرة'}
-              </label>
-              <input
-                type="number"
-                value={mileage}
-                onChange={(e) => setMileage(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-transparent"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-saas-text-main mb-2">
-                📍 {lang === 'fr' ? 'Lieu de prise en charge' : 'مكان الاستلام'}
-              </label>
-              <select
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                disabled={isLoadingAgencies}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-transparent disabled:bg-slate-100"
-              >
-                <option value="">
-                  {isLoadingAgencies
-                    ? (lang === 'fr' ? 'Chargement des agences...' : 'جاري تحميل الوكالات...')
-                    : (lang === 'fr' ? 'Sélectionner une agence...' : 'اختر وكالة...')}
-                </option>
-                {agencies.map(agency => (
-                  <option key={agency.id} value={agency.name}>
-                    {agency.name} {agency.city ? `(${agency.city})` : ''}
-                  </option>
+              <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { l: lang === 'fr' ? 'Marque & modèle' : 'الماركة', v: `${reservation.car.brand} ${reservation.car.model}` },
+                  { l: lang === 'fr' ? 'Immatriculation' : 'رقم التسجيل', v: reservation.car.registration },
+                  { l: lang === 'fr' ? 'Couleur' : 'اللون', v: reservation.car.color || '—' },
+                  { l: 'VIN', v: reservation.car.vin || '—' },
+                ].map(f => (
+                  <div key={f.l}>
+                    <p className="text-[9px] font-black uppercase tracking-[0.16em] text-saas-text-muted">{f.l}</p>
+                    <p className="font-bold text-saas-text-main mt-0.5 break-words">{f.v}</p>
+                  </div>
                 ))}
-              </select>
+              </div>
+              {reservation.car.images && reservation.car.images.length > 0 && (
+                <div className="px-5 pb-5 grid grid-cols-4 gap-3">
+                  {reservation.car.images.slice(0, 4).map((image, idx) => (
+                    <img key={idx} src={image} alt={`Car ${idx + 1}`} className="w-full h-20 object-cover rounded-xl border border-saas-border" />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+                <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-lg bg-[#0284C7] text-white flex items-center justify-center">
+                    <User className="w-4 h-4" />
+                  </span>
+                  {lang === 'fr' ? 'Client' : 'العميل'}
+                </h4>
+              </div>
+              <div className="p-5 space-y-2 text-sm">
+                <p className="font-black text-saas-text-main">
+                  {reservation.client?.firstName} {reservation.client?.lastName}
+                </p>
+                <p className="text-saas-text-muted">{reservation.client?.phone || '—'}</p>
+                <p className="text-saas-text-muted text-xs">
+                  {reservation.step1?.departureDate} → {reservation.step1?.returnDate}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block font-bold text-saas-text-main mb-3">
-              ⛽ {lang === 'fr' ? 'Niveau de carburant' : 'مستوى الوقود'}
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {fuelLevels.map((level) => (
-                <button
-                  key={level.value}
-                  onClick={() => setFuelLevel(level.value as any)}
-                  className={`p-3 border-2 rounded-lg font-bold transition-all ${
-                    fuelLevel === level.value
-                      ? 'border-saas-primary-start bg-saas-primary-start text-white shadow-lg'
-                      : 'border-slate-200 hover:border-saas-primary-start/50 hover:bg-saas-primary-start/10'
-                  }`}
-                >
-                  {level.label}
-                </button>
-              ))}
+          {/* Relevés de départ */}
+          <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+              <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center">
+                  <Fuel className="w-4 h-4" />
+                </span>
+                {lang === 'fr' ? 'Relevés au départ' : 'القراءات عند المغادرة'}
+              </h4>
+            </div>
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-5">
+                <div>
+                  <label className="label-saas">{lang === 'fr' ? 'Kilométrage au départ' : 'عداد المغادرة'}</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={mileage}
+                      onChange={(e) => setMileage(e.target.value)}
+                      className="input-saas pr-12 font-bold"
+                      placeholder="0"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">km</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="label-saas">{lang === 'fr' ? 'Lieu de prise en charge' : 'مكان الاستلام'}</label>
+                  <select
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    disabled={isLoadingAgencies}
+                    className="input-saas cursor-pointer"
+                  >
+                    <option value="">
+                      {isLoadingAgencies
+                        ? (lang === 'fr' ? 'Chargement…' : 'جاري التحميل…')
+                        : (lang === 'fr' ? 'Sélectionner une agence…' : 'اختر وكالة…')}
+                    </option>
+                    {agencies.map(agency => (
+                      <option key={agency.id} value={agency.name}>
+                        {agency.name}{agency.city ? ` (${agency.city})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="label-saas">{lang === 'fr' ? 'Niveau de carburant' : 'مستوى الوقود'}</label>
+                  <FuelLevelPicker value={fuelLevel} onChange={setFuelLevel} accent="#059669" />
+                </div>
+                <div>
+                  <label className="label-saas">{lang === 'fr' ? 'Notes rapides' : 'ملاحظات سريعة'}</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    className="input-saas resize-none"
+                    placeholder={lang === 'fr' ? 'Ex : petite éraflure sur portière droite' : 'مثال: خدش صغير على الباب الأيمن'}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block font-bold text-saas-text-main mb-2">
-              📝 {lang === 'fr' ? 'Notes rapides' : 'ملاحظات سريعة'}
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-saas-primary-start focus:border-transparent"
-              rows={3}
-              placeholder={lang === 'fr' ? 'Ex: Petit éraflure sur portière droite' : 'مثال: خدش صغير على الباب الأيمن'}
+          {/* Check-list — rendu identique à l'étape d'inspection */}
+          {isLoadingChecklist ? (
+            <div className="h-40 rounded-2xl vel-skeleton" />
+          ) : (
+            <InspectionChecklist
+              lang={lang}
+              items={checklistMaster}
+              responses={responses}
+              onToggle={toggleItem}
+              title={lang === 'fr' ? 'Vérification du véhicule' : 'فحص المركبة'}
             />
-          </div>
+          )}
 
-          {/* INSPECTION ITEMS */}
-          <div className="bg-gradient-to-r from-saas-primary-start/10 to-saas-primary-end/10 rounded-xl p-6 border border-saas-primary-start/20">
-            <h4 className="text-lg font-black text-saas-text-main mb-4">
-              🔍 {lang === 'fr' ? 'Vérification du Véhicule' : 'فحص المركبة'}
-            </h4>
-            <div className="space-y-6">
-              {/* Security Items */}
-              <div>
-                <h5 className="font-bold text-saas-text-main mb-2">🛡️ {lang === 'fr' ? 'Sécurité' : 'الأمان'}</h5>
-                <div className="space-y-2">
-                  {securityItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={() => handleInspectionItemToggle(item.id)}
-                        className="w-5 h-5 text-saas-primary-start border-slate-300 rounded focus:ring-saas-primary-start"
-                      />
-                      <span className="font-bold capitalize text-saas-text-main">
-                        {item.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Photos existantes */}
+          {existingPhotos.length > 0 && (
+            <InspectionPhotoUploader
+              lang={lang}
+              photos={existingPhotos}
+              onUpload={() => {}}
+              onRemove={() => {}}
+              readOnly
+              title={lang === 'fr' ? "Photos de l'inspection de départ" : 'صور فحص المغادرة'}
+            />
+          )}
 
-              {/* Equipment Items */}
-              <div>
-                <h5 className="font-bold text-saas-text-main mb-2">🔧 {lang === 'fr' ? 'Équipements' : 'المعدات'}</h5>
-                <div className="space-y-2">
-                  {equipmentItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={() => handleInspectionItemToggle(item.id)}
-                        className="w-5 h-5 text-saas-primary-start border-slate-300 rounded focus:ring-saas-primary-start"
-                      />
-                      <span className="font-bold capitalize text-saas-text-main">
-                        {item.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Nouvelles photos */}
+          <InspectionPhotoUploader
+            lang={lang}
+            photos={photos}
+            onUpload={handlePhotoUpload}
+            onRemove={(i) => setPhotos(prev => prev.filter((_, idx) => idx !== i))}
+            uploadingType={uploadingType}
+            title={lang === 'fr' ? 'Ajouter des photos à la remise' : 'إضافة صور عند التسليم'}
+          />
 
-              {/* Comfort & Cleanliness Items */}
-              <div>
-                <h5 className="font-bold text-saas-text-main mb-2">✨ {lang === 'fr' ? 'Confort & Propreté' : 'الراحة والنظافة'}</h5>
-                <div className="space-y-2">
-                  {comfortItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={() => handleInspectionItemToggle(item.id)}
-                        className="w-5 h-5 text-saas-primary-start border-slate-300 rounded focus:ring-saas-primary-start"
-                      />
-                      <span className="font-bold capitalize text-saas-text-main">
-                        {item.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl p-4"
+            >
+              <AlertTriangle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
+              <p className="text-sm font-semibold text-red-700">{errorMessage}</p>
+            </motion.div>
+          )}
+        </div>
 
-          {/* ACTION BUTTONS */}
-          <div className="flex gap-3 mt-8">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-4 rounded-lg transition-colors"
-          >
+        {/* Pied */}
+        <div className="shrink-0 px-7 py-5 bg-white border-t border-saas-border flex items-center justify-end gap-3">
+          <button onClick={onClose} disabled={saving} className="btn-saas-outline px-8 cursor-pointer">
             {lang === 'fr' ? 'Annuler' : 'إلغاء'}
           </button>
-          <button
-            onClick={async () => {
-              try {
-                await ReservationsService.activateReservationWithInspection({
-                  reservationId: reservation.id,
-                  carId: reservation.car.id,
-                  mileage: parseInt(mileage),
-                  fuelLevel: fuelLevel as 'full' | 'half' | 'quarter' | 'eighth' | 'empty',
-                  location,
-                  notes,
-                  inspectionItems,
-                  departureAgencyId: reservation.step1?.departureAgency
-                });
-
-                // Update car mileage and fuel level only (no status changes for period-based availability)
-                await supabase
-                  .from('cars')
-                  .update({ 
-                    mileage: parseInt(mileage),
-                    fuel_level: fuelLevel
-                  })
-                  .eq('id', reservation.car.id);
-
-                // Update the local reservation state
-                const updatedReservation = {
-                  ...reservation,
-                  status: 'active' as const,
-                  activatedAt: new Date().toISOString(),
-                  departureInspection: {
-                    id: `departure-${reservation.id}`,
-                    reservationId: reservation.id,
-                    type: 'departure' as const,
-                    mileage: parseInt(mileage),
-                    fuelLevel: fuelLevel as 'full' | 'half' | 'quarter' | 'eighth' | 'empty',
-                    location,
-                    date: new Date().toLocaleDateString(),
-                    time: new Date().toLocaleTimeString(),
-                    interiorPhotos: [],
-                    exteriorPhotos: [],
-                    inspectionItems,
-                    notes,
-                    createdAt: new Date().toISOString()
-                  }
-                };
-
-                onActivate?.(updatedReservation);
-                onClose();
-              } catch (error) {
-                console.error('Error activating reservation:', error);
-                alert(lang === 'fr' ? 'Erreur lors de l\'activation: ' + (error as any).message : 'خطأ في التفعيل: ' + (error as any).message);
-              }
-            }}
-            className="flex-1 btn-saas-primary py-3"
-          >
-            ✅ {lang === 'fr' ? 'Confirmer et Activer' : 'تأكيد وتفعيل'}
+          <button onClick={handleActivate} disabled={saving} className="btn-saas-success px-10 cursor-pointer">
+            {saving
+              ? <>⏳ {lang === 'fr' ? 'Activation…' : 'جاري التفعيل…'}</>
+              : <><CheckCircle className="w-4 h-4" />{lang === 'fr' ? 'Confirmer et activer' : 'تأكيد وتفعيل'}</>}
           </button>
-        </div>
         </div>
       </motion.div>
     </motion.div>
   );
 };
 
+/* ══════════════════════════════════════════════════════════════════════════
+   TERMINER LA LOCATION
+   • même rendu de check-list que l'inspection de départ
+   • photos de l'inspection de départ affichées en consultation
+   • limite de kilométrage globale (paramétrable, enregistrée en base)
+   • alertes dépassement km et carburant inférieur au départ
+   • bilan de paiement complet + encaissement de clôture
+   • purge définitive des photos d'inspection à l'enregistrement
+   ══════════════════════════════════════════════════════════════════════════ */
 export const CompletionModal: React.FC<{ lang: Language; reservation: ReservationDetails; onClose: () => void; onComplete?: (reservation: ReservationDetails) => void }> = ({ lang, reservation, onClose, onComplete }) => {
   const [returnMileage, setReturnMileage] = useState('');
   const [returnFuelLevel, setReturnFuelLevel] = useState<'full' | 'half' | 'quarter' | 'eighth' | 'empty'>('full');
@@ -1499,99 +1524,162 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
   const [excessMileage, setExcessMileage] = useState('');
   const [missingFuel, setMissingFuel] = useState('');
   const [documentsRecovered, setDocumentsRecovered] = useState(true);
-  const [returnInspectionItems, setReturnInspectionItems] = useState<InspectionItem[]>(
-    reservation.departureInspection?.inspectionItems.map(item => ({ ...item })) || []
-  );
   const [signature, setSignature] = useState('');
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const totalDistance = returnMileage && reservation.departureInspection?.mileage
-    ? parseInt(returnMileage) - reservation.departureInspection.mileage
+  // Check-list (référentiel commun, pré-rempli avec l'état de départ)
+  const [checklistMaster, setChecklistMaster] = useState<any[]>([]);
+  const [responses, setResponses] = useState<Record<string, boolean>>({});
+  const [isLoadingChecklist, setIsLoadingChecklist] = useState(true);
+
+  // Paramétrage global de la limite de kilométrage
+  const [settings, setSettings] = useState<RentalSettings>(DatabaseService.DEFAULT_RENTAL_SETTINGS);
+  const [settingsDraft, setSettingsDraft] = useState<RentalSettings>(DatabaseService.DEFAULT_RENTAL_SETTINGS);
+  const [showSettings, setShowSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+
+  // Paiement de clôture
+  const [paymentNow, setPaymentNow] = useState<number | ''>('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'check'>('cash');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const master = await DatabaseService.getInspectionChecklistItems();
+        setChecklistMaster(master || []);
+        const departure = reservation.departureInspection?.inspectionItems || [];
+        const next: Record<string, boolean> = {};
+        (master || []).forEach((m: any) => {
+          const hit = departure.find((s: any) => s.id === m.id || s.name === m.item_name);
+          next[m.id] = hit ? !!hit.checked : false;
+        });
+        setResponses(next);
+      } catch (err) {
+        console.error('Error loading checklist:', err);
+      } finally {
+        setIsLoadingChecklist(false);
+      }
+    })();
+
+    (async () => {
+      const s = await DatabaseService.getRentalSettings();
+      setSettings(s);
+      setSettingsDraft(s);
+    })();
+  }, [reservation.id]);
+
+  const toggleItem = (itemId: string) => setResponses(prev => ({ ...prev, [itemId]: !prev[itemId] }));
+
+  const departureMileage = Number(reservation.departureInspection?.mileage) || 0;
+  const departureFuel = reservation.departureInspection?.fuelLevel || 'full';
+  const totalDistance = returnMileage ? Math.max(0, parseInt(returnMileage) - departureMileage) : 0;
+
+  // ── Alerte kilométrage ───────────────────────────────────────────────────
+  const allowedKm = settings.mileageLimitPerDay > 0
+    ? settings.mileageLimitPerDay * (Number(reservation.totalDays) || 0)
+    : 0;
+  const kmOver = allowedKm > 0 ? Math.max(0, totalDistance - allowedKm) : 0;
+  const suggestedKmFee = kmOver > 0 ? Math.round(kmOver * (settings.excessMileageFeePerKm || 0)) : 0;
+
+  // ── Alerte carburant (index plus grand = réservoir moins plein) ──────────
+  const depIdx = FUEL_ORDER.indexOf(departureFuel as any);
+  const retIdx = FUEL_ORDER.indexOf(returnFuelLevel);
+  const fuelMissingLevels = retIdx > depIdx ? retIdx - depIdx : 0;
+  const suggestedFuelFee = fuelMissingLevels > 0
+    ? Math.round(fuelMissingLevels * (settings.fuelFeePerLevel || 0))
     : 0;
 
-  const fuelLevels = [
-    { value: 'full', label: 'PLEIN' },
-    { value: 'half', label: '1/2' },
-    { value: 'quarter', label: '1/4' },
-    { value: 'eighth', label: '1/8' },
-    { value: 'empty', label: 'VIDE' }
-  ];
+  const extraFees = (parseFloat(excessMileage) || 0) + (parseFloat(missingFuel) || 0);
 
-  const totalFees = (parseFloat(excessMileage) || 0) + (parseFloat(missingFuel) || 0);
+  // ── Bilan de paiement ────────────────────────────────────────────────────
+  const baseTotal = Number(reservation.totalPrice) || 0;
+  const alreadyPaid = (reservation.payments || []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
+    || Math.max(0, baseTotal - (Number(reservation.remainingPayment) || 0));
+  const totalWithFees = baseTotal + extraFees;
+  const payNow = paymentNow === '' ? 0 : Math.max(0, Number(paymentNow));
+  const paidAfter = alreadyPaid + payNow;
+  const remainingAfter = Math.max(0, totalWithFees - paidAfter);
 
-  const securityItems = returnInspectionItems.filter(i => i.category === 'security');
-  const equipmentItems = returnInspectionItems.filter(i => i.category === 'equipment');
-  const comfortItems = returnInspectionItems.filter(i => i.category === 'comfort' || i.category === 'cleanliness');
+  const applySuggestedKmFee = () => setExcessMileage(String(suggestedKmFee));
+  const applySuggestedFuelFee = () => setMissingFuel(String(suggestedFuelFee));
 
-  const handleInspectionItemToggle = (itemId: string, checked?: boolean) => {
-    setReturnInspectionItems(prev =>
-      prev.map(item =>
-        item.id === itemId ? { ...item, checked: checked !== undefined ? checked : !item.checked } : item
-      )
-    );
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    setSettingsMessage(null);
+    try {
+      const saved = await DatabaseService.saveRentalSettings(settingsDraft);
+      setSettings(saved);
+      setSettingsDraft(saved);
+      setSettingsMessage(lang === 'fr'
+        ? 'Paramètres enregistrés — appliqués à toutes les fins de location.'
+        : 'تم حفظ الإعدادات — تُطبق على كل عمليات الإنهاء.');
+    } catch (err: any) {
+      setSettingsMessage(err?.message || 'Erreur');
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   const handleComplete = async () => {
+    if (!returnMileage || returnMileage.trim() === '') {
+      setErrorMessage(lang === 'fr' ? 'Le kilométrage de retour est obligatoire' : 'عداد العودة مطلوب');
+      return;
+    }
+    if (isNaN(parseInt(returnMileage))) {
+      setErrorMessage(lang === 'fr' ? 'Le kilométrage doit être un nombre valide' : 'العداد يجب أن يكون رقم صحيح');
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsLoading(true);
     try {
-      // Validate required fields
-      if (!returnMileage || returnMileage.trim() === '') {
-        const msg = lang === 'fr' ? 'Le kilométrage de retour est obligatoire' : 'عداد العودة مطلوب';
-        setErrorMessage(msg);
-        console.warn('Validation: Missing return mileage');
-        return;
-      }
-
-      if (isNaN(parseInt(returnMileage))) {
-        const msg = lang === 'fr' ? 'Le kilométrage doit être un nombre valide' : 'العداد يجب أن يكون رقم صحيح';
-        setErrorMessage(msg);
-        console.warn('Validation: Invalid return mileage');
-        return;
-      }
-
-      setErrorMessage(null);
-      setIsLoading(true);
-
-      console.log('🟢 Starting reservation completion for:', reservation.id);
+      const items = checklistMaster.map((m: any) => ({
+        id: m.id,
+        name: m.item_name,
+        checked: !!responses[m.id],
+        category: m.category === 'securite' ? 'security'
+          : m.category === 'equipements' ? 'equipment'
+          : m.category === 'confort' ? 'comfort' : 'cleanliness',
+      })) as InspectionItem[];
 
       await ReservationsService.completeReservationWithInspection({
         reservationId: reservation.id,
         carId: reservation.carId,
         returnMileage: parseInt(returnMileage),
-        returnFuelLevel: returnFuelLevel,
+        returnFuelLevel,
         returnLocation: reservation.step1.returnAgency || reservation.step1.departureAgency,
         returnAgencyId: reservation.step1.returnAgency || reservation.step1.departureAgency,
         excessMileage: parseFloat(excessMileage) || 0,
         missingFuel: parseFloat(missingFuel) || 0,
         signatureDataUrl: signature,
-        notes: notes,
-        inspectionItems: returnInspectionItems,
+        notes,
+        inspectionItems: items,
+        // Bilan financier de clôture
+        paymentNow: payNow,
+        paymentMethod,
+        finalTotal: totalWithFees,
+        totalPaid: paidAfter,
+        remaining: remainingAfter,
+        // Purge définitive des photos d'inspection de cette réservation
+        purgeInspectionPhotos: true,
       });
 
-      console.log('🟢 Reservation completion successful, updating car info...');
-
-      // Update car mileage and fuel level
       const { error: carError } = await supabase
         .from('cars')
-        .update({ 
-          mileage: parseInt(returnMileage),
-          fuel_level: returnFuelLevel
-        })
+        .update({ mileage: parseInt(returnMileage), fuel_level: returnFuelLevel })
         .eq('id', reservation.car.id);
+      if (carError) throw new Error(`Car update failed: ${carError.message}`);
 
-      if (carError) {
-        console.error('❌ Car update error:', carError);
-        throw new Error(`Car update failed: ${carError.message}`);
-      }
-
-      console.log('🟢 Car info updated successfully');
-
-      // Update the local reservation state
-      const updatedReservation = {
+      onComplete?.({
         ...reservation,
         status: 'completed' as const,
         completedAt: new Date().toISOString(),
+        totalPrice: totalWithFees,
+        advancePayment: paidAfter,
+        remainingPayment: remainingAfter,
         returnInspection: {
           id: `return-${reservation.id}`,
           reservationId: reservation.id,
@@ -1603,448 +1691,549 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
           time: returnTime,
           interiorPhotos: [],
           exteriorPhotos: [],
-          inspectionItems: returnInspectionItems,
-          notes: notes,
-          signature: signature,
-          createdAt: new Date().toISOString()
+          inspectionItems: items,
+          notes,
+          signature,
+          createdAt: new Date().toISOString(),
         },
         excessMileage: parseFloat(excessMileage) || 0,
         missingFuel: parseFloat(missingFuel) || 0,
-        additionalFees: totalFees,
-        notes: notes
-      };
-
-      console.log('🟢 Reservation completed successfully');
-      onComplete?.(updatedReservation);
+        additionalFees: extraFees,
+        notes,
+      });
       onClose();
     } catch (error: any) {
-      const errorMsg = error?.message || error?.toString() || 'Unknown error';
+      const errorMsg = error?.message || String(error);
       console.error('❌ Error completing reservation:', error);
-      console.error('Error details:', {
-        message: errorMsg,
-        code: error?.code,
-        details: error?.details
-      });
-
-      // Provide user-friendly error message
-      let userMessage = lang === 'fr' 
-        ? 'Erreur lors de la finalisation de la location'
-        : 'خطأ في إنهاء التأجير';
-
+      let userMessage = lang === 'fr' ? 'Erreur lors de la finalisation de la location' : 'خطأ في إنهاء التأجير';
       if (errorMsg.includes('permission') || errorMsg.includes('Policy')) {
         userMessage = lang === 'fr'
-          ? 'Vous n\'avez pas la permission d\'effectuer cette action. Veuillez contacter l\'administrateur.'
-          : 'ليس لديك صلاحية لإجراء هذا الإجراء. يرجى الاتصال بالمسؤول.';
-      } else if (errorMsg.includes('not found') || errorMsg.includes('does not exist')) {
-        userMessage = lang === 'fr'
-          ? 'La réservation n\'existe pas ou a été supprimée'
-          : 'التأجير غير موجود أو تم حذفه';
+          ? "Vous n'avez pas la permission d'effectuer cette action."
+          : 'ليس لديك صلاحية لإجراء هذا الإجراء.';
       }
-
       setErrorMessage(`${userMessage}: ${errorMsg}`);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const departurePhotos: InspectionPhoto[] = [
+    ...(reservation.departureInspection?.exteriorPhotos || []).map(url => ({ url, type: 'exterior_front' })),
+    ...(reservation.departureInspection?.interiorPhotos || []).map(url => ({ url, type: 'interior' })),
+  ];
+
+  const money = (n: number) => `${Math.round(n || 0).toLocaleString('fr-DZ')} DA`;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/55 backdrop-blur-sm flex items-center justify-center z-50 p-4"
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full p-6 max-h-[90vh] overflow-y-auto"
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        className="bg-saas-bg rounded-3xl shadow-2xl max-w-6xl w-full max-h-[93vh] flex flex-col overflow-hidden border border-saas-border"
       >
-        <h3 className="text-2xl font-black text-saas-text-main mb-6">
-          🏁 {lang === 'fr' ? 'Terminer la Location' : 'إنهاء التأجير'}
-        </h3>
-
-        <div className="space-y-6">
-          {/* Car Information */}
-          <div className="bg-gradient-to-r from-saas-primary-start/10 to-saas-primary-end/10 rounded-xl p-4 border border-saas-primary-start/20">
-            <h4 className="text-lg font-black text-saas-text-main mb-4">
-              🚗 {lang === 'fr' ? 'Informations du Véhicule' : 'معلومات المركبة'}
-            </h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        {/* En-tête */}
+        <div className="relative overflow-hidden bg-[#0F172A] text-white px-8 py-6 shrink-0">
+          <div className="absolute -right-16 -top-20 w-56 h-56 rounded-full bg-[#DC2626]/25 blur-3xl" />
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <span className="w-12 h-12 rounded-2xl bg-[#DC2626] flex items-center justify-center shadow-lg shadow-[#DC2626]/30">
+                <FileText className="w-6 h-6" />
+              </span>
               <div>
-                <p className="font-bold text-saas-text-main">{reservation.car.brand} {reservation.car.model}</p>
-                <p className="text-saas-text-muted">{reservation.car.registration}</p>
-              </div>
-              <div>
-                <p className="font-bold text-saas-text-main">{lang === 'fr' ? 'Couleur' : 'اللون'}</p>
-                <p className="text-saas-text-muted">{reservation.car.color}</p>
-              </div>
-              <div>
-                <p className="font-bold text-saas-text-main">{lang === 'fr' ? 'Énergie' : 'الطاقة'}</p>
-                <p className="text-saas-text-muted">{reservation.car.energy}</p>
-              </div>
-              <div>
-                <p className="font-bold text-saas-text-main">{lang === 'fr' ? 'Kilométrage Actuel' : 'العداد الحالي'}</p>
-                <p className="text-saas-text-muted">{reservation.car.mileage.toLocaleString()} km</p>
+                <h3 className="text-2xl font-black uppercase tracking-tighter">
+                  {lang === 'fr' ? 'Terminer la location' : 'إنهاء التأجير'}
+                </h3>
+                <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.25em] mt-1">
+                  {reservation.car.brand} {reservation.car.model} · {reservation.car.registration}
+                </p>
               </div>
             </div>
+            <button onClick={onClose} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer">
+              <XCircle className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-7 space-y-6">
+          {/* Paramétrage de la limite de kilométrage (global) */}
+          <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+            <button
+              onClick={() => setShowSettings(v => !v)}
+              className="w-full px-5 py-4 flex items-center justify-between gap-3 hover:bg-saas-bg transition-colors cursor-pointer"
+            >
+              <span className="flex items-center gap-2.5 font-black text-sm uppercase tracking-tight text-saas-text-main">
+                <span className="w-7 h-7 rounded-lg bg-[#0284C7] text-white flex items-center justify-center">
+                  <Wrench className="w-4 h-4" />
+                </span>
+                {lang === 'fr' ? 'Paramétrage limite de kilométrage' : 'إعداد حد الكيلومترات'}
+              </span>
+              <span className="flex items-center gap-3">
+                <span className="text-xs font-bold text-saas-text-muted">
+                  {settings.mileageLimitPerDay > 0
+                    ? `${settings.mileageLimitPerDay} km/${lang === 'fr' ? 'jour' : 'يوم'}`
+                    : (lang === 'fr' ? 'Illimité' : 'غير محدود')}
+                </span>
+                <motion.span animate={{ rotate: showSettings ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                  <Edit className="w-4 h-4 text-saas-text-muted" />
+                </motion.span>
+              </span>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {showSettings && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  className="overflow-hidden border-t border-saas-border bg-saas-bg"
+                >
+                  <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="label-saas">{lang === 'fr' ? 'Limite incluse (km / jour)' : 'الحد المسموح (كم/يوم)'}</label>
+                      <input
+                        type="number" min={0}
+                        value={settingsDraft.mileageLimitPerDay}
+                        onChange={e => setSettingsDraft(s => ({ ...s, mileageLimitPerDay: Number(e.target.value) || 0 }))}
+                        className="input-saas"
+                      />
+                      <p className="text-[11px] text-saas-text-muted mt-1">
+                        {lang === 'fr' ? '0 = kilométrage illimité' : '0 = بدون حد'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="label-saas">{lang === 'fr' ? 'Frais par km dépassé (DA)' : 'رسوم كل كم زائد (دج)'}</label>
+                      <input
+                        type="number" min={0} step="0.01"
+                        value={settingsDraft.excessMileageFeePerKm}
+                        onChange={e => setSettingsDraft(s => ({ ...s, excessMileageFeePerKm: Number(e.target.value) || 0 }))}
+                        className="input-saas"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-saas">{lang === 'fr' ? 'Frais par cran de carburant (DA)' : 'رسوم كل درجة وقود (دج)'}</label>
+                      <input
+                        type="number" min={0}
+                        value={settingsDraft.fuelFeePerLevel}
+                        onChange={e => setSettingsDraft(s => ({ ...s, fuelFeePerLevel: Number(e.target.value) || 0 }))}
+                        className="input-saas"
+                      />
+                    </div>
+                  </div>
+                  <div className="px-5 pb-5 flex flex-wrap items-center gap-3">
+                    <button onClick={saveSettings} disabled={savingSettings} className="btn-vel-blue px-6 py-2.5 text-xs">
+                      {savingSettings ? '⏳' : <CheckCircle className="w-4 h-4" />}
+                      {lang === 'fr' ? 'Enregistrer pour toutes les locations' : 'حفظ لجميع الإيجارات'}
+                    </button>
+                    {settingsMessage && <span className="text-xs font-semibold text-saas-text-muted">{settingsMessage}</span>}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* KM Tracking */}
-          <div className="bg-blue-50 rounded-2xl p-6 border border-blue-200">
-            <h4 className="text-lg font-black text-blue-900 mb-4">
-              🧭 {lang === 'fr' ? 'Kilométrage au Départ (Check-in)' : 'عداد الكيلومترات عند المغادرة (الدخول)'}
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Kilométrage + alerte */}
+          <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+              <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-[#0F172A] text-white flex items-center justify-center">
+                  <MapPin className="w-4 h-4" />
+                </span>
+                {lang === 'fr' ? 'Kilométrage' : 'العداد'}
+              </h4>
+            </div>
+            <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block font-bold text-blue-900 mb-2">
-                  {lang === 'fr' ? 'Kilométrage au Départ' : 'عداد المغادرة'}
-                </label>
-                <input
-                  type="number"
-                  value={reservation.departureInspection?.mileage || ''}
-                  className="w-full p-3 border border-blue-200 rounded-lg bg-slate-100"
-                  readOnly
-                />
+                <label className="label-saas">{lang === 'fr' ? 'Départ' : 'المغادرة'}</label>
+                <input value={departureMileage} readOnly className="input-saas bg-saas-bg font-bold" />
               </div>
               <div>
-                <label className="block font-bold text-blue-900 mb-2">
-                  {lang === 'fr' ? 'Kilométrage de Retour (Entrée Requise)' : 'عداد العودة (إدخال مطلوب)'}
-                </label>
+                <label className="label-saas">{lang === 'fr' ? 'Retour (requis)' : 'العودة (مطلوب)'}</label>
                 <input
                   type="number"
                   value={returnMileage}
                   onChange={(e) => setReturnMileage(e.target.value)}
-                  className="w-full p-3 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="input-saas font-bold"
                   placeholder="0"
                   required
                 />
               </div>
               <div>
-                <label className="block font-bold text-blue-900 mb-2">
-                  {lang === 'fr' ? 'Distance Totale Parcourue' : 'المسافة الإجمالية المقطوعة'}
-                </label>
+                <label className="label-saas">{lang === 'fr' ? 'Distance parcourue' : 'المسافة المقطوعة'}</label>
+                <input value={`${totalDistance.toLocaleString('fr-DZ')} km`} readOnly className="input-saas bg-saas-bg font-bold" />
+              </div>
+              <div>
+                <label className="label-saas">{lang === 'fr' ? 'Forfait inclus' : 'المسموح'}</label>
                 <input
-                  type="number"
-                  value={totalDistance}
-                  className="w-full p-3 border border-blue-200 rounded-lg bg-slate-100"
+                  value={allowedKm > 0 ? `${allowedKm.toLocaleString('fr-DZ')} km` : (lang === 'fr' ? 'Illimité' : 'غير محدود')}
                   readOnly
+                  className="input-saas bg-saas-bg font-bold"
+                />
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {kmOver > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mx-5 mb-5 rounded-2xl border-2 border-[#DC2626]/30 bg-[#DC2626]/5 p-4 flex flex-wrap items-center gap-4">
+                    <AlertTriangle className="w-6 h-6 text-[#DC2626] shrink-0" />
+                    <div className="flex-1 min-w-[220px]">
+                      <p className="font-black text-[#DC2626]">
+                        {lang === 'fr' ? 'Limite de kilométrage dépassée' : 'تم تجاوز حد الكيلومترات'}
+                      </p>
+                      <p className="text-sm text-saas-text-main mt-0.5">
+                        {lang === 'fr'
+                          ? `${kmOver.toLocaleString('fr-DZ')} km au-delà du forfait de ${allowedKm.toLocaleString('fr-DZ')} km.`
+                          : `${kmOver.toLocaleString('fr-DZ')} كم فوق الحد ${allowedKm.toLocaleString('fr-DZ')} كم.`}
+                        {settings.excessMileageFeePerKm > 0 && (
+                          <> {lang === 'fr' ? 'Frais suggérés :' : 'الرسوم المقترحة:'} <strong>{money(suggestedKmFee)}</strong></>
+                        )}
+                      </p>
+                    </div>
+                    {settings.excessMileageFeePerKm > 0 && (
+                      <button onClick={applySuggestedKmFee} className="btn-vel-cta px-5 py-2.5 text-xs">
+                        {lang === 'fr' ? 'Appliquer les frais' : 'تطبيق الرسوم'}
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Carburant + alerte */}
+          <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg flex items-center justify-between">
+              <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center">
+                  <Fuel className="w-4 h-4" />
+                </span>
+                {lang === 'fr' ? 'Carburant' : 'الوقود'}
+              </h4>
+              <span className="text-xs font-bold text-saas-text-muted">
+                {lang === 'fr' ? 'Départ' : 'المغادرة'} : <strong className="text-saas-text-main">{fuelLabel(departureFuel)}</strong>
+              </span>
+            </div>
+            <div className="p-5">
+              <label className="label-saas">{lang === 'fr' ? 'Niveau au retour' : 'المستوى عند العودة'}</label>
+              <FuelLevelPicker value={returnFuelLevel} onChange={setReturnFuelLevel} accent="#059669" />
+
+              <AnimatePresence>
+                {fuelMissingLevels > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-4 rounded-2xl border-2 border-orange-300 bg-orange-50 p-4 flex flex-wrap items-center gap-4">
+                      <AlertTriangle className="w-6 h-6 text-orange-600 shrink-0" />
+                      <div className="flex-1 min-w-[220px]">
+                        <p className="font-black text-orange-800">
+                          {lang === 'fr' ? 'Carburant inférieur au départ' : 'الوقود أقل من المغادرة'}
+                        </p>
+                        <p className="text-sm text-saas-text-main mt-0.5">
+                          {lang === 'fr'
+                            ? `Retour à ${fuelLabel(returnFuelLevel)} contre ${fuelLabel(departureFuel)} au départ (${fuelMissingLevels} cran(s) manquant(s)).`
+                            : `العودة بـ ${fuelLabel(returnFuelLevel)} مقابل ${fuelLabel(departureFuel)} (${fuelMissingLevels} درجة ناقصة).`}
+                          {settings.fuelFeePerLevel > 0 && (
+                            <> {lang === 'fr' ? 'Frais suggérés :' : 'الرسوم المقترحة:'} <strong>{money(suggestedFuelFee)}</strong></>
+                          )}
+                        </p>
+                      </div>
+                      {settings.fuelFeePerLevel > 0 && (
+                        <button onClick={applySuggestedFuelFee} className="btn-vel-cta px-5 py-2.5 text-xs">
+                          {lang === 'fr' ? 'Appliquer les frais' : 'تطبيق الرسوم'}
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Frais supplémentaires */}
+          <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+              <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-[#DC2626] text-white flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
+                </span>
+                {lang === 'fr' ? 'Frais supplémentaires' : 'الرسوم الإضافية'}
+              </h4>
+            </div>
+            <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="label-saas">{lang === 'fr' ? 'Kilométrage excédentaire (DA)' : 'الكيلومترات الزائدة (دج)'}</label>
+                <input
+                  type="number" min={0}
+                  value={excessMileage}
+                  onChange={(e) => setExcessMileage(e.target.value)}
+                  className="input-saas"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="label-saas">{lang === 'fr' ? 'Carburant manquant (DA)' : 'الوقود الناقص (دج)'}</label>
+                <input
+                  type="number" min={0}
+                  value={missingFuel}
+                  onChange={(e) => setMissingFuel(e.target.value)}
+                  className="input-saas"
+                  placeholder="0"
+                />
+              </div>
+              <div className="rounded-xl bg-[#DC2626]/5 border border-[#DC2626]/25 px-4 py-3">
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-saas-text-muted">
+                  {lang === 'fr' ? 'Total des frais' : 'إجمالي الرسوم'}
+                </p>
+                <p className="text-xl font-black text-[#DC2626] mt-0.5">{money(extraFees)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Bilan de paiement */}
+          <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+              <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-[#0284C7] text-white flex items-center justify-center">
+                  <CreditCard className="w-4 h-4" />
+                </span>
+                {lang === 'fr' ? 'Règlement' : 'التسوية'}
+              </h4>
+            </div>
+
+            <div className="p-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { l: lang === 'fr' ? 'Total location' : 'إجمالي التأجير', v: money(baseTotal), c: 'text-saas-text-main' },
+                { l: lang === 'fr' ? 'Total + frais' : 'الإجمالي + الرسوم', v: money(totalWithFees), c: 'text-[#0F172A]' },
+                { l: lang === 'fr' ? 'Déjà payé' : 'المدفوع سابقاً', v: money(alreadyPaid), c: 'text-emerald-600' },
+                { l: lang === 'fr' ? 'Reste avant paiement' : 'المتبقي قبل الدفع', v: money(Math.max(0, totalWithFees - alreadyPaid)), c: 'text-[#DC2626]' },
+              ].map(cell => (
+                <div key={cell.l} className="rounded-xl border border-saas-border bg-saas-bg px-4 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.16em] text-saas-text-muted leading-tight">{cell.l}</p>
+                  <p className={`text-lg font-black mt-1 ${cell.c}`}>{cell.v}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="label-saas">{lang === 'fr' ? 'Montant encaissé maintenant' : 'المبلغ المحصل الآن'}</label>
+                <input
+                  type="number" min={0}
+                  value={paymentNow}
+                  onChange={(e) => setPaymentNow(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="input-saas font-bold"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="label-saas">{lang === 'fr' ? 'Mode de paiement' : 'طريقة الدفع'}</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  className="input-saas cursor-pointer"
+                >
+                  <option value="cash">{lang === 'fr' ? 'Espèces' : 'نقداً'}</option>
+                  <option value="card">{lang === 'fr' ? 'Carte' : 'بطاقة'}</option>
+                  <option value="transfer">{lang === 'fr' ? 'Virement' : 'تحويل'}</option>
+                  <option value="check">{lang === 'fr' ? 'Chèque' : 'شيك'}</option>
+                </select>
+              </div>
+              <div className={`rounded-xl px-4 py-3 border-2 ${
+                remainingAfter > 0 ? 'border-[#DC2626]/30 bg-[#DC2626]/5' : 'border-emerald-400 bg-emerald-50'
+              }`}>
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-saas-text-muted">
+                  {lang === 'fr' ? 'Reste après ce paiement' : 'المتبقي بعد الدفع'}
+                </p>
+                <p className={`text-xl font-black mt-0.5 ${remainingAfter > 0 ? 'text-[#DC2626]' : 'text-emerald-700'}`}>
+                  {money(remainingAfter)}
+                </p>
+                <p className="text-[11px] font-bold mt-0.5 text-saas-text-muted">
+                  {remainingAfter > 0
+                    ? (lang === 'fr' ? 'Dette : non soldée' : 'الدين: غير مسدد')
+                    : (lang === 'fr' ? 'Dette : soldée ✓' : 'الدين: مسدد ✓')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Dates de retour */}
+          <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+              <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-[#0F172A] text-white flex items-center justify-center">
+                  <Calendar className="w-4 h-4" />
+                </span>
+                {lang === 'fr' ? 'Dates et heures' : 'التواريخ والأوقات'}
+              </h4>
+            </div>
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="label-saas">{lang === 'fr' ? 'Départ' : 'المغادرة'}</label>
+                <p className="font-bold text-saas-text-main">
+                  {reservation.step1.departureDate} · {reservation.step1.departureTime}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-saas">{lang === 'fr' ? 'Date de retour' : 'تاريخ العودة'}</label>
+                  <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="input-saas" />
+                </div>
+                <div>
+                  <label className="label-saas">{lang === 'fr' ? 'Heure' : 'الساعة'}</label>
+                  <input type="time" value={returnTime} onChange={(e) => setReturnTime(e.target.value)} className="input-saas" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Photos de l'inspection de départ */}
+          <InspectionPhotoUploader
+            lang={lang}
+            photos={departurePhotos}
+            onUpload={() => {}}
+            onRemove={() => {}}
+            readOnly
+            title={lang === 'fr' ? "Photos de l'inspection de départ" : 'صور فحص المغادرة'}
+          />
+
+          {/* Check-list retour — rendu identique à l'inspection de départ */}
+          {isLoadingChecklist ? (
+            <div className="h-40 rounded-2xl vel-skeleton" />
+          ) : (
+            <InspectionChecklist
+              lang={lang}
+              items={checklistMaster}
+              responses={responses}
+              onToggle={toggleItem}
+              title={lang === 'fr' ? "Vérification de retour (état du véhicule)" : 'فحص العودة (حالة المركبة)'}
+            />
+          )}
+
+          {/* Documents */}
+          <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+              <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-[#0284C7] text-white flex items-center justify-center">
+                  <FileText className="w-4 h-4" />
+                </span>
+                {lang === 'fr' ? 'Documents laissés par le client' : 'الوثائق المتروكة'}
+              </h4>
+            </div>
+            <div className="p-5 flex flex-wrap items-center gap-4">
+              {[
+                { v: true, l: lang === 'fr' ? 'Client a récupéré' : 'العميل استلم' },
+                { v: false, l: lang === 'fr' ? 'Notifier le client (non récupéré)' : 'إشعار العميل (غير مستلم)' },
+              ].map(opt => (
+                <label key={String(opt.v)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  documentsRecovered === opt.v ? 'border-[#0284C7] bg-[#0284C7]/8' : 'border-saas-border bg-saas-bg'
+                }`}>
+                  <input
+                    type="radio"
+                    name="documents"
+                    checked={documentsRecovered === opt.v}
+                    onChange={() => setDocumentsRecovered(opt.v)}
+                    className="accent-[#0284C7] cursor-pointer"
+                  />
+                  <span className="font-bold text-sm text-saas-text-main">{opt.l}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Signature + notes */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+                <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main">
+                  ✍️ {lang === 'fr' ? 'Signature du client' : 'توقيع العميل'}
+                </h4>
+              </div>
+              <div className="p-5 flex justify-center">
+                <SignaturePad lang={lang} onSignatureChange={setSignature} />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-saas-border bg-white overflow-hidden flex flex-col">
+              <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+                <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main">
+                  📝 {lang === 'fr' ? 'Note de clôture' : 'ملاحظة الإنهاء'}
+                </h4>
+              </div>
+              <div className="p-5 flex-1 flex">
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="input-saas flex-1 resize-none min-h-[140px]"
+                  placeholder={lang === 'fr' ? 'Observations supplémentaires…' : 'ملاحظات إضافية…'}
                 />
               </div>
             </div>
           </div>
 
-          {/* Fuel Level */}
-          <div className="bg-green-50 rounded-2xl p-6 border border-green-200">
-            <h4 className="text-lg font-black text-green-900 mb-4">
-              ⛽ {lang === 'fr' ? 'Niveau Carburant' : 'مستوى الوقود'}
-            </h4>
-            <div className="space-y-4">
+          {/* Avertissement purge */}
+          <div className="flex items-start gap-3 rounded-2xl border border-orange-300 bg-orange-50 p-4">
+            <Trash2 className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+            <p className="text-sm font-semibold text-orange-800">
+              {lang === 'fr'
+                ? "À l'enregistrement, toutes les photos d'inspection de cette réservation seront supprimées définitivement (stockage et base de données)."
+                : 'عند الحفظ، سيتم حذف جميع صور الفحص لهذا الحجز نهائياً (التخزين وقاعدة البيانات).'}
+            </p>
+          </div>
+
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-start gap-3 bg-red-50 border-2 border-red-300 rounded-2xl p-4"
+            >
+              <AlertTriangle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-green-900">
-                  {lang === 'fr' ? 'Départ' : 'المغادرة'}: {
-                    reservation.departureInspection?.fuelLevel === 'full' ? 'PLEIN' :
-                    reservation.departureInspection?.fuelLevel === 'half' ? '1/2' :
-                    reservation.departureInspection?.fuelLevel === 'quarter' ? '1/4' :
-                    reservation.departureInspection?.fuelLevel === 'eighth' ? '1/8' : 'VIDE'
-                  }
+                <p className="text-sm font-bold text-red-700">{errorMessage}</p>
+                <p className="text-xs text-red-600 mt-1">
+                  {lang === 'fr'
+                    ? 'Vérifiez la connexion et les données saisies.'
+                    : 'تحقق من الاتصال والبيانات المدخلة.'}
                 </p>
               </div>
-              <div>
-                <label className="block font-bold text-green-900 mb-3">
-                  {lang === 'fr' ? 'Niveau de retour' : 'مستوى العودة'}
-                </label>
-                <div className="grid grid-cols-5 gap-2">
-                  {fuelLevels.map((level) => (
-                    <button
-                      key={level.value}
-                      onClick={() => setReturnFuelLevel(level.value as any)}
-                      className={`p-3 border-2 rounded-lg font-bold transition-all ${
-                        returnFuelLevel === level.value
-                          ? 'border-green-600 bg-green-600 text-white shadow-lg'
-                          : 'border-green-200 hover:border-green-400 hover:bg-green-50'
-                      }`}
-                    >
-                      {level.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Dates and Times */}
-          <div className="bg-purple-50 rounded-2xl p-6 border border-purple-200">
-            <h4 className="text-lg font-black text-purple-900 mb-4">
-              📅 {lang === 'fr' ? 'Dates et Heures' : 'التواريخ والأوقات'}
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h5 className="font-bold text-purple-900 mb-2">{lang === 'fr' ? 'Départ' : 'المغادرة'}</h5>
-                <p className="text-purple-800">{reservation.step1.departureDate} à {reservation.step1.departureTime}</p>
-              </div>
-              <div>
-                <h5 className="font-bold text-purple-900 mb-2 flex items-center gap-2">
-                  {lang === 'fr' ? 'Retour' : 'العودة'}
-                  <button className="text-purple-600 hover:text-purple-800">
-                    <Edit className="w-4 h-4" />
-                  </button>
-                </h5>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
-                    className="flex-1 p-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                  <input
-                    type="time"
-                    value={returnTime}
-                    onChange={(e) => setReturnTime(e.target.value)}
-                    className="flex-1 p-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Fees */}
-          <div className="bg-red-50 rounded-2xl p-6 border border-red-200">
-            <h4 className="text-lg font-black text-red-900 mb-4">
-              💸 {lang === 'fr' ? 'Frais Supplémentaires de Clôture' : 'رسوم الإغلاق الإضافية'}
-            </h4>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-red-900 mb-2">
-                    {lang === 'fr' ? 'Kilométrage Excédentaire' : 'عداد الكيلومترات الزائد'}
-                  </label>
-                  <p className="text-sm text-red-700 mb-1">{lang === 'fr' ? 'Facturé si dépassement forfait' : 'يتم احتسابه عند تجاوز الحد المسموح'}</p>
-                  <input
-                    type="number"
-                    value={excessMileage}
-                    onChange={(e) => setExcessMileage(e.target.value)}
-                    className="w-full p-3 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-red-900 mb-2">
-                    {lang === 'fr' ? 'Carburant Manquant' : 'الوقود المفقود'}
-                  </label>
-                  <p className="text-sm text-red-700 mb-1">{lang === 'fr' ? 'Différence par rapport au check-in' : 'الفرق مقارنة بالدخول'}</p>
-                  <input
-                    type="number"
-                    value={missingFuel}
-                    onChange={(e) => setMissingFuel(e.target.value)}
-                    className="w-full p-3 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              <div className="bg-red-100 rounded-lg p-4">
-                <p className="font-bold text-red-900">
-                  {lang === 'fr' ? 'Total Frais de Clôture (TTC)' : 'إجمالي رسوم الإغلاق (شامل الضريبة)'}: {totalFees.toLocaleString()} DA
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Documents */}
-          <div className="bg-yellow-50 rounded-2xl p-6 border border-yellow-200">
-            <h4 className="text-lg font-black text-yellow-900 mb-4">
-              📄 {lang === 'fr' ? 'Documents laissés par le client' : 'الوثائق المتروكة من قبل العميل'}
-            </h4>
-            <div className="space-y-4">
-              <p className="text-yellow-800">
-                {lang === 'fr' ? 'Aucun document trouvé pour ce client.' : 'لم يتم العثور على أي وثيقة لهذا العميل.'}
-              </p>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="documents"
-                    checked={documentsRecovered}
-                    onChange={() => setDocumentsRecovered(true)}
-                    className="text-yellow-600"
-                  />
-                  <span className="font-bold text-yellow-900">
-                    {lang === 'fr' ? 'Client a récupéré' : 'العميل استلم'}
-                  </span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="documents"
-                    checked={!documentsRecovered}
-                    onChange={() => setDocumentsRecovered(false)}
-                    className="text-yellow-600"
-                  />
-                  <span className="font-bold text-yellow-900">
-                    {lang === 'fr' ? 'Notifier client (non récupéré)' : 'إشعار العميل (غير مستلم)'}
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Return Inspection */}
-          <div className="bg-orange-50 rounded-2xl p-6 border border-orange-200">
-            <h4 className="text-lg font-black text-orange-900 mb-4">
-              🔄 {lang === 'fr' ? 'Vérification Retour (État de Retour)' : 'التحقق من العودة (حالة العودة)'}
-            </h4>
-            <div className="space-y-6">
-              {/* Security Items */}
-              <div>
-                <h5 className="font-bold text-orange-900 mb-2">🛡️ {lang === 'fr' ? 'Sécurité' : 'الأمان'}</h5>
-                <div className="space-y-2">
-                  {securityItems.map(item => (
-                    <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg border">
-                      <span className="font-bold capitalize text-orange-900">
-                        {item.name}
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleInspectionItemToggle(item.id, true)}
-                          className={`px-3 py-1 rounded font-bold text-sm ${item.checked ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-green-100'}`}
-                        >
-                          {lang === 'fr' ? 'Oui' : 'نعم'}
-                        </button>
-                        <button
-                          onClick={() => handleInspectionItemToggle(item.id, false)}
-                          className={`px-3 py-1 rounded font-bold text-sm ${!item.checked ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-red-100'}`}
-                        >
-                          {lang === 'fr' ? 'Non' : 'لا'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Equipment Items */}
-              <div>
-                <h5 className="font-bold text-orange-900 mb-2">🔧 {lang === 'fr' ? 'Équipements' : 'المعدات'}</h5>
-                <div className="space-y-2">
-                  {equipmentItems.map(item => (
-                    <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg border">
-                      <span className="font-bold capitalize text-orange-900">
-                        {item.name}
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleInspectionItemToggle(item.id, true)}
-                          className={`px-3 py-1 rounded font-bold text-sm ${item.checked ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-green-100'}`}
-                        >
-                          {lang === 'fr' ? 'Oui' : 'نعم'}
-                        </button>
-                        <button
-                          onClick={() => handleInspectionItemToggle(item.id, false)}
-                          className={`px-3 py-1 rounded font-bold text-sm ${!item.checked ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-red-100'}`}
-                        >
-                          {lang === 'fr' ? 'Non' : 'لا'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Comfort & Cleanliness Items */}
-              <div>
-                <h5 className="font-bold text-orange-900 mb-2">✨ {lang === 'fr' ? 'Confort & Propreté' : 'الراحة والنظافة'}</h5>
-                <div className="space-y-2">
-                  {comfortItems.map(item => (
-                    <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-lg border">
-                      <span className="font-bold capitalize text-orange-900">
-                        {item.name}
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleInspectionItemToggle(item.id, true)}
-                          className={`px-3 py-1 rounded font-bold text-sm ${item.checked ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-green-100'}`}
-                        >
-                          {lang === 'fr' ? 'Oui' : 'نعم'}
-                        </button>
-                        <button
-                          onClick={() => handleInspectionItemToggle(item.id, false)}
-                          className={`px-3 py-1 rounded font-bold text-sm ${!item.checked ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-red-100'}`}
-                        >
-                          {lang === 'fr' ? 'Non' : 'لا'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Signature */}
-          <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-200">
-            <h4 className="text-lg font-black text-indigo-900 mb-4">
-              ✍️ {lang === 'fr' ? 'Signature du Client' : 'توقيع العميل'}
-            </h4>
-            <div className="max-w-xs mx-auto">
-            <SignaturePad lang={lang} onSignatureChange={setSignature} />
-          </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block font-bold text-slate-900 mb-2">
-              📝 {lang === 'fr' ? 'Note (Optionnel)' : 'ملاحظة (اختياري)'}
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              rows={3}
-              placeholder={lang === 'fr' ? 'Observations supplémentaires...' : 'ملاحظات إضافية...'}
-            />
-          </div>
+            </motion.div>
+          )}
         </div>
 
-        {/* Error Message Display */}
-        {errorMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4"
-          >
-            <p className="text-red-700 font-bold text-sm">
-              ❌ {lang === 'fr' ? 'Erreur' : 'خطأ'}: {errorMessage}
-            </p>
-            <p className="text-red-600 text-xs mt-2">
-              {lang === 'fr' 
-                ? 'Vérifiez votre connexion et les données saisies. Voir la console pour plus de détails.'
-                : 'تحقق من الاتصال والبيانات المدخلة. راجع وحدة التحكم لمزيد من التفاصيل.'}
-            </p>
-          </motion.div>
-        )}
-
-        <div className="flex gap-3 mt-6">
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            className="flex-1 bg-slate-200 hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 font-bold py-3 px-4 rounded-lg transition-colors"
-          >
-            {lang === 'fr' ? 'Annuler' : 'إلغاء'}
-          </button>
-          <button
-            onClick={handleComplete}
-            disabled={isLoading}
-            className="flex-1 btn-saas-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <span className="animate-spin">⏳</span>
-                {lang === 'fr' ? 'Traitement...' : 'جاري المعالجة...'}
-              </>
-            ) : (
-              <>✅ {lang === 'fr' ? 'Terminer la Location' : 'إنهاء التأجير'}</>
-            )}
-          </button>
+        {/* Pied */}
+        <div className="shrink-0 px-7 py-5 bg-white border-t border-saas-border flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm">
+            <span className="text-saas-text-muted font-semibold">{lang === 'fr' ? 'À encaisser :' : 'المطلوب:'}</span>
+            <span className="ml-2 font-black text-[#0F172A]">{money(totalWithFees)}</span>
+            <span className="mx-2 text-saas-text-muted">·</span>
+            <span className="text-saas-text-muted font-semibold">{lang === 'fr' ? 'Reste :' : 'المتبقي:'}</span>
+            <span className={`ml-2 font-black ${remainingAfter > 0 ? 'text-[#DC2626]' : 'text-emerald-600'}`}>{money(remainingAfter)}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} disabled={isLoading} className="btn-saas-outline px-8 cursor-pointer">
+              {lang === 'fr' ? 'Annuler' : 'إلغاء'}
+            </button>
+            <button onClick={handleComplete} disabled={isLoading} className="btn-saas-primary px-10 cursor-pointer">
+              {isLoading
+                ? <>⏳ {lang === 'fr' ? 'Traitement…' : 'جاري المعالجة…'}</>
+                : <><CheckCircle className="w-4 h-4" />{lang === 'fr' ? 'Terminer la location' : 'إنهاء التأجير'}</>}
+            </button>
+          </div>
         </div>
       </motion.div>
     </motion.div>

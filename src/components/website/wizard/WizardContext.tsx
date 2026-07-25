@@ -3,6 +3,8 @@ import { Language, Car, Agency, SpecialOffer, ReservationStep2, AdditionalServic
 import { DatabaseService } from '../../../services/DatabaseService';
 import { getCurrentSpecialOfferForCar } from '../../../utils/specialOffers';
 import { fromYmd } from './wizardUi';
+import { useWebsiteCurrency } from '../CurrencyContext';
+import { CurrencyCode, convertFromDzd, formatCurrency, isCurrencyEnabled, getCarRate } from '../../../utils/currency';
 
 // ═══ Modèle d'état du wizard de réservation (source unique de vérité) ═══
 // Tout l'état vit ici : naviguer entre les étapes ne perd jamais les saisies.
@@ -42,6 +44,11 @@ const emptyPersonal: ReservationStep2 = {
   wilaya: '16 - Alger',
   completeAddress: '',
   scannedDocuments: [],
+  // Informations de vol demandées au client
+  flightNumber: '',
+  flightDate: '',
+  flightTime: '',
+  flightTicketImage: '',
 };
 
 export type PromoStatus = 'idle' | 'checking' | 'valid' | 'invalid';
@@ -121,6 +128,18 @@ interface WizardContextValue {
   assuranceTotal: number;
   promoDiscount: number;        // remise en DA du code promo
   total: number;
+
+  // ─── Devise d'affichage ───────────────────────────────────────────────────
+  /** Devise appliquée au wizard (DZD si « Toutes devises » est sélectionné). */
+  currency: CurrencyCode;
+  /** 1 unité de `currency` = `currencyRate` DZD (1 en DZD, 0 si non activée). */
+  currencyRate: number;
+  /** La voiture choisie propose-t-elle cette devise ? */
+  currencySupported: boolean;
+  /** Formate un montant DZD dans la devise du wizard. */
+  fx: (amountDzd: number) => string;
+  /** Convertit un montant DZD dans la devise du wizard. */
+  fxValue: (amountDzd: number) => number;
 
   // Soumission
   isSubmitting: boolean;
@@ -248,12 +267,21 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     return () => { cancelled = true; };
   }, [search?.from, search?.to]);
 
-  // Charge les services une fois
+  // Charge les services une fois. Les services marqués « obligatoire » sont
+  // pré-sélectionnés d'office (comme dans l'application) et non décochables.
   useEffect(() => {
     const load = async () => {
       try {
         setLoadingServices(true);
-        setAvailableServices(await DatabaseService.getServices());
+        const list = await DatabaseService.getServices();
+        setAvailableServices(list);
+        const mandatory = (list || []).filter((s: any) => s.isMandatory);
+        if (mandatory.length > 0) {
+          setSelectedServices(prev => {
+            const missing = mandatory.filter((m: any) => !prev.some(p => p.id === m.id));
+            return missing.length > 0 ? [...prev, ...missing] : prev;
+          });
+        }
       } catch {
         setAvailableServices([]);
       } finally {
@@ -297,6 +325,8 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
   };
 
   const toggleService = (service: AdditionalService) => {
+    // Un service obligatoire reste toujours sélectionné.
+    if ((service as any).isMandatory) return;
     setSelectedServices(prev => {
       const exists = prev.find(s => s.id === service.id);
       return exists ? prev.filter(s => s.id !== service.id) : [...prev, service];
@@ -315,8 +345,14 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
       case 4:
         return true; // les services sont optionnels
       case 5:
-        // Informations personnelles — mêmes champs obligatoires que le flux existant
-        return !!(personal.firstName && personal.lastName && personal.phone && personal.email && personal.licenseNumber && personal.wilaya);
+        // Informations personnelles + informations de vol (numéro, date/heure,
+        // justificatif du billet) désormais obligatoires.
+        return !!(
+          personal.firstName && personal.lastName && personal.phone && personal.email
+          && personal.licenseNumber && personal.wilaya
+          && personal.flightNumber && personal.flightDate && personal.flightTime
+          && personal.flightTicketImage
+        );
       case 6:
         return true;
       default:
@@ -383,6 +419,18 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     setPromoDiscountPct(0);
   };
 
+  // ─── Devise du wizard ───────────────────────────────────────────────────────
+  // La devise choisie en haut du site s'applique à toute la réservation. Si la
+  // voiture sélectionnée ne propose pas cette devise, on retombe sur le DZD.
+  const site = useWebsiteCurrency();
+  const currencySupported = site.active === 'DZD'
+    || (!!car && isCurrencyEnabled(car.currencies as any, site.active));
+  const currency: CurrencyCode = currencySupported ? site.active : 'DZD';
+  const currencyRate = currency === 'DZD' ? 1 : getCarRate(car?.currencies as any, currency);
+  const fxValue = (amountDzd: number) =>
+    currency === 'DZD' ? Math.round(amountDzd) : convertFromDzd(amountDzd, currency, currencyRate);
+  const fx = (amountDzd: number) => formatCurrency(fxValue(amountDzd), currency);
+
   // ─── Soumission via RPC SECURITY DEFINER (fix RLS pour le rôle anon) ─────────
   // Client + réservation + services + consommation du code promo : une seule
   // transaction serveur. Garde anti double-clic ; les saisies survivent à une erreur.
@@ -414,6 +462,13 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
         scanned_documents: personal.scannedDocuments || [],
       };
 
+      // Informations de vol : jointes à la note si les colonnes dédiées ne sont
+      // pas encore disponibles côté RPC (dégradation propre, rien n'est perdu).
+      const flightSummary = personal.flightNumber || personal.flightDate || personal.flightTime
+        ? `${lang === 'fr' ? 'Vol' : 'الرحلة'} : ${personal.flightNumber || '—'}`
+          + ` · ${personal.flightDate || '—'} ${personal.flightTime || ''}`.trimEnd()
+        : '';
+
       const reservationPayload = {
         car_id: car.id,
         departure_date: range.from!,
@@ -430,11 +485,25 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
         deposit: car.deposit,
         discount_amount: discount + promoDiscount,
         discount_type: 'fixed',
-        notes,
+        notes: [notes, flightSummary].filter(Boolean).join('\n'),
         // Assurance de protection sélectionnée (snapshot nom + prix/jour)
         protection_assurance_id: selectedAssurance?.id || '',
         protection_assurance_name: selectedAssurance?.name || '',
         protection_assurance_price: selectedAssurance?.pricePerDay ?? 0,
+        // Devise choisie par le client : total_price reste TOUJOURS en DZD,
+        // total_price_currency porte le montant dans la devise affichée.
+        currency,
+        currency_rate: currencyRate,
+        total_price_currency: fxValue(total),
+        // Code promo (les colonnes restent nulles s'il n'y en a pas)
+        promo_code: promoStatus === 'valid' ? promoInput.trim().toUpperCase() : '',
+        promo_discount_percentage: promoStatus === 'valid' ? promoDiscountPct : 0,
+        promo_discount_amount: promoStatus === 'valid' ? promoDiscount : 0,
+        // Informations de vol
+        flight_number: personal.flightNumber || '',
+        flight_date: personal.flightDate || '',
+        flight_time: personal.flightTime || '',
+        flight_ticket_image: personal.flightTicketImage || '',
       };
 
       const servicesPayload = selectedServices.map(s => ({
@@ -478,6 +547,7 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     notes, setNotes,
     promoInput, setPromoInput, promoStatus, promoDiscountPct, verifyPromo, clearPromo,
     days, promo, basePrice, discount, servicesTotal, assuranceTotal, promoDiscount, total,
+    currency, currencyRate, currencySupported, fx, fxValue,
     isSubmitting, submitError, submitted, submit,
   };
 

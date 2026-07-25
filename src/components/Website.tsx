@@ -8,6 +8,8 @@ import { SpecialOffersListing } from './website/SpecialOffersListing';
 import { ContactsWebsite } from './website/ContactsWebsite';
 import { ReservationWizard } from './website/wizard/ReservationWizard';
 import { WizardSearchCriteria } from './website/wizard/WizardContext';
+import { WebsiteCurrencyProvider, CurrencySwitcher } from './website/CurrencyContext';
+import { ThemeToggle } from './ThemeToggle';
 import { SITE_NAME } from '../constants';
 
 interface WebsiteProps {
@@ -60,6 +62,7 @@ export const Website: React.FC<WebsiteProps> = ({
   ];
 
   return (
+    <WebsiteCurrencyProvider cars={cars}>
     <div className="min-h-screen bg-vel-void" style={{ fontFamily: 'var(--font-sans)' }}>
       {/* ── NAVBAR ── */}
       <nav className="sticky top-0 z-50 border-b border-vel-border bg-vel-void/80 backdrop-blur-xl">
@@ -134,6 +137,16 @@ export const Website: React.FC<WebsiteProps> = ({
 
             {/* Right side */}
             <div className="flex items-center gap-3">
+              {/* Filtre de devise : « Toutes » affiche tous les tarifs activés */}
+              <CurrencySwitcher
+                variant="compact"
+                className="hidden sm:inline-flex"
+                labelAll={{ fr: 'Toutes devises', ar: 'كل العملات' }[lang]}
+              />
+
+              {/* Bascule clair / sombre (partagée avec l'application) */}
+              <ThemeToggle lang={lang} variant="site" />
+
               {onLangChange && (
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -171,6 +184,13 @@ export const Website: React.FC<WebsiteProps> = ({
               exit={{ opacity: 0, height: 0 }}
               className="md:hidden pb-4 border-t border-vel-border"
             >
+              <div className="px-4 py-3 sm:hidden">
+                <CurrencySwitcher
+                  variant="compact"
+                  className="w-full"
+                  labelAll={{ fr: 'Toutes devises', ar: 'كل العملات' }[lang]}
+                />
+              </div>
               {navItems.map(item => (
                 <button
                   key={item.id}
@@ -349,5 +369,6 @@ export const Website: React.FC<WebsiteProps> = ({
         </div>
       </footer>
     </div>
+    </WebsiteCurrencyProvider>
   );
 };

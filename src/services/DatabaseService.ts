@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
-import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode } from '../types';
+import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, WorkerRole, WorkerPermissions, Entreprise, RentalSettings, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode } from '../types';
+import { parseCarCurrencies } from '../utils/currency';
 
 // Generic database service functions
 export class DatabaseService {
@@ -30,7 +31,43 @@ export class DatabaseService {
       status: dbCar.status === 'maintenance' ? 'maintenance' : 'disponible',
       // === true : reste false tant que la migration n'a pas ajouté la colonne
       isHiddenFromSite: dbCar.is_hidden_from_site === true,
+      // Propriété du véhicule (défaut : flotte de l'agence)
+      ownerType: dbCar.owner_type === 'third_party' ? 'third_party' : 'personal',
+      ownerName: dbCar.owner_name || undefined,
+      ownerPhone: dbCar.owner_phone || undefined,
+      agencySharePerDay: dbCar.agency_share_per_day != null ? Number(dbCar.agency_share_per_day) : 0,
+      // Devises secondaires (JSONB) — absentes tant que la migration n'a pas tourné
+      currencies: parseCarCurrencies(dbCar.currencies),
     };
+  }
+
+  /** Car (camelCase) → colonnes de la table `cars`. */
+  private static carToDbPayload(car: Partial<Car>): Record<string, any> {
+    const payload: Record<string, any> = {};
+    if (car.brand !== undefined) payload.brand = car.brand;
+    if (car.model !== undefined) payload.model = car.model;
+    if (car.registration !== undefined) payload.plate_number = car.registration;
+    if (car.year !== undefined) payload.year = car.year;
+    if (car.color !== undefined) payload.color = car.color;
+    if (car.vin !== undefined) payload.vin = car.vin;
+    if (car.energy !== undefined) payload.energy = car.energy;
+    if (car.transmission !== undefined) payload.transmission = car.transmission;
+    if (car.seats !== undefined) payload.seats = car.seats;
+    if (car.doors !== undefined) payload.doors = car.doors;
+    if (car.priceDay !== undefined) payload.price_per_day = car.priceDay;
+    if (car.priceWeek !== undefined) payload.price_week = car.priceWeek;
+    if (car.priceMonth !== undefined) payload.price_month = car.priceMonth;
+    if (car.deposit !== undefined) payload.deposit = car.deposit;
+    if (car.mileage !== undefined) payload.mileage = car.mileage;
+    if (car.images !== undefined) payload.image_url = car.images?.[0] || null;
+    if (car.status !== undefined) payload.status = car.status;
+    if (car.isHiddenFromSite !== undefined) payload.is_hidden_from_site = car.isHiddenFromSite;
+    if (car.ownerType !== undefined) payload.owner_type = car.ownerType;
+    if (car.ownerName !== undefined) payload.owner_name = car.ownerName || null;
+    if (car.ownerPhone !== undefined) payload.owner_phone = car.ownerPhone || null;
+    if (car.agencySharePerDay !== undefined) payload.agency_share_per_day = car.agencySharePerDay || 0;
+    if (car.currencies !== undefined) payload.currencies = car.currencies || {};
+    return payload;
   }
 
   /** Shared DB-row → SpecialOffer mapper (la ligne doit inclure le join car:cars(*)). */
@@ -204,26 +241,37 @@ export class DatabaseService {
   }
 
   static async createCar(car: Omit<Car, 'id' | 'created_at'>): Promise<Car> {
+    // `car` peut arriver soit en camelCase (formulaire), soit déjà en
+    // snake_case (anciens appels) : on ne mappe que les clés camelCase connues
+    // et on laisse passer le reste tel quel.
+    const mapped = this.carToDbPayload(car as Partial<Car>);
+    const passthrough = Object.fromEntries(
+      Object.entries(car as Record<string, any>).filter(([k]) => k.includes('_'))
+    );
     const { data, error } = await supabase
       .from('cars')
-      .insert([car])
+      .insert([{ ...passthrough, ...mapped }])
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    return this.mapDbCar(data);
   }
 
   static async updateCar(id: string, updates: Partial<Car>): Promise<Car> {
+    const mapped = this.carToDbPayload(updates);
+    const passthrough = Object.fromEntries(
+      Object.entries(updates as Record<string, any>).filter(([k]) => k.includes('_'))
+    );
     const { data, error } = await supabase
       .from('cars')
-      .update(updates)
+      .update({ ...passthrough, ...mapped })
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    return this.mapDbCar(data);
   }
 
   static async deleteCar(id: string): Promise<void> {
@@ -607,7 +655,12 @@ export class DatabaseService {
     if (error) throw error;
 
     // Map snake_case to camelCase
-    return (data || []).map(worker => ({
+    return (data || []).map(worker => this.mapWorkerRow(worker));
+  }
+
+  /** Ligne DB → Worker (camelCase), tolérant aux colonnes pas encore migrées. */
+  private static mapWorkerRow(worker: any): Worker {
+    return {
       id: worker.id,
       fullName: worker.full_name,
       dateOfBirth: worker.date_of_birth,
@@ -615,34 +668,111 @@ export class DatabaseService {
       email: worker.email,
       address: worker.address,
       profilePhoto: worker.profile_photo,
+      idCardNumber: worker.id_card_number || undefined,
       type: worker.type,
+      roleId: worker.role_id || undefined,
+      roleName: worker.role?.name || worker.role_name || undefined,
+      startDate: worker.start_date || undefined,
+      paymentEnabled: worker.payment_enabled !== false,
       paymentType: worker.payment_type,
-      baseSalary: worker.base_salary,
+      baseSalary: Number(worker.base_salary) || 0,
       username: worker.username,
       password: worker.password,
-      advances: worker.advances || [],
-      absences: worker.absences || [],
-      payments: worker.payments || [],
+      accountEnabled: worker.account_enabled === true,
+      authUserId: worker.auth_user_id || undefined,
+      permissions: this.parsePermissions(worker.permissions),
+      advances: (worker.advances || []).map((a: any) => ({
+        id: a.id,
+        amount: Number(a.amount) || 0,
+        date: a.date,
+        note: a.note || undefined,
+        settled: a.settled === true,
+      })),
+      absences: (worker.absences || []).map((a: any) => ({
+        id: a.id,
+        cost: Number(a.cost) || 0,
+        date: a.date,
+        note: a.note || undefined,
+        settled: a.settled === true,
+      })),
+      payments: (worker.payments || []).map((p: any) => ({
+        id: p.id,
+        amount: Number(p.amount) || 0,
+        date: p.date,
+        baseSalary: Number(p.base_salary) || 0,
+        advances: Number(p.advances) || 0,
+        absences: Number(p.absences) || 0,
+        netSalary: Number(p.net_salary) || 0,
+        note: p.note || undefined,
+        periodKey: p.period_key || undefined,
+      })),
       createdAt: worker.created_at,
-    }));
+    };
+  }
+
+  /** JSONB `permissions` → WorkerPermissions normalisé. */
+  private static parsePermissions(raw: any): WorkerPermissions {
+    if (!raw || typeof raw !== 'object') return { interfaces: [], actions: {} };
+    return {
+      interfaces: Array.isArray(raw.interfaces) ? raw.interfaces.filter((x: any) => typeof x === 'string') : [],
+      actions: raw.actions && typeof raw.actions === 'object'
+        ? Object.fromEntries(
+            Object.entries(raw.actions).map(([k, v]) => [k, Array.isArray(v) ? (v as any[]).filter(x => typeof x === 'string') : []])
+          )
+        : {},
+    };
+  }
+
+  /** Permissions d'un employé identifié par son email (utilisé après connexion). */
+  static async getWorkerPermissionsByEmail(email: string): Promise<{ permissions: WorkerPermissions; type: string; fullName: string } | null> {
+    if (!email) return null;
+    const { data, error } = await supabase
+      .from('workers')
+      .select('full_name, type, permissions')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return {
+      permissions: this.parsePermissions(data.permissions),
+      type: data.type || 'worker',
+      fullName: data.full_name || '',
+    };
+  }
+
+  /** Enregistre les permissions d'un employé. */
+  static async updateWorkerPermissions(workerId: string, permissions: WorkerPermissions): Promise<void> {
+    const { error } = await supabase
+      .from('workers')
+      .update({ permissions })
+      .eq('id', workerId);
+    if (error) throw error;
   }
 
   static async createWorker(worker: Omit<Worker, 'id' | 'createdAt' | 'advances' | 'absences' | 'payments'>): Promise<Worker> {
     // Create worker record in database with email and password
     console.log('[DatabaseService] Creating worker:', worker.email);
     
-    const dbWorker = {
+    const dbWorker: Record<string, any> = {
       full_name: worker.fullName,
-      date_of_birth: worker.dateOfBirth,
+      date_of_birth: worker.dateOfBirth || null,
       phone: worker.phone,
       email: worker.email,
-      address: worker.address,
-      profile_photo: worker.profilePhoto,
+      address: worker.address || null,
+      profile_photo: worker.profilePhoto || null,
+      id_card_number: worker.idCardNumber || null,
       type: worker.type,
-      payment_type: worker.paymentType,
-      base_salary: worker.baseSalary,
+      role_id: worker.roleId || null,
+      start_date: worker.startDate || null,
+      payment_enabled: worker.paymentEnabled !== false,
+      payment_type: worker.paymentType || null,
+      base_salary: worker.baseSalary || 0,
       username: worker.username,
       password: worker.password,
+      account_enabled: worker.accountEnabled === true,
+      auth_user_id: worker.authUserId || null,
+      // Un nouvel employé démarre SANS permission : l'admin les attribue ensuite.
+      permissions: worker.permissions || { interfaces: [], actions: {} },
     };
 
     const { data, error } = await supabase
@@ -658,25 +788,7 @@ export class DatabaseService {
 
     console.log('[DatabaseService] Worker created successfully:', data.id);
 
-    // Map back to camelCase for the return
-    return {
-      id: data.id,
-      fullName: data.full_name,
-      dateOfBirth: data.date_of_birth,
-      phone: data.phone,
-      email: data.email,
-      address: data.address,
-      profilePhoto: data.profile_photo,
-      type: data.type,
-      paymentType: data.payment_type,
-      baseSalary: data.base_salary,
-      username: data.username,
-      password: data.password,
-      advances: [],
-      absences: [],
-      payments: [],
-      createdAt: data.created_at,
-    };
+    return this.mapWorkerRow(data);
   }
 
   static async updateWorker(id: string, updates: Partial<Omit<Worker, 'advances' | 'absences' | 'payments'>>): Promise<Worker> {
@@ -693,6 +805,13 @@ export class DatabaseService {
     if (updates.baseSalary !== undefined) dbUpdates.base_salary = updates.baseSalary;
     if (updates.username !== undefined) dbUpdates.username = updates.username;
     if (updates.password !== undefined) dbUpdates.password = updates.password;
+    if (updates.idCardNumber !== undefined) dbUpdates.id_card_number = updates.idCardNumber || null;
+    if (updates.roleId !== undefined) dbUpdates.role_id = updates.roleId || null;
+    if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate || null;
+    if (updates.paymentEnabled !== undefined) dbUpdates.payment_enabled = updates.paymentEnabled;
+    if (updates.accountEnabled !== undefined) dbUpdates.account_enabled = updates.accountEnabled;
+    if (updates.authUserId !== undefined) dbUpdates.auth_user_id = updates.authUserId || null;
+    if (updates.permissions !== undefined) dbUpdates.permissions = updates.permissions;
 
     const { data, error } = await supabase
       .from('workers')
@@ -703,25 +822,70 @@ export class DatabaseService {
 
     if (error) throw error;
 
-    // Map back to camelCase for the return
-    return {
-      id: data.id,
-      fullName: data.full_name,
-      dateOfBirth: data.date_of_birth,
-      phone: data.phone,
-      email: data.email,
-      address: data.address,
-      profilePhoto: data.profile_photo,
-      type: data.type,
-      paymentType: data.payment_type,
-      baseSalary: data.base_salary,
-      username: data.username,
-      password: data.password,
-      advances: [],
-      absences: [],
-      payments: [],
-      createdAt: data.created_at,
-    };
+    return this.mapWorkerRow(data);
+  }
+
+  /**
+   * Crée (ou met à jour) le compte de connexion Supabase Auth d'un employé.
+   *
+   * Passe par la RPC SECURITY DEFINER `upsert_worker_auth_user`, qui écrit
+   * directement dans `auth.users` avec un mot de passe chiffré bcrypt. C'est
+   * la seule façon de créer un compte depuis le navigateur sans la clé de
+   * service ET sans déconnecter l'administrateur (contrairement à signUp).
+   * L'employé peut ensuite se connecter normalement depuis la page de login.
+   */
+  static async upsertWorkerAuthUser(email: string, password: string, fullName: string, role: string): Promise<string | null> {
+    const { data, error } = await supabase.rpc('upsert_worker_auth_user', {
+      p_email: email.trim().toLowerCase(),
+      p_password: password,
+      p_full_name: fullName,
+      p_role: role,
+    });
+
+    if (error) {
+      const msg = error.message || '';
+      if (msg.includes('upsert_worker_auth_user')) {
+        throw new Error(
+          "La fonction upsert_worker_auth_user n'existe pas encore. Exécutez la migration supabase/migrations/20260725_mhd_auto_major_update.sql dans le SQL Editor de Supabase."
+        );
+      }
+      throw error;
+    }
+    return (data as any)?.user_id || null;
+  }
+
+  /** Supprime le compte de connexion d'un employé (le salarié reste en base). */
+  static async deleteWorkerAuthUser(email: string): Promise<void> {
+    const { error } = await supabase.rpc('delete_worker_auth_user', { p_email: email.trim().toLowerCase() });
+    if (error && !(error.message || '').includes('delete_worker_auth_user')) throw error;
+  }
+
+  // ── Rôles d'employés (créés librement par l'admin) ───────────────────────
+  static async getWorkerRoles(): Promise<WorkerRole[]> {
+    const { data, error } = await supabase
+      .from('worker_roles')
+      .select('*')
+      .order('name', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(r => ({ id: r.id, name: r.name, createdAt: r.created_at }));
+  }
+
+  static async createWorkerRole(name: string): Promise<WorkerRole> {
+    const { data, error } = await supabase
+      .from('worker_roles')
+      .insert([{ name: name.trim() }])
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') throw new Error('Ce rôle existe déjà.');
+      throw error;
+    }
+    return { id: data.id, name: data.name, createdAt: data.created_at };
+  }
+
+  static async deleteWorkerRole(id: string): Promise<void> {
+    const { error } = await supabase.from('worker_roles').delete().eq('id', id);
+    if (error) throw error;
   }
 
   static async deleteWorker(id: string): Promise<void> {
@@ -752,10 +916,29 @@ export class DatabaseService {
 
     return {
       id: data.id,
-      amount: data.amount,
+      amount: Number(data.amount) || 0,
       date: data.date,
       note: data.note,
+      settled: data.settled === true,
     };
+  }
+
+  /** Marque des acomptes / absences comme déduits d'un paiement. */
+  static async settleWorkerItems(advanceIds: string[], absenceIds: string[]): Promise<void> {
+    if (advanceIds.length > 0) {
+      const { error } = await supabase
+        .from('worker_advances')
+        .update({ settled: true })
+        .in('id', advanceIds);
+      if (error) throw error;
+    }
+    if (absenceIds.length > 0) {
+      const { error } = await supabase
+        .from('worker_absences')
+        .update({ settled: true })
+        .in('id', absenceIds);
+      if (error) throw error;
+    }
   }
 
   static async deleteWorkerAdvance(id: string): Promise<void> {
@@ -786,9 +969,10 @@ export class DatabaseService {
 
     return {
       id: data.id,
-      cost: data.cost,
+      cost: Number(data.cost) || 0,
       date: data.date,
       note: data.note,
+      settled: data.settled === true,
     };
   }
 
@@ -803,7 +987,7 @@ export class DatabaseService {
 
   // Worker Payments
   static async createWorkerPayment(workerId: string, payment: Omit<WorkerPayment, 'id' | 'createdAt'>): Promise<WorkerPayment> {
-    const dbPayment = {
+    const dbPayment: Record<string, any> = {
       worker_id: workerId,
       amount: payment.amount,
       date: payment.date,
@@ -811,7 +995,8 @@ export class DatabaseService {
       advances: payment.advances,
       absences: payment.absences,
       net_salary: payment.netSalary,
-      note: payment.note,
+      note: payment.note || null,
+      period_key: payment.periodKey || null,
     };
 
     const { data, error } = await supabase
@@ -824,13 +1009,14 @@ export class DatabaseService {
 
     return {
       id: data.id,
-      amount: data.amount,
+      amount: Number(data.amount) || 0,
       date: data.date,
-      baseSalary: data.base_salary,
-      advances: data.advances,
-      absences: data.absences,
-      netSalary: data.net_salary,
-      note: data.note,
+      baseSalary: Number(data.base_salary) || 0,
+      advances: Number(data.advances) || 0,
+      absences: Number(data.absences) || 0,
+      netSalary: Number(data.net_salary) || 0,
+      note: data.note || undefined,
+      periodKey: data.period_key || undefined,
     };
   }
 
@@ -975,6 +1161,16 @@ export class DatabaseService {
           protection_assurance_id,
           protection_assurance_name,
           protection_assurance_price,
+          currency,
+          currency_rate,
+          total_price_currency,
+          promo_code,
+          promo_discount_percentage,
+          promo_discount_amount,
+          flight_number,
+          flight_date,
+          flight_time,
+          flight_ticket_image,
           client:clients(*),
           car:cars(*),
           reservation_services(*),
@@ -1112,6 +1308,19 @@ export class DatabaseService {
         status: reservation.status || 'website_reservation',
         createdAt: reservation.created_at,
         source: 'website',
+        // Devise choisie par le client (total_price reste en DZD)
+        currency: reservation.currency || 'DZD',
+        currencyRate: reservation.currency_rate != null ? Number(reservation.currency_rate) : 1,
+        totalPriceCurrency: reservation.total_price_currency != null ? Number(reservation.total_price_currency) : undefined,
+        // Code promo : absent = ne rien afficher
+        promoCode: reservation.promo_code || undefined,
+        promoDiscountPercentage: reservation.promo_discount_percentage != null ? Number(reservation.promo_discount_percentage) : undefined,
+        promoDiscountAmount: reservation.promo_discount_amount != null ? Number(reservation.promo_discount_amount) : undefined,
+        // Informations de vol
+        flightNumber: reservation.flight_number || undefined,
+        flightDate: reservation.flight_date || undefined,
+        flightTime: reservation.flight_time || undefined,
+        flightTicketImage: reservation.flight_ticket_image || undefined,
       } as WebsiteOrder;
     });
   }
@@ -1768,6 +1977,20 @@ export class DatabaseService {
   }
 
   // Services
+  private static mapServiceRow(service: any) {
+    return {
+      id: service.id,
+      category: service.category,
+      name: service.service_name,
+      description: service.description,
+      price: Math.round(Number(service.price)),
+      isActive: service.is_active,
+      // Service obligatoire : pré-coché automatiquement sur toute réservation
+      isMandatory: service.is_mandatory === true,
+      createdAt: service.created_at,
+    };
+  }
+
   static async getServices(): Promise<any[]> {
     const { data, error } = await supabase
       .from('services')
@@ -1776,15 +1999,7 @@ export class DatabaseService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return (data || []).map(service => ({
-      id: service.id,
-      category: service.category,
-      name: service.service_name,
-      description: service.description,
-      price: Math.round(Number(service.price)),
-      isActive: service.is_active,
-      createdAt: service.created_at,
-    }));
+    return (data || []).map(service => this.mapServiceRow(service));
   }
 
   static async createService(service: Omit<any, 'id' | 'created_at'>): Promise<any> {
@@ -1796,45 +2011,33 @@ export class DatabaseService {
         description: service.description,
         price: service.price,
         is_active: true,
+        is_mandatory: service.isMandatory === true,
       }])
       .select()
       .single();
 
     if (error) throw error;
-    return {
-      id: data.id,
-      category: data.category,
-      name: data.service_name,
-      description: data.description,
-      price: Math.round(Number(data.price)),
-      isActive: data.is_active,
-      createdAt: data.created_at,
-    };
+    return this.mapServiceRow(data);
   }
 
   static async updateService(id: string, updates: any): Promise<any> {
+    const payload: Record<string, any> = {
+      service_name: updates.name,
+      description: updates.description,
+      price: updates.price,
+      is_active: updates.isActive,
+    };
+    if (updates.isMandatory !== undefined) payload.is_mandatory = updates.isMandatory === true;
+
     const { data, error } = await supabase
       .from('services')
-      .update({
-        service_name: updates.name,
-        description: updates.description,
-        price: updates.price,
-        is_active: updates.isActive,
-      })
+      .update(payload)
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
-    return {
-      id: data.id,
-      category: data.category,
-      name: data.service_name,
-      description: data.description,
-      price: Math.round(Number(data.price)),
-      isActive: data.is_active,
-      createdAt: data.created_at,
-    };
+    return this.mapServiceRow(data);
   }
 
   static async deleteService(id: string): Promise<void> {
@@ -2180,5 +2383,282 @@ export class DatabaseService {
     } catch {
       return null;
     }
+  }
+
+  // ==========================================================================
+  // ENTREPRISES (clients société : contrats + factures)
+  // ==========================================================================
+
+  private static mapEntrepriseRow(row: any): Entreprise {
+    return {
+      id: row.id,
+      name: row.name,
+      rc: row.rc || undefined,
+      art: row.art || undefined,
+      nis: row.nis || undefined,
+      nif: row.nif || undefined,
+      address: row.address || undefined,
+      phone: row.phone || undefined,
+      email: row.email || undefined,
+      createdAt: row.created_at,
+    };
+  }
+
+  private static entreprisesMissingError(error: any): Error | null {
+    const msg = error?.message || '';
+    if (msg.includes('entreprises') || error?.code === '42P01') {
+      return new Error(
+        "La table entreprises n'existe pas encore. Exécutez la migration supabase/migrations/20260725_mhd_auto_major_update.sql dans le SQL Editor de Supabase."
+      );
+    }
+    return null;
+  }
+
+  static async getEntreprises(): Promise<Entreprise[]> {
+    const { data, error } = await supabase
+      .from('entreprises')
+      .select('*')
+      .order('name', { ascending: true });
+    if (error) throw this.entreprisesMissingError(error) || error;
+    return (data || []).map(r => this.mapEntrepriseRow(r));
+  }
+
+  static async searchEntreprises(query: string, limit = 20): Promise<Entreprise[]> {
+    const q = query.trim();
+    if (!q) return this.getEntreprises();
+    const { data, error } = await supabase
+      .from('entreprises')
+      .select('*')
+      .ilike('name', `%${q}%`)
+      .order('name', { ascending: true })
+      .limit(limit);
+    if (error) throw this.entreprisesMissingError(error) || error;
+    return (data || []).map(r => this.mapEntrepriseRow(r));
+  }
+
+  static async createEntreprise(entreprise: Omit<Entreprise, 'id' | 'createdAt'>): Promise<Entreprise> {
+    const { data, error } = await supabase
+      .from('entreprises')
+      .insert([{
+        name: entreprise.name.trim(),
+        rc: entreprise.rc || null,
+        art: entreprise.art || null,
+        nis: entreprise.nis || null,
+        nif: entreprise.nif || null,
+        address: entreprise.address || null,
+        phone: entreprise.phone || null,
+        email: entreprise.email || null,
+      }])
+      .select()
+      .single();
+    if (error) throw this.entreprisesMissingError(error) || error;
+    return this.mapEntrepriseRow(data);
+  }
+
+  static async updateEntreprise(id: string, updates: Partial<Entreprise>): Promise<Entreprise> {
+    const payload: Record<string, any> = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.rc !== undefined) payload.rc = updates.rc || null;
+    if (updates.art !== undefined) payload.art = updates.art || null;
+    if (updates.nis !== undefined) payload.nis = updates.nis || null;
+    if (updates.nif !== undefined) payload.nif = updates.nif || null;
+    if (updates.address !== undefined) payload.address = updates.address || null;
+    if (updates.phone !== undefined) payload.phone = updates.phone || null;
+    if (updates.email !== undefined) payload.email = updates.email || null;
+
+    const { data, error } = await supabase
+      .from('entreprises')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw this.entreprisesMissingError(error) || error;
+    return this.mapEntrepriseRow(data);
+  }
+
+  static async deleteEntreprise(id: string): Promise<void> {
+    const { error } = await supabase.from('entreprises').delete().eq('id', id);
+    if (error) throw this.entreprisesMissingError(error) || error;
+  }
+
+  /**
+   * Historique d'une entreprise : réservations rattachées + totaux
+   * (montant global, déjà payé, reste dû).
+   */
+  static async getEntrepriseHistory(entrepriseId: string): Promise<{
+    reservations: any[];
+    total: number;
+    totalPaid: number;
+    totalRemaining: number;
+  }> {
+    const { data, error } = await supabase
+      .from('reservations')
+      .select('*, client:clients(*), car:cars(*), payments(*)')
+      .eq('entreprise_id', entrepriseId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw this.entreprisesMissingError(error) || error;
+
+    const rows = data || [];
+    let total = 0;
+    let totalPaid = 0;
+
+    const reservations = rows.map((r: any) => {
+      const resTotal = Number(r.total_price) || 0;
+      const paid = (r.payments || []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0);
+      total += resTotal;
+      totalPaid += paid;
+      return {
+        id: r.id,
+        status: r.status,
+        departureDate: r.departure_date,
+        returnDate: r.return_date,
+        totalDays: r.total_days,
+        totalPrice: resTotal,
+        paid,
+        remaining: Math.max(0, resTotal - paid),
+        clientName: r.client ? `${r.client.first_name || ''} ${r.client.last_name || ''}`.trim() : '',
+        carInfo: r.car ? `${r.car.brand || ''} ${r.car.model || ''} — ${r.car.plate_number || ''}`.trim() : '',
+        createdAt: r.created_at,
+      };
+    });
+
+    return {
+      reservations,
+      total,
+      totalPaid,
+      totalRemaining: Math.max(0, total - totalPaid),
+    };
+  }
+
+  // ==========================================================================
+  // PARAMÈTRES DE LOCATION (limite de kilométrage, frais) — globaux
+  // ==========================================================================
+
+  static readonly DEFAULT_RENTAL_SETTINGS: RentalSettings = {
+    mileageLimitPerDay: 0,
+    excessMileageFeePerKm: 0,
+    fuelFeePerLevel: 0,
+  };
+
+  /**
+   * Réglages appliqués à TOUTES les fins de location. Une seule ligne
+   * (singleton) dans `rental_settings`. Retourne les valeurs par défaut si la
+   * table n'existe pas encore ou est vide — l'écran reste utilisable.
+   */
+  static async getRentalSettings(): Promise<RentalSettings> {
+    try {
+      const { data, error } = await supabase
+        .from('rental_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return { ...this.DEFAULT_RENTAL_SETTINGS };
+
+      return {
+        mileageLimitPerDay: Number(data.mileage_limit_per_day) || 0,
+        excessMileageFeePerKm: Number(data.excess_mileage_fee_per_km) || 0,
+        fuelFeePerLevel: Number(data.fuel_fee_per_level) || 0,
+        updatedAt: data.updated_at,
+      };
+    } catch {
+      return { ...this.DEFAULT_RENTAL_SETTINGS };
+    }
+  }
+
+  static async saveRentalSettings(settings: RentalSettings): Promise<RentalSettings> {
+    const payload = {
+      id: 1,
+      mileage_limit_per_day: settings.mileageLimitPerDay || 0,
+      excess_mileage_fee_per_km: settings.excessMileageFeePerKm || 0,
+      fuel_fee_per_level: settings.fuelFeePerLevel || 0,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('rental_settings')
+      .upsert(payload, { onConflict: 'id' })
+      .select()
+      .single();
+
+    if (error) {
+      if ((error.message || '').includes('rental_settings') || error.code === '42P01') {
+        throw new Error(
+          "La table rental_settings n'existe pas encore. Exécutez la migration supabase/migrations/20260725_mhd_auto_major_update.sql dans le SQL Editor de Supabase."
+        );
+      }
+      throw error;
+    }
+
+    return {
+      mileageLimitPerDay: Number(data.mileage_limit_per_day) || 0,
+      excessMileageFeePerKm: Number(data.excess_mileage_fee_per_km) || 0,
+      fuelFeePerLevel: Number(data.fuel_fee_per_level) || 0,
+      updatedAt: data.updated_at,
+    };
+  }
+
+  // ==========================================================================
+  // INSPECTIONS — suppression définitive des photos à la clôture
+  // ==========================================================================
+
+  /**
+   * Supprime DÉFINITIVEMENT toutes les photos d'inspection d'une réservation :
+   * fichiers du bucket `inspection` + colonnes photo des lignes
+   * `vehicle_inspections`. Appelé à la validation de « Terminer la location ».
+   */
+  static async purgeInspectionImages(reservationId: string): Promise<{ removedFiles: number }> {
+    const { data: inspections, error } = await supabase
+      .from('vehicle_inspections')
+      .select('id, exterior_front_photo, exterior_rear_photo, interior_photo, other_photos, client_signature')
+      .eq('reservation_id', reservationId);
+
+    if (error) throw error;
+
+    const urls: string[] = [];
+    for (const insp of inspections || []) {
+      urls.push(insp.exterior_front_photo, insp.exterior_rear_photo, insp.interior_photo, insp.client_signature);
+      if (Array.isArray(insp.other_photos)) urls.push(...insp.other_photos);
+    }
+
+    // URL publique → chemin relatif dans le bucket `inspection`
+    const paths = urls
+      .filter((u): u is string => typeof u === 'string' && u.length > 0)
+      .map(u => {
+        const marker = '/storage/v1/object/public/inspection/';
+        const idx = u.indexOf(marker);
+        if (idx >= 0) return decodeURIComponent(u.substring(idx + marker.length));
+        if (!u.startsWith('http') && !u.startsWith('data:')) return u.replace(/^\/+/, '');
+        return null;
+      })
+      .filter((p): p is string => !!p);
+
+    let removedFiles = 0;
+    if (paths.length > 0) {
+      const { data: removed, error: storageError } = await supabase.storage
+        .from('inspection')
+        .remove(Array.from(new Set(paths)));
+      if (storageError) {
+        console.warn('[purgeInspectionImages] Storage removal failed:', storageError.message);
+      } else {
+        removedFiles = (removed || []).length;
+      }
+    }
+
+    // Efface les références en base, quoi qu'il arrive côté stockage
+    const { error: clearError } = await supabase
+      .from('vehicle_inspections')
+      .update({
+        exterior_front_photo: null,
+        exterior_rear_photo: null,
+        interior_photo: null,
+        other_photos: [],
+      })
+      .eq('reservation_id', reservationId);
+
+    if (clearError) throw clearError;
+
+    return { removedFiles };
   }
 }

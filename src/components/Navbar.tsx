@@ -2,6 +2,7 @@ import React from 'react';
 import { Globe, Menu, Search, Monitor } from 'lucide-react';
 import { Language, User } from '../types';
 import { TRANSLATIONS } from '../constants';
+import { ThemeToggle } from './ThemeToggle';
 
 interface NavbarProps {
   user: User;
@@ -34,22 +35,25 @@ export const Navbar: React.FC<NavbarProps> = ({ user, lang, setLang, toggleSideb
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        <button 
+      <div className="flex items-center gap-4">
+        <button
           onClick={() => setLang(lang === 'fr' ? 'ar' : 'fr')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-saas-border hover:border-saas-primary-via transition-all text-[10px] font-bold uppercase tracking-widest text-saas-text-main shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-saas-border hover:border-saas-primary-via transition-all text-[10px] font-bold uppercase tracking-widest text-saas-text-main shadow-sm cursor-pointer"
         >
           <Globe size={16} className="text-saas-primary-via" />
           {t.changeLang}
         </button>
 
-        <button 
+        {/* Bascule clair / sombre — partagée avec le site public */}
+        <ThemeToggle lang={lang} variant="nav" />
+
+        <button
           onClick={onWebsiteToggle}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-100 border border-blue-300 hover:bg-blue-200 transition-all text-[10px] font-bold uppercase tracking-widest text-blue-700 shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-saas-border hover:border-saas-secondary-start hover:text-saas-secondary-start transition-all text-[10px] font-bold uppercase tracking-widest text-saas-text-main shadow-sm cursor-pointer"
           title={lang === 'fr' ? 'Aperçu du site web' : 'عرض الموقع'}
         >
-          <Monitor size={16} />
-          {{fr: 'Aperçu', ar: 'عرض'}[lang]}
+          <Monitor size={16} className="text-saas-secondary-start" />
+          <span className="hidden md:inline">{{fr: 'Aperçu', ar: 'عرض'}[lang]}</span>
         </button>
 
         <div className="h-8 w-[1px] bg-saas-border" />

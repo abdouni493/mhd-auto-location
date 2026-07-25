@@ -20,16 +20,22 @@ import { DashboardPage } from './components/DashboardPage';
 import ReportsPage from './components/ReportsPage';
 import { CarGainsPage } from './components/CarGainsPage';
 import { ReservationsPage } from './components/ReservationsPage';
-import { Language, User, UserRole, Car, Agency } from './types';
+import { EntreprisesPage } from './components/EntreprisesPage';
+import { Language, User, UserRole, Car, Agency, WorkerPermissions } from './types';
 import { supabase, supabaseConfigured } from './supabase';
 import { SIDEBAR_ITEMS } from './constants';
 import { DatabaseService } from './services/DatabaseService';
 import { setupErrorInterceptor } from './utils/errorInterceptor';
 import { DebugAuth } from './utils/debugAuth';
 import { sessionService } from './utils/sessionService';
+import { initTheme } from './utils/themeService';
+import { PermissionsProvider, usePermissions } from './utils/permissions';
 
 // Initialize global error interceptor on load
 setupErrorInterceptor();
+
+// Applique le thème clair/sombre enregistré avant le premier rendu
+initTheme();
 
 // Make Supabase available globally for console debugging
 if (typeof window !== 'undefined') {
@@ -52,6 +58,9 @@ export default function App() {
   const [isLoadingAgenciesForWebsite, setIsLoadingAgenciesForWebsite] = useState(true);
   const [maintenanceAlertsCount, setMaintenanceAlertsCount] = useState(0);
   const [webOrdersCount, setWebOrdersCount] = useState(0);
+  // Permissions de l'employé connecté (null pour un admin = accès total)
+  const [workerPermissions, setWorkerPermissions] = useState<WorkerPermissions | null>(null);
+  const isAdminUser = !user || user.role === 'admin';
   
   // Refs to prevent multiple listener initialization (especially important in StrictMode dev environment)
   const authListenerInitialized = useRef(false);
@@ -79,6 +88,7 @@ export default function App() {
       '/website-commandes': 'web-orders',
       '/protection-services': 'protection-services',
       '/reservations': 'reservations',
+      '/entreprises': 'entreprises',
       '/rapports': 'reports',
       '/configuration': 'config',
       '/': 'dashboard', // Default to dashboard
@@ -87,6 +97,26 @@ export default function App() {
     const tabId = pathMap[pathname] || 'dashboard';
     setActiveTab(tabId);
   }, [location.pathname]);
+
+  // Charge les permissions de l'employé connecté (un admin n'en a pas besoin).
+  useEffect(() => {
+    if (!user || isAuthLoading) return;
+    if (user.role === 'admin') {
+      setWorkerPermissions(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const info = await DatabaseService.getWorkerPermissionsByEmail(user.email);
+        if (!cancelled) setWorkerPermissions(info?.permissions || { interfaces: [], actions: {} });
+      } catch (err) {
+        console.error('[Auth] Failed to load worker permissions:', err);
+        if (!cancelled) setWorkerPermissions({ interfaces: [], actions: {} });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, isAuthLoading]);
 
   // Responsive sidebar visibility
   useEffect(() => {
@@ -121,6 +151,7 @@ export default function App() {
       'web-orders': '/website-commandes',
       'protection-services': '/protection-services',
       'reservations': '/reservations',
+      'entreprises': '/entreprises',
       'reports': '/rapports',
       'config': '/configuration',
     };
@@ -468,6 +499,7 @@ export default function App() {
         '/website-commandes': 'web-orders',
         '/protection-services': 'protection-services',
         '/reservations': 'reservations',
+        '/entreprises': 'entreprises',
         '/rapports': 'reports',
         '/configuration': 'config',
       };
@@ -477,38 +509,65 @@ export default function App() {
 
     const activeItem = SIDEBAR_ITEMS.find(item => item.id === activeTab) || SIDEBAR_ITEMS[0];
 
+    /**
+     * Garde d'accès : un employé qui saisit directement une URL non autorisée
+     * ne doit pas voir l'écran. La sidebar filtre déjà les onglets, ceci ferme
+     * la porte d'entrée par l'adresse.
+     */
+    const GuardedContent: React.FC<{ tabId: string; children: React.ReactNode }> = ({ tabId, children }) => {
+      const { canSeeInterface } = usePermissions();
+      if (canSeeInterface(tabId)) return <>{children}</>;
+      return (
+        <div className="glass-card p-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#DC2626]/10 border border-[#DC2626]/25 flex items-center justify-center mx-auto mb-5 text-3xl">
+            🔒
+          </div>
+          <p className="text-lg font-black text-saas-text-main">
+            {lang === 'fr' ? 'Accès non autorisé' : 'وصول غير مصرح به'}
+          </p>
+          <p className="text-sm text-saas-text-muted mt-2 max-w-md mx-auto">
+            {lang === 'fr'
+              ? "Cette section ne fait pas partie de vos permissions. Contactez l'administrateur si vous pensez qu'il s'agit d'une erreur."
+              : 'هذا القسم ليس ضمن صلاحياتك. تواصل مع المسؤول إذا كنت تعتقد أن هذا خطأ.'}
+          </p>
+        </div>
+      );
+    };
+
     const renderContent = () => {
       switch (activeTab) {
         case 'dashboard':
-          return <DashboardPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
+          return <GuardedContent tabId="dashboard"><DashboardPage lang={lang} isAuthLoading={isAuthLoading} user={user} /></GuardedContent>;
         case 'planner':
-          return <PlannerPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
+          return <GuardedContent tabId="planner"><PlannerPage lang={lang} isAuthLoading={isAuthLoading} user={user} /></GuardedContent>;
         case 'car-gains':
-          return <CarGainsPage lang={lang} />;
+          return <GuardedContent tabId="car-gains"><CarGainsPage lang={lang} /></GuardedContent>;
         case 'vehicles':
-          return <CarsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
+          return <GuardedContent tabId="vehicles"><CarsPage lang={lang} isAuthLoading={isAuthLoading} user={user} /></GuardedContent>;
         case 'maintenance':
-          return <MaintenancePage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
+          return <GuardedContent tabId="maintenance"><MaintenancePage lang={lang} isAuthLoading={isAuthLoading} user={user} /></GuardedContent>;
         case 'agencies':
-          return <AgenciesPage lang={lang} />;
+          return <GuardedContent tabId="agencies"><AgenciesPage lang={lang} /></GuardedContent>;
         case 'clients':
-          return <ClientsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
+          return <GuardedContent tabId="clients"><ClientsPage lang={lang} isAuthLoading={isAuthLoading} user={user} /></GuardedContent>;
+        case 'entreprises':
+          return <GuardedContent tabId="entreprises"><EntreprisesPage lang={lang} /></GuardedContent>;
         case 'team':
-          return <EquipePage lang={lang} />;
+          return <GuardedContent tabId="team"><EquipePage lang={lang} /></GuardedContent>;
         case 'expenses':
-          return <ExpensesPage lang={lang} cars={cars} />;
+          return <GuardedContent tabId="expenses"><ExpensesPage lang={lang} cars={cars} /></GuardedContent>;
         case 'web-mgmt':
-          return <WebsiteManagementPage lang={lang} />;
+          return <GuardedContent tabId="web-mgmt"><WebsiteManagementPage lang={lang} /></GuardedContent>;
         case 'web-orders':
-          return <WebsiteOrders lang={lang} onOrdersChanged={refreshWebOrdersCount} />;
+          return <GuardedContent tabId="web-orders"><WebsiteOrders lang={lang} onOrdersChanged={refreshWebOrdersCount} /></GuardedContent>;
         case 'protection-services':
-          return <ProtectionServicesPage lang={lang} />;
+          return <GuardedContent tabId="protection-services"><ProtectionServicesPage lang={lang} /></GuardedContent>;
         case 'reservations':
-          return <ReservationsPage lang={lang} isAuthLoading={isAuthLoading} user={user} />;
+          return <GuardedContent tabId="reservations"><ReservationsPage lang={lang} isAuthLoading={isAuthLoading} user={user} /></GuardedContent>;
         case 'reports':
-          return <ReportsPage lang={lang} />;
+          return <GuardedContent tabId="reports"><ReportsPage lang={lang} /></GuardedContent>;
         case 'config':
-          return user ? <ConfigPage lang={lang} user={user} /> : null;
+          return user ? <GuardedContent tabId="config"><ConfigPage lang={lang} user={user} /></GuardedContent> : null;
         default:
           return (
             <div className="space-y-8">
@@ -580,10 +639,10 @@ export default function App() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.5 }}
+                initial={{ opacity: 0, y: 14, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               >
                 {renderContent()}
               </motion.div>
@@ -636,7 +695,11 @@ export default function App() {
 
     // User is authenticated, render dashboard
     console.log('[ProtectedRoute] User authenticated, rendering dashboard');
-    return <DashboardLayout />;
+    return (
+      <PermissionsProvider isAdmin={isAdminUser} permissions={workerPermissions}>
+        <DashboardLayout />
+      </PermissionsProvider>
+    );
   };
 
   return (
@@ -683,6 +746,7 @@ export default function App() {
       <Route path="/vehicules" element={<ProtectedRoute />} />
       <Route path="/maintenance" element={<ProtectedRoute />} />
       <Route path="/clients" element={<ProtectedRoute />} />
+      <Route path="/entreprises" element={<ProtectedRoute />} />
       <Route path="/agences" element={<ProtectedRoute />} />
       <Route path="/equipe" element={<ProtectedRoute />} />
       <Route path="/personalisation" element={<ProtectedRoute />} />

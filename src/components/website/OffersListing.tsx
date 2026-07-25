@@ -4,6 +4,9 @@ import { motion, useReducedMotion } from 'motion/react';
 import { Fuel, Settings, Users, DoorOpen, Gauge } from 'lucide-react';
 import { CarDetailsModal } from './CarDetailsModal';
 import { getCurrentSpecialOfferForCar } from '../../utils/specialOffers';
+import { useWebsiteCurrency, CurrencySwitcher } from './CurrencyContext';
+import { CURRENCIES, ALL_CURRENCIES, isCurrencyEnabled, convertFromDzd, formatCurrency, getCarRate, CurrencyCode } from '../../utils/currency';
+import { CarPriceBoard } from './CarPriceBoard';
 
 interface OffersListingProps {
   lang: Language;
@@ -22,6 +25,14 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, specia
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const reduceMotion = useReducedMotion();
+  const { display, active, available } = useWebsiteCurrency();
+
+  // « Toutes devises » : la carte liste chaque devise activée sur la voiture.
+  // Une devise sélectionnée : seuls ses tarifs sont affichés, et les voitures
+  // qui ne la proposent pas sont masquées.
+  const visibleCars = display === 'ALL'
+    ? cars
+    : cars.filter(c => active === 'DZD' || isCurrencyEnabled(c.currencies as any, active));
 
   const openDetails = (car: Car) => {
     setSelectedCar(car);
@@ -50,11 +61,25 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, specia
           <p className="text-vel-muted text-lg mt-4 max-w-2xl mx-auto">
             {{ fr: 'Découvrez notre sélection de véhicules premium avec les meilleures offres', ar: 'اكتشف تشكيلتنا من السيارات الفاخرة مع أفضل العروض' }[lang]}
           </p>
+
+          {/* Filtre de devise — en tête de la liste des offres */}
+          {available.length > 1 && (
+            <div className="mt-8 flex flex-col items-center gap-2">
+              <p className="text-[11px] font-bold tracking-[0.2em] uppercase text-vel-muted"
+                style={{ fontFamily: 'var(--font-display)' }}>
+                {{ fr: 'Afficher les prix en', ar: 'عرض الأسعار بـ' }[lang]}
+              </p>
+              <CurrencySwitcher
+                variant="pills"
+                labelAll={{ fr: 'Toutes', ar: 'الكل' }[lang]}
+              />
+            </div>
+          )}
         </motion.div>
 
         {/* Grille compacte : 1 (<360px) / 2 (téléphone) / 3 (tablette) / 4 (desktop) */}
         <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-          {cars.map((car, index) => {
+          {visibleCars.map((car, index) => {
             const promo = getCurrentSpecialOfferForCar(car.id, specialOffers);
             const specs = [
               { icon: Fuel, value: car.energy },
@@ -135,34 +160,9 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, specia
                     ))}
                   </div>
 
-                  {/* Tous les tarifs, en rangées compactes */}
-                  <div className="rounded-lg px-2.5 py-2 space-y-1 mt-auto"
-                    style={{ background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.1)' }}>
-                    <div className="flex justify-between items-baseline text-[10px]">
-                      <span className="text-vel-muted">{{ fr: 'Jour', ar: 'يوم' }[lang]}</span>
-                      {promo ? (
-                        <span className="font-black text-xs" style={{ color: '#DC2626' }}>
-                          <span className="line-through mr-1 font-medium" style={{ color: 'rgba(148,163,184,0.7)' }}>
-                            {car.priceDay.toLocaleString()}
-                          </span>
-                          {promo.newPrice.toLocaleString()} DA
-                        </span>
-                      ) : (
-                        <span className="font-black text-xs" style={{ color: '#DC2626' }}>{car.priceDay.toLocaleString()} DA</span>
-                      )}
-                    </div>
-                    <div className="flex justify-between items-baseline text-[10px]">
-                      <span className="text-vel-muted">{{ fr: 'Semaine', ar: 'أسبوع' }[lang]}</span>
-                      <span className="font-bold text-vel-slate">{car.priceWeek.toLocaleString()} DA</span>
-                    </div>
-                    <div className="flex justify-between items-baseline text-[10px]">
-                      <span className="text-vel-muted">{{ fr: 'Mois', ar: 'شهر' }[lang]}</span>
-                      <span className="font-bold text-vel-slate">{car.priceMonth.toLocaleString()} DA</span>
-                    </div>
-                    <div className="flex justify-between items-baseline text-[10px] pt-1" style={{ borderTop: '1px solid rgba(15,23,42,0.06)' }}>
-                      <span className="text-vel-muted">{{ fr: 'Caution', ar: 'الكفالة' }[lang]}</span>
-                      <span className="font-bold" style={{ color: 'rgba(248,113,113,0.9)' }}>{car.deposit.toLocaleString()} DA</span>
-                    </div>
+                  {/* Tarifs — organisés par devise activée sur la voiture */}
+                  <div className="mt-auto">
+                    <CarPriceBoard lang={lang} car={car} promo={promo} />
                   </div>
 
                   {/* Réserver — stopPropagation pour ne pas ouvrir les détails */}
@@ -181,14 +181,16 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, specia
           })}
         </div>
 
-        {cars.length === 0 && (
+        {visibleCars.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center py-24"
           >
             <p className="text-vel-muted text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-              {{ fr: 'Aucun véhicule disponible actuellement', ar: 'لا توجد سيارات متاحة حالياً' }[lang]}
+              {display === 'ALL'
+                ? { fr: 'Aucun véhicule disponible actuellement', ar: 'لا توجد سيارات متاحة حالياً' }[lang]
+                : { fr: `Aucun véhicule proposé en ${active}`, ar: `لا توجد سيارة متاحة بـ ${active}` }[lang]}
             </p>
           </motion.div>
         )}

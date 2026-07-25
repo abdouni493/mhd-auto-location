@@ -65,6 +65,27 @@ export const StepPersonalInfo: React.FC = () => {
     setPersonal(prev => ({ ...prev, scannedDocuments: prev.scannedDocuments?.filter((_, i) => i !== index) || [] }));
   };
 
+  // Justificatif du billet d'avion (image)
+  const [uploadingTicket, setUploadingTicket] = useState(false);
+  const handleTicketUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError(null);
+    setUploadingTicket(true);
+    try {
+      const result = await uploadClientDocument(file);
+      if (result.success && result.url) {
+        setPersonal(prev => ({ ...prev, flightTicketImage: result.url }));
+      } else {
+        setUploadError(result.error || 'Upload failed');
+      }
+    } catch {
+      setUploadError('Upload error');
+    } finally {
+      setUploadingTicket(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Photo */}
@@ -225,6 +246,95 @@ export const StepPersonalInfo: React.FC = () => {
             placeholder={lang === 'fr' ? 'Rue, N°, Quartier…' : 'الشارع، الرقم، المنطقة…'}
             onFocus={focusInput} onBlur={blurInput} />
         </div>
+      </SectionCard>
+
+      {/* Informations de vol — obligatoires pour organiser l'accueil */}
+      <SectionCard>
+        <SectionTitle>✈️ {{ fr: 'Informations de vol', ar: 'معلومات الرحلة' }[lang]}</SectionTitle>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <FieldLabel>{{ fr: 'Numéro de vol *', ar: 'رقم الرحلة *' }[lang]}</FieldLabel>
+            <input
+              name="flightNumber"
+              value={personal.flightNumber || ''}
+              onChange={handleChange}
+              className={`${inputClass} font-mono font-bold uppercase tracking-wider`}
+              style={inputStyle}
+              placeholder={lang === 'fr' ? 'Ex : AH1006' : 'مثال: AH1006'}
+              onFocus={focusInput} onBlur={blurInput}
+            />
+          </div>
+          <div>
+            <FieldLabel>{{ fr: "Date d'arrivée *", ar: 'تاريخ الوصول *' }[lang]}</FieldLabel>
+            <input
+              type="date"
+              name="flightDate"
+              value={personal.flightDate || ''}
+              onChange={handleChange}
+              className={inputClass}
+              style={inputStyle}
+              onFocus={focusInput} onBlur={blurInput}
+            />
+          </div>
+          <div>
+            <FieldLabel>{{ fr: "Heure d'arrivée *", ar: 'ساعة الوصول *' }[lang]}</FieldLabel>
+            <input
+              type="time"
+              name="flightTime"
+              value={personal.flightTime || ''}
+              onChange={handleChange}
+              className={inputClass}
+              style={inputStyle}
+              onFocus={focusInput} onBlur={blurInput}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <FieldLabel>{{ fr: 'Justificatif du billet *', ar: 'إثبات التذكرة *' }[lang]}</FieldLabel>
+
+          {personal.flightTicketImage ? (
+            <div className="relative inline-block rounded-2xl overflow-hidden"
+              style={{ border: '1px solid rgba(15,23,42,0.12)' }}>
+              <img
+                src={personal.flightTicketImage}
+                alt={lang === 'fr' ? 'Billet' : 'التذكرة'}
+                className="max-h-56 w-auto object-contain bg-white"
+              />
+              <button
+                onClick={() => setPersonal(prev => ({ ...prev, flightTicketImage: '' }))}
+                className="absolute top-2 right-2 p-1.5 rounded-lg text-white shadow-lg cursor-pointer"
+                style={{ background: '#DC2626' }}
+                aria-label={lang === 'fr' ? 'Retirer le billet' : 'إزالة التذكرة'}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <label
+              className="flex flex-col items-center justify-center gap-2 py-8 px-4 rounded-2xl cursor-pointer transition-colors"
+              style={{ border: '2px dashed rgba(15,23,42,0.16)', background: 'rgba(15,23,42,0.02)' }}
+            >
+              {uploadingTicket
+                ? <Loader2 size={26} className="animate-spin" style={{ color: C.accent }} />
+                : <Upload size={26} style={{ color: C.accent }} />}
+              <span className="text-sm font-bold text-vel-slate">
+                {uploadingTicket
+                  ? { fr: 'Envoi en cours…', ar: 'جاري الإرسال…' }[lang]
+                  : { fr: 'Ajouter une photo ou une capture du billet', ar: 'أضف صورة أو لقطة للتذكرة' }[lang]}
+              </span>
+              <span className="text-xs text-vel-muted">
+                {{ fr: 'JPG, PNG ou capture d’écran', ar: 'JPG أو PNG أو لقطة شاشة' }[lang]}
+              </span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleTicketUpload} disabled={uploadingTicket} />
+            </label>
+          )}
+        </div>
+
+        {uploadError && (
+          <p className="mt-3 text-xs font-bold" style={{ color: '#DC2626' }}>{uploadError}</p>
+        )}
       </SectionCard>
     </div>
   );

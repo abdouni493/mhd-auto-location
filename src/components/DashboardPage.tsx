@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardStats, MaintenanceAlert, Language, Car, ReservationDetails, VehicleExpense, User } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, DollarSign, Wrench, Shield, FileCheck, Loader2, AlertCircle } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, CalendarCheck, Clock, BarChart3, PieChart, DollarSign, Wrench, Shield, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
 import { getCars } from '../services/carService';
 import { getVehicleExpenses } from '../services/expenseService';
@@ -1190,409 +1190,275 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
         );
       })()}
 
-      {/* Enhanced Header with Better Design */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 rounded-3xl text-white shadow-2xl">
-        {/* Animated Background Elements */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12"></div>
+      {/* ══════════════════════════════════════════════════════════════════
+          TABLEAU DE BORD — En-tête, indicateurs, graphiques, actions.
+          Les blocs d'alertes ci-dessus conservent volontairement leur design
+          d'origine (bannière commandes, filtres, vidanges, réservations).
+          ══════════════════════════════════════════════════════════════════ */}
 
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-          <div className="space-y-2">
-            <motion.h1
-              initial={{ x: -50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-4xl font-black tracking-tighter uppercase flex items-center gap-4"
-            >
-              <motion.span
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                className="text-5xl"
-              >
-                📊
-              </motion.span>
-              {lang === 'fr' ? 'Tableau de Bord' : 'لوحة القيادة'}
-            </motion.h1>
-            <motion.p
-              initial={{ x: -50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              className="text-blue-100 font-bold text-sm uppercase tracking-[0.3em]"
-            >
-              {lang === 'fr' ? 'Vue d\'ensemble Premium' : 'نظرة عامة مميزة'}
-            </motion.p>
-            <motion.p
-              initial={{ x: -50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.8 }}
-              className="text-blue-200 text-sm font-medium mt-3 flex items-center gap-2"
-            >
-              <span className="text-lg">🕐</span>
-              {currentTime.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-DZ', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </motion.p>
-          </div>
+      {/* En-tête */}
+      <motion.div
+        initial={{ opacity: 0, y: -14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="relative overflow-hidden rounded-3xl bg-[#0F172A] text-white p-8"
+      >
+        <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-[#DC2626]/22 blur-3xl" />
+        <div className="absolute -left-16 -bottom-24 w-64 h-64 rounded-full bg-[#0284C7]/22 blur-3xl" />
 
-          <div className="flex gap-4">
-            <div className="text-center">
-              <div className="text-3xl font-black text-white">
-                {stats.totalClients}
-              </div>
-              <div className="text-xs text-blue-200 uppercase tracking-widest">
-                {lang === 'fr' ? 'Clients' : 'العملاء'}
+        <div className="relative flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+          <div>
+            <div className="flex items-center gap-4">
+              <span className="w-14 h-14 rounded-2xl bg-[#DC2626] flex items-center justify-center shadow-lg shadow-[#DC2626]/30">
+                <BarChart3 className="w-7 h-7" />
+              </span>
+              <div>
+                <h1 className="text-3xl font-black tracking-tighter uppercase">
+                  {lang === 'fr' ? 'Tableau de bord' : 'لوحة القيادة'}
+                </h1>
+                <p className="text-white/55 font-bold uppercase text-[10px] tracking-[0.25em] mt-1.5">
+                  {lang === 'fr' ? "Vue d'ensemble de l'activité" : 'نظرة عامة على النشاط'}
+                </p>
               </div>
             </div>
+
+            <p className="mt-5 flex items-center gap-2 text-sm text-white/60 font-medium capitalize">
+              <Clock className="w-4 h-4" />
+              {currentTime.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-DZ', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                hour: '2-digit', minute: '2-digit',
+              })}
+            </p>
+          </div>
+
+          {/* Chiffres clés en un coup d'œil */}
+          <div className="grid grid-cols-3 gap-3 lg:gap-4">
+            {[
+              { label: lang === 'fr' ? 'Clients' : 'العملاء', value: stats.totalClients },
+              { label: lang === 'fr' ? 'Véhicules' : 'المركبات', value: stats.totalCars },
+              { label: lang === 'fr' ? 'Contrats' : 'العقود', value: stats.totalReservations },
+            ].map(k => (
+              <div key={k.label} className="rounded-2xl bg-white/8 border border-white/15 px-5 py-4 text-center backdrop-blur-sm">
+                <p className="text-2xl font-black leading-none">{k.value}</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/50 mt-1.5">{k.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Indicateurs principaux */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 anim-stagger">
+        {[
+          {
+            label: lang === 'fr' ? 'Réservations actives' : 'الحجوزات النشطة',
+            value: stats.activeReservations.toLocaleString('fr-DZ'),
+            hint: lang === 'fr' ? 'En cours et confirmées' : 'جارية ومؤكدة',
+            icon: <CalendarCheck className="w-5 h-5" />,
+            bar: 'bg-[#0284C7]', text: 'text-[#0284C7]',
+            onClick: () => navigate('/planificateur'),
+          },
+          {
+            label: lang === 'fr' ? 'Véhicules disponibles' : 'المركبات المتاحة',
+            value: `${stats.availableCars}/${stats.totalCars}`,
+            hint: stats.totalCars > 0
+              ? `${Math.round((stats.availableCars / stats.totalCars) * 100)} % ${lang === 'fr' ? 'de la flotte' : 'من الأسطول'}`
+              : '—',
+            icon: <CarIcon className="w-5 h-5" />,
+            bar: 'bg-emerald-500', text: 'text-emerald-600',
+            onClick: () => navigate('/vehicules'),
+          },
+          {
+            label: lang === 'fr' ? 'Revenu du mois' : 'إيرادات الشهر',
+            value: `${Math.round(stats.monthlyRevenue || 0).toLocaleString('fr-DZ')} DA`,
+            hint: lang === 'fr'
+              ? `Total : ${Math.round(stats.totalRevenue || 0).toLocaleString('fr-DZ')} DA`
+              : `الإجمالي: ${Math.round(stats.totalRevenue || 0).toLocaleString('fr-DZ')} دج`,
+            icon: <TrendingUp className="w-5 h-5" />,
+            bar: 'bg-[#0F172A]', text: 'text-[#0F172A]',
+            onClick: () => navigate('/rapports'),
+          },
+          {
+            label: lang === 'fr' ? 'Alertes maintenance' : 'تنبيهات الصيانة',
+            value: String(stats.maintenanceAlerts),
+            hint: `${criticalAlerts.length} ${lang === 'fr' ? 'critique(s)' : 'حرجة'}`,
+            icon: <AlertTriangle className="w-5 h-5" />,
+            bar: 'bg-[#DC2626]', text: 'text-[#DC2626]',
+            onClick: () => navigate('/maintenance'),
+          },
+        ].map(kpi => (
+          <button
+            key={kpi.label}
+            onClick={kpi.onClick}
+            className="relative text-left bg-white rounded-2xl border border-saas-border p-5 overflow-hidden hover-lift cursor-pointer"
+          >
+            <span className={`absolute inset-y-0 left-0 w-1 ${kpi.bar}`} />
+            <div className="flex items-start justify-between mb-3">
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-saas-text-muted leading-tight pr-2">
+                {kpi.label}
+              </p>
+              <span className={kpi.text}>{kpi.icon}</span>
+            </div>
+            <p className={`text-2xl font-black leading-tight ${kpi.text}`}>{kpi.value}</p>
+            <p className="text-[11px] text-saas-text-muted mt-1 font-semibold">{kpi.hint}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Graphiques */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Revenus par mois */}
+        <div className="bg-white rounded-3xl border border-saas-border overflow-hidden">
+          <div className="px-6 py-4 border-b border-saas-border bg-saas-bg flex items-center justify-between">
+            <h3 className="font-black uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-[#0F172A] text-white flex items-center justify-center">
+                <TrendingUp className="w-4 h-4" />
+              </span>
+              {lang === 'fr' ? 'Revenus par mois' : 'الإيرادات الشهرية'}
+            </h3>
+          </div>
+
+          <div className="p-6">
+            {(stats.revenueByMonth || []).length === 0 ? (
+              <p className="py-12 text-center text-sm font-semibold text-saas-text-muted">
+                {lang === 'fr' ? 'Aucune donnée de revenu sur la période' : 'لا توجد بيانات إيرادات'}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {stats.revenueByMonth.map((item, index) => {
+                  const max = Math.max(...stats.revenueByMonth.map(r => r.revenue), 1);
+                  const pct = Math.round((item.revenue / max) * 100);
+                  return (
+                    <div key={item.month} className="flex items-center gap-4">
+                      <span className="w-12 text-[11px] font-black uppercase tracking-wider text-saas-text-muted shrink-0">
+                        {item.month}
+                      </span>
+                      <div className="flex-1 h-3 rounded-full bg-saas-bg border border-saas-border overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pct}%` }}
+                          transition={{ duration: 0.7, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                          className="h-full rounded-full bg-linear-to-r from-[#DC2626] to-[#0284C7]"
+                        />
+                      </div>
+                      <span className="w-28 text-right text-sm font-black text-saas-text-main shrink-0">
+                        {Math.round(item.revenue).toLocaleString('fr-DZ')} DA
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Taux d'utilisation des véhicules */}
+        <div className="bg-white rounded-3xl border border-saas-border overflow-hidden">
+          <div className="px-6 py-4 border-b border-saas-border bg-saas-bg flex items-center justify-between">
+            <h3 className="font-black uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-[#0284C7] text-white flex items-center justify-center">
+                <CarIcon className="w-4 h-4" />
+              </span>
+              {lang === 'fr' ? 'Utilisation des véhicules' : 'استخدام المركبات'}
+            </h3>
+          </div>
+
+          <div className="p-6">
+            {(stats.carUtilization || []).length === 0 ? (
+              <p className="py-12 text-center text-sm font-semibold text-saas-text-muted">
+                {lang === 'fr' ? 'Aucune donnée d’utilisation' : 'لا توجد بيانات استخدام'}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {stats.carUtilization.slice(0, 6).map((car, index) => (
+                  <div key={car.carId}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-bold text-saas-text-main truncate pr-3">{car.carInfo}</span>
+                      <span className={`text-sm font-black shrink-0 ${
+                        car.utilization >= 70 ? 'text-emerald-600'
+                          : car.utilization >= 35 ? 'text-[#0284C7]' : 'text-[#DC2626]'
+                      }`}>
+                        {car.utilization}%
+                      </span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-saas-bg border border-saas-border overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(100, car.utilization)}%` }}
+                        transition={{ duration: 0.7, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                        className={`h-full rounded-full ${
+                          car.utilization >= 70 ? 'bg-emerald-500'
+                            : car.utilization >= 35 ? 'bg-[#0284C7]' : 'bg-[#DC2626]'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Enhanced Key Metrics with Better Gradients */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-        <motion.div
-          initial={{ opacity: 0, y: 30, rotateY: -15 }}
-          animate={{ opacity: 1, y: 0, rotateY: 0 }}
-          transition={{ delay: 0.4, type: "spring", stiffness: 100 }}
-          whileHover={{ scale: 1.05, rotateY: 5 }}
-          className="relative overflow-hidden bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-700 p-6 rounded-3xl text-white shadow-2xl hover:shadow-blue-500/25"
-        >
-          <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-10 translate-x-10"></div>
-          <div className="relative flex items-center justify-between">
-            <div>
-              <p className="text-white/90 text-xs font-bold uppercase tracking-[0.2em] mb-2">
-                {lang === 'fr' ? 'Réservations Actives' : 'الحجوزات النشطة'}
-              </p>
-              <p className="text-3xl font-black mb-3">{stats.activeReservations}</p>
-              <div className="flex items-center gap-2">
-                <motion.div
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  📅
-                </motion.div>
-                <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-full">
-                  {lang === 'fr' ? 'Ce mois' : 'هذا الشهر'}
-                </span>
-              </div>
-            </div>
-            <motion.div
-              animate={{ scale: [1, 1.1, 1] }}
-              transition={{ duration: 2.5, repeat: Infinity }}
-              className="text-6xl opacity-90"
+      {/* Accès rapides */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 anim-stagger">
+        {[
+          {
+            title: lang === 'fr' ? 'Nouvelle réservation' : 'حجز جديد',
+            desc: lang === 'fr' ? 'Créer un contrat de location' : 'إنشاء عقد تأجير',
+            cta: lang === 'fr' ? 'Créer' : 'إنشاء',
+            icon: <CalendarCheck className="w-5 h-5" />,
+            accent: '#DC2626',
+            to: '/planificateur',
+          },
+          {
+            title: lang === 'fr' ? 'Ajouter un véhicule' : 'إضافة مركبة',
+            desc: lang === 'fr' ? 'Étendre la flotte' : 'توسيع الأسطول',
+            cta: lang === 'fr' ? 'Ajouter' : 'إضافة',
+            icon: <CarIcon className="w-5 h-5" />,
+            accent: '#0284C7',
+            to: '/vehicules',
+          },
+          {
+            title: lang === 'fr' ? 'Bénéfices par voiture' : 'أرباح كل سيارة',
+            desc: lang === 'fr' ? 'Locations, dépenses, bénéfices' : 'الإيجارات والمصاريف والأرباح',
+            cta: lang === 'fr' ? 'Analyser' : 'تحليل',
+            icon: <PieChart className="w-5 h-5" />,
+            accent: '#0F172A',
+            to: '/gains-vehicule',
+          },
+          {
+            title: lang === 'fr' ? 'Rapports' : 'التقارير',
+            desc: lang === 'fr' ? 'Performances et statistiques' : 'الأداء والإحصائيات',
+            cta: lang === 'fr' ? 'Voir' : 'عرض',
+            icon: <BarChart3 className="w-5 h-5" />,
+            accent: '#059669',
+            to: '/rapports',
+          },
+        ].map(action => (
+          <button
+            key={action.title}
+            onClick={() => navigate(action.to)}
+            className="group relative text-left bg-white rounded-3xl border border-saas-border p-6 overflow-hidden hover-lift cursor-pointer"
+          >
+            <span className="absolute inset-x-0 top-0 h-1" style={{ background: action.accent }} />
+            <span
+              className="w-11 h-11 rounded-2xl flex items-center justify-center text-white mb-4"
+              style={{ background: action.accent }}
             >
-              🚗
-            </motion.div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 30, rotateY: -15 }}
-          animate={{ opacity: 1, y: 0, rotateY: 0 }}
-          transition={{ delay: 0.5, type: "spring", stiffness: 100 }}
-          whileHover={{ scale: 1.05, rotateY: 5 }}
-          className="relative overflow-hidden bg-gradient-to-br from-orange-400 via-red-500 to-pink-600 p-6 rounded-3xl text-white shadow-2xl hover:shadow-orange-500/25"
-        >
-          <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-10 translate-x-10"></div>
-          <div className="relative flex items-center justify-between">
-            <div>
-              <p className="text-white/90 text-xs font-bold uppercase tracking-[0.2em] mb-2">
-                {lang === 'fr' ? 'Véhicules Disponibles' : 'المركبات المتاحة'}
-              </p>
-              <p className="text-3xl font-black mb-3">
-                {stats.availableCars}/{stats.totalCars}
-              </p>
-              <div className="flex items-center gap-2">
-                <motion.div
-                  animate={{ x: [0, 5, 0] }}
-                  transition={{ duration: 1.8, repeat: Infinity }}
-                >
-                  🚙
-                </motion.div>
-                <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-full">
-                  {Math.round((stats.availableCars / stats.totalCars) * 100)}%
-                </span>
-              </div>
-            </div>
-            <motion.div
-              animate={{ scale: [1, 1.1, 1] }}
-              transition={{ duration: 2.2, repeat: Infinity }}
-              className="text-6xl opacity-90"
+              {action.icon}
+            </span>
+            <h4 className="font-black text-saas-text-main leading-tight">{action.title}</h4>
+            <p className="text-xs text-saas-text-muted mt-1 leading-relaxed">{action.desc}</p>
+            <span
+              className="mt-4 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest transition-transform group-hover:translate-x-1"
+              style={{ color: action.accent }}
             >
-              🏁
-            </motion.div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 30, rotateY: -15 }}
-          animate={{ opacity: 1, y: 0, rotateY: 0 }}
-          transition={{ delay: 0.6, type: "spring", stiffness: 100 }}
-          whileHover={{ scale: 1.05, rotateY: 5 }}
-          className="relative overflow-hidden bg-gradient-to-br from-red-500 via-rose-600 to-pink-700 p-6 rounded-3xl text-white shadow-2xl hover:shadow-red-500/25"
-        >
-          <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-10 translate-x-10"></div>
-          <div className="relative flex items-center justify-between">
-            <div>
-              <p className="text-white/90 text-xs font-bold uppercase tracking-[0.2em] mb-2">
-                {lang === 'fr' ? 'Alertes Maintenance' : 'تنبيهات الصيانة'}
-              </p>
-              <p className="text-3xl font-black mb-3">{stats.maintenanceAlerts}</p>
-              <div className="flex items-center gap-2">
-                <motion.div
-                  animate={{ rotate: [0, -10, 10, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                >
-                  ⚠️
-                </motion.div>
-                <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-full">
-                  {criticalAlerts.length} {lang === 'fr' ? 'critiques' : 'حرجة'}
-                </span>
-              </div>
-            </div>
-            <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 1.8, repeat: Infinity }}
-              className="text-6xl opacity-90"
-            >
-              🔧
-            </motion.div>
-          </div>
-        </motion.div>
+              {action.cta} →
+            </span>
+          </button>
+        ))}
       </div>
-
-      {/* Enhanced Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Revenue Chart with Better Design */}
-        <motion.div
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.7 }}
-          className="relative overflow-hidden bg-gradient-to-br from-white via-slate-50 to-gray-100 p-8 rounded-3xl border border-slate-200 shadow-xl"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-purple-500/20 rounded-full -translate-y-16 translate-x-16"></div>
-
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-8">
-              <motion.div
-                animate={{ y: [0, -5, 0] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="text-3xl"
-              >
-                📊
-              </motion.div>
-              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">
-                {lang === 'fr' ? 'Évolution des Revenus' : 'تطور الإيرادات'}
-              </h3>
-            </div>
-
-            <div className="space-y-6">
-              {stats.revenueByMonth.map((item, index) => (
-                <motion.div
-                  key={item.month}
-                  initial={{ opacity: 0, x: -30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.8 + index * 0.1 }}
-                  className="flex items-center gap-4 p-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-slate-200 hover:shadow-lg transition-all"
-                >
-                  <div className="w-12 text-lg font-black text-slate-700 bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
-                    {item.month}
-                  </div>
-                  <div className="flex-1">
-                    <div className="bg-slate-200 rounded-full h-4 overflow-hidden shadow-inner">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(item.revenue / Math.max(...stats.revenueByMonth.map(m => m.revenue))) * 100}%` }}
-                        transition={{ delay: 1 + index * 0.1, duration: 1, ease: "easeOut" }}
-                        className="h-full bg-gradient-to-r from-blue-500 via-indigo-600 to-purple-700 rounded-full shadow-lg"
-                      />
-                    </div>
-                  </div>
-                  <div className="w-24 text-right">
-                    <div className="text-lg font-black text-slate-800">
-                      {item.revenue.toLocaleString()}
-                    </div>
-                    <div className="text-xs text-slate-500 uppercase tracking-widest">
-                      DZD
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Car Utilization with Enhanced Design */}
-        <motion.div
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.8 }}
-          className="relative overflow-hidden bg-gradient-to-br from-white via-emerald-50 to-teal-100 p-8 rounded-3xl border border-emerald-200 shadow-xl"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-400/20 to-teal-500/20 rounded-full -translate-y-16 translate-x-16"></div>
-
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-8">
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 3, repeat: Infinity }}
-                className="text-3xl"
-              >
-                🚗
-              </motion.div>
-              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">
-                {lang === 'fr' ? 'Taux d\'Utilisation' : 'معدلات الاستخدام'}
-              </h3>
-            </div>
-
-            <div className="space-y-6">
-              {stats.carUtilization.map((car, index) => (
-                <motion.div
-                  key={car.carId}
-                  initial={{ opacity: 0, x: 30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.9 + index * 0.1 }}
-                  className="p-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-emerald-200 hover:shadow-lg transition-all"
-                >
-                  <div className="flex items-center gap-4">
-                    <motion.div
-                      animate={{ scale: [1, 1.1, 1] }}
-                      transition={{ duration: 2, repeat: Infinity, delay: index * 0.5 }}
-                      className="text-2xl"
-                    >
-                      {car.utilization > 80 ? '🔴' : car.utilization > 60 ? '🟠' : '🟢'}
-                    </motion.div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-bold text-slate-800">{car.carInfo}</span>
-                        <span className="text-lg font-black text-emerald-600">{car.utilization}%</span>
-                      </div>
-                      <div className="bg-emerald-200 rounded-full h-3 overflow-hidden shadow-inner">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${car.utilization}%` }}
-                          transition={{ delay: 1.1 + index * 0.1, duration: 1, ease: "easeOut" }}
-                          className={`h-full rounded-full shadow-lg ${
-                            car.utilization > 80 ? 'bg-gradient-to-r from-red-500 to-red-600' :
-                            car.utilization > 60 ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
-                            'bg-gradient-to-r from-emerald-500 to-teal-600'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Enhanced Quick Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.2 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-8"
-      >
-        <motion.div
-          whileHover={{ scale: 1.05, y: -5 }}
-          whileTap={{ scale: 0.95 }}
-          className="relative overflow-hidden bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-700 p-8 rounded-3xl text-white shadow-2xl hover:shadow-blue-500/25 text-center group"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-purple-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          <div className="relative">
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="text-6xl mb-6"
-            >
-              📅
-            </motion.div>
-            <h4 className="text-xl font-black uppercase tracking-tighter mb-3">
-              {lang === 'fr' ? 'Nouvelles Réservations' : 'حجوزات جديدة'}
-            </h4>
-            <p className="text-blue-100 text-sm mb-6 leading-relaxed">
-              {lang === 'fr' ? 'Créer une nouvelle réservation pour vos clients' : 'إنشاء حجز جديد لعملائك'}
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate('/planificateur')}
-              className="w-full py-3 bg-white/20 backdrop-blur-sm text-white rounded-2xl hover:bg-white/30 transition-all font-bold uppercase tracking-widest text-sm border border-white/30"
-            >
-              🚀 {lang === 'fr' ? 'Créer' : 'إنشاء'}
-            </motion.button>
-          </div>
-        </motion.div>
-
-        <motion.div
-          whileHover={{ scale: 1.05, y: -5 }}
-          whileTap={{ scale: 0.95 }}
-          className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-600 to-cyan-700 p-8 rounded-3xl text-white shadow-2xl hover:shadow-emerald-500/25 text-center group"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-cyan-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          <div className="relative">
-            <motion.div
-              animate={{ rotate: [0, 10, -10, 0] }}
-              transition={{ duration: 2.5, repeat: Infinity }}
-              className="text-6xl mb-6"
-            >
-              🚗
-            </motion.div>
-            <h4 className="text-xl font-black uppercase tracking-tighter mb-3">
-              {lang === 'fr' ? 'Ajouter un Véhicule' : 'إضافة مركبة'}
-            </h4>
-            <p className="text-emerald-100 text-sm mb-6 leading-relaxed">
-              {lang === 'fr' ? 'Étendre votre flotte automobile' : 'توسيع أسطولك السيارات'}
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate('/vehicules')}
-              className="w-full py-3 bg-white/20 backdrop-blur-sm text-white rounded-2xl hover:bg-white/30 transition-all font-bold uppercase tracking-widest text-sm border border-white/30"
-            >
-              ➕ {lang === 'fr' ? 'Ajouter' : 'إضافة'}
-            </motion.button>
-          </div>
-        </motion.div>
-
-        <motion.div
-          whileHover={{ scale: 1.05, y: -5 }}
-          whileTap={{ scale: 0.95 }}
-          className="relative overflow-hidden bg-gradient-to-br from-orange-500 via-red-600 to-pink-700 p-8 rounded-3xl text-white shadow-2xl hover:shadow-orange-500/25 text-center group"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-400/20 to-pink-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          <div className="relative">
-            <motion.div
-              animate={{ scale: [1, 1.1, 1] }}
-              transition={{ duration: 1.8, repeat: Infinity }}
-              className="text-6xl mb-6"
-            >
-              📊
-            </motion.div>
-            <h4 className="text-xl font-black uppercase tracking-tighter mb-3">
-              {lang === 'fr' ? 'Rapports Détaillés' : 'تقارير مفصلة'}
-            </h4>
-            <p className="text-orange-100 text-sm mb-6 leading-relaxed">
-              {lang === 'fr' ? 'Analyser vos performances et statistiques' : 'تحليل أدائك والإحصائيات'}
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate('/rapports')}
-              className="w-full py-3 bg-white/20 backdrop-blur-sm text-white rounded-2xl hover:bg-white/30 transition-all font-bold uppercase tracking-widest text-sm border border-white/30"
-            >
-              📈 {lang === 'fr' ? 'Voir' : 'عرض'}
-            </motion.button>
-          </div>
-        </motion.div>
-      </motion.div>
     </div>
   );
 };

@@ -8,6 +8,11 @@ import { ReservationsService } from '../services/ReservationsService';
 import { uploadInspectionImage } from '../services/uploadInspectionImage';
 import { ClientModal } from './ClientModal';
 import { supabase } from '../supabase';
+import {
+  InspectionChecklist, ChecklistItemComposer, InspectionPhotoUploader,
+  FuelLevelPicker, InspectionPhoto,
+} from './InspectionChecklist';
+import { computeTimbre, timbreLabel } from '../utils/currency';
 
 // Signature Pad Component
 const SignaturePad: React.FC<{
@@ -327,6 +332,18 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
       const advancePayment = step6.advancePayment || 0;
       const remainingPayment = Math.max(0, totalPrice - advancePayment);
 
+      // Timbre fiscal (droit de timbre) éventuellement activé à la dernière étape
+      const timbreEnabled = !!(step6 as any).timbreEnabled;
+      const timbreRate = timbreEnabled ? ((step6 as any).timbreRate ?? null) : null;
+      const timbreAmount = timbreEnabled ? ((step6 as any).timbreAmount ?? 0) : 0;
+
+      // Statut de création : si l'agent a renseigné quoi que ce soit dans
+      // l'étape « Inspection Départ » (check-list, kilométrage, carburant,
+      // lieu, note, photo, signature), la réservation part directement en
+      // « confirmed ». Sinon elle reste « pending ».
+      const inspectionTouched = !!(formData as any).inspectionTouched;
+      const creationStatus: 'pending' | 'confirmed' = inspectionTouched ? 'confirmed' : 'pending';
+
       // Create reservation using ReservationsService
       // Skip client/car validation if inspectionMode (for both pending and accepted reservations)
       if (!(inspectionMode && initialData)) {
@@ -362,13 +379,16 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           totalPrice: totalPrice,
           advancePayment: advancePayment,
           remainingPayment: remainingPayment,
+          timbreEnabled,
+          timbreRate,
+          timbreAmount,
         });
       } else {
         // Create new reservation
+        // Déclaré hors du try : le bloc catch le journalise aussi.
+        let workerFullName: string | null = null;
         try {
           // Fetch worker's full name from database using email
-          let workerFullName: string | null = null;
-          
           if (user?.email) {
             try {
               console.log('🔍 Fetching worker by email:', user.email);
@@ -418,8 +438,14 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
             deposit: formData.step2?.selectedCar?.deposit || 0,
             advancePayment: advancePayment,
             remainingPayment: remainingPayment,
-            status: 'pending', // save as pending until confirmed
+            // « confirmed » si l'inspection de départ a été renseignée,
+            // « pending » si l'agent n'a rien touché sur cet écran.
+            status: creationStatus,
             notes: formData.step6?.notes || '',
+            // Timbre fiscal
+            timbreEnabled,
+            timbreRate,
+            timbreAmount,
             // Caution and Assurance fields
             cautionAmountDzd: (formData.step6 as any)?.caution_amount_dzd || formData.step2?.selectedCar?.deposit || 0,
             cautionCurrency: (formData.step6 as any)?.cautionCurrency || 'DZD',
@@ -1243,7 +1269,8 @@ export const Step3DepartureInspection: React.FC<{
   });
   const [selectedInspectionLocation, setSelectedInspectionLocation] = useState('');
   const [notes, setNotes] = useState('');
-  const [photos, setPhotos] = useState<{ url: string; type: string; file?: File }[]>([]);
+  const [photos, setPhotos] = useState<InspectionPhoto[]>([]);
+  const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [signature, setSignature] = useState('');
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
@@ -1252,6 +1279,18 @@ export const Step3DepartureInspection: React.FC<{
   const [newCustomItem, setNewCustomItem] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('securite');
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ show: boolean; itemId: string | null; itemName: string }>({ show: false, itemId: null, itemName: '' });
+
+  /**
+   * Trace toute intervention de l'utilisateur sur cet ecran (case cochee,
+   * kilometrage saisi, carburant, lieu, note, photo, signature).
+   * Si l'inspection a ete touchee, la reservation est creee directement en
+   * statut « confirmed » ; sinon elle reste « pending ».
+   */
+  const markTouched = React.useCallback(() => {
+    setFormData(prev => (prev as any).inspectionTouched
+      ? prev
+      : ({ ...prev, inspectionTouched: true } as any));
+  }, [setFormData]);
 
   // Load agencies from database on component mount
   useEffect(() => {
@@ -1369,6 +1408,7 @@ export const Step3DepartureInspection: React.FC<{
   const initializedInspectionRef = React.useRef(false);
 
   const toggleChecklistItem = (itemId: string) => {
+    markTouched();
     setChecklistResponses(prev => ({
       ...prev,
       [itemId]: !prev[itemId]
@@ -1520,10 +1560,10 @@ export const Step3DepartureInspection: React.FC<{
     }
   };
 
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: string) => {
-    const file = event.target.files?.[0];
+  const handlePhotoUpload = async (file: File, type: string) => {
     if (!file) return;
-
+    markTouched();
+    setUploadingType(type);
     try {
       const result = await uploadInspectionImage(file, undefined, type);
       if (result.success && result.url) {
@@ -1534,33 +1574,16 @@ export const Step3DepartureInspection: React.FC<{
     } catch (error) {
       console.error('Error uploading photo:', error);
       alert(lang === 'fr' ? 'Erreur lors du téléchargement' : 'خطأ في التحميل');
+    } finally {
+      setUploadingType(null);
     }
   };
 
   const removePhoto = (index: number) => {
+    markTouched();
     setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
-  const inspectionCategories = [
-    {
-      key: 'securite',
-      title: lang === 'fr' ? 'Sécurité' : 'الأمان',
-      icon: '🛡️',
-      items: groupedItems.securite || []
-    },
-    {
-      key: 'equipements',
-      title: lang === 'fr' ? 'Équipements' : 'المعدات',
-      icon: '🔧',
-      items: groupedItems.equipements || []
-    },
-    {
-      key: 'confort',
-      title: lang === 'fr' ? 'Confort & Propreté' : 'الراحة والنظافة',
-      icon: '✨',
-      items: groupedItems.confort || []
-    }
-  ];
 
   // Update formData with inspection data
   useEffect(() => {
@@ -1618,126 +1641,149 @@ export const Step3DepartureInspection: React.FC<{
     // Intentionally only depend on checklistItems to avoid reacting to formData changes
   }, [checklistItems]);
 
-  return (
-    <div className="space-y-8">
-      <h3 className="text-2xl font-black text-slate-900">
-        🔍 {lang === 'fr' ? 'Inspection de Départ' : 'فحص المغادرة'}
-      </h3>
+  const selectedCarInfo = formData.step2?.selectedCar || (formData as any).car;
+  const inspectionTouched = !!(formData as any).inspectionTouched;
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Vehicle Info */}
-        <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
-          <h4 className="text-lg font-black text-slate-900 mb-4">
-            🚗 {lang === 'fr' ? 'Informations Véhicule' : 'معلومات المركبة'}
-          </h4>
-          {(formData.step2?.selectedCar || formData.car) && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
+  return (
+    <div className="space-y-7">
+      {/* ── En-tête ─────────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl bg-[#0F172A] text-white p-7">
+        <div className="absolute -right-16 -top-20 w-56 h-56 rounded-full bg-[#DC2626]/25 blur-3xl" />
+        <div className="absolute -left-12 -bottom-20 w-52 h-52 rounded-full bg-[#0284C7]/20 blur-3xl" />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <span className="w-12 h-12 rounded-2xl bg-[#DC2626] flex items-center justify-center shadow-lg shadow-[#DC2626]/30">
+              <Search className="w-6 h-6" />
+            </span>
+            <div>
+              <h3 className="text-2xl font-black uppercase tracking-tighter">
+                {lang === 'fr' ? 'Inspection de départ' : 'فحص المغادرة'}
+              </h3>
+              <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.25em] mt-1">
+                {lang === 'fr' ? 'État du véhicule à la remise des clés' : 'حالة المركبة عند تسليم المفاتيح'}
+              </p>
+            </div>
+          </div>
+
+          {/* Indique clairement l'effet du remplissage sur le statut créé */}
+          <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-[11px] font-black uppercase tracking-wider ${
+            inspectionTouched
+              ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
+              : 'bg-white/10 border-white/20 text-white/60'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${inspectionTouched ? 'bg-emerald-400' : 'bg-white/40'}`} />
+            {inspectionTouched
+              ? (lang === 'fr' ? 'Réservation → Confirmée' : 'الحجز ← مؤكد')
+              : (lang === 'fr' ? 'Réservation → En attente' : 'الحجز ← في الانتظار')}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Véhicule + relevés ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Fiche véhicule */}
+        <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+            <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-lg bg-[#0F172A] text-white flex items-center justify-center">
+                <CarIcon className="w-4 h-4" />
+              </span>
+              {lang === 'fr' ? 'Véhicule' : 'المركبة'}
+            </h4>
+          </div>
+          {selectedCarInfo ? (
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-3.5">
                 <img
-                  src={(formData.step2?.selectedCar || formData.car)?.images?.[0]}
-                  alt={`${(formData.step2?.selectedCar || formData.car)?.brand} ${(formData.step2?.selectedCar || formData.car)?.model}`}
-                  className="w-16 h-12 rounded-lg object-cover"
+                  src={selectedCarInfo?.images?.[0]}
+                  alt={`${selectedCarInfo?.brand} ${selectedCarInfo?.model}`}
+                  className="w-20 h-16 rounded-xl object-cover border border-saas-border shrink-0"
                 />
-                <div>
-                  <p className="font-bold text-lg">{(formData.step2?.selectedCar || formData.car)?.brand} {(formData.step2?.selectedCar || formData.car)?.model}</p>
-                  <p className="text-slate-600">{(formData.step2?.selectedCar || formData.car)?.registration}</p>
+                <div className="min-w-0">
+                  <p className="font-black text-saas-text-main truncate">
+                    {selectedCarInfo?.brand} {selectedCarInfo?.model}
+                  </p>
+                  <p className="text-[#DC2626] font-bold text-sm">{selectedCarInfo?.registration}</p>
                 </div>
               </div>
-              <div className="space-y-2 text-sm border-t border-slate-200 pt-3">
-                <div className="flex justify-between">
-                  <span className="text-slate-600">📋 {lang === 'fr' ? 'Immatriculation' : 'لوحة الترخيص'}:</span>
-                  <span className="font-bold">{(formData.step2?.selectedCar || formData.car)?.registration}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">🎨 {lang === 'fr' ? 'Couleur' : 'اللون'}:</span>
-                  <span className="font-bold">{(formData.step2?.selectedCar || formData.car)?.color}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">📅 {lang === 'fr' ? 'Année' : 'السنة'}:</span>
-                  <span className="font-bold">{(formData.step2?.selectedCar || formData.car)?.year}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">⛽ {lang === 'fr' ? 'Énergie' : 'الوقود'}:</span>
-                  <span className="font-bold">{(formData.step2?.selectedCar || formData.car)?.energy}</span>
-                </div>
+              <div className="space-y-1.5 pt-3 border-t border-saas-border">
+                {[
+                  { l: lang === 'fr' ? 'Couleur' : 'اللون', v: selectedCarInfo?.color },
+                  { l: lang === 'fr' ? 'Année' : 'السنة', v: selectedCarInfo?.year },
+                  { l: lang === 'fr' ? 'Énergie' : 'الوقود', v: selectedCarInfo?.energy },
+                  { l: lang === 'fr' ? 'Transmission' : 'ناقل الحركة', v: selectedCarInfo?.transmission },
+                ].map(row => (
+                  <div key={row.l} className="flex justify-between text-sm">
+                    <span className="text-saas-text-muted">{row.l}</span>
+                    <span className="font-bold text-saas-text-main">{row.v || '—'}</span>
+                  </div>
+                ))}
               </div>
             </div>
+          ) : (
+            <p className="p-6 text-sm text-saas-text-muted text-center">
+              {lang === 'fr' ? 'Aucun véhicule sélectionné.' : 'لم يتم اختيار مركبة.'}
+            </p>
           )}
         </div>
 
-        {/* Basic Inspection Info */}
-        <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
-          <h4 className="text-lg font-black text-slate-900 mb-4">
-            📊 {lang === 'fr' ? 'Informations de Base' : 'المعلومات الأساسية'}
-          </h4>
-          <div className="space-y-4">
+        {/* Relevés */}
+        <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+            <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-lg bg-[#0284C7] text-white flex items-center justify-center">
+                <Fuel className="w-4 h-4" />
+              </span>
+              {lang === 'fr' ? 'Relevés au départ' : 'القراءات عند المغادرة'}
+            </h4>
+          </div>
+          <div className="p-5 space-y-5">
             <div>
-              <label className="block font-bold text-slate-900 mb-2">
-                🛣️ {lang === 'fr' ? 'Kilométrage au Départ' : 'عداد الكيلومترات عند المغادرة'}
+              <label className="label-saas">
+                {lang === 'fr' ? 'Kilométrage au départ' : 'عداد الكيلومترات عند المغادرة'}
               </label>
-              <input
-                type="number"
-                value={mileage}
-                onChange={(e) => setMileage(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold text-slate-900"
-                placeholder="0"
-                min="0"
-              />
-              {/* Always show current car mileage as reference */}
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  value={mileage}
+                  onChange={(e) => { markTouched(); setMileage(e.target.value); }}
+                  className="input-saas pr-12 font-bold"
+                  placeholder="0"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">km</span>
+              </div>
               {_carMileage !== undefined && _carMileage > 0 && (
-                <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg">
-                  <span className="text-blue-500 text-xs">📌</span>
-                  <p className="text-xs font-bold text-blue-700">
-                    {lang === 'fr'
-                      ? `Kilométrage actuel du véhicule : ${_carMileage.toLocaleString()} km`
-                      : `عداد الكيلومترات الحالي للمركبة: ${_carMileage.toLocaleString()} كم`}
-                  </p>
-                </div>
+                <p className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0284C7]/8 border border-[#0284C7]/20 text-[11px] font-bold text-[#0284C7]">
+                  <AlertTriangle size={12} />
+                  {lang === 'fr'
+                    ? `Compteur actuel du véhicule : ${_carMileage.toLocaleString('fr-DZ')} km`
+                    : `العداد الحالي للمركبة: ${_carMileage.toLocaleString('fr-DZ')} كم`}
+                </p>
               )}
             </div>
 
             <div>
-              <label className="block font-bold text-slate-900 mb-3">
-                ⛽ {lang === 'fr' ? 'Niveau de Carburant' : 'مستوى الوقود'}
-              </label>
-              <div className="grid grid-cols-5 gap-2">
-                {[
-                  { value: 'full', label: 'PLEIN' },
-                  { value: 'half', label: '1/2' },
-                  { value: 'quarter', label: '1/4' },
-                  { value: 'eighth', label: '1/8' },
-                  { value: 'empty', label: 'VIDE' }
-                ].map((level) => (
-                  <button
-                    key={level.value}
-                    onClick={() => setFuelLevel(level.value as any)}
-                    className={`p-2 text-xs border rounded-lg font-bold transition-colors ${
-                      fuelLevel === level.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    {level.label}
-                  </button>
-                ))}
-              </div>
+              <label className="label-saas">{lang === 'fr' ? 'Niveau de carburant' : 'مستوى الوقود'}</label>
+              <FuelLevelPicker
+                value={fuelLevel}
+                onChange={(v) => { markTouched(); setFuelLevel(v); }}
+                accent="#0284C7"
+              />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-900 mb-2">
-                📍 {lang === 'fr' ? 'Lieu d\'Inspection' : 'مكان الفحص'}
-              </label>
+              <label className="label-saas">{lang === 'fr' ? "Lieu d'inspection" : 'مكان الفحص'}</label>
               <select
                 value={selectedInspectionLocation}
-                onChange={(e) => setSelectedInspectionLocation(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => { markTouched(); setSelectedInspectionLocation(e.target.value); }}
+                className="input-saas cursor-pointer"
                 disabled={isLoadingAgencies}
               >
                 <option value="">
-                  {isLoadingAgencies 
-                    ? (lang === 'fr' ? 'Chargement...' : 'جاري التحميل...') 
-                    : (lang === 'fr' ? 'Sélectionner une agence...' : 'اختر وكالة...')
-                  }
+                  {isLoadingAgencies
+                    ? (lang === 'fr' ? 'Chargement…' : 'جاري التحميل…')
+                    : (lang === 'fr' ? 'Sélectionner une agence…' : 'اختر وكالة…')}
                 </option>
                 {agencies.map((agency) => (
                   <option key={agency.id} value={`${agency.name} - ${agency.city}`}>
@@ -1750,193 +1796,101 @@ export const Step3DepartureInspection: React.FC<{
         </div>
 
         {/* Notes */}
-        <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
-          <h4 className="text-lg font-black text-slate-900 mb-4">
-            📝 {lang === 'fr' ? 'Notes d\'Inspection (Optionnel)' : 'ملاحظات الفحص (اختياري)'}
-          </h4>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            rows={8}
-            placeholder={lang === 'fr' ? 'État général du véhicule, observations particulières...' : 'الحالة العامة للمركبة، ملاحظات خاصة...'}
+        <div className="rounded-2xl border border-saas-border bg-white overflow-hidden flex flex-col">
+          <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+            <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-lg bg-[#0F172A] text-white flex items-center justify-center">
+                <PenTool className="w-4 h-4" />
+              </span>
+              {lang === 'fr' ? "Notes d'inspection" : 'ملاحظات الفحص'}
+              <span className="text-[10px] font-bold text-saas-text-muted normal-case tracking-normal">
+                ({lang === 'fr' ? 'optionnel' : 'اختياري'})
+              </span>
+            </h4>
+          </div>
+          <div className="p-5 flex-1 flex">
+            <textarea
+              value={notes}
+              onChange={(e) => { markTouched(); setNotes(e.target.value); }}
+              className="input-saas flex-1 resize-none min-h-[220px]"
+              placeholder={lang === 'fr'
+                ? 'État général, rayures, impacts, observations particulières…'
+                : 'الحالة العامة، الخدوش، الملاحظات الخاصة…'}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Check-list (rendu de référence partagé) ─────────────────────── */}
+      {isLoadingChecklist ? (
+        <div className="h-40 rounded-2xl vel-skeleton" />
+      ) : (
+        <div className="space-y-4">
+          <InspectionChecklist
+            lang={lang}
+            items={checklistItems}
+            responses={checklistResponses}
+            onToggle={toggleChecklistItem}
+            onDeleteItem={removeChecklistItem}
+          />
+          <ChecklistItemComposer
+            lang={lang}
+            category={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            value={newCustomItem}
+            onValueChange={setNewCustomItem}
+            onAdd={addCustomChecklistItem}
           />
         </div>
-      </div>
+      )}
 
-      {/* Inspection Checklist */}
-      <div className="space-y-6">
-        <h4 className="text-xl font-black text-slate-900">
-          ✅ {lang === 'fr' ? 'Contrôle d\'État du Véhicule' : 'فحص حالة المركبة'}
-        </h4>
+      {/* ── Photos ──────────────────────────────────────────────────────── */}
+      <InspectionPhotoUploader
+        lang={lang}
+        photos={photos}
+        onUpload={handlePhotoUpload}
+        onRemove={removePhoto}
+        uploadingType={uploadingType}
+        title={lang === 'fr' ? "Photos d'état initial" : 'صور الحالة الأولية'}
+      />
 
-        {inspectionCategories.map((category) => (
-          <div key={category.key} className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
-            <h5 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
-              {category.icon} {category.title}
-            </h5>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-              {category.items.map((item) => (
-                <div
-                  key={item.id}
-                  className={`flex items-center gap-3 p-3 border-2 rounded-lg transition-all ${
-                    checklistResponses[item.id]
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-red-300 bg-red-50'
-                  }`}
-                >
-                  <div
-                    onClick={() => toggleChecklistItem(item.id)}
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer ${
-                      checklistResponses[item.id] ? 'border-green-500 bg-green-500' : 'border-red-300 bg-red-300'
-                    }`}
-                  >
-                    {checklistResponses[item.id] && <Check className="w-3 h-3 text-white" />}
-                  </div>
-                  <span className={`font-bold flex-1 ${checklistResponses[item.id] ? 'text-green-800' : 'text-red-800'}`}>
-                    {item.item_name}
-                  </span>
-                  <button
-                    onClick={() => removeChecklistItem(item.id)}
-                    className="text-red-500 hover:text-red-700 p-1"
-                    title={lang === 'fr' ? 'Supprimer cet élément' : 'حذف هذا العنصر'}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Add custom item */}
-            <div className="flex gap-2 mt-4">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="securite">🛡️ Sécurité</option>
-                <option value="equipements">🔧 Équipements</option>
-                <option value="confort">✨ Confort</option>
-              </select>
-              <input
-                type="text"
-                value={newCustomItem}
-                onChange={(e) => setNewCustomItem(e.target.value)}
-                placeholder={lang === 'fr' ? 'Ajouter un élément personnalisé...' : 'إضافة عنصر مخصص...'}
-                className="flex-1 p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                onKeyPress={(e) => e.key === 'Enter' && addCustomChecklistItem()}
-              />
-              <button
-                onClick={addCustomChecklistItem}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Photo Upload */}
-      <div className="bg-orange-50 rounded-2xl p-6 border border-orange-200">
-        <h4 className="text-lg font-black text-orange-900 mb-4">
-          📸 {lang === 'fr' ? 'Photos d\'État Initial' : 'صور الحالة الأولية'}
-        </h4>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          {/* Upload buttons */}
-          {[
-            { label: 'Extérieur Avant', type: 'exterior_front' },
-            { label: 'Intérieur', type: 'interior' },
-            { label: 'Extérieur Arrière', type: 'exterior_rear' },
-            { label: 'Autres', type: 'other' }
-          ].map((item) => (
-            <div key={item.type} className="relative">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handlePhotoUpload(e, item.type)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-              <div className="aspect-square border-2 border-dashed border-orange-300 rounded-lg flex flex-col items-center justify-center hover:bg-orange-100 transition-colors">
-                <Upload className="w-8 h-8 text-orange-500 mb-2" />
-                <span className="text-sm text-orange-700 font-bold text-center">
-                  {lang === 'fr' ? item.label : (item.label === 'Extérieur Avant' ? 'الخارج الأمامي' : item.label === 'Intérieur' ? 'الداخل' : item.label === 'Extérieur Arrière' ? 'الخارج الخلفي' : 'أخرى')}
-                </span>
-              </div>
-            </div>
-          ))}
+      {/* ── Signature ───────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+        <div className="px-5 py-4 border-b border-saas-border bg-saas-bg">
+          <h4 className="font-black uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-[#0F172A] text-white flex items-center justify-center">
+              <PenTool className="w-4 h-4" />
+            </span>
+            {lang === 'fr' ? 'Signature du client' : 'توقيع العميل'}
+          </h4>
         </div>
 
-        {/* Display uploaded photos */}
-        {photos.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {photos.map((photo, index) => {
-              // Resolve possible stored path into absolute URL
-              const resolveUrl = (u?: string) => {
-                if (!u) return u;
-                if (u.startsWith('http')) return u;
-                const base = import.meta.env.VITE_SUPABASE_URL || '';
-                if (!base) return u;
-                // If it's already a storage path
-                if (u.startsWith('/')) return `${base}${u}`;
-                if (u.includes('/storage/v1')) return `${base}${u}`;
-                // If it already contains 'inspection' path, just prefix host
-                if (u.includes('inspection')) return `${base}/storage/v1/object/public/${u.replace(/^\/+/, '')}`;
-                // default: assume it's a filename stored in inspection bucket
-                return `${base}/storage/v1/object/public/inspection/${u}`;
-              };
-
-              const src = resolveUrl(photo.url);
-
-              return (
-                <div key={index} className="relative group">
-                  <img
-                    src={src}
-                    alt={`Photo ${index + 1}`}
-                    className="w-full aspect-square object-cover rounded-lg border border-orange-200"
-                  />
-                  <button
-                    onClick={() => removePhoto(index)}
-                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              );
-            })}
+        <div className="p-6 flex flex-col items-center gap-5">
+          <div className="rounded-2xl border-2 border-dashed border-saas-border bg-saas-bg p-4">
+            <SignaturePad
+              lang={lang}
+              initialSignature={signature}
+              onSignatureChange={(s) => { markTouched(); setSignature(s); }}
+            />
           </div>
-        )}
-      </div>
 
-      {/* Signature Section */}
-      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-6 border border-purple-200">
-        <h4 className="text-lg font-black text-purple-900 mb-4">
-          ✍️ {lang === 'fr' ? 'Signature du Client' : 'توقيع العميل'}
-        </h4>
-
-        <div className="flex flex-col items-center space-y-4">
-            <div className="bg-white border-2 border-dashed border-purple-300 rounded-2xl p-4 shadow-inner">
-            <SignaturePad lang={lang} initialSignature={signature} onSignatureChange={setSignature} />
-          </div>
-          {/* preview raw signature in case canvas doesn't render URL */}
           {signature && !signature.startsWith('data:') && (
-            <div className="mt-2">
-              <img src={signature} alt="signature" className="max-w-full h-auto border" />
-            </div>
+            <img src={signature} alt="signature" className="max-w-full h-auto border border-saas-border rounded-lg" />
           )}
 
-          <div className="flex items-center gap-3">
+          <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
               id="signature-confirm"
-              className="w-5 h-5 text-purple-600 border-purple-300 rounded focus:ring-purple-500"
+              onChange={markTouched}
+              className="w-5 h-5 rounded border-saas-border accent-[#DC2626] cursor-pointer"
             />
-            <label htmlFor="signature-confirm" className="text-purple-900 font-bold text-sm">
-              {lang === 'fr' ? 'Je confirme avoir inspecté le véhicule et accepte son état actuel' : 'أؤكد أنني قمت بفحص المركبة وأقبل حالتها الحالية'}
-            </label>
-          </div>
+            <span className="text-saas-text-main font-bold text-sm">
+              {lang === 'fr'
+                ? "Je confirme avoir inspecté le véhicule et accepte son état actuel"
+                : 'أؤكد أنني قمت بفحص المركبة وأقبل حالتها الحالية'}
+            </span>
+          </label>
         </div>
       </div>
 
@@ -2361,6 +2315,29 @@ export const Step5AdditionalServices: React.FC<{
         setLoadingServices(true);
         const dbServices = await DatabaseService.getServices();
         setServices(dbServices);
+
+        // Services obligatoires : cochés automatiquement dès l'arrivée sur
+        // l'étape, sans écraser une sélection déjà faite.
+        const mandatory = dbServices.filter((s: any) => s.isMandatory);
+        if (mandatory.length > 0) {
+          setFormData(prev => {
+            const current = prev.step5?.additionalServices || [];
+            const missing = mandatory.filter((m: any) =>
+              !current.some((c: any) => c.id === m.id || (c.name && c.name === m.name))
+            );
+            if (missing.length === 0) return prev;
+            return {
+              ...prev,
+              step5: {
+                ...prev.step5,
+                additionalServices: [
+                  ...current,
+                  ...missing.map((m: any) => ({ ...m, selected: true, isMandatory: true })),
+                ],
+              },
+            } as any;
+          });
+        }
       } catch (err) {
         console.error('Error loading services:', err);
         setServices([]);
@@ -2453,6 +2430,9 @@ export const Step5AdditionalServices: React.FC<{
   };
 
   const toggleService = (service: any) => {
+    // Un service obligatoire ne peut pas être décoché.
+    if (service.isMandatory) return;
+
     const currentServices = formData.step5?.additionalServices || [];
     const isSelected = currentServices.some(s => servicesEqual(service, s) || servicesEqual(s, service));
 
@@ -2597,7 +2577,14 @@ export const Step5AdditionalServices: React.FC<{
 
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h4 className="font-bold text-lg text-slate-900">{service.name}</h4>
+                    <h4 className="font-bold text-lg text-slate-900 flex items-center gap-2 flex-wrap">
+                      {service.name}
+                      {service.isMandatory && (
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#DC2626] bg-[#DC2626]/10 border border-[#DC2626]/25 px-2 py-0.5 rounded-full">
+                          {lang === 'fr' ? 'Obligatoire' : 'إلزامي'}
+                        </span>
+                      )}
+                    </h4>
                     <p className="text-slate-600 text-sm mb-2">{service.description}</p>
                     <p className="font-bold text-green-700">{service.price.toLocaleString()} DA</p>
                   </div>
@@ -2905,7 +2892,10 @@ export const Step6FinalPricing: React.FC<{
   // Assurance Serenity states
   const [assuranceEnabled, setAssuranceEnabled] = useState(false);
   const [assurancePercentage, setAssurancePercentage] = useState<number | ''>('');
-  
+
+  // Timbre fiscal (droit de timbre) — barème par tranche de 100 DA
+  const [timbreEnabled, setTimbreEnabled] = useState(false);
+
   const hasInitialized = React.useRef(false);
 
   // TVA rates options
@@ -2962,6 +2952,9 @@ export const Step6FinalPricing: React.FC<{
       // Initialize assurance fields
       setAssuranceEnabled((formData.step6 as any).assuranceEnabled || false);
       setAssurancePercentage((formData.step6 as any).assurancePercentage || '');
+
+      // Timbre fiscal
+      setTimbreEnabled((formData.step6 as any).timbreEnabled || false);
     }
   }, [(formData as any).id]); // Reinitialize when editing a different reservation
 
@@ -3029,10 +3022,17 @@ export const Step6FinalPricing: React.FC<{
   const totalPrice = isManualTotal && manualTotal !== '' ? Math.max(0, Math.round(Number(manualTotal))) : computedPrice;
   
   // Calculate assurance amount
-  const assuranceAmount = assuranceEnabled && assurancePercentage !== '' 
+  const assuranceAmount = assuranceEnabled && assurancePercentage !== ''
     ? Math.round(totalPrice * (Number(assurancePercentage) / 100))
     : 0;
-  const finalTotal = totalPrice + assuranceAmount;
+
+  // Timbre fiscal : calculé sur le total location + assurance Serenity.
+  // Barème par tranche de 100 DA — 1 % / 1,5 % / 2 % selon le montant.
+  const timbreBase = totalPrice + assuranceAmount;
+  const timbre = computeTimbre(timbreBase);
+  const timbreAmount = timbreEnabled ? timbre.amount : 0;
+
+  const finalTotal = totalPrice + assuranceAmount + timbreAmount;
 
   // Console logging for debugging
   React.useEffect(() => {
@@ -3068,15 +3068,19 @@ export const Step6FinalPricing: React.FC<{
         assurancePercentage: assurancePercentage,
         assuranceAmount: assuranceAmount,
         finalTotal: finalTotal,
+        // Timbre fiscal (repris sur le contrat imprimé)
+        timbreEnabled: timbreEnabled,
+        timbreRate: timbreEnabled ? timbre.rate : null,
+        timbreAmount: timbreAmount,
         // Caution amount in DZD for database
-        caution_amount_dzd: cautionCurrency === 'EUR' && euroAmount && euroRate 
+        caution_amount_dzd: cautionCurrency === 'EUR' && euroAmount && euroRate
           ? Math.round(Number(euroAmount) * Number(euroRate))
           : (editedDeposit !== '' ? Number(editedDeposit) : deposit),
       },
       deposit: deposit,
       totalPrice: totalPrice
     }));
-  }, [totalPrice, isManualTotal, manualTotal, tvaEnabled, tvaAmount, cautionEnabled, cautionCurrency, euroAmount, euroRate, assuranceEnabled, assurancePercentage, assuranceAmount, finalTotal, deposit, editedDeposit]);
+  }, [totalPrice, isManualTotal, manualTotal, tvaEnabled, tvaAmount, cautionEnabled, cautionCurrency, euroAmount, euroRate, assuranceEnabled, assurancePercentage, assuranceAmount, timbreEnabled, timbreAmount, timbre.rate, finalTotal, deposit, editedDeposit]);
 
   return (
     <div className="space-y-8">
@@ -3696,7 +3700,7 @@ export const Step6FinalPricing: React.FC<{
                   {assuranceAmount > 0 && (
                     <div className="p-2 bg-purple-50 rounded border border-purple-200">
                       <p className="text-sm text-purple-700">
-                        {lang === 'fr' ? 'Montant Assurance:' : 'مبلغ التأمين:'} 
+                        {lang === 'fr' ? 'Montant Assurance:' : 'مبلغ التأمين:'}
                         <span className="font-bold ml-2">{assuranceAmount.toLocaleString()} DA</span>
                       </p>
                     </div>
@@ -3704,6 +3708,74 @@ export const Step6FinalPricing: React.FC<{
                 </div>
               )}
             </div>
+
+            {/* ── TIMBRE FISCAL (droit de timbre) ─────────────────────── */}
+            <div className="border-t border-indigo-200 pt-3 mt-3">
+              <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={timbreEnabled}
+                  onChange={(e) => setTimbreEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded border-saas-border accent-[#DC2626] cursor-pointer"
+                />
+                <span className="font-bold text-[#DC2626]">
+                  {lang === 'fr' ? '🧾 Timbre fiscal' : '🧾 الطابع الجبائي'}
+                </span>
+              </label>
+
+              <AnimatePresence initial={false}>
+                {timbreEnabled && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="ml-6 space-y-2">
+                      <div className="rounded-lg border border-[#DC2626]/25 bg-[#DC2626]/5 p-3 space-y-1.5">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-saas-text-muted">
+                            {lang === 'fr' ? 'Base de calcul' : 'أساس الحساب'}
+                          </span>
+                          <span className="font-bold text-saas-text-main">{timbreBase.toLocaleString('fr-DZ')} DA</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-saas-text-muted">
+                            {lang === 'fr' ? 'Barème appliqué' : 'التعريفة المطبقة'}
+                          </span>
+                          <span className="font-bold text-[#DC2626] text-right">{timbreLabel(timbreBase, lang)}</span>
+                        </div>
+                        <div className="flex justify-between text-base border-t border-[#DC2626]/20 pt-1.5">
+                          <span className="font-bold text-saas-text-main">
+                            {lang === 'fr' ? 'Montant du timbre' : 'مبلغ الطابع'}
+                          </span>
+                          <span className="font-black text-[#DC2626]">{timbreAmount.toLocaleString('fr-DZ')} DA</span>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-saas-text-muted leading-relaxed">
+                        {lang === 'fr'
+                          ? 'Barème : 300 → 30 000 DA = 1 DA / 100 DA (1 %) · 30 001 → 100 000 DA = 1,5 DA / 100 DA (1,5 %) · au-delà de 100 000 DA = 2 DA / 100 DA (2 %). Le timbre apparaît sur le contrat imprimé.'
+                          : 'التعريفة: 300 → 30000 دج = 1 دج/100 دج · 30001 → 100000 دج = 1.5 دج/100 دج · أكثر من 100000 دج = 2 دج/100 دج. يظهر الطابع في العقد المطبوع.'}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Total général incluant assurance + timbre */}
+            {(assuranceAmount > 0 || timbreAmount > 0) && (
+              <div className="border-t border-indigo-200 pt-3 mt-3 flex justify-between items-center">
+                <span className="font-black text-indigo-900">
+                  {lang === 'fr' ? 'TOTAL À PAYER' : 'الإجمالي المستحق'}
+                </span>
+                <span className="text-xl font-black text-indigo-600">
+                  {finalTotal.toLocaleString('fr-DZ')} DA
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Right Column - Duration & Payment */}
@@ -3749,7 +3821,10 @@ export const Step6FinalPricing: React.FC<{
             {assuranceEnabled && assuranceAmount > 0 && (
               <li>✓ {lang === 'fr' ? 'Assurance Serenity: ' : 'تأمين Serenity: '}<span className="font-bold">{assuranceAmount.toLocaleString()} DA ({assurancePercentage}%)</span></li>
             )}
-            <li>✓ {lang === 'fr' ? 'Total avec Assurance: ' : 'المجموع مع التأمين: '}<span className="font-bold">{finalTotal.toLocaleString()} DA</span></li>
+            {timbreEnabled && timbreAmount > 0 && (
+              <li>✓ {lang === 'fr' ? 'Timbre fiscal: ' : 'الطابع الجبائي: '}<span className="font-bold">{timbreAmount.toLocaleString()} DA ({String(timbre.rate).replace('.', ',')} %)</span></li>
+            )}
+            <li>✓ {lang === 'fr' ? 'Total général: ' : 'المجموع العام: '}<span className="font-bold">{finalTotal.toLocaleString()} DA</span></li>
             <li>✓ {lang === 'fr' ? 'Durée: ' : 'المدة: '}<span className="font-bold">{days} {lang === 'fr' ? 'jours' : 'أيام'}</span></li>
             <li>✓ {lang === 'fr' ? 'TVA Appliquée: ' : 'تطبيق TVA: '}<span className="font-bold">{tvaEnabled ? (lang === 'fr' ? 'Oui (' + tvaRate + '%)' : 'نعم (' + tvaRate + '%)') : (lang === 'fr' ? 'Non' : 'لا')}</span></li>
           </ul>

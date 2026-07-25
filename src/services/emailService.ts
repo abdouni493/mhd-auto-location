@@ -603,10 +603,13 @@ export class EmailService {
       };
 
       const categoryLabels: Record<string, string> = {
-        security:    isFrench ? '🛡️ Sécurité'         : '🛡️ الأمان',
-        equipment:   isFrench ? '🔧 Équipements'      : '🔧 المعدات',
-        comfort:     isFrench ? '✨ Confort & Propreté': '✨ الراحة والنظافة',
-        cleanliness: isFrench ? '🧹 Nettoyage'         : '🧹 التنظيف',
+        security:    isFrench ? 'Sécurité'            : 'الأمان',
+        equipment:   isFrench ? 'Équipements'         : 'المعدات',
+        comfort:     isFrench ? 'Confort & Propreté'  : 'الراحة والنظافة',
+        cleanliness: isFrench ? 'Nettoyage'           : 'التنظيف',
+      };
+      const categoryAccent: Record<string, string> = {
+        security: '#DC2626', equipment: '#0284C7', comfort: '#0F172A', cleanliness: '#0F172A',
       };
 
       const groupedItems: Record<string, any[]> = {};
@@ -615,168 +618,259 @@ export class EmailService {
         groupedItems[item.category].push(item);
       });
 
-      const checklistHTML = Object.entries(groupedItems).map(([cat, items]) => `
-        <div style="margin-bottom:10px;">
-          <div style="font-weight:700;font-size:12px;color:#1a3a8a;padding:5px 8px;background:#f0f1f3;border-left:4px solid #2563eb;border-radius:3px;margin-bottom:4px;">
-            ${categoryLabels[cat] || cat}
-          </div>
-          ${(items as any[]).map(item => `
-            <div style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:0.5px solid #ddd;font-size:12px;">
-              <span style="color:#333;">${item.name}</span>
-              <span style="font-weight:700;font-size:13px;">${item.checked ? '✅' : '❌'}</span>
-            </div>
-          `).join('')}
-        </div>
-      `).join('');
+      const totalItems = (inspectionData?.inspectionItems || []).length;
+      const okItems = (inspectionData?.inspectionItems || []).filter((i: any) => i.checked).length;
+      const okRatio = totalItems > 0 ? Math.round((okItems / totalItems) * 100) : 0;
+
+      const checklistHTML = Object.entries(groupedItems).map(([cat, items]) => {
+        const accent = categoryAccent[cat] || '#0F172A';
+        const list = items as any[];
+        const catOk = list.filter(i => i.checked).length;
+        return `
+        <table class="cat" width="100%" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td class="cat-head" style="border-left:4px solid ${accent};">
+              <span class="cat-title">${categoryLabels[cat] || cat}</span>
+              <span class="cat-count">${catOk}/${list.length}</span>
+            </td>
+          </tr>
+          ${list.map(item => `
+          <tr>
+            <td class="cat-row">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
+                <td class="item-name">${item.name}</td>
+                <td class="item-state" align="right">
+                  <span class="pill ${item.checked ? 'pill-ok' : 'pill-ko'}">
+                    ${item.checked ? (isFrench ? 'Conforme' : 'مطابق') : (isFrench ? 'À signaler' : 'ملاحظة')}
+                  </span>
+                </td>
+              </tr></table>
+            </td>
+          </tr>`).join('')}
+        </table>`;
+      }).join('');
+
+      // ── Photos de l'inspection : affichées en grand et nettes (impression PDF)
+      const photos: string[] = [
+        ...((inspectionData?.exteriorPhotos as string[]) || []),
+        ...((inspectionData?.interiorPhotos as string[]) || []),
+      ].filter(Boolean);
+
+      const photosHTML = photos.length > 0 ? `
+    <div class="section">
+      <div class="section-title" style="border-left-color:#0284C7;color:#0284C7;">
+        ${isFrench ? 'Photos de l\'inspection' : 'صور الفحص'} (${photos.length})
+      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="photo-grid">
+        ${photos.map((url, i) => (i % 2 === 0
+          ? `<tr><td class="photo-cell"><img src="${url}" alt="Photo ${i + 1}" class="photo"><div class="photo-cap">${isFrench ? 'Photo' : 'صورة'} ${i + 1}</div></td>`
+             + (photos[i + 1]
+                 ? `<td class="photo-cell"><img src="${photos[i + 1]}" alt="Photo ${i + 2}" class="photo"><div class="photo-cap">${isFrench ? 'Photo' : 'صورة'} ${i + 2}</div></td>`
+                 : '<td class="photo-cell"></td>')
+             + '</tr>'
+          : '')).join('')}
+      </table>
+    </div>` : '';
+
+      const signatureHTML = inspectionData?.signature
+        ? `<img src="${inspectionData.signature}" alt="signature" class="sig-img">`
+        : '<div class="sig-line"></div>';
+
+      const fuelText = ({
+        full: isFrench ? 'Plein' : 'ممتلئ',
+        half: '1/2', quarter: '1/4', eighth: '1/8',
+        empty: isFrench ? 'Vide' : 'فارغ',
+      } as Record<string, string>)[inspectionData?.fuelLevel || ''] || 'N/A';
 
       const html = `<!DOCTYPE html>
 <html dir="${textDir}" lang="${isFrench ? 'fr' : 'ar'}">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${labels.title}</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; background: white; line-height: 1.5; direction: ${textDir}; font-size: 13px; }
-    .page { width: 100%; max-width: 210mm; padding: 12mm; margin: 0 auto; background: white; }
-    .header { border-bottom: 3px solid #1a3a8a; padding-bottom: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-    .logo { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
-    .header-text { flex: 1; }
-    .agency-name { font-size: 20px; font-weight: bold; color: #1a3a8a; text-align: center; margin-bottom: 2px; }
-    .agency-contact { font-size: 10px; color: #555; text-align: center; }
-    .doc-title { font-size: 13px; color: #555; text-align: center; margin-top: 2px; }
-    .info-boxes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px; }
-    .ibox { padding: 6px 8px; border-radius: 4px; font-size: 11px; }
-    .ibox.blue  { background: #dbeafe; border-left: 4px solid #2563eb; }
-    .ibox.green { background: #dcfce7; border-left: 4px solid #16a34a; }
-    .ibox.amber { background: #fef3c7; border-left: 4px solid #d97706; }
-    .ibox-label { font-weight: 600; color: #222; margin-bottom: 2px; font-size: 10px; }
-    .ibox-value { color: #333; font-size: 11px; font-weight: 600; }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-    .section { padding: 8px 10px; border-radius: 5px; border: 1px solid #e5e7eb; margin-bottom: 8px; }
-    .section.client-s  { background: #f0f9ff; border-color: #bfdbfe; }
-    .section.vehicle-s { background: #f0fdf4; border-color: #bbf7d0; }
-    .section.inspect-s { background: #f8f9fa; border-color: #e5e7eb; }
-    .section-title { font-size: 12px; font-weight: 700; background: #f0f1f3; padding: 4px 6px; border-radius: 3px; margin-bottom: 6px; border-left: 4px solid #2563eb; color: #1a3a8a; }
-    .field { padding: 2px 0; border-bottom: 0.5px solid #ddd; }
-    .field-label { font-weight: 600; color: #1a3a8a; font-size: 11px; }
-    .field-value { color: #444; font-size: 12px; margin-top: 1px; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
-    .notes-box { background: #f0f9ff; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; padding: 10px; border-radius: 4px; margin-bottom: 8px; font-size: 12px; color: #333; }
-    .notes-label { font-weight: 700; color: #1a3a8a; margin-bottom: 4px; font-size: 11px; }
-    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 14px; }
-    .sig-block { text-align: center; }
-    .sig-line { border-top: 1px solid #333; margin-bottom: 4px; height: 30px; }
-    .sig-label { font-weight: 600; font-size: 12px; color: #1a3a8a; }
-    .sig-date  { font-size: 10px; color: #666; margin-top: 2px; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family:'DM Sans','Segoe UI',Arial,sans-serif; color:#0F172A; background:#F8FAFC;
+      line-height:1.55; direction:${textDir}; font-size:13px;
+    }
+    .page { width:100%; max-width:210mm; margin:0 auto; background:#FFFFFF; padding:0 0 24px; }
+
+    /* En-tête charbon + rouge logo */
+    .header { background:#0F172A; color:#fff; padding:22px 26px; }
+    .header table { width:100%; }
+    .logo { width:52px; height:52px; border-radius:12px; object-fit:cover; background:#fff; }
+    .agency-name { font-size:19px; font-weight:800; letter-spacing:-0.3px; }
+    .agency-contact { font-size:10.5px; color:rgba(255,255,255,0.62); margin-top:3px; }
+    .kicker {
+      display:inline-block; background:#DC2626; color:#fff; border-radius:999px;
+      padding:5px 14px; font-size:9.5px; font-weight:800; letter-spacing:1.4px; text-transform:uppercase;
+    }
+    .doc-sub { font-size:11px; color:rgba(255,255,255,0.62); margin-top:6px; }
+
+    .body { padding:22px 26px 0; }
+
+    /* Bandeau d'informations clés */
+    .ibox-row { width:100%; border-collapse:separate; border-spacing:8px 0; margin-bottom:16px; }
+    .ibox { border:1px solid #E2E8F0; border-radius:10px; padding:10px 12px; background:#F8FAFC; }
+    .ibox-label { font-size:9px; font-weight:800; letter-spacing:1.1px; text-transform:uppercase; color:#64748B; }
+    .ibox-value { font-size:13px; font-weight:800; color:#0F172A; margin-top:3px; }
+
+    .section { border:1px solid #E2E8F0; border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+    .section-title {
+      font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.3px;
+      color:#DC2626; border-left:4px solid #DC2626; padding-left:10px; margin-bottom:10px;
+    }
+    .grid { width:100%; }
+    .field { padding:5px 0; border-bottom:1px solid #F1F5F9; }
+    .field-label { font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#64748B; }
+    .field-value { font-size:12.5px; font-weight:700; color:#0F172A; margin-top:2px; }
+
+    /* Barre de conformité */
+    .ratio-wrap { background:#F1F5F9; border-radius:999px; height:9px; overflow:hidden; margin-top:8px; }
+    .ratio-fill { height:9px; background:#DC2626; border-radius:999px; }
+    .ratio-text { font-size:11px; font-weight:800; color:#0F172A; margin-top:6px; }
+
+    /* Check-list */
+    .cat { margin-bottom:10px; border:1px solid #E2E8F0; border-radius:10px; overflow:hidden; }
+    .cat-head { background:#F8FAFC; padding:8px 12px; }
+    .cat-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#0F172A; }
+    .cat-count { float:${isFrench ? 'right' : 'left'}; font-size:11px; font-weight:800; color:#64748B; }
+    .cat-row { padding:7px 12px; border-top:1px solid #F1F5F9; }
+    .item-name { font-size:12px; color:#334155; font-weight:600; }
+    .pill { display:inline-block; padding:3px 10px; border-radius:999px; font-size:9.5px; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; }
+    .pill-ok { background:#DCFCE7; color:#15803D; }
+    .pill-ko { background:#FEE2E2; color:#B91C1C; }
+
+    /* Photos — grandes, nettes, sans recadrage */
+    .photo-grid { border-collapse:separate; border-spacing:8px; }
+    .photo-cell { width:50%; vertical-align:top; }
+    .photo {
+      width:100%; max-width:100%; height:auto; display:block;
+      border:1px solid #E2E8F0; border-radius:10px; background:#F8FAFC;
+      image-rendering:auto;
+    }
+    .photo-cap { font-size:9.5px; font-weight:700; color:#64748B; margin-top:4px; text-align:center; text-transform:uppercase; letter-spacing:0.8px; }
+
+    .notes-box { border:1px solid #E2E8F0; border-left:4px solid #0284C7; border-radius:10px; padding:12px 14px; margin-bottom:14px; background:#F8FAFC; }
+    .notes-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1.2px; color:#0284C7; margin-bottom:5px; }
+    .notes-text { font-size:12.5px; color:#334155; }
+
+    .signatures { width:100%; margin-top:18px; }
+    .sig-block { width:50%; text-align:center; padding:0 14px; vertical-align:bottom; }
+    .sig-line { border-top:1px solid #CBD5E1; height:34px; margin-bottom:6px; }
+    .sig-img { max-height:60px; max-width:100%; display:block; margin:0 auto 4px; }
+    .sig-label { font-size:11px; font-weight:800; color:#0F172A; }
+    .sig-date { font-size:9.5px; color:#64748B; margin-top:2px; }
+
+    .footer { margin-top:20px; padding:12px 26px 0; border-top:1px solid #E2E8F0; font-size:9.5px; color:#94A3B8; }
+
+    @media print {
+      @page { size:A4; margin:10mm; }
+      body { background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .page { max-width:none; }
+      .section, .cat, .photo-cell { page-break-inside:avoid; }
+      .photo { max-height:none; }
+    }
   </style>
 </head>
 <body>
   <div class="page">
 
-    <!-- Header -->
     <div class="header">
-      ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo">` : ''}
-      <div class="header-text">
-        <div class="agency-name">${agencyName}</div>
-        <div class="agency-contact">
-          ${agencyAddress}${agencyPhone ? ` &nbsp;|&nbsp; 📞 ${this.ltrPhone(agencyPhone)}` : ''}
-        </div>
-        <div class="doc-title">🔍 ${labels.title}</div>
-      </div>
+      <table cellpadding="0" cellspacing="0" role="presentation"><tr>
+        <td width="60" valign="top">
+          ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo">` : ''}
+        </td>
+        <td valign="top">
+          <div class="agency-name">${agencyName}</div>
+          <div class="agency-contact">
+            ${agencyAddress}${agencyPhone ? ` &nbsp;|&nbsp; ${this.ltrPhone(agencyPhone)}` : ''}
+          </div>
+        </td>
+        <td align="${isFrench ? 'right' : 'left'}" valign="top">
+          <span class="kicker">${labels.title}</span>
+          <div class="doc-sub">${labels.date} : ${today}</div>
+        </td>
+      </tr></table>
     </div>
 
-    <!-- Info boxes -->
-    <div class="info-boxes">
-      <div class="ibox blue">
-        <div class="ibox-label">📅 ${labels.date}</div>
-        <div class="ibox-value">${today}</div>
+    <div class="body">
+
+      <table class="ibox-row" cellpadding="0" cellspacing="0" role="presentation"><tr>
+        <td class="ibox" width="33%">
+          <div class="ibox-label">${labels.reservationNo}</div>
+          <div class="ibox-value">#${reservation.id?.substring(0, 8).toUpperCase() || 'N/A'}</div>
+        </td>
+        <td class="ibox" width="33%">
+          <div class="ibox-label">${labels.registration}</div>
+          <div class="ibox-value">${this.ltr(car.registration || 'N/A')}</div>
+        </td>
+        <td class="ibox" width="34%">
+          <div class="ibox-label">${labels.mileage} &nbsp;·&nbsp; ${labels.fuelLevel}</div>
+          <div class="ibox-value">${this.ltr((inspectionData?.mileage || car.mileage || 0) + ' km')} &nbsp;·&nbsp; ${fuelText}</div>
+        </td>
+      </tr></table>
+
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
+        <td width="49%" valign="top">
+          <div class="section">
+            <div class="section-title">${labels.clientInfo}</div>
+            <table class="grid" cellpadding="0" cellspacing="0" role="presentation">
+              <tr><td class="field"><div class="field-label">${labels.fullName}</div><div class="field-value">${client.firstName || ''} ${client.lastName || ''}</div></td></tr>
+              <tr><td class="field"><div class="field-label">${labels.phone}</div><div class="field-value">${client.phone ? this.ltrPhone(client.phone) : 'N/A'}</div></td></tr>
+              <tr><td class="field"><div class="field-label">${labels.emailLabel}</div><div class="field-value">${client.email || 'N/A'}</div></td></tr>
+              <tr><td class="field"><div class="field-label">${labels.license}</div><div class="field-value">${client.licenseNumber || 'N/A'}</div></td></tr>
+            </table>
+          </div>
+        </td>
+        <td width="2%"></td>
+        <td width="49%" valign="top">
+          <div class="section">
+            <div class="section-title" style="border-left-color:#0284C7;color:#0284C7;">${labels.vehicleInfo}</div>
+            <table class="grid" cellpadding="0" cellspacing="0" role="presentation">
+              <tr><td class="field"><div class="field-label">${labels.model}</div><div class="field-value">${this.ltr((car.brand || '') + ' ' + (car.model || ''))}</div></td></tr>
+              <tr><td class="field"><div class="field-label">${labels.color}</div><div class="field-value">${car.color || 'N/A'}</div></td></tr>
+              <tr><td class="field"><div class="field-label">${labels.vin}</div><div class="field-value">${this.ltr(car.vin || 'N/A')}</div></td></tr>
+              <tr><td class="field"><div class="field-label">${labels.mileage}</div><div class="field-value">${this.ltr((inspectionData?.mileage || car.mileage || 0) + ' km')}</div></td></tr>
+            </table>
+          </div>
+        </td>
+      </tr></table>
+
+      <div class="section">
+        <div class="section-title">${labels.inspectionDetails}</div>
+        ${totalItems > 0 ? `
+        <div class="ratio-wrap"><div class="ratio-fill" style="width:${okRatio}%;"></div></div>
+        <div class="ratio-text">${okItems}/${totalItems} ${isFrench ? 'points conformes' : 'نقطة مطابقة'} (${okRatio} %)</div>
+        <div style="height:12px;"></div>` : ''}
+        ${checklistHTML || `<p style="color:#94A3B8;font-size:12px;">${isFrench ? "Aucun élément d'inspection" : 'لا توجد عناصر فحص'}</p>`}
       </div>
-      <div class="ibox green">
-        <div class="ibox-label">🔢 ${labels.reservationNo}</div>
-        <div class="ibox-value">#${reservation.id?.substring(0, 8).toUpperCase() || 'N/A'}</div>
+
+      ${photosHTML}
+
+      <div class="notes-box">
+        <div class="notes-label">${labels.notes}</div>
+        <div class="notes-text">${inspectionData?.notes || (isFrench ? 'Aucune note' : 'بدون ملاحظات')}</div>
       </div>
-      <div class="ibox amber">
-        <div class="ibox-label">🚗 ${labels.registration}</div>
-        <div class="ibox-value">${this.ltr(car.registration || 'N/A')}</div>
-      </div>
+
+      <table class="signatures" cellpadding="0" cellspacing="0" role="presentation"><tr>
+        <td class="sig-block">
+          ${signatureHTML}
+          <div class="sig-label">${labels.clientSig}</div>
+          <div class="sig-date">${labels.dateAndSig}</div>
+        </td>
+        <td class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-label">${labels.agencySig}</div>
+          <div class="sig-date">${labels.dateAndSig}</div>
+        </td>
+      </tr></table>
+
     </div>
 
-    <!-- Client + Vehicle (2 columns) -->
-    <div class="two-col">
-      <div class="section client-s">
-        <div class="section-title">👤 ${labels.clientInfo}</div>
-        <div class="grid-2">
-          <div class="field">
-            <div class="field-label">${labels.fullName}</div>
-            <div class="field-value">${client.firstName || ''} ${client.lastName || ''}</div>
-          </div>
-          <div class="field">
-            <div class="field-label">${labels.phone}</div>
-            <div class="field-value">${client.phone ? this.ltrPhone(client.phone) : 'N/A'}</div>
-          </div>
-          <div class="field">
-            <div class="field-label">${labels.emailLabel}</div>
-            <div class="field-value">${client.email || 'N/A'}</div>
-          </div>
-          <div class="field">
-            <div class="field-label">${labels.license}</div>
-            <div class="field-value">${client.licenseNumber || 'N/A'}</div>
-          </div>
-        </div>
-      </div>
-      <div class="section vehicle-s">
-        <div class="section-title">🚗 ${labels.vehicleInfo}</div>
-        <div class="grid-2">
-          <div class="field">
-            <div class="field-label">${labels.model}</div>
-            <div class="field-value">${this.ltr((car.brand || '') + ' ' + (car.model || ''))}</div>
-          </div>
-          <div class="field">
-            <div class="field-label">${labels.color}</div>
-            <div class="field-value">${car.color || 'N/A'}</div>
-          </div>
-          <div class="field">
-            <div class="field-label">${labels.vin}</div>
-            <div class="field-value">${this.ltr(car.vin || 'N/A')}</div>
-          </div>
-          <div class="field">
-            <div class="field-label">${labels.mileage}</div>
-            <div class="field-value">${this.ltr((inspectionData?.mileage || car.mileage || 0) + ' km')}</div>
-          </div>
-          <div class="field">
-            <div class="field-label">⛽ ${labels.fuelLevel}</div>
-            <div class="field-value">${inspectionData?.fuelLevel || 'N/A'}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Inspection Checklist -->
-    <div class="section inspect-s">
-      <div class="section-title">✅ ${labels.inspectionDetails}</div>
-      <div class="two-col">
-        ${checklistHTML || `<p style="color:#888;font-size:12px;">${isFrench ? 'Aucun élément d\'inspection' : 'لا توجد عناصر فحص'}</p>`}
-      </div>
-    </div>
-
-    <!-- Notes -->
-    <div class="notes-box">
-      <div class="notes-label">📝 ${labels.notes}</div>
-      <div>${inspectionData?.notes || (isFrench ? 'Aucune note' : 'بدون ملاحظات')}</div>
-    </div>
-
-    <!-- Signatures -->
-    <div class="signatures">
-      <div class="sig-block">
-        <div class="sig-line"></div>
-        <div class="sig-label">${labels.clientSig}</div>
-        <div class="sig-date">${labels.dateAndSig}</div>
-      </div>
-      <div class="sig-block">
-        <div class="sig-line"></div>
-        <div class="sig-label">${labels.agencySig}</div>
-        <div class="sig-date">${labels.dateAndSig}</div>
-      </div>
+    <div class="footer">
+      ${agencyName} — ${labels.title} — ${today}
     </div>
 
   </div>

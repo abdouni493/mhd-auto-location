@@ -1,5 +1,61 @@
 import { supabase } from '../supabase';
-import { ReservationDetails, VehicleInspection, Payment, ProtectionAssurance } from '../types';
+import { ReservationDetails, VehicleInspection, Payment, ProtectionAssurance, Entreprise } from '../types';
+import { parseCarCurrencies } from '../utils/currency';
+
+/**
+ * Champs « extras » d'une réservation ajoutés par la mise à jour 2026-07-25 :
+ * timbre fiscal, devise du site public, code promo, entreprise, vol.
+ * Regroupés ici pour rester cohérents entre `getReservations` et
+ * `getReservationById`, et tolérants aux colonnes pas encore migrées.
+ */
+function mapReservationExtras(res: any) {
+  return {
+    // Timbre fiscal
+    timbreEnabled: res.timbre_enabled === true,
+    timbreRate: res.timbre_rate != null ? Number(res.timbre_rate) : undefined,
+    timbreAmount: res.timbre_amount != null ? Number(res.timbre_amount) : 0,
+    // Devise choisie par le client (le total reste stocké en DZD)
+    currency: res.currency || 'DZD',
+    currencyRate: res.currency_rate != null ? Number(res.currency_rate) : 1,
+    totalPriceCurrency: res.total_price_currency != null ? Number(res.total_price_currency) : undefined,
+    // Code promo : absent = ne rien afficher du tout
+    promoCode: res.promo_code || undefined,
+    promoDiscountPercentage: res.promo_discount_percentage != null ? Number(res.promo_discount_percentage) : undefined,
+    promoDiscountAmount: res.promo_discount_amount != null ? Number(res.promo_discount_amount) : undefined,
+    // Entreprise rattachée (facturation société)
+    entrepriseId: res.entreprise_id || undefined,
+    entreprise: res.entreprise
+      ? ({
+          id: res.entreprise.id,
+          name: res.entreprise.name,
+          rc: res.entreprise.rc || undefined,
+          art: res.entreprise.art || undefined,
+          nis: res.entreprise.nis || undefined,
+          nif: res.entreprise.nif || undefined,
+          address: res.entreprise.address || undefined,
+          phone: res.entreprise.phone || undefined,
+          email: res.entreprise.email || undefined,
+          createdAt: res.entreprise.created_at,
+        } as Entreprise)
+      : undefined,
+    // Informations de vol (réservations du site public)
+    flightNumber: res.flight_number || undefined,
+    flightDate: res.flight_date || undefined,
+    flightTime: res.flight_time || undefined,
+    flightTicketImage: res.flight_ticket_image || undefined,
+  };
+}
+
+/** Champs propriétaire + devises d'une voiture jointe à une réservation. */
+function mapCarExtras(car: any) {
+  return {
+    ownerType: car?.owner_type === 'third_party' ? ('third_party' as const) : ('personal' as const),
+    ownerName: car?.owner_name || undefined,
+    ownerPhone: car?.owner_phone || undefined,
+    agencySharePerDay: car?.agency_share_per_day != null ? Number(car.agency_share_per_day) : 0,
+    currencies: parseCarCurrencies(car?.currencies),
+  };
+}
 
 // Mappe un forfait d'assurance de protection embarqué (avec ses items + statut).
 function mapProtectionAssurance(pa: any): ProtectionAssurance | undefined {
@@ -61,6 +117,20 @@ export class ReservationsService {
     createdByName?: string;
     // Origine : 'agency' (créée par l'admin, défaut) ou 'website' (site public).
     source?: 'website' | 'agency';
+    // Timbre fiscal (droit de timbre) appliqué au total
+    timbreEnabled?: boolean;
+    timbreRate?: number;
+    timbreAmount?: number;
+    // Entreprise rattachée (facturation société)
+    entrepriseId?: string | null;
+    // Devise choisie (site public). Le total reste stocké en DZD.
+    currency?: string;
+    currencyRate?: number;
+    totalPriceCurrency?: number;
+    // Code promo consommé
+    promoCode?: string | null;
+    promoDiscountPercentage?: number | null;
+    promoDiscountAmount?: number | null;
   }): Promise<{ id: string }> {
     const { data: reservation, error } = await supabase
       .from('reservations')
@@ -98,6 +168,20 @@ export class ReservationsService {
         // Réservations créées ici = origine agence par défaut. Marquée
         // explicitement pour que le planificateur affiche « 🏢 Agence ».
         source: data.source || 'agency',
+        // Timbre fiscal
+        timbre_enabled: data.timbreEnabled || false,
+        timbre_rate: data.timbreEnabled ? (data.timbreRate ?? null) : null,
+        timbre_amount: data.timbreEnabled ? (data.timbreAmount ?? 0) : 0,
+        // Entreprise (facturation société)
+        entreprise_id: data.entrepriseId || null,
+        // Devise choisie (le total_price reste TOUJOURS en DZD)
+        currency: data.currency || 'DZD',
+        currency_rate: data.currencyRate ?? 1,
+        total_price_currency: data.totalPriceCurrency ?? null,
+        // Code promo
+        promo_code: data.promoCode || null,
+        promo_discount_percentage: data.promoDiscountPercentage ?? null,
+        promo_discount_amount: data.promoDiscountAmount ?? null,
       }])
       .select()
       .single();
@@ -230,6 +314,7 @@ export class ReservationsService {
         images: res.car.image_url ? [res.car.image_url] : [],
         mileage: res.car.mileage,
         vin: res.car.vin,
+        ...mapCarExtras(res.car),
       } : null,
       step1: {
         carId: res.car_id,
@@ -364,6 +449,7 @@ export class ReservationsService {
       // Colonne ajoutée par la migration 20260708_reservation_source.sql ;
       // absente = ancienne base → traitée comme 'agency'.
       source: (res.source === 'website' ? 'website' : 'agency') as 'website' | 'agency',
+      ...mapReservationExtras(res),
     })).map(mapped => {
       console.log('✅ Mapped reservation:', {
         id: mapped.id,
@@ -449,6 +535,7 @@ export class ReservationsService {
         images: data.car.image_url ? [data.car.image_url] : [],
         mileage: data.car.mileage,
         vin: data.car.vin,
+        ...mapCarExtras(data.car),
       } : null,
       step1: {
         carId: data.car_id,
@@ -577,6 +664,7 @@ export class ReservationsService {
       createdBy: data.created_by,
       createdByName: data.created_by_name,
       source: (data.source === 'website' ? 'website' : 'agency') as 'website' | 'agency',
+      ...mapReservationExtras(data),
     };
   }
 
@@ -610,6 +698,16 @@ export class ReservationsService {
     protectionAssuranceId: string | null;
     protectionAssuranceName: string | null;
     protectionAssurancePrice: number | null;
+    timbreEnabled: boolean;
+    timbreRate: number | null;
+    timbreAmount: number;
+    entrepriseId: string | null;
+    currency: string;
+    currencyRate: number;
+    totalPriceCurrency: number | null;
+    promoCode: string | null;
+    promoDiscountPercentage: number | null;
+    promoDiscountAmount: number | null;
   }>): Promise<void> {
     const updateData: any = {};
 
@@ -647,6 +745,17 @@ export class ReservationsService {
     if (updates.protectionAssuranceId !== undefined) updateData.protection_assurance_id = updates.protectionAssuranceId;
     if (updates.protectionAssuranceName !== undefined) updateData.protection_assurance_name = updates.protectionAssuranceName;
     if (updates.protectionAssurancePrice !== undefined) updateData.protection_assurance_price = updates.protectionAssurancePrice;
+    // Timbre fiscal / entreprise / devise / code promo
+    if (updates.timbreEnabled !== undefined) updateData.timbre_enabled = updates.timbreEnabled;
+    if (updates.timbreRate !== undefined) updateData.timbre_rate = updates.timbreRate;
+    if (updates.timbreAmount !== undefined) updateData.timbre_amount = updates.timbreAmount;
+    if (updates.entrepriseId !== undefined) updateData.entreprise_id = updates.entrepriseId;
+    if (updates.currency !== undefined) updateData.currency = updates.currency;
+    if (updates.currencyRate !== undefined) updateData.currency_rate = updates.currencyRate;
+    if (updates.totalPriceCurrency !== undefined) updateData.total_price_currency = updates.totalPriceCurrency;
+    if (updates.promoCode !== undefined) updateData.promo_code = updates.promoCode;
+    if (updates.promoDiscountPercentage !== undefined) updateData.promo_discount_percentage = updates.promoDiscountPercentage;
+    if (updates.promoDiscountAmount !== undefined) updateData.promo_discount_amount = updates.promoDiscountAmount;
 
     // Remove caution_amount_dzd from updateData if it exists and is invalid, as it may not exist in the schema yet
     // The column should be added via migration first
@@ -805,6 +914,18 @@ export class ReservationsService {
     notes?: string;
     inspectionItems: any[];
     returnAgencyId?: string;
+    /** Montant encaissé lors de la clôture (0 si le client ne paie rien). */
+    paymentNow?: number;
+    paymentMethod?: 'cash' | 'card' | 'transfer' | 'check';
+    paymentNote?: string;
+    /** Total dû après ajout des frais supplémentaires (DZD). */
+    finalTotal?: number;
+    /** Cumul déjà payé APRÈS l'encaissement de clôture. */
+    totalPaid?: number;
+    /** Reste dû après l'encaissement de clôture. */
+    remaining?: number;
+    /** Supprimer définitivement les photos d'inspection (défaut : true). */
+    purgeInspectionPhotos?: boolean;
   }): Promise<void> {
     try {
       console.log('📋 Starting completion process for reservation:', data.reservationId);
@@ -900,7 +1021,34 @@ export class ReservationsService {
       if (data.missingFuel !== undefined) updateData.missing_fuel = data.missingFuel;
       if (data.notes) updateData.notes = data.notes;
 
+      // Frais supplémentaires + nouveau total dû
+      const additionalFees = (data.excessMileage || 0) + (data.missingFuel || 0);
+      updateData.additional_fees = additionalFees;
+      if (data.finalTotal !== undefined) updateData.total_price = Math.round(data.finalTotal);
+      if (data.totalPaid !== undefined) updateData.advance_payment = Math.round(data.totalPaid);
+      if (data.remaining !== undefined) {
+        updateData.remaining_payment = Math.max(0, Math.round(data.remaining));
+        // Statut de dette : soldé ou non
+        updateData.payment_status = Math.round(data.remaining) <= 0 ? 'paid' : 'partial';
+      }
+
       console.log('Update data:', updateData);
+
+      // Encaissement de clôture : enregistré comme un paiement à part entière
+      if (data.paymentNow && data.paymentNow > 0) {
+        try {
+          await this.addPayment({
+            reservationId: data.reservationId,
+            amount: Math.round(data.paymentNow),
+            method: data.paymentMethod || 'cash',
+            note: data.paymentNote || 'Paiement à la clôture de la location',
+          });
+          console.log('✅ Closing payment recorded:', data.paymentNow);
+        } catch (err) {
+          console.error('❌ Closing payment failed:', err);
+          throw err;
+        }
+      }
 
       const { error } = await supabase
         .from('reservations')
@@ -908,11 +1056,34 @@ export class ReservationsService {
         .eq('id', data.reservationId);
 
       if (error) {
-        console.error('❌ Reservation update failed:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error);
-        throw new Error(`Failed to complete reservation: ${error.message}`);
+        // `payment_status` peut ne pas exister sur d'anciennes bases : on réessaie sans.
+        if (error.message && error.message.includes('payment_status')) {
+          delete updateData.payment_status;
+          const { error: retryError } = await supabase
+            .from('reservations')
+            .update(updateData)
+            .eq('id', data.reservationId);
+          if (retryError) throw new Error(`Failed to complete reservation: ${retryError.message}`);
+        } else {
+          console.error('❌ Reservation update failed:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          console.error('Error details:', error);
+          throw new Error(`Failed to complete reservation: ${error.message}`);
+        }
+      }
+
+      // Purge DÉFINITIVE des photos d'inspection de cette réservation
+      // (fichiers du bucket + colonnes en base). Non bloquant : la location
+      // est déjà clôturée si le nettoyage échoue.
+      if (data.purgeInspectionPhotos !== false) {
+        try {
+          const { DatabaseService } = await import('./DatabaseService');
+          const { removedFiles } = await DatabaseService.purgeInspectionImages(data.reservationId);
+          console.log(`🗑️ Inspection photos purged (${removedFiles} file(s))`);
+        } catch (err) {
+          console.warn('⚠️ Inspection photo purge failed (non-blocking):', err);
+        }
       }
 
       console.log('✅ Reservation completion successful');

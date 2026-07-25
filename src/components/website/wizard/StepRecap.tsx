@@ -16,6 +16,7 @@ export const StepRecap: React.FC = () => {
     agencies, departureAgency, returnAgency, differentReturnAgency,
     personal, selectedServices, selectedAssurance, notes, setNotes,
     days, promo, basePrice, discount, servicesTotal, assuranceTotal, total,
+    currency, currencyRate, currencySupported, fx,
     promoInput, setPromoInput, promoStatus, promoDiscountPct, promoDiscount, verifyPromo, clearPromo,
     goToStep, prev, isSubmitting, submitError, submit,
   } = useWizard();
@@ -56,6 +57,26 @@ export const StepRecap: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Devise appliquée à toute la réservation */}
+      {currency !== 'DZD' && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl px-5 py-3.5"
+          style={{ background: 'rgba(2,132,199,0.07)', border: '1px solid rgba(2,132,199,0.22)' }}>
+          <span className="text-sm font-black" style={{ color: '#0284C7', fontFamily: 'var(--font-display)' }}>
+            {{ fr: 'Devise de la réservation', ar: 'عملة الحجز' }[lang]} : {currency}
+          </span>
+          <span className="text-xs text-vel-muted font-semibold">
+            1 {currency} = {currencyRate.toLocaleString('fr-DZ')} DA
+          </span>
+        </div>
+      )}
+      {!currencySupported && (
+        <div className="rounded-2xl px-5 py-3.5 text-sm font-semibold"
+          style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', color: '#B91C1C' }}>
+          {{ fr: 'Cette voiture n’est pas proposée dans la devise choisie — les montants sont affichés en dinars.',
+             ar: 'هذه السيارة غير متاحة بالعملة المختارة — تُعرض المبالغ بالدينار.' }[lang]}
+        </div>
+      )}
+
       {/* Résumé */}
       <SectionCard>
         <SectionTitle>📋 {{ fr: 'Récapitulatif de la réservation', ar: 'ملخص الحجز' }[lang]}</SectionTitle>
@@ -89,7 +110,7 @@ export const StepRecap: React.FC = () => {
           {summaryBlock(
             lang === 'fr' ? '🛎️ Services' : '🛎️ الخدمات', 4,
             selectedServices.length > 0
-              ? selectedServices.map(s => ({ label: s.name, value: `${s.price.toLocaleString()} DA` }))
+              ? selectedServices.map(s => ({ label: s.name, value: fx(s.price) }))
               : [{ label: lang === 'fr' ? 'Aucun service sélectionné' : 'لم يتم اختيار خدمات', value: '' }]
           )}
           {summaryBlock(
@@ -113,7 +134,7 @@ export const StepRecap: React.FC = () => {
             <span className="text-vel-slate">
               {days} {{ fr: 'j ×', ar: 'يوم ×' }[lang]} {car.priceDay.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
             </span>
-            <span className="font-bold text-vel-ink">{basePrice.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+            <span className="font-bold text-vel-ink">{fx(basePrice)}</span>
           </div>
 
           {/* Remise offre spéciale */}
@@ -125,7 +146,7 @@ export const StepRecap: React.FC = () => {
                 {' '}({promo.newPrice.toLocaleString()} {{ fr: 'DA/j', ar: 'د.ج/ي' }[lang]})
               </span>
               <span className="font-bold" style={{ color: '#DC2626' }}>
-                −{discount.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+                −{fx(discount)}
               </span>
             </div>
           )}
@@ -137,7 +158,7 @@ export const StepRecap: React.FC = () => {
               <span className="text-vel-slate">
                 🛡️ {selectedAssurance.name} ({days} {{ fr: 'j ×', ar: 'يوم ×' }[lang]} {selectedAssurance.pricePerDay.toLocaleString()})
               </span>
-              <span className="font-bold" style={{ color: C.accent }}>{assuranceTotal.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+              <span className="font-bold" style={{ color: C.accent }}>{fx(assuranceTotal)}</span>
             </div>
           )}
 
@@ -145,7 +166,7 @@ export const StepRecap: React.FC = () => {
             <div key={s.id} className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
               style={{ background: 'rgba(217,119,6,0.05)', border: '1px solid rgba(217,119,6,0.1)' }}>
               <span className="text-vel-slate">{s.name}</span>
-              <span className="font-bold" style={{ color: C.amber }}>{s.price.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+              <span className="font-bold" style={{ color: C.amber }}>{fx(s.price)}</span>
             </div>
           ))}
 
@@ -228,7 +249,7 @@ export const StepRecap: React.FC = () => {
                 🎟️ {{ fr: 'Code promo', ar: 'رمز الخصم' }[lang]} {promoInput.trim().toUpperCase()} (−{promoDiscountPct}%)
               </span>
               <span className="font-bold" style={{ color: '#16A34A' }}>
-                −{promoDiscount.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+                −{fx(promoDiscount)}
               </span>
             </div>
           )}
@@ -238,9 +259,17 @@ export const StepRecap: React.FC = () => {
             <span className="font-black text-vel-ink" style={{ fontFamily: 'var(--font-display)' }}>
               {{ fr: 'TOTAL', ar: 'المجموع' }[lang]}
             </span>
-            <span className="font-black text-3xl" style={{ color: C.accent, fontFamily: 'var(--font-display)', textShadow: '0 0 20px rgba(220,38,38,0.2)' }}>
-              {total.toLocaleString()}
-              <span className="text-base ml-1" style={{ color: 'rgba(220,38,38,0.75)' }}>{{ fr: 'DA', ar: 'د.ج' }[lang]}</span>
+            <span className="text-right">
+              <span className="block font-black text-3xl" style={{ color: C.accent, fontFamily: 'var(--font-display)' }}>
+                {fx(total)}
+              </span>
+              {currency !== 'DZD' && (
+                <span className="block text-xs font-bold text-vel-muted mt-0.5">
+                  ≈ {total.toLocaleString('fr-DZ')} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+                  <span className="mx-1">·</span>
+                  1 {currency} = {currencyRate.toLocaleString('fr-DZ')} DA
+                </span>
+              )}
             </span>
           </div>
         </div>

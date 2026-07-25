@@ -1,22 +1,33 @@
 @import "tailwindcss";
 
+/* Le thème sombre est piloté par la classe `.dark` posée sur <html>
+   (voir src/utils/themeService.ts + le bouton de la navbar). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", "DM Sans", sans-serif;
 
-  /* === PALETTE "AUTOMOTIVE LIGHT" ===
+  /* === PALETTE "MHD AUTO / SARL OUKKAL" ===
      Source de vérité : design-system/auto_location/MASTER.md
-     Primary ardoise #1E293B · CTA rouge #DC2626 · fond #F8FAFC · texte #0F172A.
-     Les noms vel-* historiques sont conservés (échelle de profondeur) mais
-     pointent désormais vers des valeurs CLAIRES. */
+     Identité du logo : bouclier charbon #0F172A, rouge crimson #DC2626,
+     bleu électrique #0284C7. Mode clair : fond #F8FAFC, surfaces #FFFFFF.
+     Les noms vel-* historiques sont conservés (échelle de profondeur). */
   --color-vel-void:        #F8FAFC;  /* fond de page */
   --color-vel-abyss:       #F1F5F9;  /* bandes / placeholders d'image */
-  --color-vel-deep:        #E8EDF4;  /* creux plus profonds */
+  --color-vel-deep:        #E2E8F0;  /* creux plus profonds (bordure métal) */
   --color-vel-surface:     #FFFFFF;  /* cartes */
   --color-vel-elevated:    #FFFFFF;  /* cartes / champs */
 
-  --color-vel-primary:     #1E293B;  /* ardoise premium (titres, nav) */
-  --color-vel-cta:         #DC2626;  /* rouge action (boutons, accents) */
+  --color-vel-primary:     #0F172A;  /* charbon du bouclier (titres, nav) */
+  --color-vel-primary-soft:#1E293B;  /* charbon secondaire */
+  --color-vel-cta:         #DC2626;  /* rouge logo (boutons, accents) */
+  --color-vel-cta-dark:    #B91C1C;  /* rouge logo — survol */
+
+  /* Bleu électrique du logo (accents secondaires, badges info) */
+  --color-vel-blue:        #0284C7;
+  --color-vel-blue-dark:   #0369A1;
+  --color-vel-blue-glow:   rgba(2, 132, 199, 0.08);
 
   --color-vel-gold:        #B45309;  /* ambre lisible sur fond clair */
   --color-vel-gold-light:  #D97706;
@@ -25,7 +36,7 @@
 
   --color-vel-red:         #DC2626;
   --color-vel-red-dark:    #B91C1C;
-  --color-vel-red-glow:    rgba(220, 38, 38, 0.12);
+  --color-vel-red-glow:    rgba(220, 38, 38, 0.08);
 
   /* Texte (ex vel-white/silver, renommés ink/slate) */
   --color-vel-ink:         #0F172A;  /* texte principal */
@@ -35,32 +46,135 @@
 
   --color-vel-glass:       #FFFFFF;
   --color-vel-glass-gold:  rgba(217, 119, 6, 0.08);
-  --color-vel-border:      rgba(15, 23, 42, 0.08);
+  --color-vel-border:      #E2E8F0;  /* bordure métallique claire */
+  --color-vel-border-strong: #CBD5E1;
   --color-vel-border-gold: rgba(217, 119, 6, 0.3);
 
-  /* Legacy saas vars kept for admin compatibility */
-  --color-saas-primary-start:   #1e3a8a;
-  --color-saas-primary-via:     #1d4ed8;
-  --color-saas-primary-end:     #0891b2;
-  --color-saas-secondary-start: #475569;
-  --color-saas-secondary-end:   #4f46e5;
+  /* ── Alias admin (saas-*) alignés sur l'identité du logo ───────────────
+     primary   = rouge crimson (actions principales)
+     secondary = bleu électrique (accents secondaires / info) */
+  --color-saas-primary-start:   #DC2626;
+  --color-saas-primary-via:     #DC2626;
+  --color-saas-primary-end:     #B91C1C;
+  --color-saas-secondary-start: #0284C7;
+  --color-saas-secondary-end:   #0369A1;
   --color-saas-warning-start:   #f59e0b;
   --color-saas-warning-end:     #ea580c;
   --color-saas-success-start:   #10b981;
   --color-saas-success-end:     #0d9488;
-  --color-saas-danger-start:    #ef4444;
-  --color-saas-danger-end:      #e11d48;
-  --color-saas-bg:              #f8fafc;
-  --color-saas-surface:         #ffffff;
-  --color-saas-border:          #e2e8f0;
-  --color-saas-text-main:       #0f172a;
-  --color-saas-text-muted:      #64748b;
+  --color-saas-danger-start:    #DC2626;
+  --color-saas-danger-end:      #B91C1C;
+  --color-saas-bg:              #F8FAFC;
+  --color-saas-surface:         #FFFFFF;
+  --color-saas-border:          #E2E8F0;
+  --color-saas-text-main:       #0F172A;
+  --color-saas-text-muted:      #64748B;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MODE SOMBRE
+   Les composants historiques utilisent massivement `bg-white`,
+   `text-slate-900`, `bg-blue-50`… Plutôt que de réécrire 50 000 lignes,
+   on redéfinit les variables de la palette Tailwind sous `.dark` : toutes
+   les utilitaires basculent d'un coup, et la sémantique (fond clair /
+   texte foncé) reste correcte en inversant les échelles neutres.
+   ══════════════════════════════════════════════════════════════════════ */
+.dark {
+  color-scheme: dark;
+
+  /* Neutres inversés ------------------------------------------------- */
+  --color-white:      #0F172A;
+  --color-slate-50:   #172033;
+  --color-slate-100:  #1E293B;
+  --color-slate-200:  #334155;
+  --color-slate-300:  #475569;
+  --color-slate-400:  #64748B;
+  --color-slate-500:  #94A3B8;
+  --color-slate-600:  #CBD5E1;
+  --color-slate-700:  #E2E8F0;
+  --color-slate-800:  #F1F5F9;
+  --color-slate-900:  #F8FAFC;
+  --color-slate-950:  #FFFFFF;
+
+  --color-gray-50:   #172033;
+  --color-gray-100:  #1E293B;
+  --color-gray-200:  #334155;
+  --color-gray-300:  #475569;
+  --color-gray-400:  #64748B;
+  --color-gray-500:  #94A3B8;
+  --color-gray-600:  #CBD5E1;
+  --color-gray-700:  #E2E8F0;
+  --color-gray-800:  #F1F5F9;
+  --color-gray-900:  #F8FAFC;
+
+  --color-zinc-50:   #172033;
+  --color-zinc-100:  #1E293B;
+  --color-zinc-200:  #334155;
+  --color-zinc-800:  #F1F5F9;
+  --color-zinc-900:  #F8FAFC;
+
+  /* Teintes colorées : les nuances 50/100 deviennent des fonds sombres,
+     les nuances 700/800/900 deviennent du texte clair lisible. */
+  --color-red-50:    #2A1416;  --color-red-100:    #3B191C;  --color-red-200: #7F1D1D;
+  --color-red-700:   #FCA5A5;  --color-red-800:    #FECACA;  --color-red-900: #FEE2E2;
+  --color-blue-50:   #0F1E33;  --color-blue-100:   #14263F;  --color-blue-200: #1E3A5F;
+  --color-blue-700:  #93C5FD;  --color-blue-800:   #BFDBFE;  --color-blue-900: #DBEAFE;
+  --color-sky-50:    #0C1E2C;  --color-sky-100:    #102636;  --color-sky-200: #17405C;
+  --color-sky-700:   #7DD3FC;  --color-sky-800:    #BAE6FD;  --color-sky-900: #E0F2FE;
+  --color-cyan-50:   #0B1F26;  --color-cyan-100:   #0F2A33;  --color-cyan-200: #155E75;
+  --color-cyan-700:  #67E8F9;  --color-cyan-800:   #A5F3FC;  --color-cyan-900: #CFFAFE;
+  --color-green-50:  #0D2018;  --color-green-100:  #12291F;  --color-green-200: #14532D;
+  --color-green-700: #86EFAC;  --color-green-800:  #BBF7D0;  --color-green-900: #DCFCE7;
+  --color-emerald-50:#0C201A;  --color-emerald-100:#112A22;  --color-emerald-200: #065F46;
+  --color-emerald-700:#6EE7B7; --color-emerald-800:#A7F3D0;  --color-emerald-900: #D1FAE5;
+  --color-teal-50:   #0C2020;  --color-teal-100:   #112A2A;  --color-teal-200: #115E59;
+  --color-teal-700:  #5EEAD4;  --color-teal-800:   #99F6E4;  --color-teal-900: #CCFBF1;
+  --color-amber-50:  #241B0B;  --color-amber-100:  #2E220E;  --color-amber-200: #78350F;
+  --color-amber-700: #FCD34D;  --color-amber-800:  #FDE68A;  --color-amber-900: #FEF3C7;
+  --color-yellow-50: #241F0B;  --color-yellow-100: #2E270E;  --color-yellow-200: #713F12;
+  --color-yellow-700:#FDE047;  --color-yellow-800: #FEF08A;  --color-yellow-900: #FEF9C3;
+  --color-orange-50: #26170D;  --color-orange-100: #301C10;  --color-orange-200: #7C2D12;
+  --color-orange-700:#FDBA74;  --color-orange-800: #FED7AA;  --color-orange-900: #FFEDD5;
+  --color-purple-50: #1D1230;  --color-purple-100: #26173D;  --color-purple-200: #581C87;
+  --color-purple-700:#D8B4FE;  --color-purple-800: #E9D5FF;  --color-purple-900: #F3E8FF;
+  --color-violet-50: #1B1436;  --color-violet-100: #221942;  --color-violet-200: #4C1D95;
+  --color-violet-700:#C4B5FD;  --color-violet-800: #DDD6FE;  --color-violet-900: #EDE9FE;
+  --color-indigo-50: #141a35;  --color-indigo-100: #1A2143;  --color-indigo-200: #312E81;
+  --color-indigo-700:#A5B4FC;  --color-indigo-800: #C7D2FE;  --color-indigo-900: #E0E7FF;
+  --color-pink-50:   #2A1120;  --color-pink-100:   #351628;  --color-pink-200: #831843;
+  --color-pink-700:  #F9A8D4;  --color-pink-800:   #FBCFE8;  --color-pink-900: #FCE7F3;
+  --color-rose-50:   #2A121A;  --color-rose-100:   #351720;  --color-rose-200: #881337;
+  --color-rose-700:  #FDA4AF;  --color-rose-800:   #FECDD3;  --color-rose-900: #FFE4E6;
+
+  /* Jetons applicatifs ---------------------------------------------- */
+  --color-vel-void:     #0B1220;
+  --color-vel-abyss:    #111C2E;
+  --color-vel-deep:     #1E293B;
+  --color-vel-surface:  #0F172A;
+  --color-vel-elevated: #16213A;
+  --color-vel-primary:  #F8FAFC;
+  --color-vel-ink:      #F8FAFC;
+  --color-vel-slate:    #CBD5E1;
+  --color-vel-muted:    #94A3B8;
+  --color-vel-dim:      #64748B;
+  --color-vel-glass:    #0F172A;
+  --color-vel-border:   #1E293B;
+  --color-vel-border-strong: #334155;
+
+  --color-saas-bg:         #0B1220;
+  --color-saas-surface:    #0F172A;
+  --color-saas-border:     #1E293B;
+  --color-saas-text-main:  #F8FAFC;
+  --color-saas-text-muted: #94A3B8;
 }
 
 /* ── Global ── */
+html { transition: background-color 0.35s ease, color 0.35s ease; }
+
 body {
   @apply bg-vel-void text-vel-ink antialiased;
   font-family: var(--font-sans);
+  transition: background-color 0.35s ease, color 0.35s ease;
 }
 
 .font-display { font-family: var(--font-display); }
@@ -77,20 +191,26 @@ body {
   border: 1px solid var(--color-vel-border-gold);
 }
 
-/* ── Encart accent (ex glass-cyan) ── */
+/* ── Encart accent (rouge logo) ── */
 .vel-glass-accent {
-  background: rgba(220, 38, 38, 0.04);
-  border: 1px solid rgba(220, 38, 38, 0.14);
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.16);
 }
 
-/* ── Bouton CTA principal (rouge action) ── */
+/* ── Encart accent secondaire (bleu électrique du logo) ── */
+.vel-glass-blue {
+  background: var(--color-vel-blue-glow);
+  border: 1px solid rgba(2, 132, 199, 0.18);
+}
+
+/* ── Bouton CTA principal (rouge logo) ── */
 .btn-vel-cta {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.05em;
   color: #FFFFFF;
   border-radius: 0.75rem;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -108,28 +228,53 @@ body {
 .btn-vel-cta:active { transform: scale(0.97); }
 .btn-vel-cta:focus-visible { outline: 2px solid #B91C1C; outline-offset: 2px; }
 
-/* ── Bouton contour ── */
+/* ── Bouton contour (bordure métallique → rouge logo au survol) ── */
 .btn-vel-outline-cyan {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.05em;
   color: #334155;
   border-radius: 0.75rem;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   cursor: pointer;
   background: #FFFFFF;
-  border: 1px solid rgba(15, 23, 42, 0.14);
+  border: 1px solid #E2E8F0;
 }
 .btn-vel-outline-cyan:hover {
-  border-color: rgba(220, 38, 38, 0.4);
+  border-color: #DC2626;
   color: #DC2626;
-  background: rgba(220, 38, 38, 0.04);
+  background: rgba(220, 38, 38, 0.08);
+  transform: translateY(-1px);
 }
 .btn-vel-outline-cyan:active { transform: scale(0.97); }
+.dark .btn-vel-outline-cyan { background: #0F172A; color: #CBD5E1; border-color: #1E293B; }
+.dark .btn-vel-outline-cyan:hover { color: #F87171; border-color: #DC2626; }
+
+/* ── Bouton bleu électrique (accent secondaire du logo) ── */
+.btn-vel-blue {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #FFFFFF;
+  border-radius: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  background: linear-gradient(135deg, #0284C7, #0369A1);
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
+}
+.btn-vel-blue:hover {
+  box-shadow: 0 8px 22px rgba(2, 132, 199, 0.32);
+  transform: translateY(-2px);
+}
+.btn-vel-blue:active { transform: scale(0.97); }
 
 /* ── Anciennes classes "glow" neutralisées (pas de néon en mode clair) ── */
 .text-glow-cyan, .text-glow-violet, .text-glow-gold, .text-glow-red { text-shadow: none; }
@@ -147,7 +292,7 @@ body {
   transform: translateY(-2px);
 }
 
-/* ── Bouton rouge (identique au CTA, conservé pour compat) ── */
+/* ── Bouton rouge logo (identique au CTA, conservé pour compat) ── */
 .btn-vel-red {
   @apply relative overflow-hidden font-display font-bold tracking-wider
          text-white px-8 py-4 rounded-xl transition-all duration-200
@@ -165,25 +310,25 @@ body {
   @apply relative overflow-hidden font-display font-bold tracking-wider
          text-vel-slate px-8 py-4 rounded-xl transition-all duration-200
          active:scale-95 flex items-center justify-center gap-2 cursor-pointer;
-  background: #FFFFFF;
+  background: var(--color-vel-surface);
   border: 1px solid var(--color-vel-border);
 }
 .btn-vel-ghost:hover {
-  border-color: rgba(220, 38, 38, 0.35);
+  border-color: #DC2626;
   color: var(--color-vel-cta);
-  background: rgba(220, 38, 38, 0.03);
+  background: rgba(220, 38, 38, 0.06);
 }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #F1F5F9; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+::-webkit-scrollbar-track { background: var(--color-vel-abyss); }
+::-webkit-scrollbar-thumb { background: var(--color-vel-border-strong); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
 /* ── RTL Support ── */
 [dir="rtl"] { font-family: 'Noto Sans Arabic', sans-serif; }
 
-/* ── Admin area: keep white bg ── */
+/* ── Admin area: keep surface bg ── */
 .admin-surface {
   background: var(--color-saas-bg) !important;
   color: var(--color-saas-text-main) !important;
@@ -225,7 +370,7 @@ body {
   .btn-saas-outline {
     @apply relative overflow-hidden rounded-xl px-6 py-3 font-semibold transition-all duration-300
            bg-transparent text-saas-text-main border border-saas-border
-           hover:border-saas-primary-via hover:bg-saas-bg active:scale-95;
+           hover:border-saas-primary-via hover:text-saas-primary-via hover:bg-saas-bg active:scale-95;
   }
   .glass-card {
     @apply bg-white border border-saas-border rounded-2xl shadow-sm hover:shadow-md transition-shadow;
@@ -248,34 +393,85 @@ body {
 
 .animate-shake { animation: shake 0.2s ease-in-out infinite; }
 
+/* ══════════════════════════════════════════════════════════════════════
+   ANIMATIONS D'INTERFACE (ouverture / fermeture / apparition)
+   ══════════════════════════════════════════════════════════════════════ */
+@keyframes vel-fade-in      { from { opacity: 0 } to { opacity: 1 } }
+@keyframes vel-fade-up      { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+@keyframes vel-fade-down    { from { opacity: 0; transform: translateY(-14px) } to { opacity: 1; transform: none } }
+@keyframes vel-scale-in     { from { opacity: 0; transform: scale(0.96) } to { opacity: 1; transform: scale(1) } }
+@keyframes vel-slide-right  { from { opacity: 0; transform: translateX(-18px) } to { opacity: 1; transform: none } }
+@keyframes vel-shimmer      { 0% { background-position: -480px 0 } 100% { background-position: 480px 0 } }
+@keyframes vel-pop          { 0% { transform: scale(0.85); opacity: 0 } 60% { transform: scale(1.04) } 100% { transform: scale(1); opacity: 1 } }
+
+.anim-fade-in     { animation: vel-fade-in 0.28s ease-out both; }
+.anim-fade-up     { animation: vel-fade-up 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-fade-down   { animation: vel-fade-down 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-scale-in    { animation: vel-scale-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-slide-right { animation: vel-slide-right 0.36s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-pop         { animation: vel-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Décalage en cascade pour les listes / grilles de cartes */
+.anim-stagger > * { animation: vel-fade-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-stagger > *:nth-child(1)  { animation-delay: 0.02s }
+.anim-stagger > *:nth-child(2)  { animation-delay: 0.06s }
+.anim-stagger > *:nth-child(3)  { animation-delay: 0.10s }
+.anim-stagger > *:nth-child(4)  { animation-delay: 0.14s }
+.anim-stagger > *:nth-child(5)  { animation-delay: 0.18s }
+.anim-stagger > *:nth-child(6)  { animation-delay: 0.22s }
+.anim-stagger > *:nth-child(7)  { animation-delay: 0.26s }
+.anim-stagger > *:nth-child(8)  { animation-delay: 0.30s }
+.anim-stagger > *:nth-child(9)  { animation-delay: 0.34s }
+.anim-stagger > *:nth-child(10) { animation-delay: 0.38s }
+.anim-stagger > *:nth-child(n+11) { animation-delay: 0.42s }
+
+/* Élévation douce au survol, utilisée par les cartes cliquables */
+.hover-lift { transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease; }
+.hover-lift:hover { transform: translateY(-4px); box-shadow: 0 18px 38px -18px rgba(15, 23, 42, 0.35); }
+
+/* Placeholder de chargement */
+.vel-skeleton {
+  background: linear-gradient(90deg, var(--color-vel-abyss) 0%, var(--color-vel-deep) 40%, var(--color-vel-abyss) 80%);
+  background-size: 480px 100%;
+  animation: vel-shimmer 1.4s infinite linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-in, .anim-fade-up, .anim-fade-down, .anim-scale-in,
+  .anim-slide-right, .anim-pop, .anim-stagger > *, .vel-skeleton {
+    animation: none !important;
+  }
+  .hover-lift { transition: none; }
+}
+
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-vel-border); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-vel-border-strong); }
 
-/* ── Calendrier du wizard de réservation (react-day-picker, thème clair) ── */
+/* ── Calendrier du wizard de réservation (react-day-picker) ── */
 .wizard-calendar .rdp-root {
   --rdp-accent-color: #DC2626;
   --rdp-accent-background-color: rgba(220, 38, 38, 0.10);
   --rdp-day-height: 42px;
   --rdp-day-width: 42px;
   --rdp-day_button-border-radius: 10px;
-  --rdp-today-color: #DC2626;
+  --rdp-today-color: #0284C7;
   --rdp-selected-border: 2px solid #DC2626;
   --rdp-range_start-color: #FFFFFF;
   --rdp-range_end-color: #FFFFFF;
   --rdp-range_start-background: linear-gradient(135deg, #DC2626, #B91C1C);
   --rdp-range_end-background: linear-gradient(135deg, #DC2626, #B91C1C);
-  color: #334155;
+  color: var(--color-vel-slate);
   font-family: var(--font-sans);
 }
 .wizard-calendar .rdp-month_caption,
 .wizard-calendar .rdp-caption_label {
-  color: #0F172A;
+  color: var(--color-vel-ink);
   font-family: var(--font-display);
   font-weight: 700;
 }
-.wizard-calendar .rdp-weekday { color: #94A3B8; font-size: 11px; }
+.wizard-calendar .rdp-weekday { color: var(--color-vel-dim); font-size: 11px; }
 .wizard-calendar .rdp-chevron { fill: #DC2626; }
 .wizard-calendar .rdp-day_button { cursor: pointer; transition: background 0.15s ease; }
 .wizard-calendar .rdp-day:not(.rdp-disabled) .rdp-day_button:hover {
@@ -293,7 +489,7 @@ body {
 }
 /* Plage survolée entre le 1er et le 2e clic */
 .wizard-calendar .wizard-day-preview:not(.rdp-selected):not(.wizard-day-blocked) .rdp-day_button {
-  background: rgba(220, 38, 38, 0.07);
+  background: rgba(2, 132, 199, 0.10);
   border-radius: 0;
 }
 @media (prefers-reduced-motion: reduce) {

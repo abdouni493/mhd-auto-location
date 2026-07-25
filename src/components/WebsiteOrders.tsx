@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, AlertTriangle, Phone, Mail, User, Loader } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
 import { ReservationsService } from '../services/ReservationsService';
+import { CurrencyCode, convertFromDzd, formatCurrency } from '../utils/currency';
 
 interface WebsiteOrdersProps {
   lang: Language;
@@ -651,32 +652,119 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChan
                         const assuranceTotal = selectedOrder.assuranceTotal || 0;
                         const servicesTotal = selectedOrder.servicesTotal || 0;
                         const carPortion = Math.max(0, selectedOrder.totalPrice - servicesTotal - assuranceTotal);
+
+                        // Devise choisie par le client sur le site. Le total stocké
+                        // est TOUJOURS en dinars : on affiche la devise du client et
+                        // sa conversion DZD juste à côté.
+                        const cur = (selectedOrder.currency || 'DZD') as CurrencyCode;
+                        const rate = Number(selectedOrder.currencyRate) || 1;
+                        const inCur = (v: number) => formatCurrency(convertFromDzd(v, cur, rate), cur);
+                        const inDzd = (v: number) => `${Math.round(v).toLocaleString('fr-DZ')} DA`;
+                        const line = (v: number) => cur === 'DZD' ? inDzd(v) : `${inCur(v)}  ·  ${inDzd(v)}`;
+
+                        const promoPct = selectedOrder.promoDiscountPercentage;
+                        const promoAmount = selectedOrder.promoDiscountAmount || 0;
+
                         return (
                           <div className="space-y-3">
+                            {cur !== 'DZD' && (
+                              <div className="flex flex-wrap items-center gap-2 -mt-1 mb-1">
+                                <span className="px-2.5 py-1 rounded-lg bg-[#0284C7]/10 border border-[#0284C7]/25 text-[10px] font-black uppercase tracking-widest text-[#0284C7]">
+                                  {lang === 'fr' ? 'Devise client' : 'عملة العميل'} : {cur}
+                                </span>
+                                <span className="text-[11px] font-bold text-slate-500">
+                                  1 {cur} = {rate.toLocaleString('fr-DZ')} DA
+                                </span>
+                              </div>
+                            )}
                             <div className="flex justify-between">
                               <span className="font-bold">{lang === 'fr' ? 'Prix véhicule:' : 'سعر المركبة:'}</span>
-                              <span>{carPortion.toLocaleString()} DA</span>
+                              <span>{line(carPortion)}</span>
                             </div>
                             {assuranceTotal > 0 && (
                               <div className="flex justify-between">
                                 <span className="font-bold">🛡️ {lang === 'fr' ? 'Assurance:' : 'التأمين:'}</span>
-                                <span>{assuranceTotal.toLocaleString()} DA</span>
+                                <span>{line(assuranceTotal)}</span>
                               </div>
                             )}
                             {servicesTotal > 0 && (
                               <div className="flex justify-between">
                                 <span className="font-bold">{lang === 'fr' ? 'Services:' : 'الخدمات:'}</span>
-                                <span>{servicesTotal.toLocaleString()} DA</span>
+                                <span>{line(servicesTotal)}</span>
                               </div>
                             )}
+                            {/* Code promo — affiché UNIQUEMENT s'il en existe un */}
+                            {selectedOrder.promoCode && (
+                              <div className="flex justify-between items-center rounded-xl px-3 py-2 bg-emerald-50 border border-emerald-200">
+                                <span className="font-bold text-emerald-800 flex items-center gap-2 flex-wrap">
+                                  🎟️ {lang === 'fr' ? 'Code promo' : 'رمز الخصم'}
+                                  <span className="font-mono font-black tracking-widest">{selectedOrder.promoCode}</span>
+                                  {promoPct ? <span className="text-xs">(−{promoPct}%)</span> : null}
+                                </span>
+                                <span className="font-black text-emerald-700">−{line(promoAmount)}</span>
+                              </div>
+                            )}
+
                             <div className="border-t border-orange-300 pt-2 flex justify-between font-black text-lg">
                               <span>{lang === 'fr' ? 'Total:' : 'الإجمالي:'}</span>
-                              <span className="text-orange-600">{selectedOrder.totalPrice.toLocaleString()} DA</span>
+                              <span className="text-orange-600 text-right">
+                                {cur === 'DZD' ? inDzd(selectedOrder.totalPrice) : (
+                                  <>
+                                    {inCur(selectedOrder.totalPrice)}
+                                    <span className="block text-xs font-bold text-slate-500">
+                                      ≈ {inDzd(selectedOrder.totalPrice)}
+                                    </span>
+                                  </>
+                                )}
+                              </span>
                             </div>
                           </div>
                         );
                       })()}
                     </div>
+
+                    {/* Informations de vol (si le client les a fournies) */}
+                    {(selectedOrder.flightNumber || selectedOrder.flightDate || selectedOrder.flightTicketImage) && (
+                      <div className="bg-gradient-to-r from-sky-50 to-blue-50 rounded-2xl p-6 border border-sky-200">
+                        <h3 className="text-lg font-black text-sky-900 mb-4">
+                          ✈️ {lang === 'fr' ? 'Informations de vol' : 'معلومات الرحلة'}
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-sky-700">
+                              {lang === 'fr' ? 'N° de vol' : 'رقم الرحلة'}
+                            </p>
+                            <p className="font-black text-slate-900 font-mono tracking-wider">{selectedOrder.flightNumber || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-sky-700">
+                              {lang === 'fr' ? 'Date' : 'التاريخ'}
+                            </p>
+                            <p className="font-black text-slate-900">{selectedOrder.flightDate || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-sky-700">
+                              {lang === 'fr' ? 'Heure' : 'الساعة'}
+                            </p>
+                            <p className="font-black text-slate-900">{selectedOrder.flightTime || '—'}</p>
+                          </div>
+                        </div>
+                        {selectedOrder.flightTicketImage && (
+                          <a
+                            href={selectedOrder.flightTicketImage}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-4 block rounded-xl overflow-hidden border border-sky-200 bg-white"
+                          >
+                            <img
+                              src={selectedOrder.flightTicketImage}
+                              alt={lang === 'fr' ? 'Justificatif du billet' : 'إثبات التذكرة'}
+                              className="w-full max-h-64 object-contain"
+                            />
+                          </a>
+                        )}
+                      </div>
+                    )}
 
                     {/* Assurance de protection */}
                     {(selectedOrder.protectionAssurance || selectedOrder.protectionAssuranceName) && (

@@ -13,6 +13,8 @@ import { getCars, addCar, updateCar, deleteCar, AddCarData } from '../services/c
 import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
+import { parseCarCurrencies } from '../utils/currency';
+import { usePermissions } from '../utils/permissions';
 
 interface CarsPageProps {
   lang: Language;
@@ -119,6 +121,12 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
           status: dbCar.status === 'maintenance' ? 'maintenance' : 'disponible',
           fuelLevel: dbCar.fuel_level || 'full',
           isHiddenFromSite: dbCar.is_hidden_from_site === true,
+          // Propriété du véhicule + devises secondaires
+          ownerType: (dbCar as any).owner_type === 'third_party' ? 'third_party' : 'personal',
+          ownerName: (dbCar as any).owner_name || undefined,
+          ownerPhone: (dbCar as any).owner_phone || undefined,
+          agencySharePerDay: Number((dbCar as any).agency_share_per_day) || 0,
+          currencies: parseCarCurrencies((dbCar as any).currencies),
         }));
         setCars(mappedCars);
       }
@@ -209,6 +217,19 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
           deposit: carData.deposit || selectedCar.deposit,
           mileage: carData.mileage || selectedCar.mileage,
           fuel_level: carData.fuelLevel || selectedCar.fuelLevel || 'full',
+          // Propriété du véhicule
+          owner_type: carData.ownerType || selectedCar.ownerType || 'personal',
+          owner_name: (carData.ownerType ?? selectedCar.ownerType) === 'third_party'
+            ? (carData.ownerName ?? selectedCar.ownerName ?? null)
+            : null,
+          owner_phone: (carData.ownerType ?? selectedCar.ownerType) === 'third_party'
+            ? (carData.ownerPhone ?? selectedCar.ownerPhone ?? null)
+            : null,
+          agency_share_per_day: (carData.ownerType ?? selectedCar.ownerType) === 'third_party'
+            ? (carData.agencySharePerDay ?? selectedCar.agencySharePerDay ?? 0)
+            : 0,
+          // Devises secondaires activées
+          currencies: carData.currencies ?? selectedCar.currencies ?? {},
         };
         const result = await updateCar(selectedCar.id, updateData);
         if (result.success) {
@@ -233,6 +254,12 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
           price_month: carData.priceMonth || 0,
           deposit: carData.deposit || 0,
           mileage: carData.mileage || 0,
+          // Propriété du véhicule (par défaut : voiture de l'agence)
+          owner_type: carData.ownerType || 'personal',
+          owner_name: carData.ownerType === 'third_party' ? (carData.ownerName || null) : null,
+          owner_phone: carData.ownerType === 'third_party' ? (carData.ownerPhone || null) : null,
+          agency_share_per_day: carData.ownerType === 'third_party' ? (carData.agencySharePerDay || 0) : 0,
+          currencies: carData.currencies || {},
         };
         const result = await addCar(newCarData);
         if (result.success && result.car) {
@@ -254,6 +281,11 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
             deposit: Math.round(Number(result.car.deposit || result.car.price_per_day * 2)),
             images: result.car.image_url ? [result.car.image_url] : ['https://picsum.photos/seed/car/400/300'],
             mileage: result.car.mileage || 0,
+            ownerType: (result.car as any).owner_type === 'third_party' ? 'third_party' : 'personal',
+            ownerName: (result.car as any).owner_name || undefined,
+            ownerPhone: (result.car as any).owner_phone || undefined,
+            agencySharePerDay: Number((result.car as any).agency_share_per_day) || 0,
+            currencies: parseCarCurrencies((result.car as any).currencies),
           };
           setCars(prev => [...prev, newCar]);
         }

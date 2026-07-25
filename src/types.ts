@@ -18,6 +18,9 @@ export interface SidebarItem {
   icon: string;
 }
 
+/** Propriété du véhicule : flotte de l'agence, ou véhicule confié par un tiers. */
+export type CarOwnerType = 'personal' | 'third_party';
+
 export interface Car {
   id: string;
   brand: string;
@@ -42,6 +45,23 @@ export interface Car {
   status?: 'disponible' | 'reserve' | 'louer' | 'maintenance';
   // Masquée du site public (visible par défaut). Les vues admin l'affichent quand même.
   isHiddenFromSite?: boolean;
+
+  // ── Propriété du véhicule ────────────────────────────────────────────
+  /** 'personal' (défaut) = voiture de l'agence · 'third_party' = voiture d'un tiers. */
+  ownerType?: CarOwnerType;
+  ownerName?: string;
+  ownerPhone?: string;
+  /** Part revenant à l'agence par jour de location (DZD), pour un véhicule tiers. */
+  agencySharePerDay?: number;
+
+  // ── Multi-devises ────────────────────────────────────────────────────
+  /**
+   * Devises secondaires activables. Le DZD reste la base ; chaque devise
+   * porte son taux de change (1 unité = N DZD) et les prix jour/semaine/
+   * mois/caution en sont dérivés automatiquement.
+   * Forme : { EUR: { enabled: true, rate: 150 }, USD: {...}, GBP: {...} }
+   */
+  currencies?: Record<string, { enabled: boolean; rate: number }>;
 }
 
 export type ExpenseType = 'vidange' | 'assurance' | 'controle' | 'chaine' | 'autre';
@@ -121,6 +141,8 @@ export interface WorkerAdvance {
   amount: number;
   date: string;
   note?: string;
+  /** true dès qu'un paiement a déduit cet acompte. */
+  settled?: boolean;
 }
 
 export interface WorkerAbsence {
@@ -128,6 +150,8 @@ export interface WorkerAbsence {
   cost: number;
   date: string;
   note?: string;
+  /** true dès qu'un paiement a déduit cette absence. */
+  settled?: boolean;
 }
 
 export interface WorkerPayment {
@@ -139,6 +163,25 @@ export interface WorkerPayment {
   absences: number;
   netSalary: number;
   note?: string;
+  /** Période couverte : 'YYYY-MM' en mensuel, 'YYYY-MM-DD' en journalier. */
+  periodKey?: string;
+}
+
+/** Rôle métier créé librement par l'admin (Gérant, Réceptionniste, Chauffeur…). */
+export interface WorkerRole {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+/**
+ * Permissions d'un employé.
+ * `interfaces` : ids des onglets visibles dans sa sidebar (voir SIDEBAR_ITEMS).
+ * `actions`    : par onglet, les ids d'actions autorisées (voir INTERFACE_ACTIONS).
+ */
+export interface WorkerPermissions {
+  interfaces: string[];
+  actions: Record<string, string[]>;
 }
 
 export interface Worker {
@@ -150,21 +193,57 @@ export interface Worker {
   email: string;
   address?: string;
   profilePhoto?: string;
+  /** Numéro de carte d'identité (optionnel). */
+  idCardNumber?: string;
 
   // Work Information
   type: 'admin' | 'worker' | 'driver';
+  /** Rôle métier libre (nom), en plus du `type` technique. */
+  roleId?: string;
+  roleName?: string;
+  /** Date d'entrée en fonction. */
+  startDate?: string;
+
+  // Rémunération
+  /** false = l'employé n'est pas rémunéré via l'application. */
+  paymentEnabled?: boolean;
   paymentType?: PaymentType;
   baseSalary: number;
 
   // Login Credentials
   username: string;
   password: string;
+  /** Un compte de connexion Supabase Auth est-il actif pour cet employé ? */
+  accountEnabled?: boolean;
+  /** id de l'utilisateur Supabase Auth associé (si compte créé). */
+  authUserId?: string;
+
+  // Permissions (vide à la création : l'admin les attribue ensuite)
+  permissions?: WorkerPermissions;
 
   // Records
   advances: WorkerAdvance[];
   absences: WorkerAbsence[];
   payments: WorkerPayment[];
 
+  createdAt: string;
+}
+
+/** Client entreprise (société) — utilisé sur les contrats et les factures. */
+export interface Entreprise {
+  id: string;
+  name: string;
+  /** Registre de commerce, ex : 12/00-0000000B19 */
+  rc?: string;
+  /** Article d'imposition, ex : 000000000 */
+  art?: string;
+  /** Numéro d'identification statistique (15 chiffres). */
+  nis?: string;
+  /** Numéro d'identification fiscale (15 chiffres). */
+  nif?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
   createdAt: string;
 }
 export interface StoreExpense {
@@ -222,6 +301,11 @@ export interface ReservationStep2 {
   wilaya: string;
   completeAddress?: string;
   scannedDocuments?: string[];
+  // Informations de vol (réservations du site public)
+  flightNumber?: string;
+  flightDate?: string;
+  flightTime?: string;
+  flightTicketImage?: string;
 }
 
 export interface Reservation {
@@ -355,6 +439,11 @@ export interface AdditionalService {
   description?: string;
   price: number;
   selected: boolean;
+  /**
+   * Service obligatoire : pré-sélectionné automatiquement sur toute nouvelle
+   * réservation (application ET site public) et non décochable.
+   */
+  isMandatory?: boolean;
 }
 
 // Un item d'un forfait d'assurance de protection (avec son statut vrai/faux).
@@ -416,6 +505,48 @@ export interface ReservationDetails {
   createdByName?: string;
   /** Origine de la réservation : 'website' (site public) ou 'agency' (admin). */
   source?: 'website' | 'agency';
+
+  // ── Timbre fiscal (droit de timbre) ─────────────────────────────────
+  timbreEnabled?: boolean;
+  /** Taux appliqué : 1, 1.5 ou 2 (%). */
+  timbreRate?: number;
+  /** Montant du timbre en DZD. */
+  timbreAmount?: number;
+
+  // ── Devise choisie par le client (réservations du site public) ───────
+  currency?: string;          // 'DZD' | 'USD' | 'EUR' | 'GBP'
+  /** 1 unité de `currency` = `currencyRate` DZD (1 si DZD). */
+  currencyRate?: number;
+  /** Total dans la devise choisie (le totalPrice reste TOUJOURS en DZD). */
+  totalPriceCurrency?: number;
+
+  // ── Code promo consommé (site public) ───────────────────────────────
+  promoCode?: string;
+  promoDiscountPercentage?: number;
+  /** Montant de la réduction en DZD. */
+  promoDiscountAmount?: number;
+
+  // ── Entreprise rattachée (facturation société) ──────────────────────
+  entrepriseId?: string;
+  entreprise?: Entreprise;
+
+  // ── Informations de vol (réservations du site public) ───────────────
+  flightNumber?: string;
+  flightDate?: string;
+  flightTime?: string;
+  /** URL de l'image du billet fournie par le client. */
+  flightTicketImage?: string;
+}
+
+/** Paramètres globaux de l'agence appliqués à toutes les fins de location. */
+export interface RentalSettings {
+  /** Limite de kilométrage incluse par jour de location (0 = illimité). */
+  mileageLimitPerDay: number;
+  /** Frais facturés par kilomètre au-delà de la limite (DZD). */
+  excessMileageFeePerKm: number;
+  /** Frais forfaitaires par cran de carburant manquant (DZD). */
+  fuelFeePerLevel: number;
+  updatedAt?: string;
 }
 
 export interface Invoice {
@@ -490,6 +621,22 @@ export interface WebsiteOrder {
   status: 'website_reservation' | 'pending' | 'accepted' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
   createdAt: string;
   source: 'website';
+
+  // Devise choisie par le client sur le site (totalPrice reste en DZD)
+  currency?: string;
+  currencyRate?: number;
+  totalPriceCurrency?: number;
+
+  // Code promo utilisé (absent = aucun code, ne rien afficher)
+  promoCode?: string;
+  promoDiscountPercentage?: number;
+  promoDiscountAmount?: number;
+
+  // Informations de vol saisies par le client
+  flightNumber?: string;
+  flightDate?: string;
+  flightTime?: string;
+  flightTicketImage?: string;
 }
 
 // Document Template Types

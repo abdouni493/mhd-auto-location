@@ -6,8 +6,9 @@
 
 ---
 
-**Project:** AUTO_LOCATION
+**Project:** AUTO_LOCATION (MHD AUTO — Sarl Oukkal)
 **Generated:** 2026-07-02 22:25:06
+**Updated:** 2026-07-25 — rebranding sur l'identité du logo MHD-AUTO
 **Category:** Automotive/Car Dealership
 
 ---
@@ -18,13 +19,34 @@
 
 | Role | Hex | CSS Variable |
 |------|-----|--------------|
-| Primary | `#1E293B` | `--color-primary` |
-| Secondary | `#334155` | `--color-secondary` |
+| Primary | `#0F172A` | `--color-primary` |
+| Secondary | `#0284C7` | `--color-secondary` |
 | CTA/Accent | `#DC2626` | `--color-cta` |
-| Background | `#F8FAFC` | `--color-background` |
+| Background | `#FFFFFF` / `#F8FAFC` | `--color-background` |
 | Text | `#0F172A` | `--color-text` |
 
-**Color Notes:** Premium dark + action red
+**Color Notes:** Identité du logo MHD-AUTO — bouclier charbon `#0F172A`,
+rouge crimson d'action `#DC2626`, bleu électrique `#0284C7`. Mode clair :
+surfaces blanches `#FFFFFF`, fond applicatif `#F8FAFC`.
+
+#### Jetons dérivés
+
+| Rôle | Hex |
+|------|-----|
+| CTA hover | `#B91C1C` |
+| CTA tint | `rgba(220, 38, 38, 0.08)` |
+| Secondary hover | `#0369A1` |
+| Secondary tint | `rgba(2, 132, 199, 0.08)` |
+| Charcoal secondaire | `#1E293B` |
+| Texte secondaire | `#334155` |
+| Texte atténué | `#64748B` |
+| Bordure métallique | `#E2E8F0` |
+| Bordure métallique forte | `#CBD5E1` |
+
+**Implémentation :** `src/index.css` — `--color-vel-primary`, `--color-vel-cta`,
+`--color-vel-blue`, `--color-vel-void`, `--color-vel-surface`, plus les alias
+admin `--color-saas-*` (primary = rouge logo, secondary = bleu logo).
+Le mode sombre est activé par la classe `.dark` sur `<html>`.
 
 ### Typography
 

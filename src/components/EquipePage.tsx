@@ -7,10 +7,12 @@ import { WorkerPaymentModal } from './WorkerPaymentModal';
 import { WorkerAdvanceModal } from './WorkerAdvanceModal';
 import { WorkerAbsenceModal } from './WorkerAbsenceModal';
 import { WorkerHistoryModal } from './WorkerHistoryModal';
+import { WorkerPermissionsModal } from './WorkerPermissionsModal';
 import { ConfirmModal } from './ConfirmModal';
-import { Plus, Search, Loader2 } from 'lucide-react';
+import { Plus, Search, Loader2, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DatabaseService } from '../services/DatabaseService';
+import { usePermissions } from '../utils/permissions';
 
 interface EquipePageProps {
   lang: Language;
@@ -64,6 +66,7 @@ const INITIAL_WORKERS: Worker[] = [
 ];
 
 export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
+  const { can } = usePermissions();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +74,7 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
-  const [activeModal, setActiveModal] = useState<'details' | 'payment' | 'advance' | 'absence' | 'history' | null>(null);
+  const [activeModal, setActiveModal] = useState<'details' | 'payment' | 'advance' | 'absence' | 'history' | 'permissions' | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; workerId: string | null }>({ isOpen: false, workerId: null });
 
   // Load workers on component mount
@@ -98,22 +101,47 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
   );
 
   const handleSaveWorker = async (workerData: Partial<Worker>): Promise<void> => {
-    try {
-      if (editingWorker) {
-        // Edit existing
-        const updated = await DatabaseService.updateWorker(editingWorker.id, workerData);
-        setWorkers(workers.map(w => w.id === updated.id ? { ...updated, advances: w.advances, absences: w.absences, payments: w.payments } : w));
-      } else {
-        // Create new
-        const created = await DatabaseService.createWorker(workerData as Omit<Worker, 'id' | 'createdAt' | 'advances' | 'absences' | 'payments'>);
-        setWorkers(prev => [...prev, created]);
+    // Compte de connexion : créé/mis à jour dans l'authentification Supabase
+    // AVANT l'enregistrement en base, pour ne jamais laisser un employé
+    // « compte activé » sans identifiants réellement utilisables.
+    let authUserId: string | null = workerData.authUserId || null;
+
+    if (workerData.accountEnabled && workerData.email) {
+      if (workerData.password?.trim()) {
+        authUserId = await DatabaseService.upsertWorkerAuthUser(
+          workerData.email,
+          workerData.password.trim(),
+          workerData.fullName || '',
+          workerData.type || 'worker'
+        );
       }
-      setIsModalOpen(false);
-      setEditingWorker(null);
-    } catch (err) {
-      console.error('Error saving worker:', err);
-      throw new Error('Erreur lors de l\'enregistrement');
+    } else if (!workerData.accountEnabled && editingWorker?.accountEnabled && editingWorker.email) {
+      // Compte désactivé : on retire son accès de connexion.
+      try {
+        await DatabaseService.deleteWorkerAuthUser(editingWorker.email);
+      } catch (err) {
+        console.warn('Could not remove auth user:', err);
+      }
+      authUserId = null;
     }
+
+    const payload: Partial<Worker> = { ...workerData, authUserId: authUserId || undefined };
+    // Mot de passe vide en édition = inchangé : on ne l'écrase pas en base.
+    if (editingWorker && !workerData.password?.trim()) delete (payload as any).password;
+
+    if (editingWorker) {
+      const updated = await DatabaseService.updateWorker(editingWorker.id, payload);
+      setWorkers(workers.map(w => w.id === updated.id
+        ? { ...updated, advances: w.advances, absences: w.absences, payments: w.payments }
+        : w));
+    } else {
+      const created = await DatabaseService.createWorker(
+        payload as Omit<Worker, 'id' | 'createdAt' | 'advances' | 'absences' | 'payments'>
+      );
+      setWorkers(prev => [...prev, created]);
+    }
+    setIsModalOpen(false);
+    setEditingWorker(null);
   };
 
   const handleDeleteWorker = (workerId: string) => {
@@ -123,7 +151,7 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
   // Open various modals for a selected worker
   const handleOpenModal = (
     worker: Worker,
-    modal: 'details' | 'payment' | 'advance' | 'absence' | 'history'
+    modal: 'details' | 'payment' | 'advance' | 'absence' | 'history' | 'permissions'
   ) => {
     setSelectedWorker(worker);
     setActiveModal(modal);
@@ -248,6 +276,7 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
                       setIsModalOpen(true);
                     }}
                     onDelete={() => handleDeleteWorker(worker.id)}
+                    onPermissions={can('team', 'permissions') ? () => handleOpenModal(worker, 'permissions') : undefined}
                   />
                 ))}
               </AnimatePresence>
@@ -294,15 +323,25 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
             onClose={() => setActiveModal(null)}
             worker={selectedWorker}
             lang={lang}
-            onCreatePayment={(payment) => {
-              setWorkers(workers.map(w =>
-                w.id === selectedWorker.id
-                  ? { ...w, payments: [...w.payments, payment], advances: [], absences: [] }
-                  : w
-              ));
+            onCreatePayment={async () => {
+              // Recharge depuis la base : les périodes payées et les acomptes
+              // soldés doivent disparaître des prochains calculs.
+              await loadWorkers();
               setActiveModal(null);
             }}
           />
+
+          {activeModal === 'permissions' && (
+            <WorkerPermissionsModal
+              lang={lang}
+              worker={selectedWorker}
+              onClose={() => setActiveModal(null)}
+              onSaved={(permissions) => {
+                setWorkers(prev => prev.map(w => w.id === selectedWorker.id ? { ...w, permissions } : w));
+                setSelectedWorker(prev => prev ? { ...prev, permissions } : prev);
+              }}
+            />
+          )}
 
           <WorkerAdvanceModal
             isOpen={activeModal === 'advance'}
@@ -314,6 +353,7 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
                   ? { ...w, advances: [...w.advances, advance] }
                   : w
               ));
+              setSelectedWorker(prev => prev ? { ...prev, advances: [...prev.advances, advance] } : prev);
               setActiveModal(null);
             }}
             lang={lang}
@@ -329,6 +369,7 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
                   ? { ...w, absences: [...w.absences, absence] }
                   : w
               ));
+              setSelectedWorker(prev => prev ? { ...prev, absences: [...prev.absences, absence] } : prev);
               setActiveModal(null);
             }}
             lang={lang}

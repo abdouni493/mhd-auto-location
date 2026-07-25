@@ -32,6 +32,8 @@ export const StepServices: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {availableServices.map((service, i) => {
               const isSelected = selectedServices.some(s => s.id === service.id);
+              // Service obligatoire : toujours coché, non décochable.
+              const isMandatory = !!service.isMandatory;
               return (
                 <motion.div
                   key={service.id}
@@ -45,8 +47,9 @@ export const StepServices: React.FC = () => {
                     description: service.description,
                     category: service.category || 'service',
                     selected: false,
-                  })}
-                  className="rounded-2xl p-5 cursor-pointer transition-all duration-300 relative overflow-hidden"
+                    isMandatory,
+                  } as any)}
+                  className={`rounded-2xl p-5 transition-all duration-300 relative overflow-hidden ${isMandatory ? 'cursor-default' : 'cursor-pointer'}`}
                   style={{
                     background: isSelected ? 'rgba(220,38,38,0.05)' : C.elevated,
                     border: isSelected ? '1px solid rgba(220,38,38,0.25)' : '1px solid rgba(15,23,42,0.06)',
@@ -55,8 +58,14 @@ export const StepServices: React.FC = () => {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-black text-vel-ink text-sm" style={{ fontFamily: 'var(--font-display)' }}>
+                      <h4 className="font-black text-vel-ink text-sm flex items-center gap-2 flex-wrap" style={{ fontFamily: 'var(--font-display)' }}>
                         {service.name || service.service_name}
+                        {isMandatory && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
+                            style={{ color: '#DC2626', background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)' }}>
+                            {{ fr: 'Inclus', ar: 'مشمول' }[lang]}
+                          </span>
+                        )}
                       </h4>
                       {service.description && (
                         <p className="text-vel-muted text-xs mt-1 leading-relaxed">{service.description}</p>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Language, ReservationDetails, Client, Car } from '../types';
+import { Language, ReservationDetails, Client, Car, Entreprise } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, Grid3x3, CalendarDays, X, Zap, Gauge, Heart, ChevronDown } from 'lucide-react';
 import { ReservationDetailsView } from './ReservationDetailsView';
@@ -13,6 +13,8 @@ import { SendContractModal } from './SendContractModal';
 import { WebsiteOrders } from './WebsiteOrders';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
+import { CurrencyCode, convertFromDzd, formatCurrency, computeTimbre } from '../utils/currency';
+import { EntrepriseModal } from './EntreprisesPage';
 import { getCars } from '../services/carService';
 import { supabase } from '../supabase';
 import { generateConditionsPrintHTML, getConditionsTemplate } from '../constants/ConditionsTemplates';
@@ -1121,6 +1123,52 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                     <div className="text-slate-600">{lang === 'fr' ? 'Reste à payer' : 'المتبقي'}</div>
                     <div className={`font-bold ${remainingAmount === 0 ? 'text-green-700' : 'text-red-700'}`}>{remainingAmount.toLocaleString()} {lang === 'fr' ? 'DA' : 'د.ج'}</div>
                   </div>
+
+                  {/* Devise choisie par le client (réservations du site) */}
+                  {reservation.currency && reservation.currency !== 'DZD' && (
+                    <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-[#0284C7]">
+                        🌐 {lang === 'fr' ? 'Devise client' : 'عملة العميل'} · {reservation.currency}
+                      </span>
+                      <span className="text-right">
+                        <span className="block font-black text-[#0284C7]">
+                          {formatCurrency(
+                            convertFromDzd(displayTotalPrice, reservation.currency as CurrencyCode, Number(reservation.currencyRate) || 1),
+                            reservation.currency as CurrencyCode
+                          )}
+                        </span>
+                        <span className="block text-[10px] font-bold text-slate-400">
+                          1 {reservation.currency} = {(Number(reservation.currencyRate) || 1).toLocaleString('fr-DZ')} DA
+                        </span>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Code promo — masqué entièrement s'il n'y en a pas */}
+                  {reservation.promoCode && (
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-emerald-50 border border-emerald-200">
+                      <span className="flex items-center gap-2 text-xs font-bold text-emerald-800 flex-wrap">
+                        🎟️ <span className="font-mono font-black tracking-widest">{reservation.promoCode}</span>
+                        {reservation.promoDiscountPercentage ? <span>(−{reservation.promoDiscountPercentage}%)</span> : null}
+                      </span>
+                      <span className="text-xs font-black text-emerald-700">
+                        −{(reservation.promoDiscountAmount || 0).toLocaleString('fr-DZ')} DA
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Timbre fiscal appliqué */}
+                  {reservation.timbreEnabled && (reservation.timbreAmount || 0) > 0 && (
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-[#DC2626]/6 border border-[#DC2626]/20">
+                      <span className="text-xs font-bold text-[#B91C1C]">
+                        🧾 {lang === 'fr' ? 'Timbre fiscal' : 'الطابع الجبائي'}
+                        {reservation.timbreRate ? ` (${String(reservation.timbreRate).replace('.', ',')} %)` : ''}
+                      </span>
+                      <span className="text-xs font-black text-[#B91C1C]">
+                        {(reservation.timbreAmount || 0).toLocaleString('fr-DZ')} DA
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2417,6 +2465,49 @@ export const PersonalizationModal: React.FC<{
     email: '',
   });
 
+  // Recherche / création d'entreprise enregistrée (module Entreprises)
+  const [entrepriseQuery, setEntrepriseQuery] = useState('');
+  const [entrepriseResults, setEntrepriseResults] = useState<Entreprise[]>([]);
+  const [loadingEntreprises, setLoadingEntreprises] = useState(false);
+  const [showEntrepriseModal, setShowEntrepriseModal] = useState(false);
+  const [selectedEntrepriseId, setSelectedEntrepriseId] = useState<string | null>(null);
+
+  // Affichage des prix sur le contrat imprimé (activé par défaut)
+  const [showPricesOnContract, setShowPricesOnContract] = useState(true);
+
+  // Charge les entreprises dès que l'option société est activée
+  useEffect(() => {
+    if (!isSociete) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingEntreprises(true);
+      try {
+        const list = await DatabaseService.searchEntreprises(entrepriseQuery);
+        if (!cancelled) setEntrepriseResults(list);
+      } catch {
+        if (!cancelled) setEntrepriseResults([]);
+      } finally {
+        if (!cancelled) setLoadingEntreprises(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isSociete, entrepriseQuery]);
+
+  /** Recopie une entreprise enregistrée dans les champs du document. */
+  const applyEntreprise = (e: Entreprise) => {
+    setSelectedEntrepriseId(e.id);
+    setSocieteData(prev => ({
+      ...prev,
+      entreprise: e.name,
+      rc: e.rc || '',
+      art: e.art || '',
+      nis: e.nis || '',
+      nif: e.nif || '',
+      email: e.email || prev.email,
+    }));
+    setEntrepriseQuery(e.name);
+  };
+
   useEffect(() => {
     loadAgencySettings();
   }, []);
@@ -2594,6 +2685,16 @@ export const PersonalizationModal: React.FC<{
 
     const hasSecondConductor = !!secondConductor;
     const hasSociete = !!societe;
+
+    // Timbre fiscal enregistré sur la réservation (repris tel quel sur le
+    // contrat). Si la colonne est absente, on recalcule d'après le barème.
+    const contractTimbreEnabled = !!(reservation as any)?.timbreEnabled;
+    const contractTimbreAmount = contractTimbreEnabled
+      ? Number((reservation as any)?.timbreAmount) || computeTimbre(reservation?.totalPrice || 0).amount
+      : 0;
+    const contractTimbreRate = contractTimbreEnabled
+      ? ((reservation as any)?.timbreRate ?? computeTimbre(reservation?.totalPrice || 0).rate)
+      : 0;
     // Assurance de protection : affichée uniquement si un forfait a été choisi
     // à la création de la réservation.
     const hasProtectionAssurance = !!(reservation?.protectionAssurance || reservation?.protectionAssuranceName);
@@ -3121,8 +3222,9 @@ export const PersonalizationModal: React.FC<{
         </div>
         ` : ''}
 
-        <!-- Pricing & Conditions (2 columns) -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <!-- Pricing & Conditions -->
+        <div style="display: grid; grid-template-columns: ${showPricesOnContract ? '1fr 1fr' : '1fr'}; gap: 10px;">
+          ${showPricesOnContract ? `
           <!-- Pricing -->
           <div class="section pricing-section">
             <div class="section-title">💰 ${labels.pricing}</div>
@@ -3151,12 +3253,19 @@ export const PersonalizationModal: React.FC<{
                 <span>${((reservation?.totalPrice || 0) * 0.19).toFixed(2)} DA</span>
               </div>
               ` : ''}
+              ${contractTimbreAmount > 0 ? `
+              <div class="pricing-row">
+                <span>🧾 ${isFrench ? 'Timbre fiscal' : 'الطابع الجبائي'}${contractTimbreRate ? ` (${String(contractTimbreRate).replace('.', ',')} %)` : ''}:</span>
+                <span>${contractTimbreAmount.toFixed(2)} DA</span>
+              </div>
+              ` : ''}
               <div class="pricing-row grand-total">
                 <span>${labels.totalTTC}:</span>
-                <span>${(reservation?.tvaApplied ? ((reservation?.totalPrice || 0) * 1.19) : (reservation?.totalPrice || 0)).toFixed(2)} DA</span>
+                <span>${((reservation?.tvaApplied ? ((reservation?.totalPrice || 0) * 1.19) : (reservation?.totalPrice || 0)) + contractTimbreAmount).toFixed(2)} DA</span>
               </div>
             </div>
           </div>
+          ` : ''}
 
           <!-- Conditions -->
           <div class="section conditions-section">
@@ -5166,6 +5275,20 @@ export const PersonalizationModal: React.FC<{
             </button>
           </div>
 
+          {/* Création d'une entreprise sans quitter l'impression */}
+          <AnimatePresence>
+            {showEntrepriseModal && (
+              <EntrepriseModal
+                lang={lang}
+                onClose={() => setShowEntrepriseModal(false)}
+                onSaved={(created) => {
+                  setEntrepriseResults(prev => [created, ...prev]);
+                  applyEntreprise(created);
+                }}
+              />
+            )}
+          </AnimatePresence>
+
           {/* Content Area with Preview */}
           <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-50 to-white p-8">
 
@@ -5203,6 +5326,55 @@ export const PersonalizationModal: React.FC<{
                 {/* Fields - shown when checked */}
                 {isSociete && (
                   <div className="p-4 bg-white border-t border-amber-200 space-y-3">
+
+                    {/* Sélection d'une entreprise enregistrée */}
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-black uppercase tracking-wider text-amber-800">
+                          {lang === 'fr' ? 'Entreprise enregistrée' : 'شركة مسجلة'}
+                        </span>
+                        <button
+                          onClick={() => setShowEntrepriseModal(true)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 transition-colors cursor-pointer"
+                        >
+                          + {lang === 'fr' ? 'Nouvelle entreprise' : 'شركة جديدة'}
+                        </button>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={entrepriseQuery}
+                        onChange={e => { setEntrepriseQuery(e.target.value); setSelectedEntrepriseId(null); }}
+                        placeholder={lang === 'fr' ? "Rechercher une entreprise par nom…" : 'ابحث عن شركة بالاسم…'}
+                        className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                      />
+
+                      <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1.5">
+                        {loadingEntreprises ? (
+                          <p className="text-xs text-amber-700 py-2">{lang === 'fr' ? 'Chargement…' : 'جاري التحميل…'}</p>
+                        ) : entrepriseResults.length === 0 ? (
+                          <p className="text-xs text-amber-700 py-2">
+                            {lang === 'fr' ? 'Aucune entreprise trouvée — créez-en une.' : 'لا توجد شركة — أنشئ واحدة.'}
+                          </p>
+                        ) : entrepriseResults.map(ent => (
+                          <button
+                            key={ent.id}
+                            onClick={() => applyEntreprise(ent)}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer border ${
+                              selectedEntrepriseId === ent.id
+                                ? 'bg-amber-600 text-white border-amber-600'
+                                : 'bg-white border-amber-200 hover:bg-amber-100'
+                            }`}
+                          >
+                            <span className="font-bold block truncate">{ent.name}</span>
+                            <span className={`text-[11px] ${selectedEntrepriseId === ent.id ? 'text-white/80' : 'text-amber-700'}`}>
+                              {[ent.rc && `RC ${ent.rc}`, ent.nif && `NIF ${ent.nif}`].filter(Boolean).join(' · ') || '—'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <p className="text-xs text-amber-600 font-semibold">
                       {lang === 'fr'
                         ? `Remplissez les champs voulus — seuls les champs remplis apparaitront sur ${type === 'contract' ? 'le contrat' : 'la facture'}.`
@@ -5282,6 +5454,38 @@ export const PersonalizationModal: React.FC<{
                 )}
               </div>
             )}
+            {/* Affichage des prix sur le contrat imprimé */}
+            {type === 'contract' && (
+              <div className="mb-5 border-2 border-slate-300 rounded-xl overflow-hidden">
+                <label className="flex items-center gap-3 px-4 py-3 bg-slate-50 cursor-pointer select-none hover:bg-slate-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={showPricesOnContract}
+                    onChange={e => setShowPricesOnContract(e.target.checked)}
+                    className="w-5 h-5 accent-[#DC2626] cursor-pointer"
+                  />
+                  <span className="text-xl">&#x1F4B0;</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-slate-800 text-sm">
+                      {lang === 'fr' ? 'Afficher les prix et totaux sur le contrat' : 'إظهار الأسعار والمجاميع في العقد'}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {lang === 'fr'
+                        ? 'Activé par défaut. Décochez pour imprimer un contrat sans aucun montant.'
+                        : 'مفعّل افتراضياً. ألغِ التحديد لطباعة عقد بدون أي مبلغ.'}
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
+                    showPricesOnContract ? 'bg-[#DC2626] text-white' : 'bg-slate-300 text-slate-700'
+                  }`}>
+                    {showPricesOnContract
+                      ? (lang === 'fr' ? 'VISIBLE' : 'ظاهر')
+                      : (lang === 'fr' ? 'MASQUÉ' : 'مخفي')}
+                  </span>
+                </label>
+              </div>
+            )}
+
             {/* Second Conductor Search (only for contract) */}
             {type === 'contract' && (
               <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-5">

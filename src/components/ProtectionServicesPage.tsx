@@ -544,6 +544,11 @@ const ServicesManager: React.FC<{ lang: Language }> = ({ lang }) => {
                       <span className="text-[9px] font-bold uppercase tracking-widest text-saas-text-muted">
                         {t(lang, meta.fr, meta.ar)}
                       </span>
+                      {s.isMandatory && (
+                        <span className="ml-2 inline-block text-[9px] font-black uppercase tracking-widest text-[#DC2626] bg-[#DC2626]/10 border border-[#DC2626]/25 px-2 py-0.5 rounded-full">
+                          {t(lang, 'Obligatoire', 'إلزامي')}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <span className="flex items-center gap-1 text-saas-primary-via font-black text-sm flex-shrink-0">
@@ -606,6 +611,8 @@ const ServiceFormModal: React.FC<{
   const [name, setName] = useState(editing?.name || '');
   const [price, setPrice] = useState<number | ''>(editing?.price ?? '');
   const [description, setDescription] = useState(editing?.description || '');
+  // Service obligatoire : coché d'office sur toute nouvelle réservation
+  const [isMandatory, setIsMandatory] = useState<boolean>(editing?.isMandatory ?? false);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -615,9 +622,9 @@ const ServiceFormModal: React.FC<{
     try {
       setSaving(true);
       if (editing) {
-        await DatabaseService.updateService(editing.id, { name: name.trim(), description, price: p, isActive: true });
+        await DatabaseService.updateService(editing.id, { name: name.trim(), description, price: p, isActive: true, isMandatory });
       } else {
-        await DatabaseService.createService({ category, name: name.trim(), description, price: p });
+        await DatabaseService.createService({ category, name: name.trim(), description, price: p, isMandatory });
       }
       onSaved();
     } catch (err) {
@@ -679,6 +686,36 @@ const ServiceFormModal: React.FC<{
             onChange={e => setDescription(e.target.value)}
             placeholder={t(lang, 'Détails du service…', 'تفاصيل الخدمة…')} />
         </div>
+
+        {/* Service obligatoire */}
+        <button
+          type="button"
+          onClick={() => setIsMandatory(v => !v)}
+          className={`w-full flex items-start gap-3.5 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+            isMandatory ? 'border-[#DC2626] bg-[#DC2626]/6' : 'border-saas-border bg-saas-bg hover:border-saas-border-strong'
+          }`}
+        >
+          <span
+            className={`relative w-11 h-6 rounded-full shrink-0 mt-0.5 transition-colors ${isMandatory ? 'bg-[#DC2626]' : 'bg-slate-300'}`}
+          >
+            <motion.span
+              layout
+              transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+              className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+              style={{ left: isMandatory ? 22 : 2 }}
+            />
+          </span>
+          <span>
+            <span className="block font-black text-saas-text-main">
+              {t(lang, 'Service obligatoire', 'خدمة إلزامية')}
+            </span>
+            <span className="block text-xs text-saas-text-muted mt-0.5 leading-relaxed">
+              {t(lang,
+                "Sélectionné automatiquement à l'étape « Services » de chaque nouvelle réservation, dans l'application comme sur le site public. Le client ne peut pas le décocher.",
+                'يتم اختياره تلقائياً في خطوة «الخدمات» لكل حجز جديد، في التطبيق وفي الموقع. لا يمكن للعميل إلغاء تحديده.')}
+            </span>
+          </span>
+        </button>
       </div>
 
       <div className="flex gap-3 mt-8 pt-5 border-t border-saas-border">
