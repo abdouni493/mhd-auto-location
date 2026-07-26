@@ -486,8 +486,14 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
         await ReservationsService.updateReservationServices(reservationId, selectedServices);
       }
 
-      // Save departure inspection if present
-      const inspection = formData.step3?.departureInspection;
+      // Save departure inspection ONLY if the agent actually filled the
+      // « Inspection de départ » screen. Le kilométrage est pré-rempli avec le
+      // compteur du véhicule, ce qui écrivait auparavant une inspection fantôme
+      // (et créait un enregistrement d'inspection) même pour une réservation
+      // restée « en attente ». En mode inspection (activation d'une réservation
+      // existante) on enregistre toujours.
+      const shouldSaveInspection = inspectionTouched || (inspectionMode && !!initialData);
+      const inspection = shouldSaveInspection ? formData.step3?.departureInspection : undefined;
       if (inspection) {
         try {
           // Determine agency_id: prefer explicit agency id from step1, else fallback to first agency
@@ -2303,7 +2309,7 @@ export const Step5AdditionalServices: React.FC<{
   const [loadingDrivers, setLoadingDrivers] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<any>(null);
   const [driverCaution, setDriverCaution] = useState(0);
-  const [newService, setNewService] = useState({ name: '', price: 0, description: '', category: 'service' });
+  const [newService, setNewService] = useState({ name: '', price: 0, description: '', category: 'service', isMandatory: false });
   const [showNewServiceForm, setShowNewServiceForm] = useState(false);
   const [showDriverList, setShowDriverList] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ show: boolean; serviceId: string | null; serviceName: string }>({ show: false, serviceId: null, serviceName: '' });
@@ -2466,16 +2472,33 @@ export const Step5AdditionalServices: React.FC<{
           name: newService.name,
           description: newService.description,
           price: newService.price,
+          isMandatory: newService.isMandatory,
         });
 
         setServices(prev => [...prev, created]);
-        toggleService(created);
+        // Ajoute directement le nouveau service à la sélection. Un service
+        // obligatoire est ignoré par toggleService, on l'insère donc manuellement.
+        setFormData(prev => {
+          const current = prev.step5?.additionalServices || [];
+          if (current.some(s => s.id === created.id)) return prev;
+          return {
+            ...prev,
+            step5: {
+              ...prev.step5,
+              additionalServices: [
+                ...current,
+                { ...created, originalServiceId: created.id, selected: true },
+              ],
+            },
+          } as any;
+        });
 
         setNewService({
           name: '',
           price: 0,
           description: '',
-          category: 'service'
+          category: 'service',
+          isMandatory: false,
         });
         setShowNewServiceForm(false);
       } catch (err) {
@@ -2757,48 +2780,106 @@ export const Step5AdditionalServices: React.FC<{
                 ➕ {lang === 'fr' ? 'Créer un Service' : 'إنشاء خدمة'}
               </h3>
 
-              <div className="space-y-6">
+              <div className="space-y-5">
                 {/* Service Category */}
                 <div>
                   <label className="block font-bold text-slate-900 mb-2">
                     📂 {lang === 'fr' ? 'Catégorie' : 'الفئة'}
                   </label>
-                  <select
-                    value={newService.category}
-                    onChange={(e) => setNewService(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="service">🛠️ {lang === 'fr' ? 'Service' : 'خدمة'}</option>
-                    <option value="equipment">🔧 {lang === 'fr' ? 'Équipement' : 'معدات'}</option>
-                    <option value="insurance">🛡️ {lang === 'fr' ? 'Assurance' : 'تأمين'}</option>
-                    <option value="decoration">🎉 {lang === 'fr' ? 'Décoration' : 'ديكور'}</option>
-                  </select>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { value: 'service', fr: 'Service', ar: 'خدمة', icon: '🛎️' },
+                      { value: 'decoration', fr: 'Décoration', ar: 'زينة', icon: '🎀' },
+                      { value: 'equipment', fr: 'Équipement', ar: 'معدات', icon: '🧰' },
+                      { value: 'insurance', fr: 'Assurance', ar: 'تأمين', icon: '🛡️' },
+                    ].map(c => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => setNewService(prev => ({ ...prev, category: c.value }))}
+                        className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-bold transition-all ${
+                          newService.category === c.value
+                            ? 'border-saas-primary-via bg-saas-primary-via/5 text-saas-primary-via'
+                            : 'border-slate-200 text-slate-500 hover:border-saas-primary-via/40'
+                        }`}
+                      >
+                        <span className="text-lg">{c.icon}</span>
+                        {lang === 'fr' ? c.fr : c.ar}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Service Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input
-                    placeholder={lang === 'fr' ? 'Nom du service' : 'اسم الخدمة'}
-                    value={newService.name}
-                    onChange={(e) => setNewService(prev => ({ ...prev, name: e.target.value }))}
-                    className="p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <input
-                    type="number"
-                    placeholder={lang === 'fr' ? 'Prix (DA)' : 'السعر (دج)'}
-                    value={newService.price || ''}
-                    onChange={(e) => setNewService(prev => ({ ...prev, price: Number(e.target.value) }))}
-                    className="p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  <div>
+                    <label className="block font-bold text-slate-900 mb-2">
+                      {lang === 'fr' ? 'Nom du service' : 'اسم الخدمة'}
+                    </label>
+                    <input
+                      placeholder={lang === 'fr' ? 'Ex : Nettoyage véhicule' : 'مثال: تنظيف السيارة'}
+                      value={newService.name}
+                      onChange={(e) => setNewService(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-900 mb-2">
+                      {lang === 'fr' ? 'Prix (DA)' : 'السعر (دج)'}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      value={newService.price || ''}
+                      onChange={(e) => setNewService(prev => ({ ...prev, price: Number(e.target.value) }))}
+                      className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-900 mb-2">
+                    {lang === 'fr' ? 'Description (optionnel)' : 'الوصف (اختياري)'}
+                  </label>
+                  <textarea
+                    placeholder={lang === 'fr' ? 'Détails du service…' : 'تفاصيل الخدمة…'}
+                    value={newService.description}
+                    onChange={(e) => setNewService(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows={3}
                   />
                 </div>
 
-                <textarea
-                  placeholder={lang === 'fr' ? 'Description du service (optionnel)' : 'وصف الخدمة (اختياري)'}
-                  value={newService.description}
-                  onChange={(e) => setNewService(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                />
+                {/* Service obligatoire */}
+                <button
+                  type="button"
+                  onClick={() => setNewService(prev => ({ ...prev, isMandatory: !prev.isMandatory }))}
+                  className={`w-full flex items-start gap-3.5 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                    newService.isMandatory ? 'border-[#DC2626] bg-[#DC2626]/6' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`relative w-11 h-6 rounded-full shrink-0 mt-0.5 transition-colors ${newService.isMandatory ? 'bg-[#DC2626]' : 'bg-slate-300'}`}
+                  >
+                    <motion.span
+                      layout
+                      transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+                      className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+                      style={{ left: newService.isMandatory ? 22 : 2 }}
+                    />
+                  </span>
+                  <span>
+                    <span className="block font-black text-slate-900">
+                      {lang === 'fr' ? 'Service obligatoire' : 'خدمة إلزامية'}
+                    </span>
+                    <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      {lang === 'fr'
+                        ? "Sélectionné automatiquement à l'étape « Services » de chaque nouvelle réservation, dans l'application comme sur le site public. Le client ne peut pas le décocher."
+                        : 'يتم اختياره تلقائياً في خطوة «الخدمات» لكل حجز جديد، في التطبيق وفي الموقع. لا يمكن للعميل إلغاء تحديده.'}
+                    </span>
+                  </span>
+                </button>
               </div>
 
               <div className="flex gap-3 mt-6">

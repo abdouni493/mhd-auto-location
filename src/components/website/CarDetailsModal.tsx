@@ -1,7 +1,7 @@
 import React from 'react';
 import { Language, Car } from '../../types';
 import { motion } from 'motion/react';
-import { X, Fuel, Settings, Users, DoorOpen, Palette, Gauge } from 'lucide-react';
+import { X, Fuel, Settings, Users, DoorOpen, Palette } from 'lucide-react';
 
 interface CarDetailsModalProps {
   lang: Language;
@@ -17,7 +17,6 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
     { icon: Users, label: { fr: 'Places', ar: 'مقاعد' }, value: `${car.seats} ${lang === 'fr' ? 'places' : 'مقاعد'}` },
     { icon: DoorOpen, label: { fr: 'Portes', ar: 'أبواب' }, value: `${car.doors} ${lang === 'fr' ? 'portes' : 'أبواب'}` },
     { icon: Palette, label: { fr: 'Couleur', ar: 'اللون' }, value: car.color },
-    { icon: Gauge, label: { fr: 'Kilométrage', ar: 'الكيلومترات' }, value: `${car.mileage.toLocaleString()} km` },
   ];
 
   return (

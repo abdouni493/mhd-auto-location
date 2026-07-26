@@ -1545,6 +1545,13 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
   const [paymentNow, setPaymentNow] = useState<number | ''>('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'check'>('cash');
 
+  // Services obligatoires de la réservation. Par défaut cochés (prestation
+  // fournie/facturée par l'agence). Les décocher = le client a assuré la
+  // prestation lui-même (ex : rend la voiture déjà lavée) → l'agence lui
+  // restitue le coût du service, déduit du total dû.
+  const [mandatoryServices, setMandatoryServices] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [refundedServiceIds, setRefundedServiceIds] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     (async () => {
       try {
@@ -1569,7 +1576,33 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
       setSettings(s);
       setSettingsDraft(s);
     })();
+
+    // Détermine les services obligatoires présents sur cette réservation en
+    // croisant les services facturés avec le référentiel (drapeau obligatoire).
+    (async () => {
+      try {
+        const master = await DatabaseService.getServices();
+        const reservationServices: any[] =
+          (reservation as any).additionalServices || reservation.step5?.additionalServices || [];
+        const mandatory = reservationServices
+          .map((rs: any) => {
+            const name = rs.service_name || rs.name || rs.serviceName || '';
+            const price = Number(rs.price) || 0;
+            const hit = master.find((m: any) => m.name === name);
+            const isMandatory = rs.is_mandatory === true || rs.isMandatory === true || !!(hit && hit.isMandatory);
+            return { id: String(rs.id || rs.service_id || name), name, price, isMandatory };
+          })
+          .filter((s: any) => s.isMandatory && s.price > 0)
+          .map(({ id, name, price }: any) => ({ id, name, price }));
+        setMandatoryServices(mandatory);
+      } catch (err) {
+        console.error('Error loading mandatory services:', err);
+      }
+    })();
   }, [reservation.id]);
+
+  const toggleServiceRefund = (id: string) =>
+    setRefundedServiceIds(prev => ({ ...prev, [id]: !prev[id] }));
 
   const toggleItem = (itemId: string) => setResponses(prev => ({ ...prev, [itemId]: !prev[itemId] }));
 
@@ -1594,11 +1627,16 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
 
   const extraFees = (parseFloat(excessMileage) || 0) + (parseFloat(missingFuel) || 0);
 
+  // ── Restitution des services obligatoires décochés ───────────────────────
+  const servicesRefund = mandatoryServices.reduce(
+    (s, sv) => s + (refundedServiceIds[sv.id] ? sv.price : 0), 0
+  );
+
   // ── Bilan de paiement ────────────────────────────────────────────────────
   const baseTotal = Number(reservation.totalPrice) || 0;
   const alreadyPaid = (reservation.payments || []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
     || Math.max(0, baseTotal - (Number(reservation.remainingPayment) || 0));
-  const totalWithFees = baseTotal + extraFees;
+  const totalWithFees = Math.max(0, baseTotal + extraFees - servicesRefund);
   const payNow = paymentNow === '' ? 0 : Math.max(0, Number(paymentNow));
   const paidAfter = alreadyPaid + payNow;
   const remainingAfter = Math.max(0, totalWithFees - paidAfter);
@@ -2004,6 +2042,65 @@ export const CompletionModal: React.FC<{ lang: Language; reservation: Reservatio
               </div>
             </div>
           </div>
+
+          {/* Services obligatoires — restitution au client */}
+          {mandatoryServices.length > 0 && (
+            <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+                <h4 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center">
+                    <Sparkles className="w-4 h-4" />
+                  </span>
+                  {lang === 'fr' ? 'Services obligatoires' : 'الخدمات الإلزامية'}
+                </h4>
+              </div>
+              <div className="p-5 space-y-3">
+                <p className="text-xs text-saas-text-muted leading-relaxed">
+                  {lang === 'fr'
+                    ? "Décochez un service si le client l'a assuré lui-même (ex : rend le véhicule déjà lavé). Son coût lui est alors restitué et déduit du total."
+                    : 'قم بإلغاء تحديد خدمة إذا قام العميل بها بنفسه (مثال: إعادة السيارة نظيفة). عندها تُعاد قيمتها وتُخصم من الإجمالي.'}
+                </p>
+                {mandatoryServices.map(sv => {
+                  const refunded = !!refundedServiceIds[sv.id];
+                  return (
+                    <button
+                      key={sv.id}
+                      type="button"
+                      onClick={() => toggleServiceRefund(sv.id)}
+                      className={`w-full flex items-center gap-3.5 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                        refunded ? 'border-emerald-400 bg-emerald-50' : 'border-saas-border bg-saas-bg hover:border-saas-border-strong'
+                      }`}
+                    >
+                      <span className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${refunded ? 'bg-slate-300' : 'bg-emerald-500'}`}>
+                        <motion.span
+                          layout
+                          transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+                          className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+                          style={{ left: refunded ? 2 : 22 }}
+                        />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-black text-saas-text-main truncate">{sv.name}</span>
+                        <span className={`block text-xs font-bold mt-0.5 ${refunded ? 'text-emerald-700' : 'text-saas-text-muted'}`}>
+                          {refunded
+                            ? (lang === 'fr' ? `Restitué au client : −${money(sv.price)}` : `يُعاد للعميل: −${money(sv.price)}`)
+                            : (lang === 'fr' ? `Facturé : ${money(sv.price)}` : `مفوتر: ${money(sv.price)}`)}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+                {servicesRefund > 0 && (
+                  <div className="flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-300 px-4 py-3">
+                    <p className="text-[9px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                      {lang === 'fr' ? 'Total restitué au client' : 'الإجمالي المُعاد للعميل'}
+                    </p>
+                    <p className="text-xl font-black text-emerald-700">−{money(servicesRefund)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Bilan de paiement */}
           <div className="rounded-2xl border border-saas-border bg-white overflow-hidden">

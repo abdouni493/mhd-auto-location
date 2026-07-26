@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Language, Car, SpecialOffer } from '../../types';
 import { motion, useReducedMotion } from 'motion/react';
-import { Fuel, Settings, Users, DoorOpen, Gauge } from 'lucide-react';
+import { Fuel, Settings, Users, DoorOpen } from 'lucide-react';
 import { CarDetailsModal } from './CarDetailsModal';
 import { getCurrentSpecialOfferForCar } from '../../utils/specialOffers';
 import { useWebsiteCurrency, CurrencySwitcher } from './CurrencyContext';
@@ -86,7 +86,6 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, specia
               { icon: Settings, value: car.transmission },
               { icon: Users, value: `${car.seats}` },
               { icon: DoorOpen, value: `${car.doors}` },
-              { icon: Gauge, value: `${(car.mileage / 1000).toFixed(0)}k km` },
             ];
             return (
               <motion.div

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Car, Rental, Language, Expense, ReservationDetails } from '../types';
 import { CarCard } from './CarCard';
 import { CarModal } from './CarModal';
@@ -7,13 +7,13 @@ import { ExpenseModal } from './ExpenseModal';
 import { HistoryModal } from './HistoryModal';
 import { CarReportModal } from './CarReportModal';
 import { ConfirmModal } from './ConfirmModal';
-import { Plus, Search, Loader2, RefreshCw } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Plus, Search, Loader2, RefreshCw, Coins, CheckCircle, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { getCars, addCar, updateCar, deleteCar, AddCarData } from '../services/carService';
 import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
-import { parseCarCurrencies } from '../utils/currency';
+import { parseCarCurrencies, SECONDARY_CURRENCIES, CURRENCIES, DEFAULT_RATES } from '../utils/currency';
 import { usePermissions } from '../utils/permissions';
 
 interface CarsPageProps {
@@ -92,6 +92,76 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportExpenses, setReportExpenses] = useState<Expense[]>([]);
   const [reportReservations, setReportReservations] = useState<ReservationDetails[]>([]);
+
+  // ── Taux de change global (appliqué à TOUTES les voitures) ────────────────
+  type RateConfig = { enabled: boolean; rate: number };
+  const [globalRates, setGlobalRates] = useState<Record<'USD' | 'EUR' | 'GBP', RateConfig>>({
+    USD: { enabled: false, rate: DEFAULT_RATES.USD },
+    EUR: { enabled: false, rate: DEFAULT_RATES.EUR },
+    GBP: { enabled: false, rate: DEFAULT_RATES.GBP },
+  });
+  const [showRatesPanel, setShowRatesPanel] = useState(false);
+  const [applyingRates, setApplyingRates] = useState(false);
+  const [ratesMessage, setRatesMessage] = useState<string | null>(null);
+  const ratesInitialized = useRef(false);
+
+  // Pré-remplit les taux globaux à partir de la configuration existante des
+  // voitures (première voiture qui a un taux défini pour chaque devise).
+  useEffect(() => {
+    if (ratesInitialized.current) return;
+    if (cars.length === 0) return;
+    ratesInitialized.current = true;
+    setGlobalRates(prev => {
+      const next = { ...prev };
+      for (const code of SECONDARY_CURRENCIES) {
+        const carWith = cars.find(c => (c.currencies as any)?.[code]?.rate);
+        const anyEnabled = cars.some(c => (c.currencies as any)?.[code]?.enabled);
+        if (carWith) {
+          next[code] = { enabled: anyEnabled, rate: (carWith.currencies as any)[code].rate };
+        }
+      }
+      return next;
+    });
+  }, [cars]);
+
+  /**
+   * Applique les taux de change saisis à TOUTES les voitures. Les prix
+   * (jour/semaine/mois/caution) restent stockés en DZD ; seules les devises
+   * secondaires + leur taux sont uniformisés, donc l'affichage converti de
+   * chaque voiture bascule instantanément sur le même taux.
+   */
+  const applyGlobalRates = async () => {
+    setApplyingRates(true);
+    setRatesMessage(null);
+    try {
+      const currencies: Record<string, RateConfig> = {};
+      for (const code of SECONDARY_CURRENCIES) {
+        currencies[code] = {
+          enabled: globalRates[code].enabled,
+          rate: Number(globalRates[code].rate) || 0,
+        };
+      }
+      const results = await Promise.all(
+        cars.map(c => updateCar(c.id, { currencies } as any))
+      );
+      const failed = results.filter(r => !r.success).length;
+      setCars(prev => prev.map(c => ({ ...c, currencies: { ...(currencies as any) } })));
+      setRatesMessage(
+        failed === 0
+          ? (lang === 'fr'
+              ? `Taux appliqués à ${cars.length} véhicule(s).`
+              : `تم تطبيق الأسعار على ${cars.length} مركبة.`)
+          : (lang === 'fr'
+              ? `${cars.length - failed}/${cars.length} mis à jour · ${failed} échec(s).`
+              : `${cars.length - failed}/${cars.length} تم التحديث · ${failed} فشل.`)
+      );
+    } catch (err) {
+      console.error('Error applying global rates:', err);
+      setRatesMessage(lang === 'fr' ? "Erreur lors de l'application des taux." : 'خطأ أثناء تطبيق الأسعار.');
+    } finally {
+      setApplyingRates(false);
+    }
+  };
 
   const loadCarsData = async () => {
     try {
@@ -456,6 +526,139 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
             </span>
           </button>
         </div>
+      </div>
+
+      {/* ── Taux de change global (appliqué à toutes les voitures) ─────────── */}
+      <div className="bg-white rounded-2xl border border-saas-border shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowRatesPanel(v => !v)}
+          className="w-full px-6 py-4 flex items-center justify-between gap-3 hover:bg-saas-bg transition-colors cursor-pointer"
+        >
+          <span className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-xl bg-saas-primary-via/10 text-saas-primary-via flex items-center justify-center">
+              <Coins size={18} />
+            </span>
+            <span className="text-left">
+              <span className="block font-black text-saas-text-main text-sm uppercase tracking-tight">
+                {lang === 'fr' ? 'Taux de change global' : 'سعر الصرف العام'}
+              </span>
+              <span className="block text-[10px] font-bold uppercase tracking-widest text-saas-text-muted mt-0.5">
+                {lang === 'fr'
+                  ? 'Appliqué à toutes les voitures en une fois'
+                  : 'يُطبق على جميع السيارات دفعة واحدة'}
+              </span>
+            </span>
+          </span>
+          <span className="flex items-center gap-3">
+            <span className="hidden sm:flex items-center gap-2 text-[11px] font-bold text-saas-text-muted">
+              {SECONDARY_CURRENCIES.filter(c => globalRates[c].enabled).map(c => (
+                <span key={c} className="px-2 py-1 rounded-lg bg-saas-bg border border-saas-border">
+                  {CURRENCIES[c].flag} {globalRates[c].rate} DA
+                </span>
+              ))}
+            </span>
+            <motion.span animate={{ rotate: showRatesPanel ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown size={18} className="text-saas-text-muted" />
+            </motion.span>
+          </span>
+        </button>
+
+        <AnimatePresence initial={false}>
+          {showRatesPanel && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden border-t border-saas-border bg-saas-bg"
+            >
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-saas-text-muted leading-relaxed">
+                  {lang === 'fr'
+                    ? "1 unité de devise = X DA. Activez une devise et fixez son taux, puis appliquez : le taux et l'activation sont copiés sur chaque voiture, et tous les prix affichés dans cette devise se recalculent avec le même taux."
+                    : '1 وحدة عملة = X دج. فعّل عملة وحدّد سعرها ثم طبّق: يُنسخ السعر والتفعيل على كل سيارة، وتُحتسب كل الأسعار المعروضة بهذه العملة بنفس السعر.'}
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {SECONDARY_CURRENCIES.map(code => {
+                    const cfg = globalRates[code];
+                    const meta = CURRENCIES[code];
+                    return (
+                      <div
+                        key={code}
+                        className={`rounded-2xl border-2 p-4 transition-all ${
+                          cfg.enabled ? 'border-saas-primary-via bg-white' : 'border-saas-border bg-white/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 font-black text-saas-text-main">
+                            <span className="text-xl">{meta.flag}</span>
+                            {code} <span className="text-saas-text-muted font-bold">({meta.symbol})</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setGlobalRates(prev => ({ ...prev, [code]: { ...prev[code], enabled: !prev[code].enabled } }))
+                            }
+                            className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${cfg.enabled ? 'bg-saas-primary-via' : 'bg-slate-300'}`}
+                            aria-label={code}
+                          >
+                            <motion.span
+                              layout
+                              transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+                              className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+                              style={{ left: cfg.enabled ? 22 : 2 }}
+                            />
+                          </button>
+                        </div>
+
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-saas-text-muted mt-4 mb-1.5">
+                          {lang === 'fr' ? `Taux (1 ${code} = ? DA)` : `السعر (1 ${code} = ? دج)`}
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={0}
+                            value={cfg.rate}
+                            disabled={!cfg.enabled}
+                            onChange={e =>
+                              setGlobalRates(prev => ({
+                                ...prev,
+                                [code]: { ...prev[code], rate: e.target.value === '' ? 0 : Number(e.target.value) },
+                              }))
+                            }
+                            className="w-full pl-3 pr-12 py-2.5 bg-saas-bg border border-saas-border rounded-xl outline-none focus:border-saas-primary-via font-bold text-sm disabled:opacity-50 transition-all"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-saas-text-muted">DA</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 pt-1">
+                  <button
+                    onClick={applyGlobalRates}
+                    disabled={applyingRates || cars.length === 0}
+                    className="btn-saas-primary px-6 py-3 disabled:opacity-60"
+                  >
+                    {applyingRates
+                      ? <Loader2 size={18} className="animate-spin" />
+                      : <CheckCircle size={18} />}
+                    <span className="font-bold uppercase tracking-widest text-xs">
+                      {lang === 'fr'
+                        ? `Appliquer à toutes les voitures (${cars.length})`
+                        : `تطبيق على كل السيارات (${cars.length})`}
+                    </span>
+                  </button>
+                  {ratesMessage && (
+                    <span className="text-xs font-semibold text-saas-text-muted">{ratesMessage}</span>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Compteurs statuts réels ─────────────────────────────────────────── */}
