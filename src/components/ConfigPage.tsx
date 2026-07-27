@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Language, User } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X } from 'lucide-react';
+import { X, RotateCcw, Trash2, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
+import { ReservationsService } from '../services/ReservationsService';
 import { supabase } from '../supabase';
 
 interface ConfigPageProps {
@@ -42,6 +43,71 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
 
   // Database
   const [lastBackup] = useState('Aujourd\'hui à 10:45');
+
+  // Corbeille des réservations (suppression réversible)
+  const [deletedReservations, setDeletedReservations] = useState<Array<{
+    id: string; clientName: string; carLabel: string; departureDate: string;
+    returnDate: string; status: string; totalPrice: number; deletedAt: string | null; createdAt: string;
+  }>>([]);
+  const [loadingTrash, setLoadingTrash] = useState(false);
+  const [trashActionId, setTrashActionId] = useState<string | null>(null);
+  const [pendingHardDelete, setPendingHardDelete] = useState<{ id: string; label: string } | null>(null);
+
+  const loadTrash = async () => {
+    try {
+      setLoadingTrash(true);
+      const list = await ReservationsService.getDeletedReservations();
+      setDeletedReservations(list);
+    } catch (err) {
+      console.error('Error loading reservations trash:', err);
+      setNotification({ type: 'error', message: lang === 'fr' ? 'Erreur de chargement de la corbeille' : 'خطأ في تحميل سلة المهملات' });
+    } finally {
+      setLoadingTrash(false);
+    }
+  };
+
+  const handleRestoreReservation = async (id: string) => {
+    try {
+      setTrashActionId(id);
+      await ReservationsService.restoreReservation(id);
+      setDeletedReservations(prev => prev.filter(r => r.id !== id));
+      setNotification({ type: 'success', message: lang === 'fr' ? 'Réservation restaurée avec succès' : 'تمت استعادة الحجز بنجاح' });
+    } catch (err) {
+      console.error('Error restoring reservation:', err);
+      setNotification({ type: 'error', message: lang === 'fr' ? 'Échec de la restauration' : 'فشل الاستعادة' });
+    } finally {
+      setTrashActionId(null);
+    }
+  };
+
+  const confirmHardDelete = async () => {
+    if (!pendingHardDelete) return;
+    const id = pendingHardDelete.id;
+    try {
+      setTrashActionId(id);
+      await ReservationsService.hardDeleteReservation(id);
+      setDeletedReservations(prev => prev.filter(r => r.id !== id));
+      setNotification({ type: 'success', message: lang === 'fr' ? 'Réservation supprimée définitivement' : 'تم حذف الحجز نهائياً' });
+    } catch (err) {
+      console.error('Error permanently deleting reservation:', err);
+      setNotification({ type: 'error', message: lang === 'fr' ? 'Échec de la suppression définitive' : 'فشل الحذف النهائي' });
+    } finally {
+      setTrashActionId(null);
+      setPendingHardDelete(null);
+    }
+  };
+
+  const formatTrashDate = (iso: string | null) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleString(lang === 'fr' ? 'fr-FR' : 'ar', { dateStyle: 'medium', timeStyle: 'short' });
+  };
+
+  // Charge la corbeille dès l'ouverture de l'onglet Base de données.
+  useEffect(() => {
+    if (activeTab === 'database') loadTrash();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Load data from database
   useEffect(() => {
@@ -859,6 +925,77 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                       </label>
                     </div>
                   </div>
+
+                  {/* Corbeille des réservations (suppression réversible) */}
+                  <div className="bg-red-50 p-6 rounded-xl border border-red-200">
+                    <div className="flex items-start justify-between mb-4 gap-3">
+                      <div>
+                        <h3 className="font-black text-red-700 text-lg flex items-center gap-2">
+                          🗑️ {{fr: 'Corbeille des réservations', ar: 'سلة حذف الحجوزات'}[lang]}
+                        </h3>
+                        <p className="text-sm text-red-600 mt-1">
+                          {{fr: 'Réservations supprimées. Restaurez-les ou supprimez-les définitivement.', ar: 'الحجوزات المحذوفة. استعدها أو احذفها نهائياً.'}[lang]}
+                        </p>
+                      </div>
+                      <button
+                        onClick={loadTrash}
+                        disabled={loadingTrash}
+                        className="btn-saas-secondary py-2 px-4 text-xs shrink-0 flex items-center gap-2 disabled:opacity-60"
+                        title={{fr: 'Actualiser', ar: 'تحديث'}[lang]}
+                      >
+                        <RefreshCw size={16} className={loadingTrash ? 'animate-spin' : ''} />
+                        {{fr: 'Actualiser', ar: 'تحديث'}[lang]}
+                      </button>
+                    </div>
+
+                    {loadingTrash ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="animate-spin text-red-500" size={28} />
+                      </div>
+                    ) : deletedReservations.length === 0 ? (
+                      <p className="text-sm text-red-700/70 italic py-6 text-center">
+                        {{fr: 'La corbeille est vide.', ar: 'السلة فارغة.'}[lang]}
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {deletedReservations.map(r => (
+                          <div
+                            key={r.id}
+                            className="bg-white rounded-xl border border-red-200 p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="font-black text-saas-text-main truncate">
+                                {r.clientName} <span className="text-saas-text-muted font-bold">· {r.carLabel}</span>
+                              </p>
+                              <p className="text-xs text-saas-text-muted mt-0.5">
+                                {r.departureDate} → {r.returnDate} · {r.totalPrice.toLocaleString('fr-DZ')} DA
+                                {' · '}
+                                {{fr: 'Supprimée le', ar: 'حُذفت في'}[lang]} {formatTrashDate(r.deletedAt)}
+                              </p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                onClick={() => handleRestoreReservation(r.id)}
+                                disabled={trashActionId === r.id}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
+                              >
+                                {trashActionId === r.id ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+                                {{fr: 'Restaurer', ar: 'استعادة'}[lang]}
+                              </button>
+                              <button
+                                onClick={() => setPendingHardDelete({ id: r.id, label: `${r.clientName} · ${r.carLabel}` })}
+                                disabled={trashActionId === r.id}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
+                              >
+                                <Trash2 size={15} />
+                                {{fr: 'Supprimer définitivement', ar: 'حذف نهائي'}[lang]}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -866,6 +1003,54 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
           </AnimatePresence>
         )}
       </div>
+
+      {/* Confirmation de suppression définitive */}
+      <AnimatePresence>
+        {pendingHardDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-start justify-center z-[60] p-4 overflow-y-auto sm:py-8"
+            onClick={() => setPendingHardDelete(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-red-200"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 text-center mb-2">
+                {{fr: 'Suppression définitive', ar: 'حذف نهائي'}[lang]}
+              </h3>
+              <p className="text-slate-600 text-center text-sm mb-1">
+                {{fr: 'Cette réservation sera supprimée définitivement et ne pourra plus être restaurée.', ar: 'سيتم حذف هذا الحجز نهائياً ولا يمكن استعادته.'}[lang]}
+              </p>
+              <p className="text-slate-900 font-bold text-center text-sm mb-6 truncate">{pendingHardDelete.label}</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPendingHardDelete(null)}
+                  className="flex-1 px-4 py-2 border border-slate-200 text-slate-900 rounded-lg font-bold hover:bg-slate-50 transition-colors"
+                >
+                  {{fr: 'Annuler', ar: 'إلغاء'}[lang]}
+                </button>
+                <button
+                  onClick={confirmHardDelete}
+                  disabled={!!trashActionId}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {trashActionId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {{fr: 'Supprimer', ar: 'حذف'}[lang]}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

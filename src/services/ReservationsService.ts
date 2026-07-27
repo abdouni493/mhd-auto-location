@@ -250,7 +250,46 @@ export class ReservationsService {
       query = query.lte('return_date', filters.endDate);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    // Masque les réservations mises à la corbeille (suppression réversible).
+    query = query.is('deleted_at', null);
+
+    let { data, error } = await query.order('created_at', { ascending: false });
+
+    // Compatibilité : si la colonne `deleted_at` n'existe pas encore (migration
+    // non appliquée), on relance la requête sans ce filtre pour ne rien casser.
+    if (error && /deleted_at/i.test(error.message || '')) {
+      console.warn('⚠️ Column deleted_at missing — run migration 20260727. Falling back.');
+      let fallback = supabase
+        .from('reservations')
+        .select(`
+          *,
+          client:clients(*),
+          car:cars(*),
+          departure_agency:agencies!reservations_departure_agency_fkey(*),
+          return_agency:agencies!reservations_return_agency_fkey(*),
+          vehicle_inspections(
+            *,
+            inspection_responses(
+              *,
+              checklist_item:inspection_checklist_items(*)
+            )
+          ),
+          reservation_services(*),
+          payments(*),
+          protection_assurance:protection_assurances!reservations_protection_assurance_fkey(
+            id, name, price_per_day, is_active, created_at,
+            protection_assurance_item_links(
+              id, status, item:protection_assurance_items(id, item_name, display_order)
+            )
+          )
+        `);
+      if (filters?.status) fallback = fallback.eq('status', filters.status);
+      if (filters?.clientId) fallback = fallback.eq('client_id', filters.clientId);
+      if (filters?.carId) fallback = fallback.eq('car_id', filters.carId);
+      if (filters?.startDate) fallback = fallback.gte('departure_date', filters.startDate);
+      if (filters?.endDate) fallback = fallback.lte('return_date', filters.endDate);
+      ({ data, error } = await fallback.order('created_at', { ascending: false }));
+    }
 
     if (error) {
       console.error('Error fetching reservations:', error);
@@ -1116,26 +1155,102 @@ export class ReservationsService {
     // The car status is no longer used for availability checks - only date overlaps matter
   }
 
+  /**
+   * Suppression RÉVERSIBLE : la réservation n'est pas effacée mais placée dans
+   * la corbeille (`deleted_at`). Elle disparaît de l'application et reste
+   * restaurable / supprimable définitivement depuis Paramètres → Sauvegarde.
+   */
   static async deleteReservation(id: string): Promise<void> {
-    // First, get the reservation to find the car ID
-    const { data: reservation, error: fetchError } = await supabase
+    const { error } = await supabase
       .from('reservations')
-      .select('car_id')
-      .eq('id', id)
-      .single();
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
 
-    if (fetchError) throw fetchError;
+    if (error) {
+      if (/deleted_at/i.test(error.message || '')) {
+        throw new Error(
+          "La corbeille des réservations n'est pas encore activée. Exécutez la migration " +
+          "20260727_reservation_soft_delete.sql dans Supabase (ajout de la colonne deleted_at)."
+        );
+      }
+      throw error;
+    }
+  }
 
-    // Delete the reservation
+  /** Liste des réservations mises à la corbeille (les plus récentes d'abord). */
+  static async getDeletedReservations(): Promise<Array<{
+    id: string;
+    clientName: string;
+    carLabel: string;
+    departureDate: string;
+    returnDate: string;
+    status: string;
+    totalPrice: number;
+    deletedAt: string | null;
+    createdAt: string;
+  }>> {
+    const { data, error } = await supabase
+      .from('reservations')
+      .select(`
+        id, status, total_price, departure_date, return_date, created_at, deleted_at,
+        client:clients(first_name, last_name),
+        car:cars(brand, model, plate_number)
+      `)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+
+    if (error) {
+      if (/deleted_at/i.test(error.message || '')) return [];
+      throw error;
+    }
+
+    return (data || []).map((r: any) => {
+      const first = r.client?.first_name || r.client?.firstName || '';
+      const last = r.client?.last_name || r.client?.lastName || '';
+      const carLabel = r.car
+        ? `${r.car.brand || ''} ${r.car.model || ''}`.trim() + (r.car.plate_number ? ` · ${r.car.plate_number}` : '')
+        : '—';
+      return {
+        id: r.id,
+        clientName: `${first} ${last}`.trim() || '—',
+        carLabel: carLabel || '—',
+        departureDate: r.departure_date || '',
+        returnDate: r.return_date || '',
+        status: r.status,
+        totalPrice: Number(r.total_price) || 0,
+        deletedAt: r.deleted_at,
+        createdAt: r.created_at,
+      };
+    });
+  }
+
+  /** Restaure une réservation depuis la corbeille. */
+  static async restoreReservation(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('reservations')
+      .update({ deleted_at: null })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  /**
+   * Suppression DÉFINITIVE (irréversible) depuis la corbeille. Purge aussi les
+   * photos d'inspection éventuelles pour ne pas laisser de fichiers orphelins.
+   */
+  static async hardDeleteReservation(id: string): Promise<void> {
+    try {
+      const { DatabaseService } = await import('./DatabaseService');
+      await DatabaseService.purgeInspectionImages(id);
+    } catch (err) {
+      console.warn('⚠️ Inspection photo purge failed (non-blocking):', err);
+    }
+
     const { error } = await supabase
       .from('reservations')
       .delete()
       .eq('id', id);
 
     if (error) throw error;
-
-    // With period-based availability, we no longer need to update car status globally
-    // The car status is no longer used for availability checks - only date overlaps matter
   }
 
   // ========== VEHICLE INSPECTIONS ==========

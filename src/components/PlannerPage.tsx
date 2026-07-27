@@ -1403,7 +1403,9 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                 ⚠️ {lang === 'fr' ? 'Confirmer la Suppression' : 'تأكيد الحذف'}
               </h3>
               <p className="text-saas-text-muted mb-6">
-                {lang === 'fr' ? 'Êtes-vous sûr de vouloir supprimer cette réservation ? Cette action ne peut pas être annulée.' : 'هل أنت متأكد من حذف هذا الحجز؟ لا يمكن التراجع عن هذا الإجراء.'}
+                {lang === 'fr'
+                  ? 'La réservation sera placée dans la corbeille. Vous pourrez la restaurer ou la supprimer définitivement depuis Paramètres → Sauvegarde.'
+                  : 'سيتم نقل الحجز إلى سلة المهملات. يمكنك استعادته أو حذفه نهائياً من الإعدادات ← النسخ الاحتياطي.'}
               </p>
               <div className="flex gap-3">
                 <button

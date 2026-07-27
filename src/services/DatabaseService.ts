@@ -1190,13 +1190,16 @@ export class DatabaseService {
         // pas les réservations créées par l'agence.
         // Colonne ajoutée par 20260708_reservation_source.sql.
         .eq('source', 'website')
+        // Masque les commandes mises à la corbeille (suppression réversible).
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (error) {
         console.warn('Error fetching website orders:', error);
-        // Repli si la colonne source n'existe pas encore (migration non appliquée) :
-        // on retente sans le filtre pour ne pas casser l'affichage des commandes.
-        if (error.code === '42703' || /column .*source.* does not exist/i.test(error.message || '')) {
+        // Repli si une colonne (source / deleted_at) n'existe pas encore
+        // (migration non appliquée) : on retente sans ces filtres pour ne pas
+        // casser l'affichage des commandes.
+        if (error.code === '42703' || /column .*(source|deleted_at).* does not exist/i.test(error.message || '') || /deleted_at/i.test(error.message || '')) {
           const retry = await supabase
             .from('reservations')
             .select(`
@@ -1365,26 +1368,49 @@ export class DatabaseService {
   }
 
   static async deleteWebsiteOrder(orderId: string): Promise<void> {
-    // Delete from reservations table (website orders are reservations)
+    // Suppression RÉVERSIBLE : la commande (= réservation) est placée dans la
+    // corbeille au lieu d'être effacée. Restaurable depuis Paramètres.
     const { error } = await supabase
       .from('reservations')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', orderId);
 
-    if (error) throw error;
+    if (error) {
+      // Repli si la migration n'est pas encore appliquée : suppression réelle.
+      if (/deleted_at/i.test(error.message || '')) {
+        const { error: hardErr } = await supabase
+          .from('reservations')
+          .delete()
+          .eq('id', orderId);
+        if (hardErr) throw hardErr;
+        return;
+      }
+      throw error;
+    }
   }
 
   // Reservations
   static async getReservations(): Promise<ReservationDetails[]> {
-    const { data, error } = await supabase
-      .from('reservations')
-      .select(`
+    const select = `
         *,
         client:clients(*),
         car:cars(*),
         payments:payments(*)
-      `)
+      `;
+    let { data, error } = await supabase
+      .from('reservations')
+      .select(select)
+      // Masque les réservations mises à la corbeille (suppression réversible).
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
+
+    // Repli si la colonne deleted_at n'existe pas encore (migration non appliquée).
+    if (error && /deleted_at/i.test(error.message || '')) {
+      ({ data, error } = await supabase
+        .from('reservations')
+        .select(select)
+        .order('created_at', { ascending: false }));
+    }
 
     if (error) throw error;
     return data || [];
@@ -1406,9 +1432,15 @@ export class DatabaseService {
     // Add retry logic for rate limiting
     const maxRetries = 2;
     let lastError;
-    
+    // Les réservations en corbeille (deleted_at non nul) sont exclues des stats.
+    // Si la colonne n'existe pas encore (migration non appliquée), on relance
+    // sans ce filtre.
+    let softDeleteSupported = true;
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
+        // Applique le filtre « non supprimée » aux requêtes de réservations.
+        const notTrashed = (q: any) => (softDeleteSupported ? q.is('deleted_at', null) : q);
         // Run all queries in parallel for faster loading
         const [
           revenueResult,
@@ -1424,17 +1456,17 @@ export class DatabaseService {
           recentReservationsResult,
           alertsResult
         ] = await Promise.all([
-          supabase.from('reservations').select('total_price').eq('status', 'completed'),
-          supabase.from('reservations').select('total_price, completed_at').eq('status', 'completed').gte('completed_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+          notTrashed(supabase.from('reservations').select('total_price').eq('status', 'completed')),
+          notTrashed(supabase.from('reservations').select('total_price, completed_at').eq('status', 'completed').gte('completed_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())),
           supabase.from('store_expenses').select('cost'),
           supabase.from('vehicle_expenses').select('cost'),
           supabase.from('clients').select('id', { count: 'exact' }),
           supabase.from('cars').select('id', { count: 'exact' }),
-          supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active']),
-          supabase.from('reservations').select('id', { count: 'exact' }),
-          supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active']),
+          notTrashed(supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active'])),
+          notTrashed(supabase.from('reservations').select('id', { count: 'exact' })),
+          notTrashed(supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active'])),
           supabase.from('payments').select('id', { count: 'exact' }).eq('status', 'pending'),
-          supabase.from('reservations').select('*, client:clients(*), car:cars(*)').order('created_at', { ascending: false }).limit(5),
+          notTrashed(supabase.from('reservations').select('*, client:clients(*), car:cars(*)').order('created_at', { ascending: false }).limit(5)),
           supabase.from('maintenance_alerts').select('id', { count: 'exact' })
         ]);
 
@@ -1511,7 +1543,14 @@ export class DatabaseService {
       } catch (error: any) {
         lastError = error;
         const message = error.message || '';
-        
+
+        // Colonne deleted_at absente (migration 20260727 non appliquée) : on
+        // relance les stats sans le filtre de corbeille.
+        if (softDeleteSupported && /deleted_at/i.test(message)) {
+          softDeleteSupported = false;
+          continue;
+        }
+
         // Check if it's a rate limit error
         if (message.includes('429') || message.includes('Too Many Requests')) {
           if (attempt < maxRetries) {
