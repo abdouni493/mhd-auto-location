@@ -60,6 +60,20 @@ const EXPENSE_META: Record<ExpenseType, { fr: string; ar: string; icon: React.Re
   autre:     { fr:'Autre',            ar:'أخرى',         icon:<Wrench size={13}/>,      color:'text-gray-700',   bg:'bg-gray-50',    border:'border-gray-200' },
 };
 
+/**
+ * Métadonnées d'un type de dépense, avec repli pour les types personnalisés
+ * créés depuis la page Maintenance (bougies, freins…).
+ */
+const metaFor = (type: string) =>
+  EXPENSE_META[type] || {
+    fr: type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Autre',
+    ar: type || 'أخرى',
+    icon: <Wrench size={13}/>,
+    color: 'text-slate-700',
+    bg: 'bg-slate-50',
+    border: 'border-slate-200',
+  };
+
 // Status badge
 const statusCls = (s: string) => ({
   completed: 'bg-green-100 text-green-700 border-green-200',
@@ -93,12 +107,12 @@ const CarBlock: React.FC<CarBlockProps> = ({ car, reservations, expenses, lang, 
   const totalExpenses  = expenses.reduce((s, e) => s + (Number(e.cost) || 0), 0);
   const netBenefit     = totalCollected - totalExpenses;
 
-  // Group expenses by type
-  const byType = (Object.keys(EXPENSE_META) as ExpenseType[]).reduce((acc, k) => {
-    const g = expenses.filter(e => e.type === k);
-    if (g.length) acc[k] = g;
+  // Regroupement par type : construit à partir des dépenses réelles pour que
+  // les types personnalisés apparaissent aussi dans le rapport.
+  const byType = expenses.reduce((acc, e) => {
+    (acc[e.type] = acc[e.type] || []).push(e);
     return acc;
-  }, {} as Record<ExpenseType, VehicleExpense[]>);
+  }, {} as Record<string, VehicleExpense[]>);
 
   return (
     <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
@@ -294,7 +308,7 @@ const CarBlock: React.FC<CarBlockProps> = ({ car, reservations, expenses, lang, 
                 ) : (
                   <>
                     {(Object.entries(byType) as [ExpenseType, VehicleExpense[]][]).map(([type, group])=>{
-                      const meta = EXPENSE_META[type];
+                      const meta = metaFor(type);
                       const sub  = group.reduce((s,e)=>s+(Number(e.cost)||0),0);
                       return (
                         <div key={type}>

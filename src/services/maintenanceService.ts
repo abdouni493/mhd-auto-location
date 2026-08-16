@@ -1,220 +1,228 @@
 import { supabase } from '../supabase';
-import { Car, VehicleExpense } from '../types';
+import { Car, MaintenanceTracking, MaintenanceType, VehicleExpense } from '../types';
+import { DEFAULT_MAINTENANCE_TYPES } from './maintenanceTypeService';
+
+/** Niveau d'alerte d'une échéance. `unknown` = aucune donnée saisie. */
+export type MaintenanceLevel = 'critical' | 'warning' | 'success' | 'unknown';
+
+/** État d'un type de maintenance pour un véhicule donné. */
+export interface MaintenanceItemStatus {
+  type: MaintenanceType;
+  /** Dernière intervention enregistrée pour ce type. */
+  expense: VehicleExpense | null;
+  lastDate: string | null;
+  /** Suivi kilométrique ------------------------------------------------ */
+  lastMileage: number | null;
+  /** Kilométrage absolu de la prochaine échéance (dernier relevé + intervalle). */
+  nextMileage: number | null;
+  intervalKm: number | null;
+  kmRemaining: number | null;
+  /** Suivi par date ---------------------------------------------------- */
+  expirationDate: string | null;
+  daysRemaining: number | null;
+  isExpired: boolean;
+  /** Cumuls sur tout l'historique du véhicule pour ce type. */
+  count: number;
+  totalCost: number;
+  level: MaintenanceLevel;
+}
 
 export interface MaintenanceStatus {
   car: Car;
-  vidange: {
-    lastDate: string | null;
-    lastMileage: number | null;
-    nextMileage: number | null;
-    kmRemaining: number | null;
-    expense: VehicleExpense | null;
-  };
-  chaine: {
-    lastDate: string | null;
-    lastMileage: number | null;
-    nextMileage: number | null;
-    kmRemaining: number | null;
-    expense: VehicleExpense | null;
-  };
-  assurance: {
-    lastDate: string | null;
-    expirationDate: string | null;
-    daysRemaining: number | null;
-    isExpired: boolean;
-    expense: VehicleExpense | null;
-  };
-  controleTechnique: {
-    lastDate: string | null;
-    expirationDate: string | null;
-    daysRemaining: number | null;
-    isExpired: boolean;
-    expense: VehicleExpense | null;
-  };
+  items: MaintenanceItemStatus[];
+  /** Pire niveau parmi les échéances suivies (km/date). */
+  worstLevel: MaintenanceLevel;
+  criticalCount: number;
+  warningCount: number;
+  totalCost: number;
+  expenseCount: number;
+  lastExpenseDate: string | null;
 }
 
+/** Seuils d'alerte, partagés par toutes les vues. */
+export const KM_WARNING_THRESHOLD = 2000;
+export const DAYS_WARNING_THRESHOLD = 30;
+
+/** Mappe une ligne brute `vehicle_expenses` vers le modèle applicatif. */
+const mapExpenseRow = (exp: any): VehicleExpense => {
+  if (exp.carId) return exp as VehicleExpense; // déjà au format applicatif
+  return {
+    id: exp.id,
+    carId: exp.car_id,
+    type: exp.type,
+    cost: exp.cost,
+    date: exp.date,
+    note: exp.note,
+    currentMileage: exp.current_mileage,
+    nextVidangeKm: exp.next_vidange_km,
+    expirationDate: exp.expiration_date,
+    expenseName: exp.expense_name,
+    createdAt: exp.created_at,
+    oilFilterChanged: exp.oil_filter_changed || false,
+    airFilterChanged: exp.air_filter_changed || false,
+    fuelFilterChanged: exp.fuel_filter_changed || false,
+    acFilterChanged: exp.ac_filter_changed || false,
+  };
+};
+
+/** Horodatage de référence d'une dépense (createdAt si dispo, sinon date). */
+const stamp = (e: VehicleExpense): number => {
+  const t = e.createdAt ? new Date(e.createdAt).getTime() : NaN;
+  if (!Number.isNaN(t)) return t;
+  const d = new Date(e.date).getTime();
+  return Number.isNaN(d) ? 0 : d;
+};
+
+/** Dernière dépense d'une liste (la plus récente par date puis par création). */
+const latestOf = (list: VehicleExpense[]): VehicleExpense | null => {
+  if (list.length === 0) return null;
+  return [...list].sort((a, b) => {
+    const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
+    if (!Number.isNaN(byDate) && byDate !== 0) return byDate;
+    return stamp(b) - stamp(a);
+  })[0];
+};
+
+/** Nombre de jours entiers entre aujourd'hui et une date d'expiration. */
+const daysUntil = (dateStr: string): number => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+/**
+ * Niveau d'alerte à partir de la valeur restante.
+ * - km   : rouge <= 0, orange <= 2 000 km, vert au-delà
+ * - jours: rouge < 0, orange <= 30 jours, vert au-delà
+ */
+export function getStatusLevel(
+  tracking: MaintenanceTracking,
+  value: number | null | undefined
+): MaintenanceLevel {
+  if (value === null || value === undefined || Number.isNaN(value)) return 'unknown';
+  if (tracking === 'mileage') {
+    if (value <= 0) return 'critical';
+    if (value <= KM_WARNING_THRESHOLD) return 'warning';
+    return 'success';
+  }
+  if (tracking === 'date') {
+    if (value < 0) return 'critical';
+    if (value <= DAYS_WARNING_THRESHOLD) return 'warning';
+    return 'success';
+  }
+  return 'unknown';
+}
+
+/** Classes de la pastille d'état, communes à toutes les vues maintenance. */
+export const LEVEL_STYLES: Record<MaintenanceLevel, { bg: string; border: string; text: string; bar: string; label: { fr: string; ar: string } }> = {
+  critical: { bg: 'bg-red-50',    border: 'border-red-200',    text: 'text-red-700',    bar: 'bg-red-500',    label: { fr: 'Critique',  ar: 'حرج' } },
+  warning:  { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  bar: 'bg-amber-500',  label: { fr: 'Bientôt',   ar: 'قريباً' } },
+  success:  { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-700',  bar: 'bg-green-500',  label: { fr: 'Bon',       ar: 'جيد' } },
+  unknown:  { bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-600',  bar: 'bg-slate-400',  label: { fr: 'À saisir',  ar: 'غير مسجل' } },
+};
+
+const WORST_ORDER: MaintenanceLevel[] = ['critical', 'warning', 'success', 'unknown'];
+
+/**
+ * Calcule l'état de maintenance de chaque véhicule, pour tous les types
+ * (système + personnalisés). Les types `simple` restent des lignes de dépense :
+ * ils remontent leur cumul mais pas de compte à rebours.
+ */
 export async function getMaintenanceStatus(
   cars: Car[],
-  allExpenses?: VehicleExpense[]
+  allExpenses?: VehicleExpense[],
+  types: MaintenanceType[] = DEFAULT_MAINTENANCE_TYPES
 ): Promise<MaintenanceStatus[]> {
   try {
-    const result: MaintenanceStatus[] = [];
+    let expensesPool: VehicleExpense[] = (allExpenses || []).map(mapExpenseRow);
 
-    for (const car of cars) {
-      // Use passed expenses or fall back to querying
-      let expenses: any[] = [];
-      
-      if (allExpenses && allExpenses.length > 0) {
-        // Filter expenses for this specific car from the passed data
-        expenses = allExpenses.filter(exp => exp.carId === car.id);
-        console.log(`[Maintenance] Using passed expenses: Found ${expenses.length} expenses for car ${car.id} (${car.brand} ${car.model})`);
-      } else {
-        // Fallback to database query (backward compatibility)
-        const { data: dbExpenses, error } = await supabase
-          .from('vehicle_expenses')
-          .select('*')
-          .eq('car_id', car.id)
-          .order('date', { ascending: false });
-
-        if (error) {
-          console.error(`Error fetching expenses for car ${car.id}:`, error);
-          console.error(`  Error details:`, error.message, error.details);
-          continue;
-        }
-
-        expenses = dbExpenses || [];
-        
-        if (!expenses || expenses.length === 0) {
-          console.log(`[Maintenance] No expenses found for car ${car.id} (${car.brand} ${car.model})`);
-        } else {
-          console.log(`[Maintenance] Found ${expenses.length} expenses for car ${car.id}`);
-        }
+    // Repli : si l'appelant n'a pas fourni les dépenses, on les charge ici.
+    if (!allExpenses) {
+      const { data, error } = await supabase
+        .from('vehicle_expenses')
+        .select('*')
+        .order('date', { ascending: false });
+      if (error) {
+        console.error('[maintenance] lecture des dépenses impossible:', error.message);
+        return [];
       }
+      expensesPool = (data || []).map(mapExpenseRow);
+    }
 
-      // Map expenses to VehicleExpense format if needed
-      const mappedExpenses: VehicleExpense[] = (expenses || []).map(exp => {
-        // Check if already mapped or from database
-        if (exp.carId) {
-          // Already VehicleExpense format
-          return exp as VehicleExpense;
+    const activeTypes = types.filter(t => t.isActive !== false);
+
+    return cars.map(car => {
+      const carExpenses = expensesPool.filter(e => e.carId === car.id);
+
+      const items: MaintenanceItemStatus[] = activeTypes.map(type => {
+        const group = carExpenses.filter(e => e.type === type.key);
+        const latest = latestOf(group);
+        const totalCost = group.reduce((s, e) => s + (Number(e.cost) || 0), 0);
+
+        let lastMileage: number | null = null;
+        let intervalKm: number | null = null;
+        let nextMileage: number | null = null;
+        let kmRemaining: number | null = null;
+        let expirationDate: string | null = null;
+        let daysRemaining: number | null = null;
+
+        if (type.tracking === 'mileage' && latest) {
+          lastMileage = latest.currentMileage ?? null;
+          intervalKm = latest.nextVidangeKm ?? null;
+          if (lastMileage !== null && intervalKm) {
+            nextMileage = lastMileage + intervalKm;
+            kmRemaining = nextMileage - (car.mileage || 0);
+          }
         }
-        // From database, needs mapping
+
+        if (type.tracking === 'date' && latest?.expirationDate) {
+          expirationDate = latest.expirationDate;
+          daysRemaining = daysUntil(latest.expirationDate);
+        }
+
+        const level = getStatusLevel(
+          type.tracking,
+          type.tracking === 'mileage' ? kmRemaining : daysRemaining
+        );
+
         return {
-          id: exp.id,
-          carId: exp.car_id,
-          type: exp.type,
-          cost: exp.cost,
-          date: exp.date,
-          note: exp.note,
-          currentMileage: exp.current_mileage,
-          nextVidangeKm: exp.next_vidange_km,
-          expirationDate: exp.expiration_date,
-          expenseName: exp.expense_name,
-          createdAt: exp.created_at,
-          oilFilterChanged: exp.oil_filter_changed || false,
-          airFilterChanged: exp.air_filter_changed || false,
-          fuelFilterChanged: exp.fuel_filter_changed || false,
-          acFilterChanged: exp.ac_filter_changed || false,
+          type,
+          expense: latest,
+          lastDate: latest?.date || null,
+          lastMileage,
+          nextMileage,
+          intervalKm,
+          kmRemaining,
+          expirationDate,
+          daysRemaining,
+          isExpired: level === 'critical',
+          count: group.length,
+          totalCost,
+          level,
         };
       });
 
-      // Separate expenses by type
-      const vidangeExpenses = mappedExpenses.filter(e => e.type === 'vidange');
-      const chaineExpenses = mappedExpenses.filter(e => e.type === 'chaine');
-      const assuranceExpenses = mappedExpenses.filter(e => e.type === 'assurance');
-      const controleExpenses = mappedExpenses.filter(e => e.type === 'controle');
+      const tracked = items.filter(i => i.type.tracking !== 'simple');
+      const worstLevel =
+        WORST_ORDER.find(lvl => tracked.some(i => i.level === lvl)) || 'unknown';
 
-      // Calculate vidange status
-      // nextVidangeKm is an INTERVAL, so: nextAbsoluteTarget = lastMileage + interval
-      // kmRemaining = nextAbsoluteTarget - currentMileage
-      const latestVidange = vidangeExpenses[0];
-      const vidangeStatus = {
-        lastDate: latestVidange?.date || null,
-        lastMileage: latestVidange?.currentMileage || null,
-        nextMileage: latestVidange?.nextVidangeKm || null,
-        kmRemaining: latestVidange?.currentMileage !== null && latestVidange?.currentMileage !== undefined && latestVidange?.nextVidangeKm
-          ? (latestVidange.currentMileage + latestVidange.nextVidangeKm) - (car.mileage || 0)
-          : null,
-        expense: latestVidange || null,
-      };
+      const dated = carExpenses.map(e => e.date).filter(Boolean).sort();
 
-      // Calculate chaine status
-      // nextVidangeKm is an INTERVAL, so: nextAbsoluteTarget = lastMileage + interval
-      // kmRemaining = nextAbsoluteTarget - currentMileage
-      const latestChaine = chaineExpenses[0];
-      const chaineStatus = {
-        lastDate: latestChaine?.date || null,
-        lastMileage: latestChaine?.currentMileage || null,
-        nextMileage: latestChaine?.nextVidangeKm || null,
-        kmRemaining: latestChaine?.currentMileage !== null && latestChaine?.currentMileage !== undefined && latestChaine?.nextVidangeKm
-          ? (latestChaine.currentMileage + latestChaine.nextVidangeKm) - (car.mileage || 0)
-          : null,
-        expense: latestChaine || null,
-      };
-
-      // Calculate assurance status
-      const latestAssurance = assuranceExpenses[0];
-      const today = new Date();
-      const assuranceExpiration = latestAssurance?.expirationDate
-        ? new Date(latestAssurance.expirationDate)
-        : null;
-      const assuranceDaysRemaining = assuranceExpiration
-        ? Math.ceil((assuranceExpiration.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-        : null;
-
-      const assuranceStatus = {
-        lastDate: latestAssurance?.date || null,
-        expirationDate: latestAssurance?.expirationDate || null,
-        daysRemaining: assuranceDaysRemaining,
-        isExpired: assuranceDaysRemaining !== null && assuranceDaysRemaining < 0,
-        expense: latestAssurance || null,
-      };
-
-      // Calculate controle technique status
-      const latestControle = controleExpenses[0];
-      const controleExpiration = latestControle?.expirationDate
-        ? new Date(latestControle.expirationDate)
-        : null;
-      const controleDaysRemaining = controleExpiration
-        ? Math.ceil((controleExpiration.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-        : null;
-
-      const controleStatus = {
-        lastDate: latestControle?.date || null,
-        expirationDate: latestControle?.expirationDate || null,
-        daysRemaining: controleDaysRemaining,
-        isExpired: controleDaysRemaining !== null && controleDaysRemaining < 0,
-        expense: latestControle || null,
-      };
-
-      result.push({
+      return {
         car,
-        vidange: vidangeStatus,
-        chaine: chaineStatus,
-        assurance: assuranceStatus,
-        controleTechnique: controleStatus,
-      });
-    }
-
-    return result;
+        items,
+        worstLevel,
+        criticalCount: tracked.filter(i => i.level === 'critical').length,
+        warningCount: tracked.filter(i => i.level === 'warning').length,
+        totalCost: carExpenses.reduce((s, e) => s + (Number(e.cost) || 0), 0),
+        expenseCount: carExpenses.length,
+        lastExpenseDate: dated.length ? dated[dated.length - 1] : null,
+      };
+    });
   } catch (error) {
     console.error('Error getting maintenance status:', error);
     return [];
-  }
-}
-
-// Get status color based on alert level
-// Color thresholds:
-// - KM-based (vidange, chaine): Green > 2000 km, Yellow 0-2000 km, Red <= 0 km (overdue)
-// - Day-based (assurance, controle): Green > 30 days, Yellow 0-30 days, Red < 0 days (expired)
-export function getStatusColor(
-  type: 'vidange' | 'chaine' | 'assurance' | 'controle',
-  value: number | null | undefined
-): 'critical' | 'warning' | 'success' {
-  if (value === null || value === undefined) {
-    return 'success'; // No data yet
-  }
-
-  if (type === 'vidange' || type === 'chaine') {
-    // KM remaining
-    if (value <= 0) return 'critical'; // Overdue
-    if (value <= 2000) return 'warning'; // Warning zone
-    return 'success'; // Plenty of KM left
-  } else {
-    // Days remaining (assurance, controle)
-    if (value < 0) return 'critical'; // Expired
-    if (value <= 30) return 'warning'; // Warning zone (30 days or less)
-    return 'success'; // Plenty of time left
-  }
-}
-
-export function getStatusEmoji(status: 'critical' | 'warning' | 'success'): string {
-  switch (status) {
-    case 'critical':
-      return '🔴';
-    case 'warning':
-      return '🟡';
-    case 'success':
-      return '🟢';
   }
 }

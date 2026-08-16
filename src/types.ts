@@ -64,7 +64,50 @@ export interface Car {
   currencies?: Record<string, { enabled: boolean; rate: number }>;
 }
 
-export type ExpenseType = 'vidange' | 'assurance' | 'controle' | 'chaine' | 'autre';
+/**
+ * Clé du type de dépense véhicule.
+ *
+ * Les cinq clés historiques restent des types « système », mais la liste est
+ * désormais ouverte : l'utilisateur peut créer ses propres types depuis la
+ * page Maintenance (bougies, freins, pneus…). La clé créée est stockée telle
+ * quelle dans `vehicle_expenses.type`, d'où le `string` en union.
+ */
+export type ExpenseType =
+  | 'vidange' | 'assurance' | 'controle' | 'chaine' | 'autre'
+  | (string & {});
+
+/** Mode de suivi d'un type de maintenance. */
+export type MaintenanceTracking =
+  /** Compte à rebours en kilomètres (vidange, chaîne, bougies…). */
+  | 'mileage'
+  /** Compte à rebours en jours via une date d'expiration (assurance, contrôle). */
+  | 'date'
+  /** Simple ligne de dépense, sans échéance. */
+  | 'simple';
+
+/** Palette disponible pour un type de maintenance (classes Tailwind statiques). */
+export type MaintenanceColor =
+  | 'red' | 'blue' | 'amber' | 'green' | 'purple'
+  | 'teal' | 'orange' | 'indigo' | 'pink' | 'slate';
+
+/**
+ * Définition d'un type de maintenance / dépense véhicule.
+ * Table `maintenance_types` — les lignes `isSystem` ne sont pas supprimables.
+ */
+export interface MaintenanceType {
+  id: string;
+  key: string;
+  labelFr: string;
+  labelAr: string;
+  icon: string;
+  tracking: MaintenanceTracking;
+  defaultIntervalKm?: number | null;
+  defaultIntervalDays?: number | null;
+  color: MaintenanceColor;
+  isSystem: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
 
 export interface Expense {
   id: string;
@@ -264,10 +307,15 @@ export interface VehicleExpense {
   date: string;
   note?: string;
   currentMileage?: number;
+  /** Intervalle (en km) avant la prochaine échéance, pas une valeur absolue. */
   nextVidangeKm?: number;
   expirationDate?: string;
   expenseName?: string;
   createdAt: string;
+  oilFilterChanged?: boolean;
+  airFilterChanged?: boolean;
+  fuelFilterChanged?: boolean;
+  acFilterChanged?: boolean;
 }
 
 export interface ReservationStep1 {

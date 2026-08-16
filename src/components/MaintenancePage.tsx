@@ -1,14 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Car, Language, VehicleExpense } from '../types';
+import { Car, Language, MaintenanceType, VehicleExpense } from '../types';
 import { MaintenanceCard } from './MaintenanceCard';
 import { CarModal } from './CarModal';
 import { VehicleExpenseModal } from './VehicleExpenseModal';
+import { MaintenanceTypeModal } from './MaintenanceTypeModal';
+import { ConfirmModal } from './ConfirmModal';
 import { MaintenanceStatus, getMaintenanceStatus } from '../services/maintenanceService';
+import {
+  addMaintenanceType,
+  deleteMaintenanceType,
+  getMaintenanceTypes,
+  paletteOf,
+  typeLabel,
+  updateMaintenanceType,
+} from '../services/maintenanceTypeService';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Loader2, RefreshCw, Filter } from 'lucide-react';
+import {
+  Search, Loader2, RefreshCw, Plus, Wrench, AlertTriangle, Clock,
+  CheckCircle2, Coins, Settings2, Pencil, Trash2, ChevronDown, Database,
+} from 'lucide-react';
 import { getCars, updateCar } from '../services/carService';
-import { addVehicleExpense, updateVehicleExpense, getVehicleExpenses } from '../services/expenseService';
+import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
 
 interface MaintenancePageProps {
   lang: Language;
@@ -16,65 +29,85 @@ interface MaintenancePageProps {
   user?: any;
 }
 
+type StatusFilter = 'all' | 'critical' | 'warning' | 'success';
+
 export const MaintenancePage: React.FC<MaintenancePageProps> = ({
   lang,
   isAuthLoading = false,
   user = null,
 }) => {
   const location = useLocation();
+  const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
+
   const [cars, setCars] = useState<Car[]>([]);
   const [maintenanceData, setMaintenanceData] = useState<MaintenanceStatus[]>([]);
+  const [types, setTypes] = useState<MaintenanceType[]>([]);
+  const [typesFallback, setTypesFallback] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'critical' | 'warning' | 'success'>('all');
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
+
+  // Modales
   const [isCarModalOpen, setIsCarModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
-  const [selectedExpenseType, setSelectedExpenseType] = useState<'vidange' | 'chaine' | 'assurance' | 'controle' | 'autre'>('vidange');
   const [prefilledExpense, setPrefilledExpense] = useState<Partial<VehicleExpense> | undefined>(undefined);
   const [expenseError, setExpenseError] = useState<string | null>(null);
   const [savingExpense, setSavingExpense] = useState(false);
 
-  const isRtl = lang === 'ar';
+  // Gestion des types de dépenses
+  const [showTypes, setShowTypes] = useState(false);
+  const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
+  const [editingType, setEditingType] = useState<MaintenanceType | null>(null);
+  const [savingType, setSavingType] = useState(false);
+  const [typeError, setTypeError] = useState<string | null>(null);
+  const [pendingTypeKey, setPendingTypeKey] = useState<string | null>(null);
+  const [typeToDelete, setTypeToDelete] = useState<MaintenanceType | null>(null);
 
   /**
    * Ouvre TOUJOURS le formulaire en CRÉATION.
    *
    * Le gabarit renvoyé ne porte jamais d'`id` : la fenêtre affiche donc
-   * « Nouvelle dépense » et l'enregistrement insère une nouvelle ligne. Le
-   * gabarit est reconstruit à chaque ouverture, ce qui évite de retrouver les
-   * valeurs de la dépense précédemment saisie.
+   * « Nouvelle dépense » et l'enregistrement insère une nouvelle ligne.
    */
-  const openNewExpense = (
-    car: Car,
-    type: 'vidange' | 'chaine' | 'assurance' | 'controle' | 'autre'
-  ) => {
+  const openNewExpense = (car: Car, type?: MaintenanceType) => {
     const today = new Date().toISOString().split('T')[0];
-    const inOneYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const isMileageBased = type === 'vidange' || type === 'chaine';
+    const resolved = type || types[0];
 
     setSelectedCar(car);
-    setSelectedExpenseType(type);
     setExpenseError(null);
+    setPendingTypeKey(null);
     setPrefilledExpense({
       // Pas d'`id` : création, jamais édition.
       carId: car.id,
-      type,
+      type: resolved?.key || 'autre',
       cost: 0,
       note: '',
       date: today,
       currentMileage: car.mileage,
-      ...(isMileageBased
-        ? { nextVidangeKm: 10000 }
-        : { expirationDate: inOneYear }),
+      ...(resolved?.tracking === 'mileage'
+        ? { nextVidangeKm: resolved.defaultIntervalKm ?? 10000 }
+        : {}),
+      ...(resolved?.tracking === 'date'
+        ? {
+            expirationDate: new Date(
+              Date.now() + (resolved.defaultIntervalDays ?? 365) * 86400000
+            ).toISOString().split('T')[0],
+          }
+        : {}),
     });
     setIsExpenseModalOpen(true);
   };
 
-  // Load cars data
+  // ── Chargement ─────────────────────────────────────────────────────────
   const loadCarsData = async () => {
     try {
       setLoading(true);
+
+      const typesResult = await getMaintenanceTypes();
+      setTypes(typesResult.types);
+      setTypesFallback(typesResult.usingFallback);
+
       const result = await getCars();
       if (result.success && result.cars) {
         const mappedCars: Car[] = result.cars.map(dbCar => ({
@@ -95,18 +128,19 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
           deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
           images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
           mileage: dbCar.mileage || 0,
-          status: (dbCar.status || 'disponible') as 'disponible' | 'louer' | 'maintenance' | 'available',
+          status: (dbCar.status || 'disponible') as Car['status'],
         }));
 
         setCars(mappedCars);
 
-        // Load all vehicle expenses
         const expensesResult = await getVehicleExpenses();
         const allExpenses = expensesResult.expenses || [];
-        console.log(`[MaintenancePage] Loaded ${allExpenses.length} total expenses`);
 
-        // Load maintenance data with expenses
-        const maintenanceStatus = await getMaintenanceStatus(mappedCars, allExpenses);
+        const maintenanceStatus = await getMaintenanceStatus(
+          mappedCars,
+          allExpenses,
+          typesResult.types
+        );
         setMaintenanceData(maintenanceStatus);
       }
     } catch (err) {
@@ -119,32 +153,28 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
   useEffect(() => {
     if (isAuthLoading) return;
     if (!user) return;
-
     loadCarsData();
   }, [user, isAuthLoading]);
 
-  // Handle navigation from dashboard alert
+  // Arrivée depuis une alerte du tableau de bord
   useEffect(() => {
     const state = location.state as any;
-    // Guard: only proceed if state has all required fields and they are non-empty strings
     if (
       state &&
       typeof state.selectedCarId === 'string' && state.selectedCarId.length > 0 &&
       typeof state.expenseType === 'string' && state.expenseType.length > 0 &&
       state.showExpenseModal === true
     ) {
-      // Find the car with the given ID
       const car = cars.find(c => c.id === state.selectedCarId);
       if (car) {
-        // Même chemin que les boutons de la carte : gabarit neuf, jamais un
-        // reste de la saisie précédente.
-        openNewExpense(car, state.expenseType);
-        // Clear the location state immediately to prevent re-triggering
+        openNewExpense(car, types.find(t => t.key === state.expenseType));
         window.history.replaceState({}, document.title);
       }
     }
-  }, [location.state, cars]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, cars, types]);
 
+  // ── Véhicule ───────────────────────────────────────────────────────────
   const handleEditCar = (car: Car) => {
     setSelectedCar(car);
     setIsCarModalOpen(true);
@@ -173,15 +203,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
           mileage: carData.mileage || selectedCar.mileage,
         };
         const result = await updateCar(selectedCar.id, updateData);
-        if (result.success) {
-          setCars(prev =>
-            prev.map(c =>
-              c.id === selectedCar.id ? { ...c, ...carData } : c
-            )
-          );
-          // Reload maintenance data
-          await loadCarsData();
-        }
+        if (result.success) await loadCarsData();
       }
       setIsCarModalOpen(false);
       setSelectedCar(null);
@@ -190,49 +212,40 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
     }
   };
 
-  const handleVidangeClick = (car: Car) => openNewExpense(car, 'vidange');
-  const handleChaineClick = (car: Car) => openNewExpense(car, 'chaine');
-  const handleAssuranceClick = (car: Car) => openNewExpense(car, 'assurance');
-  const handleControleClick = (car: Car) => openNewExpense(car, 'controle');
-
+  // ── Dépense ────────────────────────────────────────────────────────────
   /**
    * Enregistre une NOUVELLE dépense en base (table `vehicle_expenses`).
-   * On reprend le véhicule et le type réellement choisis dans le formulaire —
-   * l'utilisateur peut les changer après l'ouverture.
+   * Elle alimente aussi bien les compteurs de cette page que l'historique du
+   * véhicule affiché dans la page Dépenses.
    */
-  const handleSaveExpense = async (expenseData: any) => {
+  const handleSaveExpense = async (expenseData: Partial<VehicleExpense>) => {
     const carId = expenseData.carId || selectedCar?.id;
     if (!carId) {
-      setExpenseError(lang === 'fr' ? 'Sélectionnez un véhicule.' : 'اختر مركبة.');
+      setExpenseError(T('Sélectionnez un véhicule.', 'اختر مركبة.'));
       return;
     }
 
     setSavingExpense(true);
     setExpenseError(null);
     try {
-      const expense = {
+      const result = await addVehicleExpense({
         carId,
-        type: expenseData.type || selectedExpenseType,
+        type: expenseData.type || 'autre',
         cost: Number(expenseData.cost) || 0,
         date: expenseData.date || new Date().toISOString().split('T')[0],
         note: expenseData.note || '',
         currentMileage: expenseData.currentMileage ?? selectedCar?.mileage ?? 0,
-        nextVidangeKm: expenseData.nextVidangeKm || null,
-        expirationDate: expenseData.expirationDate || null,
+        nextVidangeKm: expenseData.nextVidangeKm || undefined,
+        expirationDate: expenseData.expirationDate || undefined,
         expenseName: expenseData.expenseName || '',
         oilFilterChanged: expenseData.oilFilterChanged || false,
         airFilterChanged: expenseData.airFilterChanged || false,
         fuelFilterChanged: expenseData.fuelFilterChanged || false,
         acFilterChanged: expenseData.acFilterChanged || false,
-      };
+      });
 
-      const result = await addVehicleExpense(expense);
-      if (!result.success) {
-        throw new Error(result.error || 'Insertion refusée');
-      }
+      if (!result.success) throw new Error(result.error || 'Insertion refusée');
 
-      // Recharge la liste complète des dépenses depuis la base : les cartes de
-      // maintenance reflètent immédiatement la nouvelle ligne enregistrée.
       await loadCarsData();
       setIsExpenseModalOpen(false);
       setSelectedCar(null);
@@ -240,106 +253,209 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
     } catch (err: any) {
       console.error('Error saving expense:', err);
       setExpenseError(
-        (lang === 'fr' ? "La dépense n'a pas pu être enregistrée : " : 'تعذر حفظ النفقة: ')
-        + (err?.message || 'erreur inconnue')
+        T("La dépense n'a pas pu être enregistrée : ", 'تعذر حفظ النفقة: ')
+        + (err?.message || T('erreur inconnue', 'خطأ غير معروف'))
       );
     } finally {
       setSavingExpense(false);
     }
   };
 
-  const filteredData = maintenanceData.filter(item => {
+  // ── Types de dépenses ──────────────────────────────────────────────────
+  const handleSaveType = async (payload: any) => {
+    setSavingType(true);
+    setTypeError(null);
+    try {
+      const result = payload.id && !String(payload.id).startsWith('system-')
+        ? await updateMaintenanceType(payload.id, payload)
+        : await addMaintenanceType(payload, types.map(t => t.key));
+
+      if (!result.success || !result.type) {
+        throw new Error(result.error || T('Enregistrement refusé', 'تم رفض الحفظ'));
+      }
+
+      const refreshed = await getMaintenanceTypes();
+      setTypes(refreshed.types);
+      setTypesFallback(refreshed.usingFallback);
+      setMaintenanceData(await getMaintenanceStatus(
+        cars,
+        (await getVehicleExpenses()).expenses || [],
+        refreshed.types
+      ));
+
+      setPendingTypeKey(result.type.key);
+      setIsTypeModalOpen(false);
+      setEditingType(null);
+    } catch (err: any) {
+      setTypeError(
+        (err?.message || T('erreur inconnue', 'خطأ غير معروف'))
+        + (typesFallback
+          ? T(' — exécutez d’abord le script SQL de mise à jour.', ' — نفّذ سكربت SQL أولاً.')
+          : '')
+      );
+    } finally {
+      setSavingType(false);
+    }
+  };
+
+  const handleDeleteType = async () => {
+    if (!typeToDelete) return;
+    const result = await deleteMaintenanceType(typeToDelete.id);
+    if (result.success) {
+      const refreshed = await getMaintenanceTypes();
+      setTypes(refreshed.types);
+      setMaintenanceData(await getMaintenanceStatus(
+        cars,
+        (await getVehicleExpenses()).expenses || [],
+        refreshed.types
+      ));
+    }
+    setTypeToDelete(null);
+  };
+
+  // ── Filtrage & statistiques ────────────────────────────────────────────
+  const filteredData = useMemo(() => maintenanceData.filter(item => {
+    const q = searchTerm.toLowerCase();
     const matchesSearch =
-      item.car.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.car.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.car.registration.toLowerCase().includes(searchTerm.toLowerCase());
+      item.car.brand.toLowerCase().includes(q) ||
+      item.car.model.toLowerCase().includes(q) ||
+      item.car.registration.toLowerCase().includes(q);
 
     if (!matchesSearch) return false;
-
     if (filterStatus === 'all') return true;
+    if (filterStatus === 'success') {
+      return item.criticalCount === 0 && item.warningCount === 0;
+    }
+    return item.items.some(i => i.level === filterStatus);
+  }), [maintenanceData, searchTerm, filterStatus]);
 
-    // Check if car has any item matching the status
-    const items = [
-      { type: 'vidange', value: item.vidange.kmRemaining, threshold: 1000 },
-      { type: 'chaine', value: item.chaine.kmRemaining, threshold: 1000 },
-      { type: 'assurance', value: item.assurance.daysRemaining, threshold: 30 },
-      { type: 'controle', value: item.controleTechnique.daysRemaining, threshold: 30 },
-    ];
+  /**
+   * Liste stable passée au formulaire de dépense : un tableau recréé à chaque
+   * rendu réinitialiserait la saisie en cours.
+   */
+  const expenseModalCars = useMemo(
+    () => (cars.length > 0 ? cars : selectedCar ? [selectedCar] : []),
+    [cars, selectedCar]
+  );
 
-    return items.some(item => {
-      if (item.value === null || item.value === undefined) {
-        return filterStatus === 'success';
-      }
+  const stats = useMemo(() => ({
+    vehicles: maintenanceData.length,
+    critical: maintenanceData.reduce((s, m) => s + m.criticalCount, 0),
+    warning: maintenanceData.reduce((s, m) => s + m.warningCount, 0),
+    cost: maintenanceData.reduce((s, m) => s + m.totalCost, 0),
+  }), [maintenanceData]);
 
-      if (item.type === 'vidange' || item.type === 'chaine') {
-        if (filterStatus === 'critical') return item.value <= 0;
-        if (filterStatus === 'warning') return item.value > 0 && item.value <= item.threshold;
-        if (filterStatus === 'success') return item.value > item.threshold;
-      } else {
-        if (filterStatus === 'critical') return item.value < 0;
-        if (filterStatus === 'warning') return item.value >= 0 && item.value <= item.threshold;
-        if (filterStatus === 'success') return item.value > item.threshold;
-      }
-    });
-  });
+  const statCards = [
+    { icon: <Wrench size={18} />,        label: T('Véhicules suivis', 'مركبات متابعة'), value: stats.vehicles.toString(),                  cls: 'bg-sky-50 border-sky-200 text-sky-700' },
+    { icon: <AlertTriangle size={18} />, label: T('Alertes critiques', 'تنبيهات حرجة'), value: stats.critical.toString(),                  cls: 'bg-red-50 border-red-200 text-red-700' },
+    { icon: <Clock size={18} />,         label: T('À surveiller', 'للمراقبة'),          value: stats.warning.toString(),                   cls: 'bg-amber-50 border-amber-200 text-amber-700' },
+    { icon: <Coins size={18} />,         label: T('Coût total', 'التكلفة الإجمالية'),   value: `${stats.cost.toLocaleString('fr-FR')} DZD`, cls: 'bg-green-50 border-green-200 text-green-700' },
+  ];
+
+  const FILTER_META: Record<StatusFilter, { fr: string; ar: string; icon: React.ReactNode; active: string }> = {
+    all:      { fr: 'Tous',      ar: 'الكل',   icon: <Wrench size={14} />,        active: 'bg-saas-primary-via text-white border-saas-primary-via' },
+    critical: { fr: 'Critique',  ar: 'حرج',    icon: <AlertTriangle size={14} />, active: 'bg-red-500 text-white border-red-500' },
+    warning:  { fr: 'À venir',   ar: 'قريباً', icon: <Clock size={14} />,         active: 'bg-amber-500 text-white border-amber-500' },
+    success:  { fr: 'À jour',    ar: 'محدّث',  icon: <CheckCircle2 size={14} />,  active: 'bg-green-600 text-white border-green-600' },
+  };
 
   return (
-    <div className="space-y-10">
-      {/* Header Section */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white p-8 rounded-2xl border border-saas-border shadow-sm">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-black text-saas-text-main tracking-tighter uppercase flex items-center gap-3">
-            🔧 {lang === 'fr' ? 'Maintenance' : 'الصيانة'}
-          </h1>
-          <p className="text-saas-primary-via font-bold text-[10px] uppercase tracking-[0.3em]">
-            {lang === 'fr' ? 'Suivi complet de la maintenance et des services' : 'المتابعة الشاملة للصيانة والخدمات'}
+    <div className="space-y-6">
+      {/* ── En-tête ─────────────────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-3xl border border-saas-border bg-white shadow-sm overflow-hidden"
+      >
+        <div className="bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end px-6 py-6 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center">
+              <Wrench size={26} />
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">
+                {T('Maintenance', 'الصيانة')}
+              </h1>
+              <p className="text-white/75 text-[10px] font-bold uppercase tracking-[0.25em] mt-1">
+                {T('Échéances, entretiens et coûts par véhicule', 'المواعيد والصيانة والتكاليف لكل مركبة')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/60" size={17} />
+              <input
+                type="text"
+                placeholder={T('Rechercher un véhicule…', 'بحث عن مركبة…')}
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-11 pr-4 py-3 bg-white/15 backdrop-blur-sm border border-white/25 rounded-xl outline-none focus:border-white/60 w-full sm:w-72 transition-all font-medium text-sm text-white placeholder:text-white/60"
+              />
+            </div>
+            <button
+              onClick={loadCarsData}
+              title={T('Actualiser', 'تحديث')}
+              className="px-4 py-3 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
+              <span className="font-bold uppercase tracking-widest text-xs">
+                {T('Actualiser', 'تحديث')}
+              </span>
+            </button>
+            <button
+              onClick={() => cars[0] && openNewExpense(cars[0])}
+              disabled={cars.length === 0}
+              className="px-4 py-3 rounded-xl bg-white text-saas-primary-via hover:bg-white/90 transition-colors flex items-center justify-center gap-2 font-bold uppercase tracking-widest text-xs disabled:opacity-50 cursor-pointer"
+            >
+              <Plus size={17} /> {T('Dépense', 'نفقة')}
+            </button>
+          </div>
+        </div>
+
+        {/* Statistiques */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-5">
+          {statCards.map(card => (
+            <div key={card.label} className={`rounded-2xl border p-4 ${card.cls}`}>
+              <div className="flex items-center gap-2 opacity-80">
+                {card.icon}
+                <span className="text-[9px] font-black uppercase tracking-[0.18em]">{card.label}</span>
+              </div>
+              <p className="text-xl font-black tracking-tight mt-1.5">{card.value}</p>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* ── Bandeau migration SQL ───────────────────────────────────── */}
+      {typesFallback && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <Database className="text-amber-600 shrink-0 mt-0.5" size={18} />
+          <p className="text-sm font-semibold text-amber-800">
+            {T(
+              'Types de dépenses en mode intégré : exécutez le script SQL « 20260817_maintenance_custom_types.sql » dans Supabase pour créer et enregistrer vos propres types.',
+              'أنواع النفقات في الوضع المدمج: نفّذ سكربت SQL في Supabase لإنشاء أنواعك الخاصة.'
+            )}
           </p>
         </div>
+      )}
 
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-saas-text-muted group-focus-within:text-saas-primary-via transition-colors" size={18} />
-            <input
-              type="text"
-              placeholder={lang === 'fr' ? 'Rechercher un véhicule...' : 'بحث عن مركبة...'}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-12 pr-6 py-3.5 bg-saas-bg border border-saas-border rounded-xl outline-none focus:border-saas-primary-via w-full sm:w-80 transition-all font-medium text-sm shadow-sm"
-            />
-          </div>
-          <button
-            onClick={loadCarsData}
-            className="btn-saas-secondary px-6 py-3.5 group w-full sm:w-auto justify-center"
-            title={lang === 'fr' ? 'Actualiser' : 'تحديث'}
-          >
-            <RefreshCw size={20} className={`${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-            <span className="font-bold uppercase tracking-widest text-xs">
-              {lang === 'fr' ? 'Actualiser' : 'تحديث'}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* Retour d'enregistrement d'une dépense */}
+      {/* ── Retour d'enregistrement ─────────────────────────────────── */}
       <AnimatePresence>
         {savingExpense && (
           <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="flex items-center gap-3 bg-saas-bg border border-saas-border rounded-2xl p-4"
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="flex items-center gap-3 bg-white border border-saas-border rounded-2xl p-4"
           >
             <Loader2 className="w-5 h-5 animate-spin text-saas-primary-via shrink-0" />
             <p className="text-sm font-semibold text-saas-text-main">
-              {lang === 'fr' ? 'Enregistrement de la dépense…' : 'جاري حفظ النفقة…'}
+              {T('Enregistrement de la dépense…', 'جاري حفظ النفقة…')}
             </p>
           </motion.div>
         )}
         {expenseError && (
           <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
             className="flex items-start justify-between gap-4 bg-red-50 border border-red-200 rounded-2xl p-4"
           >
             <p className="text-sm font-semibold text-red-700">⚠️ {expenseError}</p>
@@ -347,105 +463,172 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
               onClick={() => setExpenseError(null)}
               className="text-xs font-black uppercase tracking-wider text-red-700 hover:underline cursor-pointer shrink-0"
             >
-              {lang === 'fr' ? 'Fermer' : 'إغلاق'}
+              {T('Fermer', 'إغلاق')}
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Filter Buttons */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-3 flex-wrap bg-white p-5 rounded-2xl border border-saas-border shadow-sm"
-      >
-        <span className="text-xs font-bold text-saas-text-muted uppercase tracking-widest">
-          {lang === 'fr' ? 'Filtrer:' : 'تصفية:'}
-        </span>
-        {(['all', 'critical', 'warning', 'success'] as const).map((status) => (
-          <motion.button
-            key={status}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setFilterStatus(status)}
-            className={`px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 ${
-              filterStatus === status
-                ? status === 'critical'
-                  ? 'bg-red-500/10 text-red-600 border-2 border-red-500 shadow-lg shadow-red-500/20'
-                  : status === 'warning'
-                  ? 'bg-amber-500/10 text-amber-600 border-2 border-amber-500 shadow-lg shadow-amber-500/20'
-                  : status === 'success'
-                  ? 'bg-green-500/10 text-green-600 border-2 border-green-500 shadow-lg shadow-green-500/20'
-                  : 'bg-saas-primary-via/10 text-saas-primary-via border-2 border-saas-primary-via shadow-lg shadow-saas-primary-via/20'
-                : 'bg-saas-bg text-saas-text-muted border-2 border-saas-border hover:border-saas-primary-via/50'
-            }`}
-          >
-            {status === 'all' && '🔄'}
-            {status === 'critical' && '🔴'}
-            {status === 'warning' && '🟡'}
-            {status === 'success' && '🟢'}
-            <span>
-              {status === 'all' && (lang === 'fr' ? 'Tous' : 'الكل')}
-              {status === 'critical' && (lang === 'fr' ? 'Critique' : 'حرج')}
-              {status === 'warning' && (lang === 'fr' ? 'Attention' : 'تنبيه')}
-              {status === 'success' && (lang === 'fr' ? 'Bon' : 'جيد')}
-            </span>
-          </motion.button>
-        ))}
-      </motion.div>
+      {/* ── Barre de filtres + gestion des types ────────────────────── */}
+      <div className="bg-white rounded-2xl border border-saas-border shadow-sm">
+        <div className="p-4 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-black text-saas-text-muted uppercase tracking-[0.2em] mr-1">
+            {T('Filtrer', 'تصفية')}
+          </span>
+          {(Object.keys(FILTER_META) as StatusFilter[]).map(status => {
+            const meta = FILTER_META[status];
+            const active = filterStatus === status;
+            return (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`px-4 py-2 rounded-xl font-bold text-[11px] uppercase tracking-widest transition-all flex items-center gap-2 border cursor-pointer ${
+                  active
+                    ? meta.active
+                    : 'bg-saas-bg text-saas-text-muted border-saas-border hover:border-saas-primary-via/50'
+                }`}
+              >
+                {meta.icon}
+                {T(meta.fr, meta.ar)}
+              </button>
+            );
+          })}
 
-      {/* Content Grid */}
+          <button
+            onClick={() => setShowTypes(v => !v)}
+            className="ml-auto px-4 py-2 rounded-xl font-bold text-[11px] uppercase tracking-widest border border-saas-border bg-saas-bg text-saas-text-main hover:border-saas-secondary-start hover:text-saas-secondary-start transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Settings2 size={14} />
+            {T('Types de dépenses', 'أنواع النفقات')}
+            <span className="px-1.5 py-0.5 rounded-md bg-white border border-saas-border text-[10px]">
+              {types.length}
+            </span>
+            <ChevronDown size={14} className={`transition-transform ${showTypes ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        {/* Panneau de gestion des types */}
+        <AnimatePresence initial={false}>
+          {showTypes && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="overflow-hidden border-t border-saas-border"
+            >
+              <div className="p-4 bg-saas-bg space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-bold text-saas-text-muted">
+                    {T(
+                      'Créez vos propres types (bougies, freins, pneus…) : ils apparaissent aussitôt dans la maintenance et dans les dépenses.',
+                      'أنشئ أنواعك الخاصة: تظهر فوراً في الصيانة والنفقات.'
+                    )}
+                  </p>
+                  <button
+                    onClick={() => { setEditingType(null); setTypeError(null); setIsTypeModalOpen(true); }}
+                    className="btn-saas-secondary px-4 py-2 text-xs shrink-0"
+                  >
+                    <Plus size={14} /> {T('Nouveau type', 'نوع جديد')}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {types.map(type => {
+                    const p = paletteOf(type.color);
+                    return (
+                      <div
+                        key={type.id}
+                        className={`rounded-2xl border p-3.5 flex items-center gap-3 ${p.bg} ${p.border}`}
+                      >
+                        <span className="w-10 h-10 rounded-xl bg-white/70 border border-white flex items-center justify-center text-lg shrink-0">
+                          {type.icon}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-black truncate ${p.text}`}>
+                            {typeLabel(type, lang)}
+                          </p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-saas-text-muted">
+                            {type.tracking === 'mileage'
+                              ? `${(type.defaultIntervalKm || 0).toLocaleString('fr-FR')} KM`
+                              : type.tracking === 'date'
+                              ? `${type.defaultIntervalDays || 0} ${T('jours', 'يوم')}`
+                              : T('Sans échéance', 'بدون استحقاق')}
+                            {type.isSystem && ` · ${T('système', 'نظام')}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => { setEditingType(type); setTypeError(null); setIsTypeModalOpen(true); }}
+                            title={T('Modifier', 'تعديل')}
+                            className="p-1.5 rounded-lg bg-white/80 hover:bg-white text-saas-text-muted hover:text-saas-secondary-start transition-colors cursor-pointer"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          {!type.isSystem && (
+                            <button
+                              onClick={() => setTypeToDelete(type)}
+                              title={T('Supprimer', 'حذف')}
+                              className="p-1.5 rounded-lg bg-white/80 hover:bg-white text-saas-text-muted hover:text-red-600 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Grille des véhicules ────────────────────────────────────── */}
       {loading ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex items-center justify-center min-h-96 bg-white rounded-2xl border border-saas-border"
-        >
+        <div className="flex items-center justify-center min-h-96 bg-white rounded-3xl border border-saas-border">
           <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-12 h-12 text-saas-primary-via animate-spin" />
+            <Loader2 className="w-11 h-11 text-saas-primary-via animate-spin" />
             <p className="text-saas-text-muted font-medium">
-              {lang === 'fr' ? 'Chargement des véhicules...' : 'جاري تحميل السيارات...'}
+              {T('Chargement des véhicules…', 'جاري تحميل السيارات…')}
             </p>
           </div>
-        </motion.div>
+        </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             <AnimatePresence mode="popLayout">
-              {filteredData.map((maintenance) => (
+              {filteredData.map(maintenance => (
                 <MaintenanceCard
                   key={maintenance.car.id}
                   maintenance={maintenance}
                   lang={lang}
                   onEditCar={handleEditCar}
-                  onVidangeClick={handleVidangeClick}
-                  onChaineClick={handleChaineClick}
-                  onAssuranceClick={handleAssuranceClick}
-                  onControleClick={handleControleClick}
+                  onAddExpense={(car, type) => openNewExpense(car, type)}
+                  onQuickAdd={car => openNewExpense(car)}
                 />
               ))}
             </AnimatePresence>
           </div>
 
           {filteredData.length === 0 && (
-            <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-              <p className="text-gray-400 font-medium">
-                {lang === 'fr' ? 'Aucun véhicule trouvé.' : 'لم يتم العثور على مركبات.'}
+            <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-saas-border">
+              <Wrench className="mx-auto text-saas-text-muted mb-3" size={32} />
+              <p className="text-saas-text-muted font-medium">
+                {T('Aucun véhicule trouvé.', 'لم يتم العثور على مركبات.')}
               </p>
             </div>
           )}
         </>
       )}
 
-      {/* Car Edit Modal */}
+      {/* ── Modales ─────────────────────────────────────────────────── */}
       <AnimatePresence>
         {isCarModalOpen && (
           <CarModal
             isOpen={isCarModalOpen}
-            onClose={() => {
-              setIsCarModalOpen(false);
-              setSelectedCar(null);
-            }}
+            onClose={() => { setIsCarModalOpen(false); setSelectedCar(null); }}
             onSave={handleSaveCar}
             car={selectedCar || undefined}
             lang={lang}
@@ -453,12 +636,10 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Expense Modal */}
       <AnimatePresence>
         {isExpenseModalOpen && selectedCar && (
           <VehicleExpenseModal
-            // Remonté à chaque ouverture : le formulaire repart toujours vierge.
-            key={`${selectedCar.id}-${selectedExpenseType}`}
+            key={`${selectedCar.id}-${prefilledExpense?.type || 'new'}`}
             isOpen={isExpenseModalOpen}
             onClose={() => {
               setIsExpenseModalOpen(false);
@@ -467,11 +648,42 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
             }}
             onSave={handleSaveExpense}
             expense={prefilledExpense}
-            cars={cars.length > 0 ? cars : [selectedCar]}
+            cars={expenseModalCars}
+            types={types}
+            onRequestNewType={() => { setEditingType(null); setTypeError(null); setIsTypeModalOpen(true); }}
+            pendingTypeKey={pendingTypeKey}
+            saving={savingExpense}
             lang={lang}
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {isTypeModalOpen && (
+          <MaintenanceTypeModal
+            isOpen={isTypeModalOpen}
+            onClose={() => { setIsTypeModalOpen(false); setEditingType(null); }}
+            onSave={handleSaveType}
+            type={editingType}
+            existingKeys={types.map(t => t.key)}
+            saving={savingType}
+            error={typeError}
+            lang={lang}
+          />
+        )}
+      </AnimatePresence>
+
+      <ConfirmModal
+        isOpen={!!typeToDelete}
+        onClose={() => setTypeToDelete(null)}
+        onConfirm={handleDeleteType}
+        title={{ fr: 'Supprimer le type', ar: 'حذف النوع' }}
+        message={{
+          fr: `Supprimer « ${typeToDelete?.labelFr || ''} » ? Les dépenses déjà enregistrées avec ce type sont conservées.`,
+          ar: `حذف « ${typeToDelete?.labelAr || ''} »؟ يتم الاحتفاظ بالنفقات المسجلة مسبقاً.`,
+        }}
+        lang={lang}
+      />
     </div>
   );
 };

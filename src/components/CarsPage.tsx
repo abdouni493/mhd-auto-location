@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Car, Rental, Language, Expense, ReservationDetails } from '../types';
+import { Car, Rental, Language, Expense, ReservationDetails, MaintenanceType, VehicleExpense } from '../types';
 import { CarCard } from './CarCard';
 import { CarModal } from './CarModal';
 import { CarDetailsModal } from './CarDetailsModal';
-import { ExpenseModal } from './ExpenseModal';
+import { VehicleExpenseModal } from './VehicleExpenseModal';
+import { MaintenanceTypeModal } from './MaintenanceTypeModal';
 import { HistoryModal } from './HistoryModal';
 import { CarReportModal } from './CarReportModal';
 import { ConfirmModal } from './ConfirmModal';
@@ -11,6 +12,9 @@ import { Plus, Search, Loader2, RefreshCw, Coins, CheckCircle, ChevronDown } fro
 import { motion, AnimatePresence } from 'motion/react';
 import { getCars, addCar, updateCar, deleteCar, AddCarData } from '../services/carService';
 import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
+import {
+  addMaintenanceType, getMaintenanceTypes, updateMaintenanceType,
+} from '../services/maintenanceTypeService';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { parseCarCurrencies, SECONDARY_CURRENCIES, CURRENCIES, DEFAULT_RATES } from '../utils/currency';
@@ -90,8 +94,29 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
   const [carToDelete, setCarToDelete] = useState<string | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [reportExpenses, setReportExpenses] = useState<Expense[]>([]);
+  const [reportExpenses, setReportExpenses] = useState<VehicleExpense[]>([]);
   const [reportReservations, setReportReservations] = useState<ReservationDetails[]>([]);
+
+  // ── Types de dépenses (partagés avec la page Maintenance) ─────────────────
+  const [expenseTypes, setExpenseTypes] = useState<MaintenanceType[]>([]);
+  const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
+  const [savingType, setSavingType] = useState(false);
+  const [typeError, setTypeError] = useState<string | null>(null);
+  const [pendingTypeKey, setPendingTypeKey] = useState<string | null>(null);
+  const [savingExpense, setSavingExpense] = useState(false);
+
+  useEffect(() => {
+    getMaintenanceTypes().then(result => setExpenseTypes(result.types));
+  }, []);
+
+  /**
+   * Liste stable passée au formulaire de dépense : un tableau recréé à chaque
+   * rendu réinitialiserait la saisie en cours.
+   */
+  const expenseModalCars = useMemo(
+    () => (selectedCar ? [selectedCar] : []),
+    [selectedCar]
+  );
 
   // ── Taux de change global (appliqué à TOUTES les voitures) ────────────────
   type RateConfig = { enabled: boolean; rate: number };
@@ -442,17 +467,19 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
     }
   };
 
-  const handleSaveExpense = async (
-    expenseData: Partial<Expense> & {
-      currentMileage?: number;
-      nextVidangeKm?: number;
-      expenseName?: string;
-    }
-  ) => {
-    if (!selectedCar) return;
+  /**
+   * Enregistre la dépense saisie depuis la fiche du véhicule.
+   * Elle atterrit dans `vehicle_expenses` : le même historique que celui
+   * affiché par les pages Dépenses et Maintenance.
+   */
+  const handleSaveExpense = async (expenseData: Partial<VehicleExpense>) => {
+    const carId = expenseData.carId || selectedCar?.id;
+    if (!carId) return;
+
+    setSavingExpense(true);
     try {
-      const newExpense: Omit<import('../types').VehicleExpense, 'id' | 'createdAt'> = {
-        carId: selectedCar.id,
+      const result = await addVehicleExpense({
+        carId,
         type: expenseData.type || 'autre',
         cost: expenseData.cost || 0,
         date: expenseData.date || new Date().toISOString().split('T')[0],
@@ -460,16 +487,55 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         currentMileage: expenseData.currentMileage,
         nextVidangeKm: expenseData.nextVidangeKm,
         expirationDate: expenseData.expirationDate,
-        expenseName: expenseData.expenseName || expenseData.name,
-      };
-      const result = await addVehicleExpense(newExpense);
+        expenseName: expenseData.expenseName,
+        oilFilterChanged: expenseData.oilFilterChanged || false,
+        airFilterChanged: expenseData.airFilterChanged || false,
+        fuelFilterChanged: expenseData.fuelFilterChanged || false,
+        acFilterChanged: expenseData.acFilterChanged || false,
+      });
+
       if (!result.success) {
         console.error('Error saving expense to DB', result.error);
-        setError('Failed to save expense');
+        setError(lang === 'fr' ? "La dépense n'a pas pu être enregistrée." : 'تعذر حفظ النفقة.');
+        return;
       }
+
+      setIsExpenseModalOpen(false);
+      setPendingTypeKey(null);
     } catch (err) {
       console.error('Unexpected error saving expense', err);
-      setError('Failed to save expense');
+      setError(lang === 'fr' ? "La dépense n'a pas pu être enregistrée." : 'تعذر حفظ النفقة.');
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  /** Création d'un type de dépense sans quitter la fiche véhicule. */
+  const handleSaveExpenseType = async (payload: any) => {
+    setSavingType(true);
+    setTypeError(null);
+    try {
+      const result = payload.id && !String(payload.id).startsWith('system-')
+        ? await updateMaintenanceType(payload.id, payload)
+        : await addMaintenanceType(payload, expenseTypes.map(t => t.key));
+
+      if (!result.success || !result.type) {
+        throw new Error(result.error || 'Enregistrement refusé');
+      }
+
+      const refreshed = await getMaintenanceTypes();
+      setExpenseTypes(refreshed.types);
+      setPendingTypeKey(result.type.key);
+      setIsTypeModalOpen(false);
+    } catch (err: any) {
+      setTypeError(
+        (err?.message || 'erreur inconnue')
+        + (lang === 'fr'
+          ? ' — exécutez le script SQL de mise à jour si la table est absente.'
+          : ' — نفّذ سكربت SQL إذا كان الجدول غير موجود.')
+      );
+    } finally {
+      setSavingType(false);
     }
   };
 
@@ -758,13 +824,35 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
             car={selectedCar}
             lang={lang}
           />
-          <ExpenseModal
-            isOpen={isExpenseModalOpen}
-            onClose={() => setIsExpenseModalOpen(false)}
-            onSave={handleSaveExpense}
-            car={selectedCar}
-            lang={lang}
-          />
+          <AnimatePresence>
+            {isExpenseModalOpen && (
+              <VehicleExpenseModal
+                isOpen={isExpenseModalOpen}
+                onClose={() => { setIsExpenseModalOpen(false); setPendingTypeKey(null); }}
+                onSave={handleSaveExpense}
+                cars={expenseModalCars}
+                types={expenseTypes}
+                lockedCarId={selectedCar.id}
+                onRequestNewType={() => { setTypeError(null); setIsTypeModalOpen(true); }}
+                pendingTypeKey={pendingTypeKey}
+                saving={savingExpense}
+                lang={lang}
+              />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {isTypeModalOpen && (
+              <MaintenanceTypeModal
+                isOpen={isTypeModalOpen}
+                onClose={() => setIsTypeModalOpen(false)}
+                onSave={handleSaveExpenseType}
+                existingKeys={expenseTypes.map(t => t.key)}
+                saving={savingType}
+                error={typeError}
+                lang={lang}
+              />
+            )}
+          </AnimatePresence>
           <HistoryModal
             isOpen={isHistoryModalOpen}
             onClose={() => setIsHistoryModalOpen(false)}

@@ -1,232 +1,224 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Car, Language } from '../types';
-import { MaintenanceStatus, getStatusColor, getStatusEmoji } from '../services/maintenanceService';
-import { Edit2 } from 'lucide-react';
+import { Car, Language, MaintenanceType } from '../types';
+import {
+  MaintenanceItemStatus,
+  MaintenanceStatus,
+  LEVEL_STYLES,
+} from '../services/maintenanceService';
+import { paletteOf, typeLabel } from '../services/maintenanceTypeService';
+import { Edit2, Plus, Gauge, Receipt, ChevronRight } from 'lucide-react';
 
 interface MaintenanceCardProps {
   maintenance: MaintenanceStatus;
   lang: Language;
   onEditCar: (car: Car) => void;
-  onVidangeClick: (car: Car, expenseId?: string) => void;
-  onChaineClick: (car: Car, expenseId?: string) => void;
-  onAssuranceClick: (car: Car, expenseId?: string) => void;
-  onControleClick: (car: Car, expenseId?: string) => void;
+  /** Ouvre le formulaire de dépense pour ce véhicule et ce type. */
+  onAddExpense: (car: Car, type: MaintenanceType) => void;
+  /** Ouvre le formulaire sans type imposé. */
+  onQuickAdd: (car: Car) => void;
 }
+
+/**
+ * Part consommée de l'intervalle, entre 0 et 1.
+ * Sert uniquement à la barre de progression : au-delà de l'échéance, on sature
+ * à 100 % (le dépassement est déjà signalé par la couleur rouge).
+ */
+const progressOf = (item: MaintenanceItemStatus): number | null => {
+  if (item.type.tracking === 'mileage') {
+    if (!item.intervalKm || item.kmRemaining === null) return null;
+    return Math.min(1, Math.max(0, (item.intervalKm - item.kmRemaining) / item.intervalKm));
+  }
+  if (item.type.tracking === 'date') {
+    if (item.daysRemaining === null) return null;
+    const total = item.type.defaultIntervalDays || 365;
+    return Math.min(1, Math.max(0, (total - item.daysRemaining) / total));
+  }
+  return null;
+};
 
 export const MaintenanceCard: React.FC<MaintenanceCardProps> = ({
   maintenance,
   lang,
   onEditCar,
-  onVidangeClick,
-  onChaineClick,
-  onAssuranceClick,
-  onControleClick,
+  onAddExpense,
+  onQuickAdd,
 }) => {
-  const { car, vidange, chaine, assurance, controleTechnique } = maintenance;
+  const { car, items, worstLevel, criticalCount, warningCount, totalCost } = maintenance;
+  const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
 
-  const getMaintenanceItems = () => {
-    return [
-      {
-        type: 'vidange',
-        icon: '🛢️',
-        label: lang === 'fr' ? 'Vidange' : 'تغيير الزيت',
-        status: vidange,
-        statusValue: vidange.kmRemaining,
-        threshold: 1000,
-        suffix: lang === 'fr' ? ' KM' : ' كم',
-        onClick: () => onVidangeClick(car, vidange.expense?.id),
-        color: getStatusColor('vidange', vidange.kmRemaining),
-        hoverColor: 'hover:bg-blue-100',
-        borderColor: 'border-blue-200 hover:border-blue-400',
-      },
-      {
-        type: 'chaine',
-        icon: '⛓️',
-        label: lang === 'fr' ? 'Chaîne' : 'السلسلة',
-        status: chaine,
-        statusValue: chaine.kmRemaining,
-        threshold: 1000,
-        suffix: lang === 'fr' ? ' KM' : ' كم',
-        onClick: () => onChaineClick(car, chaine.expense?.id),
-        color: getStatusColor('chaine', chaine.kmRemaining),
-        hoverColor: 'hover:bg-purple-100',
-        borderColor: 'border-purple-200 hover:border-purple-400',
-      },
-      {
-        type: 'assurance',
-        icon: '🛡️',
-        label: lang === 'fr' ? 'Assurance' : 'التأمين',
-        status: assurance,
-        statusValue: assurance.daysRemaining,
-        threshold: 30,
-        suffix: lang === 'fr' ? ' Jours' : ' أيام',
-        onClick: () => onAssuranceClick(car, assurance.expense?.id),
-        color: getStatusColor('assurance', assurance.daysRemaining),
-        hoverColor: 'hover:bg-green-100',
-        borderColor: 'border-green-200 hover:border-green-400',
-      },
-      {
-        type: 'controle',
-        icon: '🛠️',
-        label: lang === 'fr' ? 'Contrôle' : 'الفحص الفني',
-        status: controleTechnique,
-        statusValue: controleTechnique.daysRemaining,
-        threshold: 30,
-        suffix: lang === 'fr' ? ' Jours' : ' أيام',
-        onClick: () => onControleClick(car, controleTechnique.expense?.id),
-        color: getStatusColor('controle', controleTechnique.daysRemaining),
-        hoverColor: 'hover:bg-orange-100',
-        borderColor: 'border-orange-200 hover:border-orange-400',
-      },
-    ];
-  };
+  // Seuls les types à échéance apparaissent dans le compte à rebours.
+  const trackedItems = items.filter(i => i.type.tracking !== 'simple');
+  const simpleItems = items.filter(i => i.type.tracking === 'simple' && i.count > 0);
+  const level = LEVEL_STYLES[worstLevel];
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-      className="glass-card overflow-hidden bg-white flex flex-col group"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+      className="bg-white rounded-3xl border border-saas-border shadow-sm hover:shadow-lg transition-shadow overflow-hidden flex flex-col group"
     >
-      {/* Car Header Image */}
-      <div className="relative h-48 overflow-hidden">
+      {/* ── Visuel véhicule ─────────────────────────────────────────── */}
+      <div className="relative h-40 overflow-hidden bg-saas-bg">
         <img
           src={car.images[0] || 'https://picsum.photos/seed/car/400/300'}
           alt={`${car.brand} ${car.model}`}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           referrerPolicy="no-referrer"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-slate-900/85 via-slate-900/25 to-transparent" />
 
-        {/* Year Badge */}
-        <div className="absolute top-2 right-2 bg-saas-primary-start/90 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg backdrop-blur-sm shadow-lg">
-          {car.year}
+        <button
+          onClick={() => onEditCar(car)}
+          title={T('Modifier le véhicule', 'تعديل المركبة')}
+          className="absolute top-3 right-3 p-2 bg-white/90 hover:bg-white text-saas-text-main rounded-xl transition-all shadow-sm cursor-pointer"
+        >
+          <Edit2 size={15} />
+        </button>
+
+        {/* Badge d'état global */}
+        <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${level.bg} ${level.border} ${level.text}`}>
+          {criticalCount > 0
+            ? `${criticalCount} ${T('critique', 'حرج')}${criticalCount > 1 ? 's' : ''}`
+            : warningCount > 0
+            ? `${warningCount} ${T('à surveiller', 'للمراقبة')}`
+            : T(level.label.fr, level.label.ar)}
         </div>
 
-        {/* Edit Button */}
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => onEditCar(car)}
-          className="absolute top-3 left-3 p-2.5 bg-white/95 hover:bg-white text-saas-primary-via rounded-xl transition-all shadow-lg hover:shadow-xl"
-        >
-          <Edit2 size={18} />
-        </motion.button>
-      </div>
-
-      {/* Car Info */}
-      <div className="p-5 flex-1 flex flex-col gap-4">
-        <div>
-          <h3 className="text-lg font-black text-saas-text-main uppercase tracking-tighter">
+        {/* Identité */}
+        <div className="absolute bottom-0 inset-x-0 p-4 text-white">
+          <h3 className="text-lg font-black uppercase tracking-tight leading-tight">
             {car.brand} {car.model}
           </h3>
-          <p className="text-[10px] text-saas-primary-via font-bold uppercase tracking-widest">{car.registration}</p>
-        </div>
-
-        {/* Current Mileage */}
-        <div className="bg-saas-bg rounded-xl p-3 border border-saas-border">
-          <p className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest mb-1">📍 Kilométrage Actuel</p>
-          <p className="text-2xl font-black text-saas-primary-via tracking-tighter">{car.mileage.toLocaleString()} KM</p>
-        </div>
-
-        {/* Maintenance Items Grid */}
-        <div className="space-y-2.5">
-          {getMaintenanceItems().map((item) => {
-            const isExpired = item.statusValue !== null && (
-              (item.type === 'vidange' || item.type === 'chaine') 
-                ? item.statusValue <= 0 
-                : item.statusValue < 0
-            );
-
-            const statusBgColor =
-              item.color === 'critical'
-                ? 'bg-red-50 border-red-200'
-                : item.color === 'warning'
-                ? 'bg-amber-50 border-amber-200'
-                : 'bg-green-50 border-green-200';
-
-            const statusTextColor =
-              item.color === 'critical'
-                ? 'text-red-700'
-                : item.color === 'warning'
-                ? 'text-amber-700'
-                : 'text-green-700';
-
-            return (
-              <motion.button
-                key={item.type}
-                onClick={item.onClick}
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full p-3.5 rounded-xl border-2 transition-all ${statusBgColor} hover:shadow-md flex items-center justify-between group/item`}
-              >
-                <div className="flex items-center gap-3 text-left flex-1">
-                  <span className="text-2xl">{item.icon}</span>
-                  <div className="flex-1">
-                    <p className={`text-xs font-bold uppercase tracking-widest ${statusTextColor}`}>
-                      {item.label}
-                    </p>
-                    {item.status.lastDate && (
-                      <div className="text-[9px] opacity-60 mt-0.5 space-y-0.5">
-                        <p>
-                          {lang === 'fr' ? 'Dernier:' : 'آخر:'} {new Date(item.status.lastDate).toLocaleDateString(
-                            lang === 'fr' ? 'fr-FR' : 'ar-SA'
-                          )}
-                        </p>
-                        {item.status.lastMileage !== null && item.status.lastMileage !== undefined && (
-                          <p>
-                            {lang === 'fr' ? 'À' : 'في'} {item.status.lastMileage.toLocaleString()} km
-                          </p>
-                        )}
-                        {item.status.nextMileage !== null && item.status.nextMileage !== undefined && (
-                          <p className={`font-bold ${statusTextColor}`}>
-                            {lang === 'fr' ? 'Prochain à' : 'القادم في'} {item.status.nextMileage.toLocaleString()} km
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xl font-black">
-                      {getStatusEmoji(item.color)}
-                    </span>
-                    <div>
-                      <p className={`text-xs font-bold uppercase tracking-widest ${statusTextColor} opacity-70 mb-0.5`}>
-                        {lang === 'fr' ? 'Restant' : 'متبقي'}
-                      </p>
-                      <p className={`text-lg font-black ${statusTextColor} tracking-tighter`}>
-                        {item.statusValue !== null && item.statusValue !== undefined
-                          ? Math.abs(item.statusValue).toLocaleString()
-                          : '—'}
-                      </p>
-                      <p className={`text-[8px] font-bold uppercase tracking-widest ${statusTextColor} opacity-60`}>
-                        {item.suffix}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </motion.button>
-            );
-          })}
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/80">
+              {car.registration}
+            </span>
+            <span className="w-1 h-1 rounded-full bg-white/40" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/80">
+              {car.year}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Footer Info */}
-      <div className="px-5 py-4 border-t border-saas-border bg-saas-bg/50 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">⚙️</span>
-          <span className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">{car.transmission}</span>
+      {/* ── Bandeau kilométrage ─────────────────────────────────────── */}
+      <div className="px-4 py-3 bg-saas-bg border-b border-saas-border flex items-center justify-between">
+        <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-saas-text-muted">
+          <Gauge size={14} /> {T('Compteur', 'العداد')}
+        </span>
+        <span className="text-lg font-black text-saas-text-main tracking-tight">
+          {(car.mileage || 0).toLocaleString('fr-FR')} <span className="text-xs text-saas-text-muted">KM</span>
+        </span>
+      </div>
+
+      {/* ── Échéances ───────────────────────────────────────────────── */}
+      <div className="p-4 flex-1 space-y-2">
+        {trackedItems.length === 0 && (
+          <p className="text-xs text-saas-text-muted text-center py-6">
+            {T('Aucun type suivi. Créez-en un depuis « Types de dépenses ».',
+               'لا يوجد نوع متابع. أنشئ نوعاً من « أنواع النفقات ».')}
+          </p>
+        )}
+
+        {trackedItems.map(item => {
+          const p = paletteOf(item.type.color);
+          const lvl = LEVEL_STYLES[item.level];
+          const progress = progressOf(item);
+          const value =
+            item.type.tracking === 'mileage' ? item.kmRemaining : item.daysRemaining;
+          const unit =
+            item.type.tracking === 'mileage' ? T('KM', 'كم') : T('JOURS', 'يوم');
+
+          return (
+            <button
+              key={item.type.key}
+              onClick={() => onAddExpense(car, item.type)}
+              title={T(`Nouvelle dépense · ${item.type.labelFr}`, `نفقة جديدة · ${item.type.labelAr}`)}
+              className={`w-full text-left px-3 py-2.5 rounded-2xl border transition-all hover:shadow-sm cursor-pointer ${lvl.bg} ${lvl.border}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 ${p.bg} border ${p.border}`}>
+                  {item.type.icon}
+                </span>
+
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-black uppercase tracking-wide truncate ${lvl.text}`}>
+                    {typeLabel(item.type, lang)}
+                  </p>
+                  <p className="text-[10px] text-saas-text-muted font-semibold truncate">
+                    {item.lastDate
+                      ? item.type.tracking === 'mileage'
+                        ? `${new Date(item.lastDate).toLocaleDateString('fr-FR')} · ${(item.lastMileage ?? 0).toLocaleString('fr-FR')} km → ${(item.nextMileage ?? 0).toLocaleString('fr-FR')} km`
+                        : `${T('Expire le', 'ينتهي في')} ${item.expirationDate ? new Date(item.expirationDate).toLocaleDateString('fr-FR') : '—'}`
+                      : T('Jamais enregistré', 'غير مسجل')}
+                  </p>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <p className={`text-base font-black leading-none ${lvl.text}`}>
+                    {value === null || value === undefined ? '—' : Math.abs(value).toLocaleString('fr-FR')}
+                  </p>
+                  <p className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${lvl.text} opacity-70`}>
+                    {value !== null && value !== undefined && value < 0 ? T('DÉPASSÉ', 'متجاوز') : unit}
+                  </p>
+                </div>
+              </div>
+
+              {progress !== null && (
+                <div className="mt-2 h-1.5 rounded-full bg-white/70 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress * 100}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                    className={`h-full rounded-full ${lvl.bar}`}
+                  />
+                </div>
+              )}
+            </button>
+          );
+        })}
+
+        {/* Types sans échéance déjà utilisés sur ce véhicule */}
+        {simpleItems.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {simpleItems.map(item => (
+              <button
+                key={item.type.key}
+                onClick={() => onAddExpense(car, item.type)}
+                className="px-2.5 py-1 rounded-lg bg-saas-bg border border-saas-border text-[10px] font-bold text-saas-text-muted hover:border-saas-primary-via hover:text-saas-primary-via transition-colors cursor-pointer"
+              >
+                {item.type.icon} {typeLabel(item.type, lang)} · {item.count}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Pied : cumul + action ───────────────────────────────────── */}
+      <div className="px-4 py-3 border-t border-saas-border bg-saas-bg flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-saas-text-muted">
+            <Receipt size={11} /> {T('Total dépenses', 'إجمالي النفقات')}
+          </p>
+          <p className="text-sm font-black text-saas-text-main truncate">
+            {totalCost.toLocaleString('fr-FR')} DZD
+            <span className="text-[10px] font-bold text-saas-text-muted ml-1.5">
+              · {maintenance.expenseCount}
+            </span>
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-lg">⛽</span>
-          <span className="text-[10px] font-bold text-saas-text-muted uppercase tracking-widest">{car.energy}</span>
-        </div>
+        <button
+          onClick={() => onQuickAdd(car)}
+          className="btn-saas-primary px-3.5 py-2 text-xs shrink-0"
+        >
+          <Plus size={14} />
+          {T('Dépense', 'نفقة')}
+          <ChevronRight size={14} className="opacity-70" />
+        </button>
       </div>
     </motion.div>
   );

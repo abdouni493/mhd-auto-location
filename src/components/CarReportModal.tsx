@@ -27,6 +27,20 @@ const EXPENSE_META: Record<ExpenseType, { labelFr: string; labelAr: string; icon
   autre:     { labelFr: 'Autre',              labelAr: 'أخرى',             icon: <Wrench size={14}/>,      color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-gray-200' },
 };
 
+/**
+ * Métadonnées d'un type de dépense, avec repli pour les types personnalisés
+ * créés depuis la page Maintenance (bougies, freins…).
+ */
+const metaFor = (type: string) =>
+  EXPENSE_META[type] || {
+    labelFr: type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Autre',
+    labelAr: type || 'أخرى',
+    icon: <Wrench size={14}/>,
+    color: 'text-slate-700',
+    bg: 'bg-slate-50',
+    border: 'border-slate-200',
+  };
+
 const STATUS_STYLE: Record<string, { label: string; labelAr: string; cls: string }> = {
   active:    { label: 'Active',     labelAr: 'نشطة',          cls: 'bg-blue-100 text-blue-700 border-blue-300' },
   completed: { label: 'Terminée',   labelAr: 'مكتملة',        cls: 'bg-green-100 text-green-700 border-green-300' },
@@ -91,12 +105,12 @@ export const CarReportModal: React.FC<CarReportModalProps> = ({
   const totalExpenses  = filteredExp.reduce((s, e) => s + (e.cost || 0), 0);
   const netBenefit     = totalCollected - totalExpenses;
 
-  // Group expenses by type
-  const byType = (Object.keys(EXPENSE_META) as ExpenseType[]).reduce((acc, k) => {
-    const g = filteredExp.filter(e => e.type === k);
-    if (g.length) acc[k] = g;
+  // Regroupement par type : construit à partir des dépenses réelles pour que
+  // les types personnalisés apparaissent aussi dans le rapport.
+  const byType = filteredExp.reduce((acc, e) => {
+    (acc[e.type] = acc[e.type] || []).push(e);
     return acc;
-  }, {} as Record<ExpenseType, VehicleExpense[]>);
+  }, {} as Record<string, VehicleExpense[]>);
 
   const handleGenerate = () => {
     if (!startDate || !endDate) {
@@ -470,7 +484,7 @@ export const CarReportModal: React.FC<CarReportModalProps> = ({
                   ) : (
                     <div className="divide-y divide-gray-100">
                       {(Object.entries(byType) as [ExpenseType, VehicleExpense[]][]).map(([type, group], catIdx) => {
-                        const meta     = EXPENSE_META[type];
+                        const meta     = metaFor(type);
                         const catTotal = group.reduce((s, e) => s + (e.cost || 0), 0);
                         const open     = expandedType === type;
                         return (
