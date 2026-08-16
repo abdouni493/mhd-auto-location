@@ -501,3 +501,66 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .wizard-calendar .rdp-day_button { transition: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ADAPTATION MOBILE GLOBALE
+   ──────────────────────────────────────────────────────────────────────
+   Les écrans d'administration ont été dessinés pour le bureau : padding de
+   2 rem, titres en text-4xl, grilles à 3–4 colonnes. Sur un téléphone, ces
+   valeurs débordent de l'écran ou ne laissent presque plus de place au
+   contenu. Plutôt que de reprendre chaque classe dans une soixantaine de
+   composants, on réduit ici les utilitaires les plus lourds sous 640 px.
+
+   RÈGLE DE SÉCURITÉ : chaque sélecteur est gardé par
+   `:not([class*=":<préfixe>"])`. Un élément qui déclare déjà une variante
+   responsive (`p-4 sm:p-8`, `grid-cols-1 lg:grid-cols-4`…) exprime une
+   intention explicite : on n'y touche pas. Seuls les utilitaires posés sans
+   aucune déclinaison responsive sont ramenés à une échelle mobile.
+
+   Ces règles sont hors `@layer` : à spécificité égale, une déclaration non
+   layerisée l'emporte sur les utilitaires Tailwind (qui vivent dans une
+   couche), quel que soit l'ordre du fichier.
+   ══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 639px) {
+  /* ── Rembourrages ── */
+  .p-8:not([class*=":p-"])   { padding: 1.25rem; }
+  .p-6:not([class*=":p-"])   { padding: 1rem; }
+  .px-8:not([class*=":px-"]) { padding-inline: 1.25rem; }
+  .px-6:not([class*=":px-"]) { padding-inline: 1rem; }
+  .py-8:not([class*=":py-"]) { padding-block: 1.25rem; }
+  .py-6:not([class*=":py-"]) { padding-block: 1rem; }
+
+  /* ── Espacements ── */
+  .gap-8:not([class*=":gap-"]) { gap: 1.25rem; }
+  .gap-6:not([class*=":gap-"]) { gap: 1rem; }
+
+  .space-y-10:not([class*=":space-y-"]) > * + * { margin-top: 1.5rem; margin-block-start: 1.5rem; }
+  .space-y-8:not([class*=":space-y-"])  > * + * { margin-top: 1.25rem; margin-block-start: 1.25rem; }
+
+  /* ── Titres ── */
+  .text-5xl:not([class*=":text-"]) { font-size: 2rem;    line-height: 1.1; }
+  .text-4xl:not([class*=":text-"]) { font-size: 1.75rem; line-height: 1.15; }
+  .text-3xl:not([class*=":text-"]) { font-size: 1.5rem;  line-height: 1.2; }
+
+  /* ── Grilles : 3 colonnes ou plus deviennent 2 colonnes ── */
+  .grid-cols-3:not([class*=":grid-cols-"]),
+  .grid-cols-4:not([class*=":grid-cols-"]),
+  .grid-cols-5:not([class*=":grid-cols-"]),
+  .grid-cols-6:not([class*=":grid-cols-"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Aucun débordement horizontal de la zone de contenu : les tableaux
+     larges gardent leur propre conteneur `overflow-x-auto`. */
+  .admin-shell-main { overflow-x: hidden; }
+
+  /* iOS zoome automatiquement sur un champ dont le texte fait moins de
+     16 px. On force la taille au moment de la saisie : plus de zoom
+     intempestif ni de mise en page décalée après la frappe. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+

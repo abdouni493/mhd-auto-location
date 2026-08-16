@@ -59,10 +59,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: isRtl ? '100%' : '-100%', opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed inset-y-0 left-0 z-50 w-72 bg-white text-saas-text-main flex flex-col shadow-xl ltr:left-0 rtl:right-0 border-r border-saas-border lg:static lg:h-screen lg:sticky lg:top-0 lg:shadow-none"
+          className="fixed inset-y-0 left-0 z-50 w-[86vw] max-w-72 bg-white text-saas-text-main flex flex-col shadow-xl ltr:left-0 rtl:right-0 border-r border-saas-border overflow-y-auto lg:static lg:w-72 lg:h-screen lg:sticky lg:top-0 lg:shadow-none"
           style={{ [isRtl ? 'right' : 'left']: 0 }}
         >
-          <div className="p-8 flex items-center justify-between border-b border-saas-border">
+          <div className="p-5 lg:p-8 flex items-center justify-between border-b border-saas-border shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl overflow-hidden border border-saas-border shadow-md shadow-saas-primary-start/15 flex items-center justify-center flex-shrink-0">
                 {agencyData.logo ? (

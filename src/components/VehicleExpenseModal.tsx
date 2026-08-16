@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { VehicleExpense, Language, Car, MaintenanceType, MaintenanceTracking } from '../types';
 import { findType, paletteOf, typeLabel } from '../services/maintenanceTypeService';
+import { ModalPortal } from './ui/ModalPortal';
 
 interface VehicleExpenseModalProps {
   isOpen: boolean;
@@ -261,13 +262,16 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
     : null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto sm:py-8">
+    <ModalPortal>
+      {/* Centrée dans le viewport : la fenêtre s'ouvre là où l'utilisateur se
+          trouve, quel que soit le défilement de la page en arrière-plan. */}
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-slate-900/50 backdrop-blur-sm overscroll-contain">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 20 }}
         transition={{ type: 'spring', damping: 24, stiffness: 320 }}
-        className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-saas-border max-h-[calc(100vh-4rem)]"
+        className="bg-white w-full max-w-2xl rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-saas-border max-h-[92vh] sm:max-h-[calc(100vh-6rem)]"
       >
         {/* ── En-tête ───────────────────────────────────────────────── */}
         <div className="px-6 py-5 bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white flex items-start justify-between gap-4">
@@ -607,6 +611,7 @@ export const VehicleExpenseModal: React.FC<VehicleExpenseModalProps> = ({
           </button>
         </div>
       </motion.div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 };

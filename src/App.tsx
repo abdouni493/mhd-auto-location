@@ -635,13 +635,22 @@ export default function App() {
             toggleSidebar={() => setIsSidebarVisible(!isSidebarVisible)} 
           />
           
-          <main className="flex-1 p-8 overflow-y-auto">
+          <main className="admin-shell-main flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
             <AnimatePresence mode="wait">
+              {/*
+                ⚠️ Ne JAMAIS animer `filter` ici. Une valeur de filtre autre que
+                `none` — y compris `blur(0px)` laissé en place à la fin de
+                l'animation — fait de ce conteneur le bloc conteneur de tous les
+                descendants en `position: fixed`. Les fenêtres modales
+                s'ancraient alors en haut du contenu de la page : ouverte après
+                avoir fait défiler, la fenêtre apparaissait hors de l'écran.
+                `opacity` + `y` suffisent : Motion repose le transform à `none`.
+              */}
               <motion.div
                 key={activeTab}
-                initial={{ opacity: 0, y: 14, filter: 'blur(4px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               >
                 {renderContent()}

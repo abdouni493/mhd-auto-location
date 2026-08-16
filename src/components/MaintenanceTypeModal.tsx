@@ -8,6 +8,7 @@ import {
   paletteOf,
   slugifyKey,
 } from '../services/maintenanceTypeService';
+import { ModalPortal } from './ui/ModalPortal';
 
 interface MaintenanceTypeModalProps {
   isOpen: boolean;
@@ -130,13 +131,14 @@ export const MaintenanceTypeModal: React.FC<MaintenanceTypeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto sm:py-10">
+    <ModalPortal>
+      <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-6 bg-slate-900/50 backdrop-blur-sm overscroll-contain">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 16 }}
         transition={{ type: 'spring', damping: 24, stiffness: 320 }}
-        className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-saas-border max-h-[calc(100vh-5rem)]"
+        className="bg-white w-full max-w-xl rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-saas-border max-h-[92vh] sm:max-h-[calc(100vh-6rem)]"
       >
         {/* En-tête */}
         <div className="px-6 py-5 bg-linear-to-r from-saas-secondary-start to-saas-secondary-end text-white flex items-start justify-between gap-4">
@@ -358,6 +360,7 @@ export const MaintenanceTypeModal: React.FC<MaintenanceTypeModalProps> = ({
           </button>
         </div>
       </motion.div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 };

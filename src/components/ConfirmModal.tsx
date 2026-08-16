@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, AlertTriangle } from 'lucide-react';
 import { Language } from '../types';
+import { ModalPortal } from './ui/ModalPortal';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -23,11 +24,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-sm overscroll-contain">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden border border-saas-border"
+        className="bg-white w-full max-w-md rounded-2xl sm:rounded-[2rem] shadow-2xl overflow-hidden border border-saas-border max-h-[92vh] overflow-y-auto"
       >
         <div className="p-6 border-b border-saas-border flex items-center justify-between bg-saas-danger-start text-white">
           <h2 className="text-lg font-black uppercase tracking-tighter flex items-center gap-3">
@@ -66,6 +68,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </button>
         </div>
       </motion.div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 };
