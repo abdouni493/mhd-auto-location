@@ -19,7 +19,7 @@ export const CompaniesManager: React.FC<{ lang: Language }> = ({ lang }) => {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Company | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<{ name: string; logo: string }>({ name: '', logo: '' });
+  const [form, setForm] = useState<{ name: string; logo: string; isPrimary: boolean }>({ name: '', logo: '', isPrimary: true });
 
   // Création d'un compte administrateur d'agence (spec B).
   const [adminFor, setAdminFor] = useState<Company | null>(null);
@@ -49,13 +49,13 @@ export const CompaniesManager: React.FC<{ lang: Language }> = ({ lang }) => {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', logo: '' });
+    setForm({ name: '', logo: '', isPrimary: true });
     setShowForm(true);
   };
 
   const openEdit = (c: Company) => {
     setEditing(c);
-    setForm({ name: c.name, logo: c.logo || '' });
+    setForm({ name: c.name, logo: c.logo || '', isPrimary: c.isPrimary !== false });
     setShowForm(true);
   };
 
@@ -75,10 +75,10 @@ export const CompaniesManager: React.FC<{ lang: Language }> = ({ lang }) => {
       setSaving(true);
       setError(null);
       if (editing) {
-        const updated = await DatabaseService.updateCompany(editing.id, { name: form.name, logo: form.logo || null });
+        const updated = await DatabaseService.updateCompany(editing.id, { name: form.name, logo: form.logo || null, isPrimary: form.isPrimary });
         setCompanies(prev => prev.map(c => (c.id === editing.id ? updated : c)));
       } else {
-        const created = await DatabaseService.createCompany({ name: form.name, logo: form.logo || null, isPrimary: true });
+        const created = await DatabaseService.createCompany({ name: form.name, logo: form.logo || null, isPrimary: form.isPrimary });
         setCompanies(prev => [...prev, created]);
       }
       setShowForm(false);
@@ -258,6 +258,28 @@ export const CompaniesManager: React.FC<{ lang: Language }> = ({ lang }) => {
                     </label>
                   </div>
                 </div>
+
+                {/* Agence principale (« star ») : comptabilité + employés indépendants */}
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, isPrimary: !prev.isPrimary }))}
+                  className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${
+                    form.isPrimary ? 'border-amber-400 bg-amber-50' : 'border-saas-border bg-white'
+                  }`}
+                >
+                  <Star size={22} className={form.isPrimary ? 'fill-amber-500 text-amber-500' : 'text-saas-text-muted'} />
+                  <span className="flex-1">
+                    <span className="block font-black text-saas-text-main">
+                      {t('Agence principale', 'وكالة رئيسية')}
+                    </span>
+                    <span className="block text-xs text-saas-text-muted mt-0.5">
+                      {t('Comptabilité et employés indépendants (business autonome).', 'محاسبة وموظفون مستقلون (نشاط قائم بذاته).')}
+                    </span>
+                  </span>
+                  <span className={`w-11 h-6 rounded-full shrink-0 relative transition-colors ${form.isPrimary ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                    <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" style={{ left: form.isPrimary ? 22 : 2 }} />
+                  </span>
+                </button>
               </div>
 
               <div className="p-6 border-t border-saas-border flex gap-3">

@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { getCars, updateCar } from '../services/carService';
 import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
+import { DatabaseService } from '../services/DatabaseService';
+import { isCarInActiveCompany } from '../utils/companyContext';
 
 interface MaintenancePageProps {
   lang: Language;
@@ -108,9 +110,15 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
       setTypes(typesResult.types);
       setTypesFallback(typesResult.usingFallback);
 
-      const result = await getCars();
+      const [result, carLinks] = await Promise.all([
+        getCars(),
+        DatabaseService.getCarCompanyLinks(),
+      ]);
       if (result.success && result.cars) {
-        const mappedCars: Car[] = result.cars.map(dbCar => ({
+        const mappedCars: Car[] = result.cars
+          // Multi-agences : un admin scoppé ne voit que les voitures de son agence.
+          .filter(dbCar => isCarInActiveCompany(dbCar.id || '', carLinks))
+          .map(dbCar => ({
           id: dbCar.id || '',
           brand: dbCar.brand,
           model: dbCar.model,

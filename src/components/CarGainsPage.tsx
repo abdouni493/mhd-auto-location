@@ -12,6 +12,7 @@ import { getVehicleExpenses } from '../services/expenseService';
 import { generateReportHTML } from './ReportPrintTemplate';
 import { generateOwnerReportHTML } from './OwnerReportTemplate';
 import { usePermissions } from '../utils/permissions';
+import { isCarInActiveCompany } from '../utils/companyContext';
 
 interface CarGainsPageProps {
   lang: Language;
@@ -90,9 +91,14 @@ export const CarGainsPage: React.FC<CarGainsPageProps> = ({ lang }) => {
   useEffect(() => {
     (async () => {
       try {
-        const carsData = await DatabaseService.getCars();
-        setCars(carsData);
-        if (carsData.length > 0) setSelectedCarId(carsData[0].id);
+        // Multi-agences : un admin scoppé ne voit que les voitures de son agence.
+        const [carsData, links] = await Promise.all([
+          DatabaseService.getCars(),
+          DatabaseService.getCarCompanyLinks(),
+        ]);
+        const scoped = carsData.filter(c => isCarInActiveCompany(c.id, links));
+        setCars(scoped);
+        if (scoped.length > 0) setSelectedCarId(scoped[0].id);
       } catch (err) {
         console.error('Error loading cars:', err);
       }

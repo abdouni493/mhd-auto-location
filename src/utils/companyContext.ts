@@ -170,3 +170,20 @@ export function scopeQuery<T>(query: T): T {
   // supabase-js renvoie un builder chaînable ; `.eq` conserve le type.
   return (query as any).eq('company_id', cid) as T;
 }
+
+/**
+ * Une voiture est-elle visible dans le périmètre de l'agence active ?
+ *  - vue « toutes agences » (super-admin) : toujours vrai ;
+ *  - agence précise : vrai si la voiture est liée à cette agence (table
+ *    car_companies). Une voiture SANS aucun lien est rattachée à l'agence
+ *    principale (compat. voitures historiques).
+ * `links` = map carId -> [companyId] (voir DatabaseService.getCarCompanyLinks).
+ */
+export function isCarInActiveCompany(carId: string, links: Record<string, string[]>): boolean {
+  const scope = companyContext.getScopeCompanyId();
+  if (!scope) return true;
+  const ids = (links[carId] && links[carId].length)
+    ? links[carId]
+    : (companyContext.getPrimaryCompanyId() ? [companyContext.getPrimaryCompanyId() as string] : []);
+  return ids.includes(scope);
+}

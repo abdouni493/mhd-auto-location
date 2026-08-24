@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { Mail, Lock, UserIcon, Eye, EyeOff, Globe } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Mail, Lock, UserIcon, Eye, EyeOff, Globe, Building2, UserPlus, ShieldCheck, ArrowLeft, Loader2, Check } from 'lucide-react';
 import { supabase } from '../supabase';
-import { Language, UserRole, User } from '../types';
+import { Language, UserRole, User, Company } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { DatabaseService } from '../services/DatabaseService';
 import { sessionService } from '../utils/sessionService';
@@ -37,6 +37,21 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
   const [agencyBranding, setAgencyBranding] = useState<AgencyBranding>({
     logo: '',
     name: 'AutoLocation'
+  });
+
+  // ── Création d'un compte admin d'agence (multi-agences, super-admin) ───────
+  // Sécurisé : le super-admin s'authentifie d'abord avec ses propres
+  // identifiants ; on vérifie is_super_admin avant d'autoriser la création.
+  const [isCreateAdmin, setIsCreateAdmin] = useState(false);
+  const [caAuthorized, setCaAuthorized] = useState(false);
+  const [caLoading, setCaLoading] = useState(false);
+  const [caError, setCaError] = useState('');
+  const [caSuccess, setCaSuccess] = useState('');
+  const [caCompanies, setCaCompanies] = useState<Company[]>([]);
+  const [caShowPassword, setCaShowPassword] = useState(false);
+  const [caForm, setCaForm] = useState({
+    superEmail: '', superPassword: '',
+    companyId: '', fullName: '', email: '', password: '',
   });
 
   useEffect(() => {
@@ -316,6 +331,88 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
     }
   };
 
+  // Quitte le mode « création admin » et nettoie la session SDK transitoire.
+  const closeCreateAdmin = async () => {
+    setIsCreateAdmin(false);
+    setCaAuthorized(false);
+    setCaError('');
+    setCaSuccess('');
+    setCaCompanies([]);
+    setCaForm({ superEmail: '', superPassword: '', companyId: '', fullName: '', email: '', password: '' });
+    try { await supabase.auth.signOut(); } catch { /* noop */ }
+  };
+
+  // Étape 1 : le super-admin s'authentifie, on vérifie ses droits, on charge
+  // la liste des agences.
+  const handleAuthorizeSuperAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCaError('');
+    setCaLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: caForm.superEmail.trim(),
+        password: caForm.superPassword,
+      });
+      if (error || !data.user) {
+        setCaError(lang === 'fr' ? 'Identifiants super-admin invalides.' : 'بيانات المشرف العام غير صحيحة.');
+        return;
+      }
+      // Vérifie le statut super-admin (RLS app_users : lecture de sa propre ligne).
+      const { data: appUser } = await supabase
+        .from('app_users')
+        .select('is_super_admin')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
+      if (!appUser?.is_super_admin) {
+        setCaError(lang === 'fr'
+          ? "Ce compte n'est pas super-administrateur."
+          : 'هذا الحساب ليس مشرفاً عاماً.');
+        try { await supabase.auth.signOut(); } catch { /* noop */ }
+        return;
+      }
+      // Charge les agences (session authentifiée active).
+      const list = await DatabaseService.getCompanies();
+      setCaCompanies(list);
+      setCaForm(prev => ({ ...prev, companyId: list.find(c => !c.isPrimary)?.id || list[0]?.id || '' }));
+      setCaAuthorized(true);
+    } catch (err: any) {
+      setCaError(err?.message || (lang === 'fr' ? "Erreur d'autorisation." : 'خطأ في التفويض.'));
+    } finally {
+      setCaLoading(false);
+    }
+  };
+
+  // Étape 2 : création du compte administrateur pour l'agence choisie.
+  const handleCreateAgencyAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCaError('');
+    setCaSuccess('');
+    const email = caForm.email.trim().toLowerCase();
+    if (!caForm.companyId) { setCaError(lang === 'fr' ? 'Choisissez une agence.' : 'اختر وكالة.'); return; }
+    if (!caForm.fullName.trim()) { setCaError(lang === 'fr' ? 'Nom complet requis.' : 'الاسم الكامل مطلوب.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setCaError(lang === 'fr' ? 'Email invalide.' : 'بريد غير صحيح.'); return; }
+    if (caForm.password.length < 6) { setCaError(lang === 'fr' ? 'Mot de passe : 6 caractères minimum.' : 'كلمة المرور: 6 أحرف على الأقل.'); return; }
+    setCaLoading(true);
+    try {
+      await DatabaseService.createAgencyAdmin({
+        email,
+        password: caForm.password,
+        fullName: caForm.fullName.trim(),
+        companyId: caForm.companyId,
+      });
+      const companyName = caCompanies.find(c => c.id === caForm.companyId)?.name || '';
+      setCaSuccess(lang === 'fr'
+        ? `Compte administrateur créé pour « ${companyName} ». Il peut se connecter avec son email et son mot de passe.`
+        : `تم إنشاء حساب مسؤول لـ « ${companyName} ». يمكنه تسجيل الدخول ببريده وكلمة المرور.`);
+      setCaForm(prev => ({ ...prev, fullName: '', email: '', password: '' }));
+    } catch (err: any) {
+      const msg = err?.message || '';
+      setCaError(msg.includes('already') ? (lang === 'fr' ? 'Cet email est déjà utilisé.' : 'هذا البريد مستخدم بالفعل.') : (msg || (lang === 'fr' ? 'La création a échoué.' : 'فشل الإنشاء.')));
+    } finally {
+      setCaLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-saas-bg via-saas-bg to-blue-50">
       {/* Animated background elements */}
@@ -409,9 +506,96 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
             </motion.div>
           </motion.div>
 
+          {isCreateAdmin ? (
+          /* ── Création d'un compte administrateur d'agence (super-admin) ── */
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            <button
+              type="button"
+              onClick={closeCreateAdmin}
+              className="inline-flex items-center gap-2 text-xs font-bold text-saas-text-muted hover:text-saas-primary-via transition-colors"
+            >
+              <ArrowLeft size={14} /> {lang === 'fr' ? 'Retour à la connexion' : 'العودة لتسجيل الدخول'}
+            </button>
+
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-2xl bg-[#0284C7]/10 border border-[#0284C7]/25 flex items-center justify-center mx-auto mb-3 text-[#0284C7]">
+                <UserPlus size={22} />
+              </div>
+              <h2 className="text-lg font-black text-saas-text-main uppercase tracking-tight">
+                {lang === 'fr' ? "Compte administrateur d'agence" : 'حساب مسؤول وكالة'}
+              </h2>
+              <p className="text-xs text-saas-text-muted mt-1">
+                {lang === 'fr' ? 'Réservé au super-administrateur' : 'مخصص للمشرف العام'}
+              </p>
+            </div>
+
+            {!caAuthorized ? (
+              <form className="space-y-4" onSubmit={handleAuthorizeSuperAdmin}>
+                <p className="text-xs text-saas-text-muted leading-relaxed">
+                  {lang === 'fr'
+                    ? "Identifiez-vous avec votre compte super-administrateur pour autoriser la création."
+                    : 'سجّل الدخول بحساب المشرف العام للسماح بالإنشاء.'}
+                </p>
+                <div className="space-y-2">
+                  <label className="label-saas">{lang === 'fr' ? 'Email super-admin' : 'بريد المشرف العام'}</label>
+                  <div className="relative group">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-saas-text-muted" size={18} />
+                    <input type="email" value={caForm.superEmail} onChange={e => setCaForm(p => ({ ...p, superEmail: e.target.value }))} className="input-saas pl-12" placeholder="super@admin.dz" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="label-saas">{lang === 'fr' ? 'Mot de passe' : 'كلمة المرور'}</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-saas-text-muted" size={18} />
+                    <input type="password" value={caForm.superPassword} onChange={e => setCaForm(p => ({ ...p, superPassword: e.target.value }))} className="input-saas pl-12" placeholder="••••••••" />
+                  </div>
+                </div>
+                {caError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">{caError}</div>}
+                <button type="submit" disabled={caLoading} className="btn-saas-primary w-full text-sm py-3.5 flex items-center justify-center gap-2 disabled:opacity-60">
+                  {caLoading ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+                  {lang === 'fr' ? 'Continuer' : 'متابعة'}
+                </button>
+              </form>
+            ) : (
+              <form className="space-y-4" onSubmit={handleCreateAgencyAdmin}>
+                <div className="space-y-2">
+                  <label className="label-saas flex items-center gap-1.5"><Building2 size={12} />{lang === 'fr' ? 'Agence' : 'الوكالة'}</label>
+                  <select value={caForm.companyId} onChange={e => setCaForm(p => ({ ...p, companyId: e.target.value }))} className="input-saas cursor-pointer">
+                    <option value="">{lang === 'fr' ? '— Choisir une agence —' : '— اختر وكالة —'}</option>
+                    {caCompanies.map(c => <option key={c.id} value={c.id}>{c.name}{c.isPrimary ? ' ★' : ''}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="label-saas">{lang === 'fr' ? 'Nom complet' : 'الاسم الكامل'}</label>
+                  <input value={caForm.fullName} onChange={e => setCaForm(p => ({ ...p, fullName: e.target.value }))} className="input-saas" placeholder={lang === 'fr' ? 'Ex : Karim Oukkal' : 'مثال: كريم'} />
+                </div>
+                <div className="space-y-2">
+                  <label className="label-saas">Email</label>
+                  <input type="email" value={caForm.email} onChange={e => setCaForm(p => ({ ...p, email: e.target.value }))} className="input-saas" placeholder="admin@agence.dz" />
+                </div>
+                <div className="space-y-2">
+                  <label className="label-saas">{lang === 'fr' ? 'Mot de passe' : 'كلمة المرور'}</label>
+                  <div className="relative">
+                    <input type={caShowPassword ? 'text' : 'password'} value={caForm.password} onChange={e => setCaForm(p => ({ ...p, password: e.target.value }))} className="input-saas pr-11 font-mono" placeholder="••••••" />
+                    <button type="button" onClick={() => setCaShowPassword(v => !v)} className="absolute right-4 top-1/2 -translate-y-1/2 text-saas-text-muted hover:text-saas-primary-via">
+                      {caShowPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+                {caError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">{caError}</div>}
+                {caSuccess && <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">{caSuccess}</div>}
+                <button type="submit" disabled={caLoading} className="btn-vel-blue w-full text-sm py-3.5 flex items-center justify-center gap-2 disabled:opacity-60">
+                  {caLoading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                  {lang === 'fr' ? 'Créer le compte' : 'إنشاء الحساب'}
+                </button>
+              </form>
+            )}
+          </motion.div>
+          ) : (
+          <>
           {/* Form Section */}
-          <motion.form 
-            className="space-y-8" 
+          <motion.form
+            className="space-y-8"
             onSubmit={handleSubmit}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -555,6 +739,24 @@ export const Login: React.FC<LoginProps> = ({ lang, onLogin }) => {
               </button>
               <p className="text-xs text-saas-text-muted mt-2">(première connexion uniquement)</p>
             </motion.div>
+          )}
+
+          {/* Entrée : création d'un compte administrateur pour une agence
+              (multi-agences). L'autorisation super-admin est vérifiée à l'étape
+              suivante — aucun accès n'est accordé sans identifiants valides. */}
+          {!isSigningUp && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => { setIsCreateAdmin(true); setCaError(''); setCaSuccess(''); }}
+                className="inline-flex items-center gap-2 text-xs font-bold text-saas-text-muted hover:text-saas-primary-via transition-colors"
+              >
+                <UserPlus size={14} />
+                {lang === 'fr' ? "Créer un compte administrateur d'agence" : 'إنشاء حساب مسؤول وكالة'}
+              </button>
+            </div>
+          )}
+          </>
           )}
 
           {/* Decorative line */}

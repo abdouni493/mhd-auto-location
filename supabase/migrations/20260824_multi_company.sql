@@ -22,7 +22,9 @@
 --   6)  Fonctions auth_company_id() / auth_is_super_admin()
 --   7)  Trigger d'auto-remplissage de company_id (BEFORE INSERT)
 --   8)  RLS : companies, car_companies, app_users
---   9)  RLS company-scoped sur les tables métier (super-admin voit tout)
+--   (Le cloisonnement des tables métier est assuré côté application — voir la
+--    note en fin de fichier ; pas de RLS « authenticated only » qui casserait
+--    les sessions employés « anon ».)
 -- ============================================================================
 
 BEGIN;
@@ -220,11 +222,12 @@ ALTER TABLE public.companies     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.car_companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_users     ENABLE ROW LEVEL SECURITY;
 
--- companies : lisible par tous (switcher, formulaire voiture, workers) ;
--- écriture réservée au super-admin.
+-- companies : lisible par les utilisateurs authentifiés (switcher, formulaire
+-- voiture, création d'admin) ; écriture réservée au super-admin. Pas d'accès
+-- anon (évite d'exposer la liste des agences sur la page de connexion).
 DROP POLICY IF EXISTS mc_companies_select ON public.companies;
 CREATE POLICY mc_companies_select ON public.companies
-  FOR SELECT TO anon, authenticated USING (true);
+  FOR SELECT TO authenticated USING (true);
 
 DROP POLICY IF EXISTS mc_companies_insert ON public.companies;
 CREATE POLICY mc_companies_insert ON public.companies
@@ -278,53 +281,24 @@ CREATE POLICY mc_app_users_delete ON public.app_users
   FOR DELETE TO authenticated USING (public.auth_is_super_admin());
 
 
--- ============================================================================
--- 9) RLS COMPANY-SCOPED SUR LES TABLES MÉTIER
--- ============================================================================
--- Filet de sécurité côté base (l'app filtre déjà par agence) : un admin scoppé
--- ne lit/écrit QUE les lignes de son agence ; le super-admin voit tout. On
--- autorise aussi les lignes company_id NULL (commandes du site en attente, +
--- écritures via RPC SECURITY DEFINER). Policies nommées « mc_* » : purement
--- additives, elles ne remplacent aucune policy existante.
-DO $$
-DECLARE
-  t text;
-  tables text[] := ARRAY[
-    'reservations','clients','vehicle_expenses','store_expenses','payments',
-    'workers','maintenance_alerts','document_templates','worker_advances',
-    'worker_absences','worker_payments','worker_roles','promo_codes',
-    'entreprises','rental_settings','agency_settings'
-  ];
-  cond text := '(public.auth_is_super_admin() OR company_id = public.auth_company_id() OR company_id IS NULL)';
-BEGIN
-  FOREACH t IN ARRAY tables LOOP
-    IF to_regclass('public.' || t) IS NOT NULL THEN
-      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
-
-      EXECUTE format('DROP POLICY IF EXISTS mc_scope_select ON public.%I', t);
-      EXECUTE format('CREATE POLICY mc_scope_select ON public.%I FOR SELECT TO authenticated USING %s', t, cond);
-
-      EXECUTE format('DROP POLICY IF EXISTS mc_scope_insert ON public.%I', t);
-      EXECUTE format('CREATE POLICY mc_scope_insert ON public.%I FOR INSERT TO authenticated WITH CHECK %s', t, cond);
-
-      EXECUTE format('DROP POLICY IF EXISTS mc_scope_update ON public.%I', t);
-      EXECUTE format('CREATE POLICY mc_scope_update ON public.%I FOR UPDATE TO authenticated USING %s WITH CHECK %s', t, cond, cond);
-
-      EXECUTE format('DROP POLICY IF EXISTS mc_scope_delete ON public.%I', t);
-      EXECUTE format('CREATE POLICY mc_scope_delete ON public.%I FOR DELETE TO authenticated USING %s', t, cond);
-    END IF;
-  END LOOP;
-END $$;
-
 COMMIT;
 
 -- ============================================================================
--- NOTE IMPORTANTE
+-- SÉPARATION DES DONNÉES PAR AGENCE — MODÈLE RETENU
 -- ============================================================================
--- La section 9 active la RLS company-scoped sur les tables métier pour le rôle
--- « authenticated » (admins Supabase Auth). Si votre application permet à des
--- EMPLOYÉS de lire ces tables via le rôle « anon » (session worker sans auth
--- Supabase), et que cela cessait de fonctionner après cette migration,
--- rejouez alors vos policies « anon » existantes : les policies « mc_* »
--- ci-dessus sont additives et ne les suppriment jamais.
+-- Le cloisonnement des tables MÉTIER (réservations, clients, dépenses,
+-- maintenance, employés, rapports, comptabilité…) est assuré par la COUCHE
+-- APPLICATIVE : chaque lecture est filtrée par `company_id` et chaque écriture
+-- est estampillée sur l'agence active (voir src/utils/companyContext.ts).
+--
+-- On N'ACTIVE PAS de RLS company-scoped « authenticated only » sur ces tables,
+-- car les EMPLOYÉS se connectent via une session « worker » (RPC login_worker)
+-- SANS session Supabase Auth : leurs requêtes passent par le rôle « anon ».
+-- Une RLS réservée au rôle « authenticated » les priverait de tout accès et
+-- casserait l'agence actuelle. Le trigger `set_company_id_from_auth` +
+-- l'estampillage applicatif garantissent que chaque ligne porte son agence ;
+-- le super-admin voit tout, un admin/employé scoppé ne voit que son agence.
+--
+-- Les tables companies / car_companies / app_users (section 8) SONT protégées
+-- par RLS car elles ne sont manipulées que par des utilisateurs authentifiés.
 -- ============================================================================
