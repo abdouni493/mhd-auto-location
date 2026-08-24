@@ -17,6 +17,8 @@ interface MaintenanceCardProps {
   onAddExpense: (car: Car, type: MaintenanceType) => void;
   /** Ouvre le formulaire sans type imposé. */
   onQuickAdd: (car: Car) => void;
+  /** Agences rattachées au véhicule (multi-agences) — masqué si mono-agence. */
+  companyBadges?: { id: string; name: string }[];
 }
 
 /**
@@ -43,6 +45,7 @@ export const MaintenanceCard: React.FC<MaintenanceCardProps> = ({
   onEditCar,
   onAddExpense,
   onQuickAdd,
+  companyBadges,
 }) => {
   const { car, items, worstLevel, criticalCount, warningCount, totalCost } = maintenance;
   const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
@@ -102,6 +105,19 @@ export const MaintenanceCard: React.FC<MaintenanceCardProps> = ({
               {car.year}
             </span>
           </div>
+          {/* Badges d'agence — le parc étant commun, ils indiquent le rattachement */}
+          {companyBadges && companyBadges.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {companyBadges.map(b => (
+                <span
+                  key={b.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/20 border border-white/30 text-[9px] font-black uppercase tracking-wider text-white backdrop-blur-sm"
+                >
+                  🏢 {b.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

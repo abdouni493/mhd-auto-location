@@ -19,7 +19,6 @@ import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { parseCarCurrencies, SECONDARY_CURRENCIES, CURRENCIES, DEFAULT_RATES } from '../utils/currency';
 import { usePermissions } from '../utils/permissions';
-import { useCompany } from '../utils/companyProvider';
 import { companyContext } from '../utils/companyContext';
 
 interface CarsPageProps {
@@ -32,9 +31,12 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
   const [cars, setCars] = useState<Car[]>([]);
   const [reservations, setReservations] = useState<ReservationDetails[]>([]);
   // Multi-agences : liste des agences + liens voiture↔agence (car_companies).
-  const { isSuperAdmin } = useCompany();
+  // Le parc est COMMUN : aucune voiture n'est masquée selon l'agence active.
   const [companies, setCompanies] = useState<Company[]>([]);
   const [carLinks, setCarLinks] = useState<Record<string, string[]>>({});
+  // Filtre d'agence PUREMENT VISUEL ('all' = tout le parc, valeur par défaut).
+  // Il ne restreint pas les droits : il aide juste à retrouver une voiture.
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
 
   useEffect(() => {
     if (isAuthLoading || !user) return;
@@ -305,32 +307,33 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
     [cars, reservations]
   );
 
-  // Périmètre agence : un admin scoppé ne voit QUE les voitures liées à son
-  // agence (via car_companies) ; le super-admin en vue « toutes agences » les
-  // voit toutes. La table `cars` reste partagée : le site public n'est pas filtré.
-  const scopeCompanyId = companyContext.getScopeCompanyId();
+  // ── Périmètre : PARC COMPLET, toutes agences confondues ───────────────────
+  // Le parc `cars` est PARTAGÉ entre les agences : cette page affiche donc
+  // TOUTES les voitures quelle que soit l'agence active (aucun filtre
+  // d'agence). Le rattachement reste lisible grâce aux badges d'agence sur
+  // chaque carte, et un filtre d'agence facultatif permet de se restreindre
+  // ponctuellement à une agence sans masquer le reste du parc.
   const filteredCars = carsWithRealStatus.filter(car => {
+    const q = debouncedSearch.trim().toLowerCase();
     const matchesSearch =
-      car.brand.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-      car.model.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-      car.registration.toLowerCase().includes(debouncedSearch.toLowerCase());
+      !q ||
+      car.brand.toLowerCase().includes(q) ||
+      car.model.toLowerCase().includes(q) ||
+      car.registration.toLowerCase().includes(q) ||
+      // La recherche accepte aussi le nom d'une agence.
+      carCompanyBadges(car.id).some(b => b.name.toLowerCase().includes(q));
     if (!matchesSearch) return false;
-    if (scopeCompanyId && !carCompanyIds(car.id).includes(scopeCompanyId)) return false;
+    if (companyFilter !== 'all' && !carCompanyIds(car.id).includes(companyFilter)) return false;
     return true;
   });
 
-  // Compteurs par statut réel (limités à l'agence active pour un admin scoppé)
-  const scopedCars = useMemo(
-    () => carsWithRealStatus.filter(c => !scopeCompanyId || carCompanyIds(c.id).includes(scopeCompanyId)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [carsWithRealStatus, scopeCompanyId, carLinks, companies]
-  );
+  // Compteurs par statut réel — sur le parc entier (toutes agences).
   const counters = useMemo(() => ({
-    disponible:  scopedCars.filter(c => c.status === 'disponible').length,
-    reserve:     scopedCars.filter(c => c.status === 'reserve').length,
-    louer:       scopedCars.filter(c => c.status === 'louer').length,
-    maintenance: scopedCars.filter(c => c.status === 'maintenance').length,
-  }), [scopedCars]);
+    disponible:  carsWithRealStatus.filter(c => c.status === 'disponible').length,
+    reserve:     carsWithRealStatus.filter(c => c.status === 'reserve').length,
+    louer:       carsWithRealStatus.filter(c => c.status === 'louer').length,
+    maintenance: carsWithRealStatus.filter(c => c.status === 'maintenance').length,
+  }), [carsWithRealStatus]);
 
   const handleAddCar = () => {
     setSelectedCar(null);
@@ -668,6 +671,39 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         </div>
       </div>
 
+      {/* ── Filtre d'agence (parc commun à toutes les agences) ─────────────── */}
+      {companies.length > 1 && (
+        <div className="bg-white rounded-2xl border border-saas-border shadow-sm p-5 space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-saas-text-muted">
+            {lang === 'fr'
+              ? `Parc commun — ${cars.length} véhicule${cars.length > 1 ? 's' : ''} visibles pour toutes les agences`
+              : `أسطول مشترك — ${cars.length} مركبة مرئية لكل الوكالات`}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[{ id: 'all', name: lang === 'fr' ? 'Toutes les agences' : 'كل الوكالات', count: cars.length },
+              ...companies.map(c => ({
+                id: c.id,
+                name: c.name,
+                count: cars.filter(car => carCompanyIds(car.id).includes(c.id)).length,
+              }))].map(chip => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setCompanyFilter(chip.id)}
+                className={`px-4 py-2 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all ${
+                  companyFilter === chip.id
+                    ? 'bg-saas-primary-via text-white border-saas-primary-via shadow-sm'
+                    : 'bg-saas-bg text-saas-text-muted border-saas-border hover:border-saas-primary-via/40'
+                }`}
+              >
+                {chip.id === 'all' ? '🚘' : '🏢'} {chip.name}
+                <span className="ml-2 opacity-70">{chip.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Taux de change global (appliqué à toutes les voitures) ─────────── */}
       <div className="bg-white rounded-2xl border border-saas-border shadow-sm overflow-hidden">
         <button
@@ -852,9 +888,9 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
                 onReports={handleReports}
                 onStatusChange={handleStatusChange}
                 activeReservationInfo={getActiveReservationInfo(car.id)}
-                // Badges d'agence : affichés au super-admin dès qu'il existe
-                // plusieurs agences (mono-agence = affichage inchangé).
-                companyBadges={isSuperAdmin && companies.length > 1 ? carCompanyBadges(car.id) : undefined}
+                // Badges d'agence : affichés dès qu'il existe plusieurs
+                // agences, car le parc est commun (mono-agence = inchangé).
+                companyBadges={companies.length > 1 ? carCompanyBadges(car.id) : undefined}
               />
             ))}
           </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Car, Language, MaintenanceType, VehicleExpense } from '../types';
+import { Car, Company, Language, MaintenanceType, VehicleExpense } from '../types';
 import { MaintenanceCard } from './MaintenanceCard';
 import { CarModal } from './CarModal';
 import { VehicleExpenseModal } from './VehicleExpenseModal';
@@ -23,7 +23,7 @@ import {
 import { getCars, updateCar } from '../services/carService';
 import { addVehicleExpense, getVehicleExpenses } from '../services/expenseService';
 import { DatabaseService } from '../services/DatabaseService';
-import { isCarInActiveCompany } from '../utils/companyContext';
+import { companyContext } from '../utils/companyContext';
 
 interface MaintenancePageProps {
   lang: Language;
@@ -48,6 +48,30 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
+
+  // ── Multi-agences ────────────────────────────────────────────────────────
+  // Le parc `cars` est PARTAGÉ : la maintenance couvre TOUTES les voitures de
+  // TOUTES les agences, quelle que soit l'agence active. Les liens
+  // voiture↔agence servent uniquement à l'affichage (badges) et au filtre
+  // facultatif ci-dessous ('all' par défaut = parc complet).
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [carLinks, setCarLinks] = useState<Record<string, string[]>>({});
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
+
+  /** Agences effectives d'une voiture : ses liens, ou l'agence principale. */
+  const carCompanyIds = (carId: string): string[] => {
+    const ids = carLinks[carId] || [];
+    if (ids.length > 0) return ids;
+    const primaryId = companyContext.getPrimaryCompanyId();
+    return primaryId ? [primaryId] : [];
+  };
+
+  /** Badges d'agence affichés sur la carte de maintenance. */
+  const carCompanyBadges = (carId: string): { id: string; name: string }[] =>
+    carCompanyIds(carId)
+      .map(id => companies.find(c => c.id === id))
+      .filter((c): c is Company => !!c)
+      .map(c => ({ id: c.id, name: c.name }));
 
   // Modales
   const [isCarModalOpen, setIsCarModalOpen] = useState(false);
@@ -110,15 +134,17 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
       setTypes(typesResult.types);
       setTypesFallback(typesResult.usingFallback);
 
-      const [result, carLinks] = await Promise.all([
+      const [result, links, companyList] = await Promise.all([
         getCars(),
         DatabaseService.getCarCompanyLinks(),
+        DatabaseService.getCompanies().catch(() => [] as Company[]),
       ]);
+      setCarLinks(links);
+      setCompanies(companyList);
       if (result.success && result.cars) {
-        const mappedCars: Car[] = result.cars
-          // Multi-agences : un admin scoppé ne voit que les voitures de son agence.
-          .filter(dbCar => isCarInActiveCompany(dbCar.id || '', carLinks))
-          .map(dbCar => ({
+        // AUCUN filtre d'agence : le suivi de maintenance porte sur le parc
+        // entier, toutes agences confondues.
+        const mappedCars: Car[] = result.cars.map(dbCar => ({
           id: dbCar.id || '',
           brand: dbCar.brand,
           model: dbCar.model,
@@ -323,19 +349,24 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
 
   // ── Filtrage & statistiques ────────────────────────────────────────────
   const filteredData = useMemo(() => maintenanceData.filter(item => {
-    const q = searchTerm.toLowerCase();
+    const q = searchTerm.trim().toLowerCase();
     const matchesSearch =
+      !q ||
       item.car.brand.toLowerCase().includes(q) ||
       item.car.model.toLowerCase().includes(q) ||
-      item.car.registration.toLowerCase().includes(q);
+      item.car.registration.toLowerCase().includes(q) ||
+      // La recherche accepte aussi le nom d'une agence.
+      carCompanyBadges(item.car.id).some(b => b.name.toLowerCase().includes(q));
 
     if (!matchesSearch) return false;
+    if (companyFilter !== 'all' && !carCompanyIds(item.car.id).includes(companyFilter)) return false;
     if (filterStatus === 'all') return true;
     if (filterStatus === 'success') {
       return item.criticalCount === 0 && item.warningCount === 0;
     }
     return item.items.some(i => i.level === filterStatus);
-  }), [maintenanceData, searchTerm, filterStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [maintenanceData, searchTerm, filterStatus, companyFilter, carLinks, companies]);
 
   /**
    * Liste stable passée au formulaire de dépense : un tableau recréé à chaque
@@ -515,6 +546,37 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
           </button>
         </div>
 
+        {/* Filtre d'agence — le parc est commun, rien n'est masqué par défaut */}
+        {companies.length > 1 && (
+          <div className="px-4 pb-4 -mt-1 flex flex-wrap items-center gap-2 border-t border-saas-border pt-4">
+            <span className="text-[10px] font-black text-saas-text-muted uppercase tracking-[0.2em] mr-1">
+              {T('Agence', 'الوكالة')}
+            </span>
+            {[{ id: 'all', name: T('Toutes les agences', 'كل الوكالات'), count: maintenanceData.length },
+              ...companies.map(c => ({
+                id: c.id,
+                name: c.name,
+                count: maintenanceData.filter(m => carCompanyIds(m.car.id).includes(c.id)).length,
+              }))].map(chip => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setCompanyFilter(chip.id)}
+                className={`px-4 py-2 rounded-xl font-bold text-[11px] uppercase tracking-widest transition-all flex items-center gap-2 border cursor-pointer ${
+                  companyFilter === chip.id
+                    ? 'bg-saas-primary-via text-white border-saas-primary-via'
+                    : 'bg-saas-bg text-saas-text-muted border-saas-border hover:border-saas-primary-via/50'
+                }`}
+              >
+                {chip.id === 'all' ? '🚘' : '🏢'} {chip.name}
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] ${
+                  companyFilter === chip.id ? 'bg-white/25' : 'bg-white border border-saas-border'
+                }`}>{chip.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Panneau de gestion des types */}
         <AnimatePresence initial={false}>
           {showTypes && (
@@ -612,6 +674,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
                   key={maintenance.car.id}
                   maintenance={maintenance}
                   lang={lang}
+                  companyBadges={companies.length > 1 ? carCompanyBadges(maintenance.car.id) : undefined}
                   onEditCar={handleEditCar}
                   onAddExpense={(car, type) => openNewExpense(car, type)}
                   onQuickAdd={car => openNewExpense(car)}
