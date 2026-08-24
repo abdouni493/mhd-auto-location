@@ -17,6 +17,7 @@ import { CurrencyCode, convertFromDzd, formatCurrency, computeTimbre } from '../
 import { EntrepriseModal } from './EntreprisesPage';
 import { getCars } from '../services/carService';
 import { supabase } from '../supabase';
+import { scopeQuery } from '../utils/companyContext';
 import { generateConditionsPrintHTML, getConditionsTemplate } from '../constants/ConditionsTemplates';
 
 /**
@@ -2525,18 +2526,19 @@ export const PersonalizationModal: React.FC<{
     
     try {
       // Fetch all clients with correct snake_case column names
-      const { data: allClients, error } = await supabase
+      // (limité à l'agence active pour un admin scoppé — multi-agences)
+      const { data: allClients, error } = await scopeQuery(supabase
         .from('clients')
-        .select('id, first_name, last_name, phone, email, license_number, date_of_birth, place_of_birth')
+        .select('id, first_name, last_name, phone, email, license_number, date_of_birth, place_of_birth'))
         .limit(200);
       
       if (error) {
         console.error('❌ Error fetching clients:', error);
         // Try with wildcard select as fallback
         try {
-          const { data: fallbackClients, error: fallbackError } = await supabase
+          const { data: fallbackClients, error: fallbackError } = await scopeQuery(supabase
             .from('clients')
-            .select('*')
+            .select('*'))
             .limit(200);
           
           if (fallbackError) {

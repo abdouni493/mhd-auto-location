@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Car, Language } from '../types';
-import { X, Plus, Loader2, User, Users, Wallet, Coins, Info } from 'lucide-react';
+import { Car, Language, Company } from '../types';
+import { X, Plus, Loader2, User, Users, Wallet, Coins, Info, Building2, Check } from 'lucide-react';
 import { uploadCarImage } from '../services/uploadCarImage';
 import {
   CurrencyCode, CURRENCIES, SECONDARY_CURRENCIES, DEFAULT_RATES,
@@ -15,6 +15,10 @@ interface CarModalProps {
   onDelete?: (id: string) => void;
   car?: Car;
   lang: Language;
+  /** Agences métier disponibles (multi-agences). */
+  companies?: Company[];
+  /** Agences pré-sélectionnées (liens actuels de la voiture, ou défaut pour une nouvelle). */
+  initialCompanyIds?: string[];
 }
 
 const emptyForm = (): Partial<Car> => ({
@@ -42,14 +46,24 @@ const emptyForm = (): Partial<Car> => ({
   currencies: {},
 });
 
-export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onDelete, car, lang }) => {
+export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onDelete, car, lang, companies = [], initialCompanyIds }) => {
   const [formData, setFormData] = useState<Partial<Car>>(emptyForm());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
 
   useEffect(() => {
-    setFormData(car ? { ...emptyForm(), ...car } : emptyForm());
+    const base = car ? { ...emptyForm(), ...car } : emptyForm();
+    setFormData({ ...base, companyIds: initialCompanyIds ? [...initialCompanyIds] : (car?.companyIds || []) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [car, isOpen]);
+
+  const toggleCompany = (id: string) => {
+    setFormData(prev => {
+      const set = new Set(prev.companyIds || []);
+      if (set.has(id)) set.delete(id); else set.add(id);
+      return { ...prev, companyIds: Array.from(set) };
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -277,6 +291,49 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
               </motion.div>
             )}
           </section>
+
+          {/* ── 1bis. Disponibilité par agence (multi-agences) ────────────── */}
+          {/* Affiché uniquement s'il existe plusieurs agences (mono-agence = inchangé). */}
+          {companies.length > 1 && (
+            <section className="space-y-6">
+              {sectionTitle(<Building2 size={14} />, lang === 'fr' ? 'Disponible pour' : 'متاحة لـ')}
+              <p className="flex items-start gap-2 text-xs text-saas-text-muted leading-relaxed -mt-2">
+                <Info size={13} className="mt-0.5 shrink-0 text-saas-primary-via" />
+                {lang === 'fr'
+                  ? "Choisissez la ou les agences qui exploitent ce véhicule. Une voiture partagée par deux agences reste disponible aux deux (la disponibilité des dates reste commune : pas de double réservation)."
+                  : 'اختر الوكالة/الوكالات التي تستغل هذه المركبة. السيارة المشتركة تبقى متاحة للطرفين (تبقى مواعيد الحجز مشتركة: لا حجز مزدوج).'}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {companies.map(c => {
+                  const selected = (formData.companyIds || []).includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => toggleCompany(c.id)}
+                      className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                        selected ? 'border-saas-primary-via bg-saas-primary-via/8' : 'border-saas-border bg-white hover:border-saas-border-strong'
+                      }`}
+                    >
+                      <span className="w-10 h-10 rounded-xl overflow-hidden border border-saas-border bg-saas-bg flex items-center justify-center shrink-0">
+                        {c.logo ? (
+                          <img src={c.logo} alt={c.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <Building2 size={18} className="text-saas-text-muted" />
+                        )}
+                      </span>
+                      <span className="flex-1 min-w-0 font-black text-saas-text-main truncate">{c.name}</span>
+                      <span className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 ${
+                        selected ? 'border-saas-primary-via bg-saas-primary-via text-white' : 'border-saas-border'
+                      }`}>
+                        {selected && <Check size={15} />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* ── 2. Media & Photos ─────────────────────────────────────────── */}
           <section className="space-y-6">

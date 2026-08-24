@@ -13,6 +13,9 @@ import { Plus, Search, Loader2, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DatabaseService } from '../services/DatabaseService';
 import { usePermissions } from '../utils/permissions';
+import { useCompany } from '../utils/companyProvider';
+import { companyContext } from '../utils/companyContext';
+import { Company } from '../types';
 
 interface EquipePageProps {
   lang: Language;
@@ -67,6 +70,13 @@ const INITIAL_WORKERS: Worker[] = [
 
 export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
   const { can } = usePermissions();
+  // Multi-agences : le super-admin choisit l'agence de rattachement de l'employé.
+  const { isSuperAdmin } = useCompany();
+  const [companies, setCompanies] = useState<Company[]>([]);
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    DatabaseService.getCompanies().then(setCompanies).catch(() => setCompanies([]));
+  }, [isSuperAdmin]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -307,6 +317,8 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
         onSave={handleSaveWorker}
         worker={editingWorker || undefined}
         lang={lang}
+        companies={isSuperAdmin ? companies : []}
+        defaultCompanyId={companyContext.getWriteCompanyId() || undefined}
       />
 
       {selectedWorker && (

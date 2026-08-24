@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Language, WebsiteOrder, Car, Agency } from '../types';
+import { Language, WebsiteOrder, Car, Agency, Company } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, AlertTriangle, Phone, Mail, User, Loader } from 'lucide-react';
+import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, AlertTriangle, Phone, Mail, User, Loader, Building2 } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { CurrencyCode, convertFromDzd, formatCurrency } from '../utils/currency';
 
 interface WebsiteOrdersProps {
   lang: Language;
+  /** Agences métier disponibles pour router une commande acceptée. */
+  companies?: Company[];
   /** Appelé après acceptation / annulation / suppression d'une commande,
    *  pour permettre au planificateur de se rafraîchir. */
   onOrdersChanged?: () => void;
 }
 
-export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChanged }) => {
+export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, companies = [], onOrdersChanged }) => {
   const [orders, setOrders] = useState<WebsiteOrder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -22,6 +24,9 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChan
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  // Sélecteur « Accepter pour → Agence X » (routage de la commande).
+  const [acceptTarget, setAcceptTarget] = useState<WebsiteOrder | null>(null);
+  const [acceptCompanyId, setAcceptCompanyId] = useState<string>('');
 
   // Load website orders from database
   useEffect(() => {
@@ -62,17 +67,40 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChan
     setShowOrderDetails(true);
   };
 
-  const handleConfirmOrder = async (orderId: string) => {
+  /**
+   * Ouvre le sélecteur d'agence avant d'accepter. S'il n'existe qu'une seule
+   * agence (ou aucune), on accepte directement sans étape intermédiaire.
+   */
+  const openAccept = (order: WebsiteOrder) => {
+    if (companies.length >= 2) {
+      setAcceptTarget(order);
+      setAcceptCompanyId(companies[0]?.id || '');
+    } else {
+      void doAccept(order.id, companies[0]?.id || null);
+    }
+  };
+
+  /**
+   * Accepte la commande en la ROUTANT vers l'agence choisie : la réservation
+   * reçoit `company_id = chosenCompany` ET `status = 'pending'` (une seule
+   * mise à jour), le client de la commande est estampillé sur la même agence.
+   * Elle apparaît ensuite uniquement dans le planificateur et la comptabilité
+   * de cette agence. Sans agence (table companies absente), repli sur l'ancien
+   * comportement (simple passage à 'pending').
+   */
+  const doAccept = async (orderId: string, companyId: string | null) => {
     try {
       setIsProcessing(orderId);
 
-      // Accepter = passer la commande au statut 'pending' : elle quitte cette
-      // liste (site) et apparaît dans le planificateur (avec le badge « Site web »)
-      // où l'agence peut lancer l'inspection de départ.
-      await DatabaseService.updateWebsiteOrderStatus(orderId, 'pending');
+      if (companyId) {
+        await DatabaseService.acceptWebsiteOrder(orderId, companyId);
+      } else {
+        await DatabaseService.updateWebsiteOrderStatus(orderId, 'pending');
+      }
 
       // La commande acceptée n'appartient plus à la liste « Commandes Website ».
       setOrders(prev => prev.filter(order => order.id !== orderId));
+      setAcceptTarget(null);
 
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(null);
@@ -80,7 +108,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChan
       }
 
       onOrdersChanged?.();
-      console.log(`Order ${orderId} accepted → now pending in the Planner`);
+      console.log(`Order ${orderId} accepted → now pending in the Planner (company ${companyId || 'n/a'})`);
     } catch (err) {
       console.error('Error accepting order:', err);
       alert(lang === 'fr' ? 'Erreur lors de l\'acceptation de la commande' : 'خطأ في قبول الطلب');
@@ -380,7 +408,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChan
                 </button>
 
                 <button
-                  onClick={() => handleConfirmOrder(order.id)}
+                  onClick={() => openAccept(order)}
                   disabled={order.status !== 'website_reservation' || isProcessing === order.id}
                   className={`p-2.5 rounded-xl transition-all flex flex-col items-center gap-1 border ${
                     order.status === 'website_reservation' && isProcessing !== order.id
@@ -831,7 +859,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChan
                   {selectedOrder.status === 'website_reservation' && (
                     <button
                       onClick={() => {
-                        handleConfirmOrder(selectedOrder.id);
+                        openAccept(selectedOrder);
                         setShowOrderDetails(false);
                       }}
                       className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
@@ -840,6 +868,93 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, onOrdersChan
                     </button>
                   )}
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Sélecteur d'agence — « Accepter pour → Agence X » */}
+      <AnimatePresence>
+        {acceptTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-[60] p-4 overflow-y-auto sm:py-8"
+            onClick={() => setAcceptTarget(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mx-auto mb-4">
+                <Building2 className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 text-center mb-1">
+                {lang === 'fr' ? 'Accepter pour quelle agence ?' : 'قبول لأي وكالة؟'}
+              </h3>
+              <p className="text-slate-600 text-center text-sm mb-5">
+                {lang === 'fr'
+                  ? 'La réservation et le client seront rattachés à cette agence (planning + comptabilité).'
+                  : 'سيُربط الحجز والعميل بهذه الوكالة (التخطيط والمحاسبة).'}
+              </p>
+
+              <div className="space-y-2 mb-6 max-h-72 overflow-y-auto">
+                {companies.map(c => {
+                  const selected = acceptCompanyId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setAcceptCompanyId(c.id)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                        selected ? 'border-green-500 bg-green-50' : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+                        {c.logo ? (
+                          <img src={c.logo} alt={c.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <Building2 className="w-5 h-5 text-slate-400" />
+                        )}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-bold text-slate-900 truncate">{c.name}</span>
+                        {c.isPrimary && (
+                          <span className="text-[10px] font-black uppercase tracking-widest text-green-600">
+                            {lang === 'fr' ? 'Agence principale' : 'الوكالة الرئيسية'}
+                          </span>
+                        )}
+                      </span>
+                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        selected ? 'border-green-500 bg-green-500' : 'border-slate-300'
+                      }`}>
+                        {selected && <CheckCircle className="w-4 h-4 text-white" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setAcceptTarget(null)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-colors"
+                >
+                  {lang === 'fr' ? 'Annuler' : 'إلغاء'}
+                </button>
+                <button
+                  onClick={() => doAccept(acceptTarget.id, acceptCompanyId || null)}
+                  disabled={!acceptCompanyId || isProcessing === acceptTarget.id}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isProcessing === acceptTarget.id ? <Loader className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  {lang === 'fr' ? 'Accepter' : 'قبول'}
+                </button>
               </div>
             </motion.div>
           </motion.div>

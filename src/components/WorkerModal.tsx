@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Worker, Language, PaymentType, WorkerRole } from '../types';
+import { Worker, Language, PaymentType, WorkerRole, Company } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, Loader2, User, Phone, Calendar, CreditCard, KeyRound, BadgeCheck,
-  Plus, AlertTriangle, Camera, Briefcase, Mail,
+  Plus, AlertTriangle, Camera, Briefcase, Mail, Building2,
 } from 'lucide-react';
 import { uploadWorkerProfilePhoto } from '../services/uploadWorkerImage';
 import { DatabaseService } from '../services/DatabaseService';
@@ -14,6 +14,10 @@ interface WorkerModalProps {
   onSave: (worker: Partial<Worker>) => void;
   worker?: Worker;
   lang: Language;
+  /** Agences métier (super-admin) — sélecteur « Agence » du personnel. */
+  companies?: Company[];
+  /** Agence par défaut d'un nouvel employé (agence active). */
+  defaultCompanyId?: string;
 }
 
 const empty = (): Partial<Worker> => ({
@@ -35,7 +39,7 @@ const empty = (): Partial<Worker> => ({
   accountEnabled: false,
 });
 
-export const WorkerModal: React.FC<WorkerModalProps> = ({ isOpen, onClose, onSave, worker, lang }) => {
+export const WorkerModal: React.FC<WorkerModalProps> = ({ isOpen, onClose, onSave, worker, lang, companies = [], defaultCompanyId }) => {
   const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
 
   const [formData, setFormData] = useState<Partial<Worker>>(empty());
@@ -49,8 +53,11 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({ isOpen, onClose, onSav
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setFormData(worker ? { ...empty(), ...worker, password: '' } : empty());
+    setFormData(worker
+      ? { ...empty(), ...worker, password: '' }
+      : { ...empty(), companyId: defaultCompanyId });
     setValidationError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worker, isOpen]);
 
   useEffect(() => {
@@ -326,6 +333,24 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({ isOpen, onClose, onSav
                   <option value="admin">{T('Administrateur', 'مدير')}</option>
                 </select>
               </div>
+
+              {/* Agence (multi-agences) — l'employé ne verra que les données de cette agence */}
+              {companies.length > 1 && (
+                <div className="sm:col-span-3">
+                  <label className="label-saas flex items-center gap-1.5"><Building2 className="w-3 h-3" />{T('Agence', 'الوكالة')}</label>
+                  <select
+                    value={formData.companyId || ''}
+                    onChange={e => set({ companyId: e.target.value })}
+                    className="input-saas cursor-pointer sm:max-w-md"
+                  >
+                    <option value="">{T('— Sélectionner une agence —', '— اختر وكالة —')}</option>
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <p className="mt-1.5 text-[11px] text-saas-text-muted leading-snug">
+                    {T("L'employé ne voit que les données de son agence.", 'يرى الموظف بيانات وكالته فقط.')}
+                  </p>
+                </div>
+              )}
 
               <div className="sm:col-span-3">
                 <label className="label-saas">{T('Date de début de travail', 'تاريخ بدء العمل')}</label>

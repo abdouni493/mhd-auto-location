@@ -1,15 +1,22 @@
 import { supabase } from '../supabase'
 import { VehicleExpense, StoreExpense } from '../types'
+import { companyContext, scopeQuery } from '../utils/companyContext'
 
 // Helper to generate UUID (Supabase will generate it on insert, but we use this for clarity)
 const generateId = () => crypto.randomUUID ? crypto.randomUUID() : ''
 
+/** Fragment { company_id } estampillé sur l'agence active (ou {} si inconnue). */
+function companyStamp(): { company_id?: string } {
+  const id = companyContext.getWriteCompanyId()
+  return id ? { company_id: id } : {}
+}
+
 // Vehicle Expenses
 export async function getVehicleExpenses(): Promise<{ success: boolean; expenses?: VehicleExpense[]; error?: string }> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('vehicle_expenses')
-      .select('*')
+      .select('*'))
       .order('date', { ascending: false })
 
     if (error) {
@@ -60,6 +67,7 @@ export async function addVehicleExpense(expense: Omit<VehicleExpense, 'id' | 'cr
         air_filter_changed: (expense as any).airFilterChanged || false,
         fuel_filter_changed: (expense as any).fuelFilterChanged || false,
         ac_filter_changed: (expense as any).acFilterChanged || false,
+        ...companyStamp(),
       })
       .select()
       .single()
@@ -174,9 +182,9 @@ export async function deleteVehicleExpense(id: string): Promise<{ success: boole
 // Store Expenses
 export async function getStoreExpenses(): Promise<{ success: boolean; expenses?: StoreExpense[]; error?: string }> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('store_expenses')
-      .select('*')
+      .select('*'))
       .order('date', { ascending: false })
 
     if (error) {
@@ -211,6 +219,7 @@ export async function addStoreExpense(expense: Omit<StoreExpense, 'id' | 'create
         date: expense.date,
         note: expense.note || null,
         icon: expense.icon || null,
+        ...companyStamp(),
       })
       .select()
       .single()

@@ -5,6 +5,8 @@ import { X, RotateCcw, Trash2, Loader2, RefreshCw, AlertTriangle } from 'lucide-
 import { DatabaseService } from '../services/DatabaseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { supabase } from '../supabase';
+import { useCompany } from '../utils/companyProvider';
+import { CompaniesManager } from './CompaniesManager';
 
 interface ConfigPageProps {
   lang: Language;
@@ -12,7 +14,9 @@ interface ConfigPageProps {
 }
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'profile' | 'database'>('general');
+  // Multi-agences : la gestion des agences est réservée au super-admin.
+  const { isSuperAdmin } = useCompany();
+  const [activeTab, setActiveTab] = useState<'general' | 'profile' | 'database' | 'agencies'>('general');
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -531,6 +535,19 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
           >
             💾 {{fr: 'Base de données', ar: 'قاعدة البيانات'}[lang]}
           </button>
+          {/* Gestion des agences — super-admin uniquement */}
+          {isSuperAdmin && (
+            <button
+              onClick={() => setActiveTab('agencies')}
+              className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'agencies'
+                  ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
+                  : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
+              }`}
+            >
+              🏢 {{fr: 'Agences', ar: 'الوكالات'}[lang]}
+            </button>
+          )}
         </motion.div>
 
         {/* Notification Display */}
@@ -998,6 +1015,18 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                   </div>
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* AGENCES (super-admin) */}
+          {activeTab === 'agencies' && isSuperAdmin && (
+            <motion.div
+              key="agencies"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <CompaniesManager lang={lang} />
             </motion.div>
           )}
           </AnimatePresence>

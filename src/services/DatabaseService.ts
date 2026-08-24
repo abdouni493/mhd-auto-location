@@ -1,6 +1,8 @@
 import { supabase } from '../supabase';
-import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, WorkerRole, WorkerPermissions, Entreprise, RentalSettings, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode } from '../types';
+import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, WorkerRole, WorkerPermissions, Entreprise, RentalSettings, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode, Company } from '../types';
 import { parseCarCurrencies } from '../utils/currency';
+import { companyContext, scopeQuery } from '../utils/companyContext';
+import { sessionService } from '../utils/sessionService';
 
 // Generic database service functions
 export class DatabaseService {
@@ -87,6 +89,228 @@ export class DatabaseService {
       startDate: row.start_date || undefined,
       endDate: row.end_date || undefined,
     };
+  }
+
+  // ==========================================================================
+  // MULTI-AGENCES (companies) — agences « métier » indépendantes
+  // ==========================================================================
+
+  private static mapCompanyRow(row: any): Company {
+    return {
+      id: row.id,
+      name: row.name,
+      logo: row.logo || undefined,
+      isPrimary: row.is_primary === true,
+      createdAt: row.created_at,
+    };
+  }
+
+  /**
+   * Fragment `{ company_id }` à fusionner dans un payload d'insertion pour
+   * estampiller la ligne sur l'agence active. Renvoie `{}` si aucune agence
+   * n'est connue (le trigger DB remplira alors la valeur automatiquement).
+   */
+  private static companyStamp(): { company_id?: string } {
+    const id = companyContext.getWriteCompanyId();
+    return id ? { company_id: id } : {};
+  }
+
+  /** Liste des agences métier (la principale d'abord, puis par ancienneté). */
+  static async getCompanies(): Promise<Company[]> {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(r => this.mapCompanyRow(r));
+  }
+
+  /** Crée une nouvelle agence métier (super-admin uniquement). */
+  static async createCompany(company: { name: string; logo?: string | null; isPrimary?: boolean }): Promise<Company> {
+    const { data, error } = await supabase
+      .from('companies')
+      .insert([{
+        name: company.name.trim(),
+        logo: company.logo || null,
+        // Une agence créée depuis l'app est une agence principale (business
+        // indépendant avec sa propre comptabilité), sauf indication contraire.
+        is_primary: company.isPrimary !== false,
+      }])
+      .select()
+      .single();
+    if (error) throw error;
+    return this.mapCompanyRow(data);
+  }
+
+  static async updateCompany(id: string, updates: { name?: string; logo?: string | null; isPrimary?: boolean }): Promise<Company> {
+    const payload: Record<string, any> = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.logo !== undefined) payload.logo = updates.logo || null;
+    if (updates.isPrimary !== undefined) payload.is_primary = updates.isPrimary;
+
+    const { data, error } = await supabase
+      .from('companies')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return this.mapCompanyRow(data);
+  }
+
+  /**
+   * Résout l'agence de l'utilisateur connecté + son statut super-admin, à
+   * partir de `app_users` (par auth.uid()). Utilisé à la connexion.
+   *
+   * Robustesse : en cas d'échec de résolution, on renvoie `isSuperAdmin=true`
+   * et `companyId=null` (aucun filtre) pour NE JAMAIS masquer les données de
+   * l'agence existante. Les employés (session non-Supabase) sont résolus par
+   * email sur la table `workers`.
+   */
+  static async getMyCompanyInfo(opts: { userId?: string | null; email?: string | null; role?: string | null }): Promise<{ companyId: string | null; isSuperAdmin: boolean }> {
+    // 1) Chemin Supabase Auth (admins / super-admins) : app_users par auth.uid()
+    try {
+      // Après la connexion, l'app purge la session SDK Supabase pour éviter
+      // l'auto-refresh : on la restaure ici afin qu'auth.uid() (donc la RLS de
+      // app_users) soit disponible avant la lecture.
+      await sessionService.ensureSupabaseSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id || opts.userId || null;
+      if (uid) {
+        const { data, error } = await supabase
+          .from('app_users')
+          .select('company_id, is_super_admin')
+          .eq('user_id', uid)
+          .maybeSingle();
+        if (!error && data) {
+          return {
+            companyId: data.company_id || null,
+            isSuperAdmin: data.is_super_admin === true,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[DatabaseService] getMyCompanyInfo app_users lookup failed:', err);
+    }
+
+    // 2) Chemin employé (session worker_token, pas d'auth.uid) : workers.company_id
+    if (opts.email) {
+      try {
+        const { data, error } = await supabase
+          .from('workers')
+          .select('company_id')
+          .eq('email', opts.email)
+          .maybeSingle();
+        if (!error && data && data.company_id) {
+          return { companyId: data.company_id, isSuperAdmin: false };
+        }
+      } catch (err) {
+        console.warn('[DatabaseService] getMyCompanyInfo workers lookup failed:', err);
+      }
+    }
+
+    // 3) Repli sûr : aucun périmètre → super-admin, voit tout (zéro régression).
+    return { companyId: null, isSuperAdmin: true };
+  }
+
+  /**
+   * Crée le compte de connexion (Supabase Auth) d'un admin d'agence puis son
+   * rattachement `app_users` (is_super_admin = false). Réutilise la RPC
+   * existante `upsert_worker_auth_user` (rôle « admin » ⇒ interface complète).
+   */
+  static async createAgencyAdmin(payload: { email: string; password: string; fullName: string; companyId: string }): Promise<void> {
+    const userId = await this.upsertWorkerAuthUser(payload.email, payload.password, payload.fullName, 'admin');
+    if (!userId) {
+      throw new Error("Le compte d'authentification n'a pas pu être créé (aucun identifiant retourné).");
+    }
+    const { error } = await supabase
+      .from('app_users')
+      .upsert([{ user_id: userId, company_id: payload.companyId, is_super_admin: false }], { onConflict: 'user_id' });
+    if (error) {
+      throw new Error(
+        "Compte créé, mais le rattachement à l'agence a échoué : " + (error.message || '') +
+        " — vérifiez que la table app_users autorise le super-admin à écrire."
+      );
+    }
+  }
+
+  // ─── Liens voiture ↔ agence (table partagée `car_companies`) ──────────────
+
+  /** Retourne, pour chaque voiture, la liste des ids d'agences liées. */
+  static async getCarCompanyLinks(): Promise<Record<string, string[]>> {
+    const { data, error } = await supabase
+      .from('car_companies')
+      .select('car_id, company_id');
+    if (error) {
+      console.warn('[DatabaseService] getCarCompanyLinks failed:', error.message);
+      return {};
+    }
+    const map: Record<string, string[]> = {};
+    for (const row of data || []) {
+      if (!row.car_id || !row.company_id) continue;
+      (map[row.car_id] ||= []).push(row.company_id);
+    }
+    return map;
+  }
+
+  /**
+   * Remplace l'ensemble des liens agence d'une voiture (insertion/suppression).
+   * `companyIds` vide = la voiture n'est explicitement liée à aucune agence
+   * (elle est alors héritée par l'agence principale côté affichage admin).
+   */
+  static async setCarCompanies(carId: string, companyIds: string[]): Promise<void> {
+    const wanted = Array.from(new Set(companyIds.filter(Boolean)));
+
+    const { data: existing, error: readErr } = await supabase
+      .from('car_companies')
+      .select('company_id')
+      .eq('car_id', carId);
+    if (readErr) throw readErr;
+
+    const current = new Set((existing || []).map((r: any) => r.company_id));
+    const toAdd = wanted.filter(id => !current.has(id));
+    const toRemove = Array.from(current).filter(id => !wanted.includes(id as string)) as string[];
+
+    if (toAdd.length > 0) {
+      const { error } = await supabase
+        .from('car_companies')
+        .insert(toAdd.map(company_id => ({ car_id: carId, company_id })));
+      if (error) throw error;
+    }
+    if (toRemove.length > 0) {
+      const { error } = await supabase
+        .from('car_companies')
+        .delete()
+        .eq('car_id', carId)
+        .in('company_id', toRemove);
+      if (error) throw error;
+    }
+  }
+
+  /**
+   * Voitures pour l'interface ADMIN, filtrées selon l'agence active :
+   *  - vue « toutes agences » (super-admin) : toutes les voitures ;
+   *  - agence précise : uniquement celles liées à cette agence
+   *    (une voiture SANS aucun lien est rattachée à l'agence principale).
+   * Chaque voiture reçoit `companyIds` (pour les badges d'agence).
+   * NB : la table `cars` reste PARTAGÉE — le site public n'utilise pas ceci.
+   */
+  static async getCarsForAdmin(): Promise<Car[]> {
+    const [cars, links] = await Promise.all([this.getCars(), this.getCarCompanyLinks()]);
+    const scopeId = companyContext.getScopeCompanyId();
+    const primaryId = companyContext.getPrimaryCompanyId();
+
+    const effectiveCompanies = (carId: string): string[] => {
+      const ids = links[carId] || [];
+      // Voiture historique jamais liée → rattachée à l'agence principale.
+      if (ids.length === 0 && primaryId) return [primaryId];
+      return ids;
+    };
+
+    const withCompanies = cars.map(car => ({ ...car, companyIds: effectiveCompanies(car.id) }));
+    if (!scopeId) return withCompanies; // vue « toutes agences »
+    return withCompanies.filter(car => (car.companyIds || []).includes(scopeId));
   }
 
   // ─── Cars ────────────────────────────────────────────────────────────────
@@ -343,9 +567,9 @@ export class DatabaseService {
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await scopeQuery(supabase
           .from('clients')
-          .select('*')
+          .select('*'))
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -430,9 +654,9 @@ export class DatabaseService {
 
   /** Les N derniers clients créés (affichage initial de la sélection client). */
   static async getRecentClients(limit: number = 6): Promise<Client[]> {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('clients')
-      .select('*')
+      .select('*'))
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -448,9 +672,9 @@ export class DatabaseService {
     const safe = q.replace(/[%_,()]/g, ' ').trim();
     if (!safe) return [];
 
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('clients')
-      .select('*')
+      .select('*'))
       .or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,phone.ilike.%${safe}%`)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -483,6 +707,9 @@ export class DatabaseService {
       profile_photo: client.profilePhoto,
       scanned_documents: client.scannedDocuments,
       agency_id: client.agencyId,
+      // Rattachement multi-agences : estampillé sur l'agence active (le trigger
+      // DB reste un filet de sécurité si la valeur est nulle).
+      ...DatabaseService.companyStamp(),
     };
 
     const { data, error } = await supabase
@@ -642,14 +869,14 @@ export class DatabaseService {
 
   // Workers
   static async getWorkers(): Promise<Worker[]> {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('workers')
       .select(`
         *,
         advances:worker_advances(*),
         absences:worker_absences(*),
         payments:worker_payments(*)
-      `)
+      `))
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -680,6 +907,7 @@ export class DatabaseService {
       password: worker.password,
       accountEnabled: worker.account_enabled === true,
       authUserId: worker.auth_user_id || undefined,
+      companyId: worker.company_id || undefined,
       permissions: this.parsePermissions(worker.permissions),
       advances: (worker.advances || []).map((a: any) => ({
         id: a.id,
@@ -775,6 +1003,11 @@ export class DatabaseService {
       permissions: worker.permissions || { interfaces: [], actions: {} },
     };
 
+    // Agence de rattachement : valeur choisie dans le formulaire, sinon agence
+    // active (le trigger DB reste un filet de sécurité).
+    const workerCompanyId = (worker as any).companyId || companyContext.getWriteCompanyId();
+    if (workerCompanyId) dbWorker.company_id = workerCompanyId;
+
     const { data, error } = await supabase
       .from('workers')
       .insert([dbWorker])
@@ -812,6 +1045,7 @@ export class DatabaseService {
     if (updates.accountEnabled !== undefined) dbUpdates.account_enabled = updates.accountEnabled;
     if (updates.authUserId !== undefined) dbUpdates.auth_user_id = updates.authUserId || null;
     if (updates.permissions !== undefined) dbUpdates.permissions = updates.permissions;
+    if ((updates as any).companyId !== undefined) dbUpdates.company_id = (updates as any).companyId || null;
 
     const { data, error } = await supabase
       .from('workers')
@@ -1031,9 +1265,9 @@ export class DatabaseService {
 
   // Store Expenses
   static async getStoreExpenses(): Promise<StoreExpense[]> {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('store_expenses')
-      .select('*')
+      .select('*'))
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -1043,7 +1277,7 @@ export class DatabaseService {
   static async createStoreExpense(expense: Omit<StoreExpense, 'id' | 'created_at'>): Promise<StoreExpense> {
     const { data, error } = await supabase
       .from('store_expenses')
-      .insert([expense])
+      .insert([{ ...expense, ...this.companyStamp() }])
       .select()
       .single();
 
@@ -1053,9 +1287,9 @@ export class DatabaseService {
 
   // Vehicle Expenses
   static async getVehicleExpenses(): Promise<VehicleExpense[]> {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('vehicle_expenses')
-      .select('*')
+      .select('*'))
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -1065,7 +1299,7 @@ export class DatabaseService {
   static async createVehicleExpense(expense: Omit<VehicleExpense, 'id' | 'created_at'>): Promise<VehicleExpense> {
     const { data, error } = await supabase
       .from('vehicle_expenses')
-      .insert([expense])
+      .insert([{ ...expense, ...this.companyStamp() }])
       .select()
       .single();
 
@@ -1076,9 +1310,9 @@ export class DatabaseService {
   // Maintenance Alerts
   static async getMaintenanceAlerts(): Promise<MaintenanceAlert[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await scopeQuery(supabase
         .from('maintenance_alerts')
-        .select('*');
+        .select('*'));
 
       if (error) throw error;
       return (data || []).map(alert => ({
@@ -1115,6 +1349,7 @@ export class DatabaseService {
       days_until_due: alert.daysUntilDue ?? null,
       current_mileage: alert.currentMileage ?? null,
       next_service_mileage: alert.nextServiceMileage ?? null,
+      ...this.companyStamp(),
     };
 
     const { data, error } = await supabase
@@ -1128,11 +1363,11 @@ export class DatabaseService {
   }
 
   static async deleteMaintenanceAlert(carId: string, type: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await scopeQuery(supabase
       .from('maintenance_alerts')
       .delete()
       .eq('car_id', carId)
-      .eq('type', type);
+      .eq('type', type));
 
     if (error) throw error;
   }
@@ -1367,6 +1602,38 @@ export class DatabaseService {
     if (error) throw error;
   }
 
+  /**
+   * Accepte une commande du site en la ROUTANT vers une agence : en une seule
+   * mise à jour, la réservation passe `status = 'pending'` ET reçoit son
+   * `company_id`. Le client créé par la commande est estampillé sur la même
+   * agence. Après quoi la réservation n'apparaît QUE dans le planificateur et
+   * la comptabilité de l'agence choisie.
+   */
+  static async acceptWebsiteOrder(orderId: string, companyId: string): Promise<void> {
+    // 1) Récupère le client rattaché AVANT de le réassigner à l'agence.
+    const { data: resRow } = await supabase
+      .from('reservations')
+      .select('client_id')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    // 2) Une seule mise à jour : statut + agence.
+    const { error } = await supabase
+      .from('reservations')
+      .update({ status: 'pending', company_id: companyId })
+      .eq('id', orderId);
+    if (error) throw error;
+
+    // 3) Estampille le client de la commande sur la même agence (non bloquant).
+    if (resRow?.client_id) {
+      const { error: clientErr } = await supabase
+        .from('clients')
+        .update({ company_id: companyId })
+        .eq('id', resRow.client_id);
+      if (clientErr) console.warn('[DatabaseService] acceptWebsiteOrder: client stamp failed:', clientErr.message);
+    }
+  }
+
   static async deleteWebsiteOrder(orderId: string): Promise<void> {
     // Suppression RÉVERSIBLE : la commande (= réservation) est placée dans la
     // corbeille au lieu d'être effacée. Restaurable depuis Paramètres.
@@ -1397,18 +1664,18 @@ export class DatabaseService {
         car:cars(*),
         payments:payments(*)
       `;
-    let { data, error } = await supabase
+    let { data, error } = await scopeQuery(supabase
       .from('reservations')
       .select(select)
       // Masque les réservations mises à la corbeille (suppression réversible).
-      .is('deleted_at', null)
+      .is('deleted_at', null))
       .order('created_at', { ascending: false });
 
     // Repli si la colonne deleted_at n'existe pas encore (migration non appliquée).
     if (error && /deleted_at/i.test(error.message || '')) {
-      ({ data, error } = await supabase
+      ({ data, error } = await scopeQuery(supabase
         .from('reservations')
-        .select(select)
+        .select(select))
         .order('created_at', { ascending: false }));
     }
 
@@ -1419,7 +1686,7 @@ export class DatabaseService {
   static async createReservation(reservation: Omit<ReservationDetails, 'id' | 'created_at' | 'activatedAt' | 'completedAt'>): Promise<ReservationDetails> {
     const { data, error } = await supabase
       .from('reservations')
-      .insert([reservation])
+      .insert([{ ...reservation, ...this.companyStamp() }])
       .select()
       .single();
 
@@ -1441,6 +1708,8 @@ export class DatabaseService {
       try {
         // Applique le filtre « non supprimée » aux requêtes de réservations.
         const notTrashed = (q: any) => (softDeleteSupported ? q.is('deleted_at', null) : q);
+        // Périmètre agence : chaque comptabilité est indépendante. La table
+        // `cars` reste PARTAGÉE (non filtrée) — le nombre de voitures est global.
         // Run all queries in parallel for faster loading
         const [
           revenueResult,
@@ -1456,18 +1725,18 @@ export class DatabaseService {
           recentReservationsResult,
           alertsResult
         ] = await Promise.all([
-          notTrashed(supabase.from('reservations').select('total_price').eq('status', 'completed')),
-          notTrashed(supabase.from('reservations').select('total_price, completed_at').eq('status', 'completed').gte('completed_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())),
-          supabase.from('store_expenses').select('cost'),
-          supabase.from('vehicle_expenses').select('cost'),
-          supabase.from('clients').select('id', { count: 'exact' }),
+          scopeQuery(notTrashed(supabase.from('reservations').select('total_price').eq('status', 'completed'))),
+          scopeQuery(notTrashed(supabase.from('reservations').select('total_price, completed_at').eq('status', 'completed').gte('completed_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()))),
+          scopeQuery(supabase.from('store_expenses').select('cost')),
+          scopeQuery(supabase.from('vehicle_expenses').select('cost')),
+          scopeQuery(supabase.from('clients').select('id', { count: 'exact' })),
           supabase.from('cars').select('id', { count: 'exact' }),
-          notTrashed(supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active'])),
-          notTrashed(supabase.from('reservations').select('id', { count: 'exact' })),
-          notTrashed(supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active'])),
-          supabase.from('payments').select('id', { count: 'exact' }).eq('status', 'pending'),
-          notTrashed(supabase.from('reservations').select('*, client:clients(*), car:cars(*)').order('created_at', { ascending: false }).limit(5)),
-          supabase.from('maintenance_alerts').select('id', { count: 'exact' })
+          scopeQuery(notTrashed(supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active']))),
+          scopeQuery(notTrashed(supabase.from('reservations').select('id', { count: 'exact' }))),
+          scopeQuery(notTrashed(supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active']))),
+          scopeQuery(supabase.from('payments').select('id', { count: 'exact' }).eq('status', 'pending')),
+          scopeQuery(notTrashed(supabase.from('reservations').select('*, client:clients(*), car:cars(*)').order('created_at', { ascending: false }).limit(5))),
+          scopeQuery(supabase.from('maintenance_alerts').select('id', { count: 'exact' }))
         ]);
 
         // Extract data and errors
@@ -2090,10 +2359,10 @@ export class DatabaseService {
 
   // Get drivers (workers with type 'driver')
   static async getDrivers(): Promise<Worker[]> {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('workers')
       .select('*')
-      .eq('type', 'driver')
+      .eq('type', 'driver'))
       .order('full_name', { ascending: true });
 
     if (error) throw error;
@@ -2299,9 +2568,9 @@ export class DatabaseService {
   }
 
   static async getPromoCodes(): Promise<PromoCode[]> {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('promo_codes')
-      .select('*')
+      .select('*'))
       .order('created_at', { ascending: false });
 
     if (error) throw this.promoCodesMissingError(error) || error;
@@ -2316,6 +2585,7 @@ export class DatabaseService {
         discount_percentage: discountPercentage,
         is_active: true,
         is_used: false,
+        ...this.companyStamp(),
       }])
       .select()
       .single();
@@ -2454,9 +2724,9 @@ export class DatabaseService {
   }
 
   static async getEntreprises(): Promise<Entreprise[]> {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('entreprises')
-      .select('*')
+      .select('*'))
       .order('name', { ascending: true });
     if (error) throw this.entreprisesMissingError(error) || error;
     return (data || []).map(r => this.mapEntrepriseRow(r));
@@ -2465,9 +2735,9 @@ export class DatabaseService {
   static async searchEntreprises(query: string, limit = 20): Promise<Entreprise[]> {
     const q = query.trim();
     if (!q) return this.getEntreprises();
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('entreprises')
-      .select('*')
+      .select('*'))
       .ilike('name', `%${q}%`)
       .order('name', { ascending: true })
       .limit(limit);
@@ -2487,6 +2757,7 @@ export class DatabaseService {
         address: entreprise.address || null,
         phone: entreprise.phone || null,
         email: entreprise.email || null,
+        ...this.companyStamp(),
       }])
       .select()
       .single();

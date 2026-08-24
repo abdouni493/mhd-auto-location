@@ -21,7 +21,7 @@ import ReportsPage from './components/ReportsPage';
 import { CarGainsPage } from './components/CarGainsPage';
 import { ReservationsPage } from './components/ReservationsPage';
 import { EntreprisesPage } from './components/EntreprisesPage';
-import { Language, User, UserRole, Car, Agency, WorkerPermissions } from './types';
+import { Language, User, UserRole, Car, Agency, WorkerPermissions, Company } from './types';
 import { supabase, supabaseConfigured } from './supabase';
 import { SIDEBAR_ITEMS } from './constants';
 import { DatabaseService } from './services/DatabaseService';
@@ -30,6 +30,8 @@ import { DebugAuth } from './utils/debugAuth';
 import { sessionService } from './utils/sessionService';
 import { initTheme } from './utils/themeService';
 import { PermissionsProvider, usePermissions } from './utils/permissions';
+import { companyContext } from './utils/companyContext';
+import { CompanyProvider } from './utils/companyProvider';
 
 // Initialize global error interceptor on load
 setupErrorInterceptor();
@@ -60,6 +62,13 @@ export default function App() {
   const [webOrdersCount, setWebOrdersCount] = useState(0);
   // Permissions de l'employé connecté (null pour un admin = accès total)
   const [workerPermissions, setWorkerPermissions] = useState<WorkerPermissions | null>(null);
+  // Multi-agences : liste des agences (pour le switcher / le formulaire voiture)
+  // et statut super-admin de l'utilisateur connecté.
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(true);
+  // L'agence active doit être résolue AVANT que les pages ne chargent leurs
+  // données, sinon une requête pourrait partir avec le mauvais périmètre.
+  const [companyResolved, setCompanyResolved] = useState(false);
   const isAdminUser = !user || user.role === 'admin';
   
   // Refs to prevent multiple listener initialization (especially important in StrictMode dev environment)
@@ -113,6 +122,45 @@ export default function App() {
       } catch (err) {
         console.error('[Auth] Failed to load worker permissions:', err);
         if (!cancelled) setWorkerPermissions({ interfaces: [], actions: {} });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, isAuthLoading]);
+
+  // Résout l'agence active + le statut super-admin de l'utilisateur, puis
+  // charge la liste des agences (switcher + formulaire voiture). Le singleton
+  // companyContext est alimenté ici pour que la couche service filtre/estampille
+  // dès les premières requêtes.
+  useEffect(() => {
+    if (!user || isAuthLoading) return;
+    let cancelled = false;
+    setCompanyResolved(false);
+    (async () => {
+      try {
+        // userId stocké = auth.uid() pour un admin (fallback si la session SDK
+        // n'est pas encore restaurée au moment de la résolution).
+        const stored = await sessionService.getCurrentSession();
+        const info = await DatabaseService.getMyCompanyInfo({ userId: stored?.userId, email: user.email, role: user.role });
+        if (cancelled) return;
+        companyContext.setUserInfo(info.companyId, info.isSuperAdmin);
+        setIsSuperAdmin(info.isSuperAdmin);
+      } catch (err) {
+        console.warn('[Auth] Failed to resolve company info (defaulting to super-admin):', err);
+        companyContext.setUserInfo(null, true);
+        if (!cancelled) setIsSuperAdmin(true);
+      }
+      try {
+        const list = await DatabaseService.getCompanies();
+        if (cancelled) return;
+        companyContext.setCompanies(list);
+        setCompanies(list);
+      } catch (err) {
+        // Table companies indisponible → l'app reste mono-agence (aucun switcher).
+        console.warn('[Auth] Failed to load companies list:', err);
+        if (!cancelled) setCompanies([]);
+      } finally {
+        // Périmètre prêt : les pages peuvent désormais charger avec le bon filtre.
+        if (!cancelled) setCompanyResolved(true);
       }
     })();
     return () => { cancelled = true; };
@@ -472,6 +520,7 @@ export default function App() {
     console.log('[Auth] Logout handler called');
     await sessionService.invalidateSession();
     await supabase.auth.signOut();
+    companyContext.reset();
     setUser(null);
     navigate('/login');
   };
@@ -559,7 +608,27 @@ export default function App() {
         case 'web-mgmt':
           return <GuardedContent tabId="web-mgmt"><WebsiteManagementPage lang={lang} /></GuardedContent>;
         case 'web-orders':
-          return <GuardedContent tabId="web-orders"><WebsiteOrders lang={lang} onOrdersChanged={refreshWebOrdersCount} /></GuardedContent>;
+          // Commandes du site = triage centralisé réservé au super-admin :
+          // lui seul voit les commandes non encore rattachées à une agence.
+          return (
+            <GuardedContent tabId="web-orders">
+              {isSuperAdmin ? (
+                <WebsiteOrders lang={lang} companies={companies} onOrdersChanged={refreshWebOrdersCount} />
+              ) : (
+                <div className="glass-card p-16 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-[#DC2626]/10 border border-[#DC2626]/25 flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
+                  <p className="text-lg font-black text-saas-text-main">
+                    {lang === 'fr' ? 'Réservé au super-administrateur' : 'مخصص للمشرف العام'}
+                  </p>
+                  <p className="text-sm text-saas-text-muted mt-2 max-w-md mx-auto">
+                    {lang === 'fr'
+                      ? "Les commandes du site sont attribuées aux agences par le super-administrateur."
+                      : 'يتم توزيع طلبات الموقع على الوكالات من طرف المشرف العام.'}
+                  </p>
+                </div>
+              )}
+            </GuardedContent>
+          );
         case 'protection-services':
           return <GuardedContent tabId="protection-services"><ProtectionServicesPage lang={lang} /></GuardedContent>;
         case 'reservations':
@@ -679,9 +748,10 @@ export default function App() {
   const ProtectedRoute = () => {
     console.log('[ProtectedRoute] Rendering - isAuthLoading:', isAuthLoading, 'user:', user?.name || 'null');
     
-    // Show loading state while auth is initializing
-    if (isAuthLoading) {
-      console.log('[ProtectedRoute] Auth still loading, showing spinner');
+    // Show loading state while auth is initializing, ou tant que l'agence
+    // active n'est pas résolue (évite un chargement des pages hors périmètre).
+    if (isAuthLoading || (user && !companyResolved)) {
+      console.log('[ProtectedRoute] Auth/company still loading, showing spinner');
       return (
         <div className="min-h-screen flex items-center justify-center bg-saas-bg">
           <div className="text-center">
@@ -706,7 +776,9 @@ export default function App() {
     console.log('[ProtectedRoute] User authenticated, rendering dashboard');
     return (
       <PermissionsProvider isAdmin={isAdminUser} permissions={workerPermissions}>
-        <DashboardLayout />
+        <CompanyProvider companies={companies}>
+          <DashboardLayout />
+        </CompanyProvider>
       </PermissionsProvider>
     );
   };

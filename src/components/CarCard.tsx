@@ -19,6 +19,8 @@ interface CarCardProps {
   onToggleVisibility?: (car: Car) => void;
   /** Réservation en cours pour ce véhicule (si louer/reserve) */
   activeReservationInfo?: { clientName: string; departureDate: string; returnDate: string } | null;
+  /** Agences rattachées (multi-agences) — affichées en badge (super-admin). */
+  companyBadges?: { id: string; name: string }[];
 }
 
 export const CarCard: React.FC<CarCardProps> = ({
@@ -33,6 +35,7 @@ export const CarCard: React.FC<CarCardProps> = ({
   onStatusChange,
   onToggleVisibility,
   activeReservationInfo,
+  companyBadges,
 }) => {
   // 4 statuts : disponible · reserve · louer · maintenance
   const getStatusColor = (status?: string) => {
@@ -95,6 +98,19 @@ export const CarCard: React.FC<CarCardProps> = ({
             {car.brand} {car.model}
           </h3>
           <p className="text-[10px] text-saas-primary-via font-bold uppercase tracking-widest">{car.registration}</p>
+          {/* Badges d'agence (multi-agences) — visibles par le super-admin */}
+          {companyBadges && companyBadges.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {companyBadges.map(b => (
+                <span
+                  key={b.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-saas-primary-via/10 border border-saas-primary-via/20 text-[9px] font-black uppercase tracking-wider text-saas-primary-via"
+                >
+                  🏢 {b.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 text-[10px] font-bold text-saas-text-muted uppercase tracking-tight">

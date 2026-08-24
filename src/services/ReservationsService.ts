@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { ReservationDetails, VehicleInspection, Payment, ProtectionAssurance, Entreprise } from '../types';
 import { parseCarCurrencies } from '../utils/currency';
+import { companyContext, scopeQuery } from '../utils/companyContext';
 
 /**
  * Champs « extras » d'une réservation ajoutés par la mise à jour 2026-07-25 :
@@ -168,6 +169,11 @@ export class ReservationsService {
         // Réservations créées ici = origine agence par défaut. Marquée
         // explicitement pour que le planificateur affiche « 🏢 Agence ».
         source: data.source || 'agency',
+        // Rattachement multi-agences : les réservations créées par l'agence sont
+        // estampillées sur l'agence active. Les commandes du site (source
+        // 'website') restent NON rattachées (company_id NULL) jusqu'à leur
+        // acceptation par le super-admin. `null` laisse le trigger DB remplir.
+        company_id: data.source === 'website' ? null : companyContext.getWriteCompanyId(),
         // Timbre fiscal
         timbre_enabled: data.timbreEnabled || false,
         timbre_rate: data.timbreEnabled ? (data.timbreRate ?? null) : null,
@@ -253,6 +259,10 @@ export class ReservationsService {
     // Masque les réservations mises à la corbeille (suppression réversible).
     query = query.is('deleted_at', null);
 
+    // Périmètre agence : un admin scoppé ne voit QUE les réservations de son
+    // agence ; le super-admin en vue « toutes agences » voit tout (aucun filtre).
+    query = scopeQuery(query);
+
     let { data, error } = await query.order('created_at', { ascending: false });
 
     // Compatibilité : si la colonne `deleted_at` n'existe pas encore (migration
@@ -288,6 +298,7 @@ export class ReservationsService {
       if (filters?.carId) fallback = fallback.eq('car_id', filters.carId);
       if (filters?.startDate) fallback = fallback.gte('departure_date', filters.startDate);
       if (filters?.endDate) fallback = fallback.lte('return_date', filters.endDate);
+      fallback = scopeQuery(fallback);
       ({ data, error } = await fallback.order('created_at', { ascending: false }));
     }
 
@@ -1189,14 +1200,14 @@ export class ReservationsService {
     deletedAt: string | null;
     createdAt: string;
   }>> {
-    const { data, error } = await supabase
+    const { data, error } = await scopeQuery(supabase
       .from('reservations')
       .select(`
         id, status, total_price, departure_date, return_date, created_at, deleted_at,
         client:clients(first_name, last_name),
         car:cars(brand, model, plate_number)
       `)
-      .not('deleted_at', 'is', null)
+      .not('deleted_at', 'is', null))
       .order('deleted_at', { ascending: false });
 
     if (error) {

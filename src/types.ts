@@ -18,6 +18,20 @@ export interface SidebarItem {
   icon: string;
 }
 
+/**
+ * Agence « métier » (multi-agences) — une entreprise indépendante avec sa
+ * propre comptabilité et ses propres employés. À ne PAS confondre avec
+ * `Agency` (agence physique = point de départ/retour). Le champ `company_id`
+ * relie les données (réservations, clients, dépenses…) à l'une de ces agences.
+ */
+export interface Company {
+  id: string;
+  name: string;
+  logo?: string;
+  isPrimary?: boolean;
+  createdAt?: string;
+}
+
 /** Propriété du véhicule : flotte de l'agence, ou véhicule confié par un tiers. */
 export type CarOwnerType = 'personal' | 'third_party';
 
@@ -62,6 +76,14 @@ export interface Car {
    * Forme : { EUR: { enabled: true, rate: 150 }, USD: {...}, GBP: {...} }
    */
   currencies?: Record<string, { enabled: boolean; rate: number }>;
+
+  // ── Multi-agences ────────────────────────────────────────────────────
+  /**
+   * Ids des agences (companies) auxquelles cette voiture est rattachée
+   * (table `car_companies`). Une voiture peut appartenir à une ou plusieurs
+   * agences. Vide/absent = héritée par l'agence principale.
+   */
+  companyIds?: string[];
 }
 
 /**
@@ -260,6 +282,8 @@ export interface Worker {
   accountEnabled?: boolean;
   /** id de l'utilisateur Supabase Auth associé (si compte créé). */
   authUserId?: string;
+  /** Agence métier (company) de rattachement de l'employé. */
+  companyId?: string;
 
   // Permissions (vide à la création : l'admin les attribue ensuite)
   permissions?: WorkerPermissions;

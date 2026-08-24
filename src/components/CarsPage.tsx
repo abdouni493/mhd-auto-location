@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Car, Rental, Language, Expense, ReservationDetails, MaintenanceType, VehicleExpense } from '../types';
+import { Car, Rental, Language, Expense, ReservationDetails, MaintenanceType, VehicleExpense, Company } from '../types';
 import { CarCard } from './CarCard';
 import { CarModal } from './CarModal';
 import { CarDetailsModal } from './CarDetailsModal';
@@ -19,6 +19,8 @@ import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
 import { parseCarCurrencies, SECONDARY_CURRENCIES, CURRENCIES, DEFAULT_RATES } from '../utils/currency';
 import { usePermissions } from '../utils/permissions';
+import { useCompany } from '../utils/companyProvider';
+import { companyContext } from '../utils/companyContext';
 
 interface CarsPageProps {
   lang: Language;
@@ -29,6 +31,43 @@ interface CarsPageProps {
 export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
   const [cars, setCars] = useState<Car[]>([]);
   const [reservations, setReservations] = useState<ReservationDetails[]>([]);
+  // Multi-agences : liste des agences + liens voiture↔agence (car_companies).
+  const { isSuperAdmin } = useCompany();
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [carLinks, setCarLinks] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    if (isAuthLoading || !user) return;
+    (async () => {
+      try {
+        const [list, links] = await Promise.all([
+          DatabaseService.getCompanies(),
+          DatabaseService.getCarCompanyLinks(),
+        ]);
+        setCompanies(list);
+        setCarLinks(links);
+      } catch (err) {
+        console.warn('Error loading company links for cars:', err);
+      }
+    })();
+  }, [user, isAuthLoading]);
+
+  /** Agences effectives d'une voiture : ses liens, ou l'agence principale par défaut. */
+  const carCompanyIds = (carId: string): string[] => {
+    const ids = carLinks[carId] || [];
+    if (ids.length === 0) {
+      const primaryId = companyContext.getPrimaryCompanyId();
+      return primaryId ? [primaryId] : [];
+    }
+    return ids;
+  };
+
+  /** Badges d'agence affichés sur la carte (super-admin) : nom des agences liées. */
+  const carCompanyBadges = (carId: string): { id: string; name: string }[] =>
+    carCompanyIds(carId)
+      .map(id => companies.find(c => c.id === id))
+      .filter((c): c is Company => !!c)
+      .map(c => ({ id: c.id, name: c.name }));
 
   // ── Statuts réels calculés à partir des réservations ──────────────────────
   /** Calcule le statut réel de chaque voiture d'après les réservations chargées */
@@ -266,19 +305,32 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
     [cars, reservations]
   );
 
-  const filteredCars = carsWithRealStatus.filter(car =>
-    car.brand.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-    car.model.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-    car.registration.toLowerCase().includes(debouncedSearch.toLowerCase())
-  );
+  // Périmètre agence : un admin scoppé ne voit QUE les voitures liées à son
+  // agence (via car_companies) ; le super-admin en vue « toutes agences » les
+  // voit toutes. La table `cars` reste partagée : le site public n'est pas filtré.
+  const scopeCompanyId = companyContext.getScopeCompanyId();
+  const filteredCars = carsWithRealStatus.filter(car => {
+    const matchesSearch =
+      car.brand.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      car.model.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      car.registration.toLowerCase().includes(debouncedSearch.toLowerCase());
+    if (!matchesSearch) return false;
+    if (scopeCompanyId && !carCompanyIds(car.id).includes(scopeCompanyId)) return false;
+    return true;
+  });
 
-  // Compteurs par statut réel
+  // Compteurs par statut réel (limités à l'agence active pour un admin scoppé)
+  const scopedCars = useMemo(
+    () => carsWithRealStatus.filter(c => !scopeCompanyId || carCompanyIds(c.id).includes(scopeCompanyId)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [carsWithRealStatus, scopeCompanyId, carLinks, companies]
+  );
   const counters = useMemo(() => ({
-    disponible:  carsWithRealStatus.filter(c => c.status === 'disponible').length,
-    reserve:     carsWithRealStatus.filter(c => c.status === 'reserve').length,
-    louer:       carsWithRealStatus.filter(c => c.status === 'louer').length,
-    maintenance: carsWithRealStatus.filter(c => c.status === 'maintenance').length,
-  }), [carsWithRealStatus]);
+    disponible:  scopedCars.filter(c => c.status === 'disponible').length,
+    reserve:     scopedCars.filter(c => c.status === 'reserve').length,
+    louer:       scopedCars.filter(c => c.status === 'louer').length,
+    maintenance: scopedCars.filter(c => c.status === 'maintenance').length,
+  }), [scopedCars]);
 
   const handleAddCar = () => {
     setSelectedCar(null);
@@ -288,6 +340,26 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
   const handleEditCar = (car: Car) => {
     setSelectedCar(car);
     setIsCarModalOpen(true);
+  };
+
+  /** Persiste les liens voiture↔agence (car_companies) et met à jour l'état local. */
+  const persistCarCompanies = async (carId: string, companyIds?: string[]) => {
+    if (!companyIds) return;
+    try {
+      await DatabaseService.setCarCompanies(carId, companyIds);
+      setCarLinks(prev => ({ ...prev, [carId]: Array.from(new Set(companyIds)) }));
+    } catch (err) {
+      console.warn('Error saving car companies:', err);
+    }
+  };
+
+  /** Agences pré-sélectionnées pour une NOUVELLE voiture (agence active / principale). */
+  const defaultNewCarCompanyIds = (): string[] => {
+    const scope = companyContext.getScopeCompanyId();
+    if (scope) return [scope];
+    const write = companyContext.getWriteCompanyId();
+    if (write) return [write];
+    return companies.map(c => c.id);
   };
 
   const handleSaveCar = async (carData: Partial<Car>) => {
@@ -329,6 +401,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         const result = await updateCar(selectedCar.id, updateData);
         if (result.success) {
           setCars(prev => prev.map(c => c.id === selectedCar.id ? { ...c, ...carData } as Car : c));
+          await persistCarCompanies(selectedCar.id, carData.companyIds);
         }
       } else {
         const newCarData: AddCarData = {
@@ -383,6 +456,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
             currencies: parseCarCurrencies((result.car as any).currencies),
           };
           setCars(prev => [...prev, newCar]);
+          await persistCarCompanies(newCar.id, carData.companyIds);
         }
       }
       setIsCarModalOpen(false);
@@ -778,6 +852,9 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
                 onReports={handleReports}
                 onStatusChange={handleStatusChange}
                 activeReservationInfo={getActiveReservationInfo(car.id)}
+                // Badges d'agence : affichés au super-admin dès qu'il existe
+                // plusieurs agences (mono-agence = affichage inchangé).
+                companyBadges={isSuperAdmin && companies.length > 1 ? carCompanyBadges(car.id) : undefined}
               />
             ))}
           </div>
@@ -799,6 +876,8 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         onDelete={handleDeleteCar}
         car={selectedCar || undefined}
         lang={lang}
+        companies={companies}
+        initialCompanyIds={selectedCar ? carCompanyIds(selectedCar.id) : defaultNewCarCompanyIds()}
       />
 
       <ConfirmModal
