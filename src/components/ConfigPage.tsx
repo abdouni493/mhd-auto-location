@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Language, User } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, RotateCcw, Trash2, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
+import {
+  Settings, Building2, UserRound, ShieldCheck, Database, Layers,
+  Camera, Save, Download, Upload, KeyRound, Mail, Phone, MapPin, Landmark,
+  ChevronRight, RotateCcw, Trash2, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Type,
+} from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { supabase } from '../supabase';
@@ -13,10 +17,13 @@ interface ConfigPageProps {
   user: User;
 }
 
+type TabId = 'general' | 'profile' | 'database' | 'agencies';
+
 export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
+  const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
   // Multi-agences : la gestion des agences est réservée au super-admin.
   const { isSuperAdmin } = useCompany();
-  const [activeTab, setActiveTab] = useState<'general' | 'profile' | 'database' | 'agencies'>('general');
+  const [activeTab, setActiveTab] = useState<TabId>('general');
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -481,557 +488,347 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
     }
   };
 
+  // ── Métadonnées du menu latéral ────────────────────────────────────────────
+  const tabs: { id: TabId; icon: typeof Settings; label: string; desc: string; accent: string }[] = [
+    { id: 'general', icon: Building2, label: T('Agence', 'الوكالة'), desc: T('Nom, logo, coordonnées', 'الاسم، الشعار، التواصل'), accent: '#0284C7' },
+    { id: 'profile', icon: UserRound, label: T('Profil & Sécurité', 'الملف والأمان'), desc: T('Compte et connexion', 'الحساب والدخول'), accent: '#DC2626' },
+    { id: 'database', icon: Database, label: T('Données', 'البيانات'), desc: T('Sauvegarde & corbeille', 'النسخ والسلة'), accent: '#16A34A' },
+    ...(isSuperAdmin ? [{ id: 'agencies' as TabId, icon: Layers, label: T('Agences', 'الوكالات'), desc: T('Multi-agences', 'تعدد الوكالات'), accent: '#0F172A' }] : []),
+  ];
+
+  // Petit entête de carte réutilisable
+  const CardHead = ({ icon, title, subtitle, accent }: { icon: React.ReactNode; title: string; subtitle?: string; accent: string }) => (
+    <div className="flex items-center gap-3.5 px-6 py-5 border-b border-saas-border">
+      <span className="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm" style={{ background: accent }}>
+        {icon}
+      </span>
+      <div>
+        <h2 className="text-lg font-black text-saas-text-main tracking-tight">{title}</h2>
+        {subtitle && <p className="text-[11px] font-bold uppercase tracking-widest text-saas-text-muted mt-0.5">{subtitle}</p>}
+      </div>
+    </div>
+  );
+
+  const panelAnim = {
+    initial: { opacity: 0, y: 12 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -8 },
+    transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-saas-bg via-saas-bg-light to-saas-bg p-4 sm:p-6">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-4xl font-black uppercase tracking-tighter text-saas-text-main mb-2 flex items-center gap-3">
-            🛠️ {{fr: 'Configuration', ar: 'الإعدادات'}[lang]}
+    <div className="max-w-6xl mx-auto">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8 flex items-center gap-4"
+      >
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0F172A] to-[#334155] text-white flex items-center justify-center shadow-lg shadow-slate-900/20 shrink-0">
+          <Settings size={26} />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black tracking-tighter text-saas-text-main">
+            {T('Settings', 'الإعدادات')}
           </h1>
-          <p className="text-saas-text-muted text-sm font-bold uppercase tracking-widest">
-            {{fr: 'Gérez les paramètres de votre application', ar: 'إدارة إعدادات التطبيق'}[lang]}
+          <p className="text-saas-text-muted text-xs font-bold uppercase tracking-[0.2em] mt-0.5">
+            {T("Paramètres de l'application", 'إعدادات التطبيق')}
           </p>
-        </motion.div>
+        </div>
+      </motion.div>
 
-        {/* Tab Navigation */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8 flex flex-col sm:flex-row gap-4"
-        >
-          <button
-            onClick={() => setActiveTab('general')}
-            className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'general'
-                ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
-                : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
+      {/* Notification */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className={`mb-6 border rounded-2xl p-4 flex items-center gap-3 ${
+              notification.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
             }`}
           >
-            🏢 {{fr: 'Général', ar: 'عام'}[lang]}
-          </button>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'profile'
-                ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
-                : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
-            }`}
-          >
-            👤 {{fr: 'Profil & Sécurité', ar: 'الملف والأمان'}[lang]}
-          </button>
-          <button
-            onClick={() => setActiveTab('database')}
-            className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'database'
-                ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
-                : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
-            }`}
-          >
-            💾 {{fr: 'Base de données', ar: 'قاعدة البيانات'}[lang]}
-          </button>
-          {/* Gestion des agences — super-admin uniquement */}
-          {isSuperAdmin && (
-            <button
-              onClick={() => setActiveTab('agencies')}
-              className={`flex-1 py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
-                activeTab === 'agencies'
-                  ? 'bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white shadow-lg'
-                  : 'bg-white border-2 border-saas-border text-saas-text-main hover:border-saas-primary-via'
-              }`}
-            >
-              🏢 {{fr: 'Agences', ar: 'الوكالات'}[lang]}
-            </button>
-          )}
-        </motion.div>
+            {notification.type === 'success'
+              ? <CheckCircle2 className="text-green-600 shrink-0" size={20} />
+              : <AlertTriangle className="text-red-600 shrink-0" size={20} />}
+            <p className={`font-bold text-sm ${notification.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+              {notification.message}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* Notification Display */}
-        <AnimatePresence>
-          {notification && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className={`mb-6 border rounded-2xl p-4 flex items-center justify-between ${
-                notification.type === 'success'
-                  ? 'bg-green-50 border-green-200'
-                  : 'bg-red-50 border-red-200'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={notification.type === 'success' ? 'text-green-500' : 'text-red-500'}>
-                  {notification.type === 'success' ? '✅' : '❌'}
-                </div>
-                <p className={`font-medium ${notification.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>
-                  {notification.message}
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Loading State */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-saas-primary-via mx-auto mb-4"></div>
-              <p className="text-saas-text-muted font-bold">
-                {{fr: 'Chargement des paramètres...', ar: 'جاري تحميل الإعدادات...'}[lang]}
-              </p>
-            </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-24 bg-white rounded-[2rem] border border-saas-border">
+          <div className="text-center">
+            <Loader2 className="w-11 h-11 text-saas-primary-via animate-spin mx-auto mb-4" />
+            <p className="text-saas-text-muted font-bold">{T('Chargement des paramètres...', 'جاري تحميل الإعدادات...')}</p>
           </div>
-        ) : (
-          <AnimatePresence mode="wait">
-            {/* GENERAL TAB */}
-            {activeTab === 'general' && (
-            <motion.div
-              key="general"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="bg-white rounded-[2rem] shadow-lg border border-saas-border overflow-hidden"
-            >
-              <div className="p-6 border-b border-saas-border bg-linear-to-r from-saas-primary-start via-saas-primary-via to-saas-primary-end text-white">
-                <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-                  🏢 {{fr: 'Informations de l\'agence', ar: 'معلومات الوكالة'}[lang]}
-                </h2>
-              </div>
-
-              <form className="p-8 space-y-6" onSubmit={handleSaveAgencyInfo}>
-                {/* Agency Name */}
-                <div className="space-y-2">
-                  <label className="label-saas">{{fr: 'Nom de l\'enseigne *', ar: 'اسم الإشارة *'}[lang]}</label>
-                  <input
-                    type="text"
-                    name="agencyName"
-                    value={generalData.agencyName}
-                    onChange={handleGeneralChange}
-                    className="input-saas"
-                  />
-                </div>
-
-                {/* Slogan */}
-                <div className="space-y-2">
-                  <label className="label-saas">{{fr: 'Slogan commercial', ar: 'الشعار التجاري'}[lang]}</label>
-                  <textarea
-                    name="slogan"
-                    value={generalData.slogan}
-                    onChange={handleGeneralChange}
-                    rows={2}
-                    className="input-saas resize-none"
-                  />
-                </div>
-
-                {/* Address */}
-                <div className="space-y-2">
-                  <label className="label-saas">{{fr: 'Adresse du siège', ar: 'عنوان المقر'}[lang]}</label>
-                  <input
-                    type="text"
-                    name="address"
-                    value={generalData.address}
-                    onChange={handleGeneralChange}
-                    className="input-saas"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div className="space-y-2">
-                  <label className="label-saas">📞 {{fr: 'Téléphone', ar: 'الهاتف'}[lang]}</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={generalData.phone}
-                    onChange={handleGeneralChange}
-                    className="input-saas"
-                  />
-                </div>
-
-                {/* Second Phone Number */}
-                <div className="space-y-2">
-                  <label className="label-saas">📱 {{fr: 'Deuxième numéro de téléphone', ar: 'رقم الهاتف الثاني'}[lang]}</label>
-                  <input
-                    type="tel"
-                    name="phoneNumber2"
-                    value={generalData.phoneNumber2}
-                    onChange={handleGeneralChange}
-                    className="input-saas"
-                  />
-                </div>
-
-                {/* Bank Number */}
-                <div className="space-y-2">
-                  <label className="label-saas">🏦 {{fr: 'Numéro de compte bancaire', ar: 'رقم الحساب البنكي'}[lang]}</label>
-                  <input
-                    type="text"
-                    name="bankNumber"
-                    value={generalData.bankNumber}
-                    onChange={handleGeneralChange}
-                    className="input-saas"
-                  />
-                </div>
-
-                {/* Logo */}
-                <div className="space-y-4">
-                  <label className="label-saas">🖼️ {{fr: 'Logo de l\'agence', ar: 'شعار الوكالة'}[lang]}</label>
-                  <div className="flex gap-6 items-start">
-                    <div className="w-24 h-24 rounded-lg overflow-hidden border-2 border-saas-border bg-saas-bg flex items-center justify-center flex-shrink-0">
-                      {generalData.logo ? (
-                        <img src={generalData.logo} alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <span className="text-4xl">🏢</span>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <label className="block">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleLogoUpload}
-                          className="hidden"
-                        />
-                        <span className="btn-saas-primary px-6 py-3 inline-block cursor-pointer">
-                          {{fr: 'Changer le logo', ar: 'تغيير الشعار'}[lang]}
-                        </span>
-                      </label>
-                      <p className="text-xs text-saas-text-muted mt-2">
-                        {{fr: 'Format recommandé: PNG ou JPG (500x500px)', ar: 'الصيغة الموصى بها: PNG أو JPG (500x500px)'}[lang]}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Save Button */}
-                <div className="flex gap-3 pt-6 border-t border-saas-border">
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-[264px_minmax(0,1fr)] gap-6 items-start">
+          {/* ── Menu latéral ──────────────────────────────────────────────── */}
+          <nav className="bg-white rounded-2xl border border-saas-border shadow-sm p-2 lg:sticky lg:top-24">
+            <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible">
+              {tabs.map(tab => {
+                const active = activeTab === tab.id;
+                const Icon = tab.icon;
+                return (
                   <button
-                    type="button"
-                    className="flex-1 py-3 px-4 rounded-lg font-bold text-sm bg-white border-2 border-saas-border hover:bg-saas-bg-light transition-colors text-saas-text-main"
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-3 text-left transition-all shrink-0 lg:w-full cursor-pointer ${
+                      active ? 'bg-saas-bg' : 'hover:bg-saas-bg/60'
+                    }`}
                   >
-                    {{fr: 'Annuler', ar: 'إلغاء'}[lang]}
+                    {active && (
+                      <motion.span
+                        layoutId="settings-active"
+                        className="absolute left-0 top-2 bottom-2 w-1 rounded-full"
+                        style={{ background: tab.accent }}
+                        transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                      />
+                    )}
+                    <span
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                      style={active
+                        ? { background: tab.accent, color: '#fff' }
+                        : { background: 'var(--color-saas-bg, #F1F5F9)', color: tab.accent }}
+                    >
+                      <Icon size={17} />
+                    </span>
+                    <span className="min-w-0 hidden sm:block">
+                      <span className={`block text-sm font-black tracking-tight ${active ? 'text-saas-text-main' : 'text-saas-text-main/80'}`}>
+                        {tab.label}
+                      </span>
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-saas-text-muted truncate">
+                        {tab.desc}
+                      </span>
+                    </span>
+                    <span className="sm:hidden text-sm font-black text-saas-text-main">{tab.label}</span>
+                    {active && <ChevronRight size={16} className="ml-auto text-saas-text-muted hidden lg:block" />}
                   </button>
-                  <button
-                    type="submit"
-                    className="flex-1 btn-saas-primary py-3"
-                  >
-                    {{fr: 'Enregistrer les modifications', ar: 'حفظ التغييرات'}[lang]}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          )}
+                );
+              })}
+            </div>
+          </nav>
 
-          {/* PROFILE & SECURITY TAB */}
-          {activeTab === 'profile' && (
-            <motion.div
-              key="profile"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-6"
-            >
-              {/* Profile Section */}
-              <div className="bg-white rounded-[2rem] shadow-lg border border-saas-border overflow-hidden">
-                <div className="p-6 border-b border-saas-border bg-linear-to-r from-blue-500 via-blue-600 to-blue-700 text-white">
-                  <h2 className="text-2xl font-black uppercase tracking-tighter">👤 {{fr: 'Mon Profil', ar: 'ملفي الشخصي'}[lang]}</h2>
-                </div>
-
-                <form className="p-8 space-y-6">
-                  {/* Profile Photo */}
-                  <div className="space-y-4">
-                    <label className="label-saas">📸 {{fr: 'Photo de profil', ar: 'صورة الملف'}[lang]}</label>
-                    <div className="flex gap-6 items-start">
-                      <div className="w-24 h-24 rounded-full overflow-hidden border-3 border-saas-primary-via shadow-lg flex items-center justify-center flex-shrink-0 bg-saas-bg">
-                        {profileData.profilePhoto ? (
-                          <img src={profileData.profilePhoto} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <span className="text-4xl">👤</span>
-                        )}
+          {/* ── Contenu ────────────────────────────────────────────────────── */}
+          <div className="min-w-0">
+            <AnimatePresence mode="wait">
+              {/* ═══════════════ AGENCE ═══════════════ */}
+              {activeTab === 'general' && (
+                <motion.div key="general" {...panelAnim} className="bg-white rounded-[2rem] border border-saas-border shadow-sm overflow-hidden">
+                  <CardHead icon={<Building2 size={20} />} title={T("Informations de l'agence", 'معلومات الوكالة')} subtitle={T('Affichées sur les documents et le site', 'تظهر على الوثائق والموقع')} accent="#0284C7" />
+                  <form className="p-6 sm:p-8 space-y-7" onSubmit={handleSaveAgencyInfo}>
+                    {/* Logo */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-5 p-5 rounded-2xl bg-saas-bg border border-saas-border">
+                      <div className="w-24 h-24 rounded-2xl overflow-hidden border border-saas-border bg-white flex items-center justify-center shrink-0 shadow-sm">
+                        {generalData.logo
+                          ? <img src={generalData.logo} alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          : <Building2 className="text-saas-text-muted" size={30} />}
                       </div>
                       <div className="flex-1">
-                        <label className="block">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleProfilePhotoUpload}
-                            className="hidden"
-                          />
-                          <span className="btn-saas-primary px-6 py-3 inline-block cursor-pointer">
-                            {{fr: 'Changer la photo', ar: 'تغيير الصورة'}[lang]}
+                        <p className="font-black text-saas-text-main mb-1">{T("Logo de l'agence", 'شعار الوكالة')}</p>
+                        <p className="text-xs text-saas-text-muted mb-3">{T('PNG ou JPG · recommandé 500×500px', 'PNG أو JPG · يُفضّل 500×500')}</p>
+                        <label className="inline-flex">
+                          <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                          <span className="btn-saas-secondary px-5 py-2.5 inline-flex items-center gap-2 cursor-pointer text-sm">
+                            <Camera size={16} /> {T('Changer le logo', 'تغيير الشعار')}
                           </span>
                         </label>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Name */}
-                  <div className="space-y-2">
-                    <label className="label-saas">👤 {{fr: 'Nom complet', ar: 'الاسم الكامل'}[lang]}</label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={profileData.name}
-                      onChange={handleProfileChange}
-                      className="input-saas"
-                    />
-                  </div>
-
-                  {/* Save Button */}
-                  <div className="flex gap-3 pt-6 border-t border-saas-border">
-                    <button
-                      type="button"
-                      className="flex-1 py-3 px-4 rounded-lg font-bold text-sm bg-white border-2 border-saas-border hover:bg-saas-bg-light transition-colors text-saas-text-main"
-                    >
-                      {{fr: 'Annuler', ar: 'إلغاء'}[lang]}
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 btn-saas-primary py-3"
-                    >
-                      {{fr: 'Enregistrer', ar: 'حفظ'}[lang]}
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* Security Section */}
-              <div className="bg-white rounded-[2rem] shadow-lg border border-saas-border overflow-hidden">
-                <div className="p-6 border-b border-saas-border bg-linear-to-r from-red-500 via-red-600 to-red-700 text-white">
-                  <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-                    🛡️ {{fr: 'Informations de Connexion', ar: 'معلومات تسجيل الدخول'}[lang]}
-                  </h2>
-                </div>
-
-                <form className="p-8 space-y-6">
-                  {/* Username */}
-                  <div className="space-y-2">
-                    <label className="label-saas">👤 {{fr: 'Nom d\'utilisateur', ar: 'اسم المستخدم'}[lang]}</label>
-                    <input
-                      type="text"
-                      name="username"
-                      value={securityData.username}
-                      onChange={handleSecurityChange}
-                      className="input-saas"
-                    />
-                  </div>
-
-                  {/* Email */}
-                  <div className="space-y-2">
-                    <label className="label-saas">📧 {{fr: 'E-mail de récupération', ar: 'البريد الإلكتروني للاستعادة'}[lang]}</label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={securityData.email}
-                      onChange={handleSecurityChange}
-                      className="input-saas"
-                    />
-                  </div>
-
-                  {/* New Password */}
-                  <div className="space-y-2">
-                    <label className="label-saas">🔐 {{fr: 'Nouveau mot de passe', ar: 'كلمة المرور الجديدة'}[lang]}</label>
-                    <input
-                      type="password"
-                      name="newPassword"
-                      value={securityData.newPassword}
-                      onChange={handleSecurityChange}
-                      placeholder="••••••••"
-                      className="input-saas"
-                    />
-                  </div>
-
-                  {/* Confirm Password */}
-                  <div className="space-y-2">
-                    <label className="label-saas">🔐 {{fr: 'Confirmer le mot de passe', ar: 'تأكيد كلمة المرور'}[lang]}</label>
-                    <input
-                      type="password"
-                      name="confirmPassword"
-                      value={securityData.confirmPassword}
-                      onChange={handleSecurityChange}
-                      placeholder="••••••••"
-                      className="input-saas"
-                    />
-                  </div>
-
-                  {/* Save Button */}
-                  <div className="flex gap-3 pt-6 border-t border-saas-border">
-                    <button
-                      type="button"
-                      className="flex-1 py-3 px-4 rounded-lg font-bold text-sm bg-white border-2 border-saas-border hover:bg-saas-bg-light transition-colors text-saas-text-main"
-                    >
-                      {{fr: 'Annuler', ar: 'إلغاء'}[lang]}
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 btn-saas-primary py-3"
-                    >
-                      {{fr: 'Mettre à jour', ar: 'تحديث'}[lang]}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          )}
-
-          {/* DATABASE TAB */}
-          {activeTab === 'database' && (
-            <motion.div
-              key="database"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-6"
-            >
-              <div className="bg-white rounded-[2rem] shadow-lg border border-saas-border overflow-hidden">
-                <div className="p-6 border-b border-saas-border bg-linear-to-r from-green-500 via-green-600 to-green-700 text-white">
-                  <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-                    💾 {{fr: 'Gestion des données', ar: 'إدارة البيانات'}[lang]}
-                  </h2>
-                </div>
-
-                <div className="p-8 space-y-6">
-                  {/* Backup Section */}
-                  <div className="bg-green-50 p-6 rounded-xl border border-green-200">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="font-black text-green-700 text-lg flex items-center gap-2">
-                          📤 {{fr: 'Sauvegarder', ar: 'قياس النسخ الاحتياطية'}[lang]}
-                        </h3>
-                        <p className="text-sm text-green-600 mt-1">
-                          {{fr: 'Dernière sauvegarde : ', ar: 'آخر نسخة احتياطية : '}[lang]}<span className="font-bold">{lastBackup}</span>
-                        </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><Type size={12} />{T("Nom de l'enseigne", 'اسم الإشارة')} *</label>
+                        <input type="text" name="agencyName" value={generalData.agencyName} onChange={handleGeneralChange} className="input-saas" />
+                      </div>
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="label-saas">{T('Slogan commercial', 'الشعار التجاري')}</label>
+                        <textarea name="slogan" value={generalData.slogan} onChange={handleGeneralChange} rows={2} className="input-saas resize-none" />
+                      </div>
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><MapPin size={12} />{T('Adresse du siège', 'عنوان المقر')}</label>
+                        <input type="text" name="address" value={generalData.address} onChange={handleGeneralChange} className="input-saas" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><Phone size={12} />{T('Téléphone', 'الهاتف')}</label>
+                        <input type="tel" name="phone" value={generalData.phone} onChange={handleGeneralChange} className="input-saas" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><Phone size={12} />{T('Téléphone 2', 'الهاتف الثاني')}</label>
+                        <input type="tel" name="phoneNumber2" value={generalData.phoneNumber2} onChange={handleGeneralChange} className="input-saas" />
+                      </div>
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><Landmark size={12} />{T('Numéro de compte bancaire', 'رقم الحساب البنكي')}</label>
+                        <input type="text" name="bankNumber" value={generalData.bankNumber} onChange={handleGeneralChange} className="input-saas" />
                       </div>
                     </div>
-                    <p className="text-sm text-green-700 mb-4">
-                      {{fr: 'Téléchargez une copie complète de vos données au format JSON/SQL.', ar: 'قم بتنزيل نسخة كاملة من بياناتك بصيغة JSON / SQL.'}[lang]}
-                    </p>
-                    <button
-                      onClick={handleExportDatabase}
-                      className="btn-saas-primary py-3 px-6"
-                    >
-                      {{fr: 'Lancer l\'exportation', ar: 'ابدأ التصدير'}[lang]}
-                    </button>
+
+                    <div className="flex justify-end pt-2 border-t border-saas-border">
+                      <button type="submit" className="btn-saas-primary px-8 py-3 flex items-center gap-2 mt-6">
+                        <Save size={17} /> {T('Enregistrer les modifications', 'حفظ التغييرات')}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              )}
+
+              {/* ═══════════════ PROFIL & SÉCURITÉ ═══════════════ */}
+              {activeTab === 'profile' && (
+                <motion.div key="profile" {...panelAnim} className="space-y-6">
+                  <div className="bg-white rounded-[2rem] border border-saas-border shadow-sm overflow-hidden">
+                    <CardHead icon={<UserRound size={20} />} title={T('Mon profil', 'ملفي الشخصي')} accent="#0284C7" />
+                    <form className="p-6 sm:p-8 space-y-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-5 p-5 rounded-2xl bg-saas-bg border border-saas-border">
+                        <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-saas-primary-via shadow-md flex items-center justify-center shrink-0 bg-white">
+                          {profileData.profilePhoto
+                            ? <img src={profileData.profilePhoto} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            : <UserRound className="text-saas-text-muted" size={34} />}
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-black text-saas-text-main mb-1">{T('Photo de profil', 'صورة الملف')}</p>
+                          <label className="inline-flex">
+                            <input type="file" accept="image/*" onChange={handleProfilePhotoUpload} className="hidden" />
+                            <span className="btn-saas-secondary px-5 py-2.5 inline-flex items-center gap-2 cursor-pointer text-sm">
+                              <Camera size={16} /> {T('Changer la photo', 'تغيير الصورة')}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><UserRound size={12} />{T('Nom complet', 'الاسم الكامل')}</label>
+                        <input type="text" name="name" value={profileData.name} onChange={handleProfileChange} className="input-saas" />
+                      </div>
+                    </form>
                   </div>
 
-                  {/* Restore Section */}
-                  <div className="bg-blue-50 p-6 rounded-xl border border-blue-200">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="font-black text-blue-700 text-lg flex items-center gap-2">
-                          📥 {{fr: 'Restaurer une sauvegarde', ar: 'استعادة نسخة احتياطية'}[lang]}
-                        </h3>
+                  <div className="bg-white rounded-[2rem] border border-saas-border shadow-sm overflow-hidden">
+                    <CardHead icon={<ShieldCheck size={20} />} title={T('Informations de connexion', 'معلومات تسجيل الدخول')} accent="#DC2626" />
+                    <form className="p-6 sm:p-8 space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="label-saas flex items-center gap-1.5"><UserRound size={12} />{T("Nom d'utilisateur", 'اسم المستخدم')}</label>
+                          <input type="text" name="username" value={securityData.username} onChange={handleSecurityChange} className="input-saas" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="label-saas flex items-center gap-1.5"><Mail size={12} />{T('E-mail de récupération', 'بريد الاستعادة')}</label>
+                          <input type="email" name="email" value={securityData.email} onChange={handleSecurityChange} className="input-saas" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="label-saas flex items-center gap-1.5"><KeyRound size={12} />{T('Nouveau mot de passe', 'كلمة المرور الجديدة')}</label>
+                          <input type="password" name="newPassword" value={securityData.newPassword} onChange={handleSecurityChange} placeholder="••••••••" className="input-saas" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="label-saas flex items-center gap-1.5"><KeyRound size={12} />{T('Confirmer le mot de passe', 'تأكيد كلمة المرور')}</label>
+                          <input type="password" name="confirmPassword" value={securityData.confirmPassword} onChange={handleSecurityChange} placeholder="••••••••" className="input-saas" />
+                        </div>
                       </div>
+                      <div className="flex justify-end pt-2 border-t border-saas-border">
+                        <button type="submit" className="btn-saas-primary px-8 py-3 flex items-center gap-2 mt-6">
+                          <Save size={17} /> {T('Mettre à jour', 'تحديث')}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ═══════════════ DONNÉES ═══════════════ */}
+              {activeTab === 'database' && (
+                <motion.div key="database" {...panelAnim} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Export */}
+                    <div className="bg-white rounded-[2rem] border border-saas-border shadow-sm p-6 flex flex-col">
+                      <span className="w-12 h-12 rounded-xl bg-green-100 text-green-600 flex items-center justify-center mb-4"><Download size={22} /></span>
+                      <h3 className="text-lg font-black text-saas-text-main">{T('Sauvegarder', 'نسخ احتياطي')}</h3>
+                      <p className="text-sm text-saas-text-muted mt-1 mb-1">{T('Dernière : ', 'الأخيرة: ')}<span className="font-bold">{lastBackup}</span></p>
+                      <p className="text-sm text-saas-text-muted flex-1">{T('Téléchargez une copie complète de vos données (JSON).', 'حمّل نسخة كاملة من بياناتك (JSON).')}</p>
+                      <button onClick={handleExportDatabase} className="btn-saas-primary py-3 px-6 mt-5 flex items-center justify-center gap-2">
+                        <Download size={17} /> {T("Lancer l'exportation", 'ابدأ التصدير')}
+                      </button>
                     </div>
-                    <p className="text-sm text-blue-700 mb-4">
-                      {{fr: 'Importez un fichier de sauvegarde pour restaurer vos informations.', ar: 'استيراد ملف نسخة احتياطية لاستعادة معلوماتك.'}[lang]}
-                    </p>
-                    <div className="flex gap-3">
-                      <label className="flex-1">
-                        <input
-                          type="file"
-                          accept=".json,.sql"
-                          onChange={handleRestoreDatabase}
-                          className="hidden"
-                        />
-                        <span className="btn-saas-primary py-3 px-6 inline-block cursor-pointer w-full text-center">
-                          {{fr: 'Choisir un fichier', ar: 'اختر ملف'}[lang]}
+
+                    {/* Restore */}
+                    <div className="bg-white rounded-[2rem] border border-saas-border shadow-sm p-6 flex flex-col">
+                      <span className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center mb-4"><Upload size={22} /></span>
+                      <h3 className="text-lg font-black text-saas-text-main">{T('Restaurer', 'استعادة')}</h3>
+                      <p className="text-sm text-saas-text-muted mt-1 flex-1">{T('Importez un fichier de sauvegarde pour restaurer vos informations.', 'استورد ملف نسخة احتياطية لاستعادة معلوماتك.')}</p>
+                      <label className="mt-5">
+                        <input type="file" accept=".json,.sql" onChange={handleRestoreDatabase} className="hidden" />
+                        <span className="btn-saas-secondary py-3 px-6 flex items-center justify-center gap-2 cursor-pointer w-full">
+                          <Upload size={17} /> {T('Choisir un fichier', 'اختر ملف')}
                         </span>
                       </label>
                     </div>
                   </div>
 
-                  {/* Corbeille des réservations (suppression réversible) */}
-                  <div className="bg-red-50 p-6 rounded-xl border border-red-200">
-                    <div className="flex items-start justify-between mb-4 gap-3">
-                      <div>
-                        <h3 className="font-black text-red-700 text-lg flex items-center gap-2">
-                          🗑️ {{fr: 'Corbeille des réservations', ar: 'سلة حذف الحجوزات'}[lang]}
-                        </h3>
-                        <p className="text-sm text-red-600 mt-1">
-                          {{fr: 'Réservations supprimées. Restaurez-les ou supprimez-les définitivement.', ar: 'الحجوزات المحذوفة. استعدها أو احذفها نهائياً.'}[lang]}
-                        </p>
+                  {/* Corbeille */}
+                  <div className="bg-white rounded-[2rem] border border-saas-border shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between gap-3 px-6 py-5 border-b border-saas-border">
+                      <div className="flex items-center gap-3.5">
+                        <span className="w-11 h-11 rounded-xl bg-red-500 text-white flex items-center justify-center shrink-0 shadow-sm"><Trash2 size={19} /></span>
+                        <div>
+                          <h2 className="text-lg font-black text-saas-text-main tracking-tight">{T('Corbeille des réservations', 'سلة حذف الحجوزات')}</h2>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-saas-text-muted mt-0.5">{T('Restaurer ou supprimer définitivement', 'استعادة أو حذف نهائي')}</p>
+                        </div>
                       </div>
-                      <button
-                        onClick={loadTrash}
-                        disabled={loadingTrash}
-                        className="btn-saas-secondary py-2 px-4 text-xs shrink-0 flex items-center gap-2 disabled:opacity-60"
-                        title={{fr: 'Actualiser', ar: 'تحديث'}[lang]}
-                      >
-                        <RefreshCw size={16} className={loadingTrash ? 'animate-spin' : ''} />
-                        {{fr: 'Actualiser', ar: 'تحديث'}[lang]}
+                      <button onClick={loadTrash} disabled={loadingTrash} className="btn-saas-secondary py-2 px-4 text-xs shrink-0 flex items-center gap-2 disabled:opacity-60">
+                        <RefreshCw size={15} className={loadingTrash ? 'animate-spin' : ''} /> {T('Actualiser', 'تحديث')}
                       </button>
                     </div>
-
-                    {loadingTrash ? (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="animate-spin text-red-500" size={28} />
-                      </div>
-                    ) : deletedReservations.length === 0 ? (
-                      <p className="text-sm text-red-700/70 italic py-6 text-center">
-                        {{fr: 'La corbeille est vide.', ar: 'السلة فارغة.'}[lang]}
-                      </p>
-                    ) : (
-                      <div className="space-y-3">
-                        {deletedReservations.map(r => (
-                          <div
-                            key={r.id}
-                            className="bg-white rounded-xl border border-red-200 p-4 flex flex-col sm:flex-row sm:items-center gap-3"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="font-black text-saas-text-main truncate">
-                                {r.clientName} <span className="text-saas-text-muted font-bold">· {r.carLabel}</span>
-                              </p>
-                              <p className="text-xs text-saas-text-muted mt-0.5">
-                                {r.departureDate} → {r.returnDate} · {r.totalPrice.toLocaleString('fr-DZ')} DA
-                                {' · '}
-                                {{fr: 'Supprimée le', ar: 'حُذفت في'}[lang]} {formatTrashDate(r.deletedAt)}
-                              </p>
+                    <div className="p-6">
+                      {loadingTrash ? (
+                        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-red-500" size={28} /></div>
+                      ) : deletedReservations.length === 0 ? (
+                        <div className="text-center py-10">
+                          <div className="w-14 h-14 rounded-2xl bg-saas-bg flex items-center justify-center mx-auto mb-3 text-2xl">🗑️</div>
+                          <p className="text-sm text-saas-text-muted font-medium">{T('La corbeille est vide.', 'السلة فارغة.')}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {deletedReservations.map(r => (
+                            <div key={r.id} className="bg-saas-bg rounded-2xl border border-saas-border p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-black text-saas-text-main truncate">
+                                  {r.clientName} <span className="text-saas-text-muted font-bold">· {r.carLabel}</span>
+                                </p>
+                                <p className="text-xs text-saas-text-muted mt-0.5">
+                                  {r.departureDate} → {r.returnDate} · {r.totalPrice.toLocaleString('fr-DZ')} DA
+                                  {' · '}{T('Supprimée le', 'حُذفت في')} {formatTrashDate(r.deletedAt)}
+                                </p>
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => handleRestoreReservation(r.id)} disabled={trashActionId === r.id}
+                                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold transition-colors disabled:opacity-60">
+                                  {trashActionId === r.id ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />} {T('Restaurer', 'استعادة')}
+                                </button>
+                                <button onClick={() => setPendingHardDelete({ id: r.id, label: `${r.clientName} · ${r.carLabel}` })} disabled={trashActionId === r.id}
+                                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors disabled:opacity-60">
+                                  <Trash2 size={15} /> {T('Supprimer', 'حذف')}
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex gap-2 shrink-0">
-                              <button
-                                onClick={() => handleRestoreReservation(r.id)}
-                                disabled={trashActionId === r.id}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
-                              >
-                                {trashActionId === r.id ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
-                                {{fr: 'Restaurer', ar: 'استعادة'}[lang]}
-                              </button>
-                              <button
-                                onClick={() => setPendingHardDelete({ id: r.id, label: `${r.clientName} · ${r.carLabel}` })}
-                                disabled={trashActionId === r.id}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
-                              >
-                                <Trash2 size={15} />
-                                {{fr: 'Supprimer définitivement', ar: 'حذف نهائي'}[lang]}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
+                </motion.div>
+              )}
 
-          {/* AGENCES (super-admin) */}
-          {activeTab === 'agencies' && isSuperAdmin && (
-            <motion.div
-              key="agencies"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <CompaniesManager lang={lang} />
-            </motion.div>
-          )}
-          </AnimatePresence>
-        )}
-      </div>
+              {/* ═══════════════ AGENCES (super-admin) ═══════════════ */}
+              {activeTab === 'agencies' && isSuperAdmin && (
+                <motion.div key="agencies" {...panelAnim}>
+                  <CompaniesManager lang={lang} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation de suppression définitive */}
       <AnimatePresence>
@@ -1053,27 +850,18 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
               <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-xl font-black text-slate-900 text-center mb-2">
-                {{fr: 'Suppression définitive', ar: 'حذف نهائي'}[lang]}
-              </h3>
+              <h3 className="text-xl font-black text-slate-900 text-center mb-2">{T('Suppression définitive', 'حذف نهائي')}</h3>
               <p className="text-slate-600 text-center text-sm mb-1">
-                {{fr: 'Cette réservation sera supprimée définitivement et ne pourra plus être restaurée.', ar: 'سيتم حذف هذا الحجز نهائياً ولا يمكن استعادته.'}[lang]}
+                {T('Cette réservation sera supprimée définitivement et ne pourra plus être restaurée.', 'سيتم حذف هذا الحجز نهائياً ولا يمكن استعادته.')}
               </p>
               <p className="text-slate-900 font-bold text-center text-sm mb-6 truncate">{pendingHardDelete.label}</p>
               <div className="flex gap-3">
-                <button
-                  onClick={() => setPendingHardDelete(null)}
-                  className="flex-1 px-4 py-2 border border-slate-200 text-slate-900 rounded-lg font-bold hover:bg-slate-50 transition-colors"
-                >
-                  {{fr: 'Annuler', ar: 'إلغاء'}[lang]}
+                <button onClick={() => setPendingHardDelete(null)} className="flex-1 px-4 py-2 border border-slate-200 text-slate-900 rounded-lg font-bold hover:bg-slate-50 transition-colors">
+                  {T('Annuler', 'إلغاء')}
                 </button>
-                <button
-                  onClick={confirmHardDelete}
-                  disabled={!!trashActionId}
-                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
-                >
-                  {trashActionId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  {{fr: 'Supprimer', ar: 'حذف'}[lang]}
+                <button onClick={confirmHardDelete} disabled={!!trashActionId}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
+                  {trashActionId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} {T('Supprimer', 'حذف')}
                 </button>
               </div>
             </motion.div>
