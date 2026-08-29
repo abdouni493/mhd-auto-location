@@ -38,8 +38,10 @@ export const CarPriceBoard: React.FC<{
     dzd: number;
     /** Ancien tarif barré (promotion). */
     old?: number;
-    /** Total de la formule, affiché entre parenthèses. */
+    /** Total de la formule (tarif journalier × `multiplier`). */
     totalDzd?: number;
+    /** Nombre de jours de la formule, rappelé dans le calcul affiché. */
+    multiplier?: number;
     /** Suffixe du total entre parenthèses (« / semaine », « / mois »). */
     totalSuffix?: string;
     isDeposit?: boolean;
@@ -55,6 +57,7 @@ export const CarPriceBoard: React.FC<{
       label: { fr: `Jour (${WEEK_DAYS} j)`, ar: `يوم (${WEEK_DAYS} أيام)` }[lang],
       dzd: weekDayRate(car),
       totalDzd: weekTotal(car),
+      multiplier: WEEK_DAYS,
       totalSuffix: { fr: '/ sem.', ar: '/ أسبوع' }[lang],
     },
     {
@@ -62,6 +65,7 @@ export const CarPriceBoard: React.FC<{
       label: { fr: `Jour (${MONTH_DAYS} j)`, ar: `يوم (${MONTH_DAYS} يوماً)` }[lang],
       dzd: monthDayRate(car),
       totalDzd: monthTotal(car),
+      multiplier: MONTH_DAYS,
       totalSuffix: { fr: '/ mois', ar: '/ شهر' }[lang],
     },
     { key: 'deposit', label: { fr: 'Caution', ar: 'الكفالة' }[lang], dzd: car.deposit, isDeposit: true },
@@ -110,7 +114,7 @@ export const CarPriceBoard: React.FC<{
               {fmt(r.dzd, code)}
               {r.totalDzd !== undefined && (
                 <span className="ml-1 font-medium" style={{ color: 'var(--color-vel-slate)' }}>
-                  ({fmt(r.totalDzd, code)} {r.totalSuffix})
+                  (× {r.multiplier} = {fmt(r.totalDzd, code)} {r.totalSuffix})
                 </span>
               )}
             </span>
@@ -171,7 +175,7 @@ export const CarPriceBoard: React.FC<{
                     {fmt(r.dzd, code)}
                     {r.totalDzd !== undefined && (
                       <span className="block font-medium opacity-70">
-                        ({fmt(r.totalDzd, code)} {r.totalSuffix})
+                        (× {r.multiplier} = {fmt(r.totalDzd, code)} {r.totalSuffix})
                       </span>
                     )}
                   </td>

@@ -9,7 +9,7 @@ import {
 } from '../utils/currency';
 import {
   WEEK_DAYS, MONTH_DAYS,
-  weekDayRate, monthDayRate, weekTotalFromDay, monthTotalFromDay,
+  weekDayRate, monthDayRate, weekTotal, monthTotal,
 } from '../utils/pricing';
 
 interface CarModalProps {
@@ -57,25 +57,17 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
 
   useEffect(() => {
     const base = car ? { ...emptyForm(), ...car } : emptyForm();
-    // Les totaux semaine / mois sont toujours ramenés à « tarif jour × 7/30 »
-    // pour que le champ saisi (tarif journalier) et le total affiché restent
-    // cohérents, y compris sur des véhicules créés avant cette règle.
+    // `priceWeek` / `priceMonth` sont des tarifs JOURNALIERS. On matérialise
+    // simplement le repli (tarif à la journée) pour que le champ affiché soit
+    // exactement ce qui sera enregistré.
     setFormData({
       ...base,
-      priceWeek: weekTotalFromDay(weekDayRate(base)),
-      priceMonth: monthTotalFromDay(monthDayRate(base)),
+      priceWeek: weekDayRate(base),
+      priceMonth: monthDayRate(base),
       companyIds: initialCompanyIds ? [...initialCompanyIds] : (car?.companyIds || []),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [car, isOpen]);
-
-  /** Saisie d'un tarif journalier de formule : on stocke le total (× 7 / × 30). */
-  const setFormulaDayRate = (key: 'priceWeek' | 'priceMonth', perDay: number) => {
-    setFormData(prev => ({
-      ...prev,
-      [key]: key === 'priceWeek' ? weekTotalFromDay(perDay) : monthTotalFromDay(perDay),
-    }));
-  };
 
   const toggleCompany = (id: string) => {
     setFormData(prev => {
@@ -90,10 +82,23 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     const numericFields = ['year', 'seats', 'doors', 'deposit', 'mileage', 'agencySharePerDay'];
-    setFormData(prev => ({
-      ...prev,
-      [name]: numericFields.includes(name) || name.startsWith('price') ? Number(value) : value,
-    }));
+    const parsed = numericFields.includes(name) || name.startsWith('price') ? Number(value) : value;
+
+    setFormData(prev => {
+      const next: Partial<Car> = { ...prev, [name]: parsed };
+
+      // Le tarif à la journée sert de valeur par défaut aux deux formules :
+      // tant qu'aucune remise semaine / mois n'a été saisie (champ vide ou
+      // encore aligné sur l'ancien tarif jour), on le recopie. Dès que
+      // l'agence saisit une remise, elle n'est plus jamais écrasée.
+      if (name === 'priceDay') {
+        const previousDay = Number(prev.priceDay ?? 0);
+        if (!prev.priceWeek || Number(prev.priceWeek) === previousDay) next.priceWeek = Number(parsed);
+        if (!prev.priceMonth || Number(prev.priceMonth) === previousDay) next.priceMonth = Number(parsed);
+      }
+
+      return next;
+    });
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,18 +164,33 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
   };
 
   // Tarifs journaliers saisis par l'agence : « à la journée », « en semaine »,
-  // « au mois ». Les deux derniers sont dérivés des totaux stockés.
+  // « au mois ». Les totaux de formule en sont dérivés (× 7 / × 30).
   const weekPerDay = weekDayRate(formData);
   const monthPerDay = monthDayRate(formData);
-  const weekTotalDzd = weekTotalFromDay(weekPerDay);
-  const monthTotalDzd = monthTotalFromDay(monthPerDay);
+  const weekTotalDzd = weekTotal(formData);
+  const monthTotalDzd = monthTotal(formData);
 
-  /** Lignes du tableau de conversion : montants réellement facturés. */
-  const priceRows: { key: 'priceDay' | 'priceWeek' | 'priceMonth' | 'deposit'; label: string }[] = [
-    { key: 'priceDay', label: lang === 'fr' ? 'Jour' : 'يوم' },
-    { key: 'priceWeek', label: lang === 'fr' ? 'Total semaine' : 'إجمالي الأسبوع' },
-    { key: 'priceMonth', label: lang === 'fr' ? 'Total mois' : 'إجمالي الشهر' },
-    { key: 'deposit', label: lang === 'fr' ? 'Caution' : 'الضمان' },
+  /**
+   * Lignes du tableau de conversion. `dzd` = montant mis en avant (tarif
+   * journalier), `totalDzd` = total de la formule rappelé en dessous.
+   */
+  const priceRows: { key: string; label: string; dzd: number; totalDzd?: number; totalLabel?: string }[] = [
+    { key: 'priceDay', label: lang === 'fr' ? 'Jour' : 'يوم', dzd: Number(formData.priceDay ?? 0) },
+    {
+      key: 'priceWeek',
+      label: lang === 'fr' ? `Jour (${WEEK_DAYS} j)` : `يوم (${WEEK_DAYS} أيام)`,
+      dzd: weekPerDay,
+      totalDzd: weekTotalDzd,
+      totalLabel: lang === 'fr' ? '/ sem.' : '/ أسبوع',
+    },
+    {
+      key: 'priceMonth',
+      label: lang === 'fr' ? `Jour (${MONTH_DAYS} j)` : `يوم (${MONTH_DAYS} يوماً)`,
+      dzd: monthPerDay,
+      totalDzd: monthTotalDzd,
+      totalLabel: lang === 'fr' ? '/ mois' : '/ شهر',
+    },
+    { key: 'deposit', label: lang === 'fr' ? 'Caution' : 'الضمان', dzd: Number(formData.deposit ?? 0) },
   ];
 
   const isThirdParty = formData.ownerType === 'third_party';
@@ -499,11 +519,11 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
                 </label>
                 <div className="relative">
                   <input
-                    name="weekPerDay"
+                    name="priceWeek"
                     type="number"
                     min={0}
-                    value={weekPerDay}
-                    onChange={e => setFormulaDayRate('priceWeek', Number(e.target.value))}
+                    value={formData.priceWeek ?? 0}
+                    onChange={handleChange}
                     className="input-saas pr-12"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
@@ -521,11 +541,11 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
                 </label>
                 <div className="relative">
                   <input
-                    name="monthPerDay"
+                    name="priceMonth"
                     type="number"
                     min={0}
-                    value={monthPerDay}
-                    onChange={e => setFormulaDayRate('priceMonth', Number(e.target.value))}
+                    value={formData.priceMonth ?? 0}
+                    onChange={handleChange}
                     className="input-saas pr-12"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
@@ -668,15 +688,22 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
                       >
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-5">
                           {priceRows.map(row => {
-                            const dzd = Number(formData[row.key] ?? 0);
-                            const converted = convertFromDzd(dzd, code, rate);
+                            const converted = convertFromDzd(row.dzd, code, rate);
+                            const convertedTotal = row.totalDzd !== undefined
+                              ? convertFromDzd(row.totalDzd, code, rate)
+                              : undefined;
                             return (
                               <div key={row.key} className="rounded-xl bg-white border border-saas-border px-4 py-3">
                                 <p className="text-[9px] font-black uppercase tracking-[0.18em] text-saas-text-muted">{row.label}</p>
                                 <p className="text-lg font-black text-[#0284C7] leading-tight mt-0.5">
                                   {rate > 0 ? formatCurrency(converted, code) : '—'}
                                 </p>
-                                <p className="text-[10px] text-saas-text-muted">{dzd.toLocaleString('fr-FR')} DA</p>
+                                <p className="text-[10px] text-saas-text-muted">{row.dzd.toLocaleString('fr-FR')} DA</p>
+                                {convertedTotal !== undefined && (
+                                  <p className="text-[10px] font-bold text-saas-text-muted mt-0.5">
+                                    ({rate > 0 ? formatCurrency(convertedTotal, code) : '—'} {row.totalLabel})
+                                  </p>
+                                )}
                               </div>
                             );
                           })}

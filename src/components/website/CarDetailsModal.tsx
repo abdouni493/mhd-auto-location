@@ -132,7 +132,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
                   {{ fr: 'DA / jour en semaine', ar: 'د.ج / يوم بصيغة أسبوع' }[lang]}
                 </p>
                 <p className="text-xs font-bold mt-0.5" style={{ color: '#DC2626' }}>
-                  ({weekTotal(car).toLocaleString()} {{ fr: `DA / ${WEEK_DAYS} j`, ar: `د.ج / ${WEEK_DAYS} أيام` }[lang]})
+                  (× {WEEK_DAYS} = {weekTotal(car).toLocaleString()} {{ fr: 'DA / sem.', ar: 'د.ج / أسبوع' }[lang]})
                 </p>
               </div>
               <div className="vel-glass rounded-xl p-4 text-center">
@@ -143,7 +143,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
                   {{ fr: 'DA / jour au mois', ar: 'د.ج / يوم بصيغة شهر' }[lang]}
                 </p>
                 <p className="text-xs font-bold mt-0.5" style={{ color: '#DC2626' }}>
-                  ({monthTotal(car).toLocaleString()} {{ fr: `DA / ${MONTH_DAYS} j`, ar: `د.ج / ${MONTH_DAYS} يوماً` }[lang]})
+                  (× {MONTH_DAYS} = {monthTotal(car).toLocaleString()} {{ fr: 'DA / mois', ar: 'د.ج / شهر' }[lang]})
                 </p>
               </div>
             </div>
