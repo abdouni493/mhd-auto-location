@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, Loader2, Pencil, RefreshCcw, Ticket, CheckCircle2, XCircle, X } from 'lucide-react';
 import { useWizard } from './WizardContext';
 import { SectionCard, SectionTitle, FieldLabel, inputClass, inputStyle, focusInput, blurInput, C, fromYmd } from './wizardUi';
+import { WEEK_DAYS, MONTH_DAYS } from '../../../utils/pricing';
 
 /**
  * Étape 5 — Récapitulatif + confirmation.
@@ -22,6 +23,38 @@ export const StepRecap: React.FC = () => {
   } = useWizard();
 
   if (!car) return null;
+
+  /**
+   * Tranches facturées : mois entiers, puis semaines entières, puis jours
+   * isolés. `dayCount` = nombre de jours d'une tranche (30 / 7 / 1), `count` =
+   * combien de fois cette tranche est facturée.
+   */
+  const priceBrackets = [
+    {
+      key: 'months',
+      count: rental.months,
+      label: `${rental.months} × ${{ fr: rental.months > 1 ? 'mois' : 'mois', ar: 'شهر' }[lang]}`,
+      perDay: rental.monthDayRate,
+      dayCount: MONTH_DAYS,
+      amount: rental.monthsAmount,
+    },
+    {
+      key: 'weeks',
+      count: rental.weeks,
+      label: `${rental.weeks} × ${{ fr: rental.weeks > 1 ? 'semaines' : 'semaine', ar: 'أسبوع' }[lang]}`,
+      perDay: rental.weekDayRate,
+      dayCount: WEEK_DAYS,
+      amount: rental.weeksAmount,
+    },
+    {
+      key: 'days',
+      count: rental.extraDays,
+      label: `${rental.extraDays} × ${{ fr: rental.extraDays > 1 ? 'jours' : 'jour', ar: 'يوم' }[lang]}`,
+      perDay: rental.dayRate,
+      dayCount: 1,
+      amount: rental.extraDaysAmount,
+    },
+  ].filter(b => b.count > 0);
 
   const agencyName = (id: string) => agencies.find(a => a.id === id)?.name || '—';
   const effectiveReturnAgency = differentReturnAgency ? returnAgency : departureAgency;
@@ -129,23 +162,33 @@ export const StepRecap: React.FC = () => {
       <SectionCard>
         <SectionTitle>💰 {{ fr: 'Tarification', ar: 'التسعير' }[lang]}</SectionTitle>
         <div className="space-y-3">
-          <div className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'rgba(15,23,42,0.03)' }}>
-            <span className="text-vel-slate">
-              {[
-                rental.months > 0
-                  ? `${rental.months} × ${{ fr: 'mois', ar: 'شهر' }[lang]} (${rental.monthTotal.toLocaleString()})`
-                  : null,
-                rental.weeks > 0
-                  ? `${rental.weeks} × ${{ fr: 'sem.', ar: 'أسبوع' }[lang]} (${rental.weekTotal.toLocaleString()})`
-                  : null,
-                rental.extraDays > 0
-                  ? `${rental.extraDays} × ${{ fr: 'j', ar: 'يوم' }[lang]} (${rental.dayRate.toLocaleString()})`
-                  : null,
-              ].filter(Boolean).join(' + ') || `${days} ${{ fr: 'j', ar: 'يوم' }[lang]}`}
-            </span>
-            <span className="font-bold text-vel-ink">{fx(basePrice)}</span>
-          </div>
+          {/* Une ligne par tranche facturée (mois → semaines → jours), chacune
+              détaillée « tarif journalier × nombre de jours » pour que le
+              client voie exactement d'où sort le montant. */}
+          {priceBrackets.map(b => (
+            <div key={b.key} className="flex justify-between items-center gap-3 px-4 py-3 rounded-xl text-sm"
+              style={{ background: 'rgba(15,23,42,0.03)' }}>
+              <span className="text-vel-slate">
+                <span className="font-bold text-vel-ink">{b.label}</span>
+                <span className="block text-xs text-vel-muted">
+                  {b.perDay.toLocaleString()} {{ fr: 'DA/j', ar: 'د.ج/ي' }[lang]} × {b.dayCount} {{ fr: 'j', ar: 'يوم' }[lang]}
+                  {b.count > 1 && <> × {b.count}</>}
+                </span>
+              </span>
+              <span className="font-bold text-vel-ink whitespace-nowrap">{fx(b.amount)}</span>
+            </div>
+          ))}
+
+          {/* Total du véhicule, affiché seulement s'il agrège plusieurs tranches. */}
+          {priceBrackets.length > 1 && (
+            <div className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
+              style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.16)' }}>
+              <span className="font-bold text-vel-slate">
+                {{ fr: 'Total véhicule', ar: 'إجمالي المركبة' }[lang]} ({days} {{ fr: 'j', ar: 'يوم' }[lang]})
+              </span>
+              <span className="font-black" style={{ color: C.accent }}>{fx(basePrice)}</span>
+            </div>
+          )}
 
           {/* Remise offre spéciale */}
           {promo && discount > 0 && (

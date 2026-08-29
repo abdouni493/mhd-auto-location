@@ -105,17 +105,17 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ isOpen, onClos
                     <span className="text-2xl font-black text-saas-text-main tracking-tighter">{car.priceDay.toLocaleString()}</span>
                   </div>
                   <div className="flex flex-col p-5 bg-white rounded-2xl border border-saas-border shadow-sm">
-                    <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Prix/Jour (semaine)</span>
+                    <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Prix/Jour · {WEEK_DAYS} j</span>
                     <span className="text-2xl font-black text-saas-text-main tracking-tighter">{weekDayRate(car).toLocaleString()}</span>
                     <span className="text-xs font-bold text-saas-primary-via mt-0.5">
-                      (× {WEEK_DAYS} = {weekTotal(car).toLocaleString()} DA / sem.)
+                      ({weekTotal(car).toLocaleString()} DA / sem.)
                     </span>
                   </div>
                   <div className="flex flex-col p-5 bg-white rounded-2xl border border-saas-border shadow-sm">
-                    <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Prix/Jour (mois)</span>
+                    <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Prix/Jour · {MONTH_DAYS} j</span>
                     <span className="text-2xl font-black text-saas-text-main tracking-tighter">{monthDayRate(car).toLocaleString()}</span>
                     <span className="text-xs font-bold text-saas-primary-via mt-0.5">
-                      (× {MONTH_DAYS} = {monthTotal(car).toLocaleString()} DA / mois)
+                      ({monthTotal(car).toLocaleString()} DA / mois)
                     </span>
                   </div>
                   <div className="flex flex-col p-5 bg-white rounded-2xl border border-saas-border shadow-sm">

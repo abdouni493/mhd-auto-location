@@ -20,7 +20,7 @@ import {
  *
  * Les formules semaine et mois sont annoncées au TARIF JOURNALIER (c'est lui
  * qui se compare au tarif « à la journée »), le total de la formule étant
- * rappelé entre parenthèses.
+ * rappelé entre parenthèses juste en dessous.
  */
 export const CarPriceBoard: React.FC<{
   lang: Language;
@@ -31,19 +31,18 @@ export const CarPriceBoard: React.FC<{
 }> = ({ lang, car, promo, variant = 'card' }) => {
   const { display, active } = useWebsiteCurrency();
 
+  const perDay = { fr: '/j', ar: '/ي' }[lang];
+
   const rows: {
     key: string;
+    /** Durée de la formule : c'est elle qui titre la ligne. */
     label: string;
     /** Montant mis en avant : tarif journalier de la formule. */
     dzd: number;
     /** Ancien tarif barré (promotion). */
     old?: number;
-    /** Total de la formule (tarif journalier × `multiplier`). */
+    /** Total de la formule, affiché entre parenthèses sous le tarif. */
     totalDzd?: number;
-    /** Nombre de jours de la formule, rappelé dans le calcul affiché. */
-    multiplier?: number;
-    /** Suffixe du total entre parenthèses (« / semaine », « / mois »). */
-    totalSuffix?: string;
     isDeposit?: boolean;
   }[] = [
     {
@@ -54,19 +53,15 @@ export const CarPriceBoard: React.FC<{
     },
     {
       key: 'week',
-      label: { fr: `Jour (${WEEK_DAYS} j)`, ar: `يوم (${WEEK_DAYS} أيام)` }[lang],
+      label: { fr: `Semaine · ${WEEK_DAYS} j`, ar: `أسبوع · ${WEEK_DAYS} أيام` }[lang],
       dzd: weekDayRate(car),
       totalDzd: weekTotal(car),
-      multiplier: WEEK_DAYS,
-      totalSuffix: { fr: '/ sem.', ar: '/ أسبوع' }[lang],
     },
     {
       key: 'month',
-      label: { fr: `Jour (${MONTH_DAYS} j)`, ar: `يوم (${MONTH_DAYS} يوماً)` }[lang],
+      label: { fr: `Mois · ${MONTH_DAYS} j`, ar: `شهر · ${MONTH_DAYS} يوماً` }[lang],
       dzd: monthDayRate(car),
       totalDzd: monthTotal(car),
-      multiplier: MONTH_DAYS,
-      totalSuffix: { fr: '/ mois', ar: '/ شهر' }[lang],
     },
     { key: 'deposit', label: { fr: 'Caution', ar: 'الكفالة' }[lang], dzd: car.deposit, isDeposit: true },
   ];
@@ -101,20 +96,24 @@ export const CarPriceBoard: React.FC<{
         {rows.map(r => (
           <div
             key={r.key}
-            className={`flex justify-between items-baseline ${textSize} ${r.isDeposit ? 'pt-1' : ''}`}
+            className={`flex justify-between items-start gap-3 ${textSize} ${r.isDeposit ? 'pt-1.5' : ''}`}
             style={r.isDeposit ? { borderTop: '1px solid rgba(15,23,42,0.06)' } : undefined}
           >
-            <span className="text-vel-muted">{r.label}</span>
-            <span className={`font-black ${valueSize}`} style={{ color: r.isDeposit ? 'rgba(248,113,113,0.95)' : '#DC2626' }}>
-              {r.old !== undefined && (
-                <span className="line-through mr-1 font-medium" style={{ color: 'rgba(148,163,184,0.8)' }}>
-                  {fmt(r.old, code)}
-                </span>
-              )}
-              {fmt(r.dzd, code)}
+            <span className="text-vel-muted leading-snug">{r.label}</span>
+            <span className="text-right leading-snug whitespace-nowrap">
+              <span className={`font-black ${valueSize}`} style={{ color: r.isDeposit ? 'rgba(248,113,113,0.95)' : '#DC2626' }}>
+                {r.old !== undefined && (
+                  <span className="line-through mr-1 font-medium" style={{ color: 'rgba(148,163,184,0.8)' }}>
+                    {fmt(r.old, code)}
+                  </span>
+                )}
+                {fmt(r.dzd, code)}
+                {!r.isDeposit && <span className="font-bold opacity-60">{perDay}</span>}
+              </span>
+              {/* Total de la formule : le montant réellement facturé. */}
               {r.totalDzd !== undefined && (
-                <span className="ml-1 font-medium" style={{ color: 'var(--color-vel-slate)' }}>
-                  (× {r.multiplier} = {fmt(r.totalDzd, code)} {r.totalSuffix})
+                <span className="block font-bold text-vel-muted">
+                  ({fmt(r.totalDzd, code)})
                 </span>
               )}
             </span>
@@ -154,13 +153,13 @@ export const CarPriceBoard: React.FC<{
                 key={r.key}
                 style={r.isDeposit ? { borderTop: '1px solid rgba(15,23,42,0.08)' } : undefined}
               >
-                <td className={`${compact ? 'px-2.5 py-1 text-[10px]' : 'px-4 py-2 text-sm'} text-vel-muted whitespace-nowrap`}>
+                <td className={`${compact ? 'px-2.5 py-1 text-[10px]' : 'px-4 py-2 text-sm'} text-vel-muted whitespace-nowrap align-top`}>
                   {r.label}
                 </td>
                 {currencies.map(code => (
                   <td
                     key={code}
-                    className={`text-right ${compact ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-sm'} font-bold whitespace-nowrap`}
+                    className={`text-right ${compact ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-sm'} font-bold whitespace-nowrap align-top`}
                     style={{
                       color: r.isDeposit
                         ? 'rgba(248,113,113,0.95)'
@@ -173,9 +172,10 @@ export const CarPriceBoard: React.FC<{
                       </span>
                     )}
                     {fmt(r.dzd, code)}
+                    {!r.isDeposit && <span className="font-bold opacity-60">{perDay}</span>}
                     {r.totalDzd !== undefined && (
-                      <span className="block font-medium opacity-70">
-                        (× {r.multiplier} = {fmt(r.totalDzd, code)} {r.totalSuffix})
+                      <span className="block font-bold opacity-65">
+                        ({fmt(r.totalDzd, code)})
                       </span>
                     )}
                   </td>

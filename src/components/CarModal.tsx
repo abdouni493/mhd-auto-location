@@ -529,7 +529,7 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
                 </div>
                 <p className="text-[11px] font-bold text-[#DC2626] min-h-[1.25rem]">
-                  {lang === 'fr' ? 'Total semaine' : 'إجمالي الأسبوع'} = {weekPerDay.toLocaleString('fr-FR')} × {WEEK_DAYS} ={' '}
+                  {lang === 'fr' ? 'Total semaine' : 'إجمالي الأسبوع'} :{' '}
                   <span className="font-black">{weekTotalDzd.toLocaleString('fr-FR')} DA</span>
                 </p>
               </div>
@@ -551,7 +551,7 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
                 </div>
                 <p className="text-[11px] font-bold text-[#DC2626] min-h-[1.25rem]">
-                  {lang === 'fr' ? 'Total mois' : 'إجمالي الشهر'} = {monthPerDay.toLocaleString('fr-FR')} × {MONTH_DAYS} ={' '}
+                  {lang === 'fr' ? 'Total mois' : 'إجمالي الشهر'} :{' '}
                   <span className="font-black">{monthTotalDzd.toLocaleString('fr-FR')} DA</span>
                 </p>
               </div>

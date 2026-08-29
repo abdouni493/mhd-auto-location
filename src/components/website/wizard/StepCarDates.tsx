@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Search, CalendarCheck, Loader2 } from 'lucide-react';
 import { Car } from '../../../types';
 import { useWizard } from './WizardContext';
+import { WEEK_DAYS, MONTH_DAYS, weekDayRate, monthDayRate, weekTotal, monthTotal } from '../../../utils/pricing';
 import { CarBookingCalendar } from './CarBookingCalendar';
 import { SectionCard, SectionTitle, FieldLabel, inputClass, inputStyle, focusInput, blurInput, C, fromYmd } from './wizardUi';
 
@@ -156,6 +157,37 @@ export const StepCarDates: React.FC = () => {
                       <ChevronRight size={15} style={{ color: C.accent }} />
                     </div>
                   </div>
+
+                  {/* Tarifs dégressifs : tarif journalier de la formule, et
+                      juste en dessous le total réellement facturé. */}
+                  <div className="mt-3 pt-3 grid grid-cols-2 gap-2 text-left"
+                    style={{ borderTop: '1px solid rgba(15,23,42,0.07)' }}>
+                    {[
+                      {
+                        key: 'week',
+                        label: { fr: `Semaine · ${WEEK_DAYS} j`, ar: `أسبوع · ${WEEK_DAYS} أيام` }[lang],
+                        perDay: weekDayRate(c),
+                        total: weekTotal(c),
+                      },
+                      {
+                        key: 'month',
+                        label: { fr: `Mois · ${MONTH_DAYS} j`, ar: `شهر · ${MONTH_DAYS} يوماً` }[lang],
+                        perDay: monthDayRate(c),
+                        total: monthTotal(c),
+                      },
+                    ].map(f => (
+                      <div key={f.key} className="rounded-lg px-2.5 py-2" style={{ background: 'rgba(15,23,42,0.035)' }}>
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-vel-muted truncate">{f.label}</p>
+                        <p className="text-[13px] font-black text-vel-ink leading-tight">
+                          {f.perDay.toLocaleString()}
+                          <span className="text-[10px] font-bold text-vel-muted">{{ fr: ' DA/j', ar: ' د.ج/ي' }[lang]}</span>
+                        </p>
+                        <p className="text-[10px] font-bold text-vel-muted leading-tight">
+                          ({f.total.toLocaleString()})
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </motion.button>
             ))}
@@ -189,6 +221,36 @@ export const StepCarDates: React.FC = () => {
                 </>
               : <>{car.priceDay.toLocaleString()} DA/j</>}
           </p>
+          {/* Rappel des formules dégressives appliquées automatiquement dès
+              que la durée choisie atteint une semaine ou un mois. */}
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {[
+              {
+                key: 'week',
+                label: { fr: `${WEEK_DAYS} j`, ar: `${WEEK_DAYS} أيام` }[lang],
+                perDay: weekDayRate(car),
+                total: weekTotal(car),
+              },
+              {
+                key: 'month',
+                label: { fr: `${MONTH_DAYS} j`, ar: `${MONTH_DAYS} يوماً` }[lang],
+                perDay: monthDayRate(car),
+                total: monthTotal(car),
+              },
+            ].map(f => (
+              <span
+                key={f.key}
+                className="inline-flex items-baseline gap-1 px-2 py-1 rounded-lg text-[11px] whitespace-nowrap"
+                style={{ background: 'rgba(15,23,42,0.045)' }}
+              >
+                <span className="font-bold text-vel-muted">{f.label}</span>
+                <span className="font-black text-vel-slate">
+                  {f.perDay.toLocaleString()}{{ fr: ' DA/j', ar: ' د.ج/ي' }[lang]}
+                </span>
+                <span className="font-bold text-vel-muted">({f.total.toLocaleString()})</span>
+              </span>
+            ))}
+          </div>
         </div>
         <button
           onClick={() => selectCar(null)}

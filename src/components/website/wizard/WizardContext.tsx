@@ -390,7 +390,19 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
   // automatiquement du total « formule » du véhicule.
   const rental = computeRentalBase(car, days);
   const basePrice = car ? rental.total : 0;
-  const discount = promo && car ? Math.max(0, (car.priceDay - promo.newPrice) * days) : 0;
+
+  // Offre spéciale : elle fixe un tarif JOURNALIER promotionnel. Il remplace
+  // le tarif de chaque tranche uniquement lorsqu'il est plus avantageux — la
+  // promotion et la dégressivité ne se cumulent donc jamais. La remise
+  // affichée est l'écart avec le prix catalogue.
+  const promoRental = promo && car
+    ? computeRentalBase({
+        priceDay: Math.min(rental.dayRate, promo.newPrice),
+        priceWeek: Math.min(rental.weekDayRate, promo.newPrice),
+        priceMonth: Math.min(rental.monthDayRate, promo.newPrice),
+      }, days)
+    : null;
+  const discount = promoRental ? Math.max(0, basePrice - promoRental.total) : 0;
   const servicesTotal = selectedServices.reduce((sum, s) => sum + s.price, 0);
   const assuranceTotal = selectedAssurance ? selectedAssurance.pricePerDay * days : 0;
   const subtotal = Math.max(0, basePrice - discount + servicesTotal + assuranceTotal);

@@ -1204,14 +1204,14 @@ export const Step2VehicleSelection: React.FC<{
                               <span className="font-bold text-green-600">{car.priceDay.toLocaleString()} DA</span>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Jour (semaine)' : 'السعر/يوم (أسبوع)'}</span>
+                              <span className="text-sm text-slate-600">{lang === 'fr' ? `Prix/Jour · ${WEEK_DAYS} j` : `السعر/يوم · ${WEEK_DAYS} أيام`}</span>
                               <span className="font-bold text-blue-600">
                                 {weekDayRate(car).toLocaleString()} DA
                                 <span className="font-medium text-slate-500"> ({weekTotal(car).toLocaleString()} DA)</span>
                               </span>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Jour (mois)' : 'السعر/يوم (شهر)'}</span>
+                              <span className="text-sm text-slate-600">{lang === 'fr' ? `Prix/Jour · ${MONTH_DAYS} j` : `السعر/يوم · ${MONTH_DAYS} يوماً`}</span>
                               <span className="font-bold text-purple-600">
                                 {monthDayRate(car).toLocaleString()} DA
                                 <span className="font-medium text-slate-500"> ({monthTotal(car).toLocaleString()} DA)</span>
@@ -3256,12 +3256,12 @@ export const Step6FinalPricing: React.FC<{
               <p className="text-2xl font-black text-blue-900">{formData.step2.selectedCar.priceDay.toLocaleString()} DA</p>
             </div>
             <div className="text-center">
-              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? 'Prix/Jour (semaine)' : 'السعر/يوم (أسبوع)'}</p>
+              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? `Prix/Jour · ${WEEK_DAYS} j` : `السعر/يوم · ${WEEK_DAYS} أيام`}</p>
               <p className="text-2xl font-black text-blue-900">{weekDayRate(formData.step2.selectedCar).toLocaleString()} DA</p>
               <p className="text-xs font-bold text-blue-600">({weekTotal(formData.step2.selectedCar).toLocaleString()} DA / {lang === 'fr' ? 'semaine' : 'أسبوع'})</p>
             </div>
             <div className="text-center">
-              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? 'Prix/Jour (mois)' : 'السعر/يوم (شهر)'}</p>
+              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? `Prix/Jour · ${MONTH_DAYS} j` : `السعر/يوم · ${MONTH_DAYS} يوماً`}</p>
               <p className="text-2xl font-black text-blue-900">{monthDayRate(formData.step2.selectedCar).toLocaleString()} DA</p>
               <p className="text-xs font-bold text-blue-600">({monthTotal(formData.step2.selectedCar).toLocaleString()} DA / {lang === 'fr' ? 'mois' : 'شهر'})</p>
             </div>
