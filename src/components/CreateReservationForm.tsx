@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language, ReservationDetails, Client, Car, VehicleInspection, Payment, AdditionalService, ProtectionAssurance } from '../types';
+import {
+  WEEK_DAYS, MONTH_DAYS,
+  computeRentalBase, weekDayRate, monthDayRate, weekTotal, monthTotal,
+} from '../utils/pricing';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, ArrowRight, Calendar, Clock, MapPin, Car as CarIcon, User, CreditCard, CheckCircle, Plus, Search, X, Camera, Fuel, AlertTriangle, Check, Upload, PenTool } from 'lucide-react';
 import { AGENCIES, CAR_IMAGES } from '../constants';
@@ -1200,12 +1204,18 @@ export const Step2VehicleSelection: React.FC<{
                               <span className="font-bold text-green-600">{car.priceDay.toLocaleString()} DA</span>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Semaine' : 'السعر/أسبوع'}</span>
-                              <span className="font-bold text-blue-600">{car.priceWeek.toLocaleString()} DA</span>
+                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Jour (semaine)' : 'السعر/يوم (أسبوع)'}</span>
+                              <span className="font-bold text-blue-600">
+                                {weekDayRate(car).toLocaleString()} DA
+                                <span className="font-medium text-slate-500"> ({weekTotal(car).toLocaleString()} DA)</span>
+                              </span>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Mois' : 'السعر/شهر'}</span>
-                              <span className="font-bold text-purple-600">{car.priceMonth.toLocaleString()} DA</span>
+                              <span className="text-sm text-slate-600">{lang === 'fr' ? 'Prix/Jour (mois)' : 'السعر/يوم (شهر)'}</span>
+                              <span className="font-bold text-purple-600">
+                                {monthDayRate(car).toLocaleString()} DA
+                                <span className="font-medium text-slate-500"> ({monthTotal(car).toLocaleString()} DA)</span>
+                              </span>
                             </div>
                           </div>
                           <div className="mt-4 pt-4 border-t border-slate-200">
@@ -3066,30 +3076,18 @@ export const Step6FinalPricing: React.FC<{
     ? Math.ceil((new Date(formData.step1.returnDate).getTime() - new Date(formData.step1.departureDate).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
-  let calculatedBasePrice = 0;
-  let weeklyPrice = 0;
-  let monthlyPrice = 0;
-  let remainingPrice = 0;
-  // Always define weeks and remainingDays for UI
-  let weeks = 0;
-  let remainingDays = 0;
-  if (days === 7) {
-    calculatedBasePrice = selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7;
-    weeklyPrice = calculatedBasePrice;
-    weeks = 1;
-    remainingDays = 0;
-  } else if (days === 30) {
-    calculatedBasePrice = selectedCar?.priceMonth || (selectedCar?.priceDay || 0) * 30;
-    monthlyPrice = calculatedBasePrice;
-    weeks = 0;
-    remainingDays = 0;
-  } else {
-    weeks = Math.floor(days / 7);
-    remainingDays = days % 7;
-    weeklyPrice = (selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7) * weeks;
-    remainingPrice = (selectedCar?.priceDay || 0) * remainingDays;
-    calculatedBasePrice = weeklyPrice + remainingPrice;
-  }
+  // La durée est facturée par tranches décroissantes : mois entiers au total
+  // mois, semaines entières au total semaine, puis les jours isolés au tarif
+  // journalier. Une période d'exactement 7 ou 30 jours tombe donc bien sur le
+  // total « formule » saisi sur le véhicule.
+  const rental = computeRentalBase(selectedCar, days);
+  const calculatedBasePrice = rental.total;
+  const monthlyPrice = rental.monthsAmount;
+  const weeklyPrice = rental.weeksAmount;
+  const remainingPrice = rental.extraDaysAmount;
+  const months = rental.months;
+  const weeks = rental.weeks;
+  const remainingDays = rental.extraDays;
 
   const servicesTotal = formData.step5?.additionalServices?.reduce((sum, s) => sum + s.price, 0) || 0;
   // Assurance de protection : prix/jour × nombre de jours
@@ -3258,12 +3256,14 @@ export const Step6FinalPricing: React.FC<{
               <p className="text-2xl font-black text-blue-900">{formData.step2.selectedCar.priceDay.toLocaleString()} DA</p>
             </div>
             <div className="text-center">
-              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? 'Prix/Semaine' : 'السعر/أسبوع'}</p>
-              <p className="text-2xl font-black text-blue-900">{(formData.step2.selectedCar.priceWeek || formData.step2.selectedCar.priceDay * 7).toLocaleString()} DA</p>
+              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? 'Prix/Jour (semaine)' : 'السعر/يوم (أسبوع)'}</p>
+              <p className="text-2xl font-black text-blue-900">{weekDayRate(formData.step2.selectedCar).toLocaleString()} DA</p>
+              <p className="text-xs font-bold text-blue-600">({weekTotal(formData.step2.selectedCar).toLocaleString()} DA / {lang === 'fr' ? 'semaine' : 'أسبوع'})</p>
             </div>
             <div className="text-center">
-              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? 'Prix/Mois' : 'السعر/شهر'}</p>
-              <p className="text-2xl font-black text-blue-900">{(formData.step2.selectedCar.priceMonth || formData.step2.selectedCar.priceDay * 30).toLocaleString()} DA</p>
+              <p className="text-sm text-blue-600 font-bold">{lang === 'fr' ? 'Prix/Jour (mois)' : 'السعر/يوم (شهر)'}</p>
+              <p className="text-2xl font-black text-blue-900">{monthDayRate(formData.step2.selectedCar).toLocaleString()} DA</p>
+              <p className="text-xs font-bold text-blue-600">({monthTotal(formData.step2.selectedCar).toLocaleString()} DA / {lang === 'fr' ? 'mois' : 'شهر'})</p>
             </div>
           </div>
         </div>
@@ -3398,27 +3398,27 @@ export const Step6FinalPricing: React.FC<{
               <div className="bg-slate-50 rounded-lg p-4">
                 <h5 className="font-bold text-slate-900 mb-3">{lang === 'fr' ? 'Prix de Base du Véhicule' : 'سعر المركبة الأساسي'}</h5>
                 <div className="space-y-2">
-                  {days === 7 && (
+                  {months > 0 && (
                     <div className="flex justify-between items-center">
-                      <span>1 {lang === 'fr' ? 'semaine' : 'أسبوع'} × {(selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7).toLocaleString()} DA</span>
-                      <span className="font-bold">{weeklyPrice.toLocaleString()} DA</span>
-                    </div>
-                  )}
-                  {days === 30 && (
-                    <div className="flex justify-between items-center">
-                      <span>1 {lang === 'fr' ? 'mois' : 'شهر'} × {(selectedCar?.priceMonth || (selectedCar?.priceDay || 0) * 30).toLocaleString()} DA</span>
+                      <span>
+                        {months} {lang === 'fr' ? (months > 1 ? 'mois' : 'mois') : 'شهر'} × {rental.monthTotal.toLocaleString()} DA
+                        <span className="text-slate-500"> ({monthDayRate(selectedCar).toLocaleString()} DA × {MONTH_DAYS} {lang === 'fr' ? 'j' : 'ي'})</span>
+                      </span>
                       <span className="font-bold">{monthlyPrice.toLocaleString()} DA</span>
                     </div>
                   )}
-                  {days !== 7 && days !== 30 && weeklyPrice > 0 && (
+                  {weeks > 0 && (
                     <div className="flex justify-between items-center">
-                      <span>{Math.floor(days / 7)} {lang === 'fr' ? 'semaine(s)' : 'أسبوع'} × {(selectedCar?.priceWeek || (selectedCar?.priceDay || 0) * 7).toLocaleString()} DA</span>
+                      <span>
+                        {weeks} {lang === 'fr' ? (weeks > 1 ? 'semaines' : 'semaine') : 'أسبوع'} × {rental.weekTotal.toLocaleString()} DA
+                        <span className="text-slate-500"> ({weekDayRate(selectedCar).toLocaleString()} DA × {WEEK_DAYS} {lang === 'fr' ? 'j' : 'ي'})</span>
+                      </span>
                       <span className="font-bold">{weeklyPrice.toLocaleString()} DA</span>
                     </div>
                   )}
-                  {days !== 7 && days !== 30 && remainingPrice > 0 && (
+                  {remainingDays > 0 && (
                     <div className="flex justify-between items-center">
-                      <span>{days % 7} {lang === 'fr' ? 'jour(s)' : 'يوم'} × {(selectedCar?.priceDay || 0).toLocaleString()} DA</span>
+                      <span>{remainingDays} {lang === 'fr' ? 'jour(s)' : 'يوم'} × {rental.dayRate.toLocaleString()} DA</span>
                       <span className="font-bold">{remainingPrice.toLocaleString()} DA</span>
                     </div>
                   )}

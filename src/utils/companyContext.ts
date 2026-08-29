@@ -8,24 +8,36 @@ import { Company } from '../types';
  *     classes statiques sans accès au contexte React — doit lire de façon
  *     SYNCHRONE l'agence courante pour filtrer/estampiller les requêtes.
  *     → un singleton module (`companyContext`) tenu à jour à la connexion.
- *  2. L'interface (switcher, badges, garde d'accès) doit RÉAGIR au changement.
+ *  2. L'interface (badges, garde d'accès) doit RÉAGIR à la résolution.
  *     → un `CompanyProvider` React (voir `companyProvider.tsx`) qui alimente ce
  *        singleton puis expose les mêmes valeurs via un hook.
  *
- * Règle de scoping :
- *  - Admin d'agence (non super-admin) : figé sur SON `company_id`.
- *  - Super-admin : vue « Toutes les agences » par défaut (aucun filtre → voit
- *    tout, comme aujourd'hui, zéro régression), avec possibilité de basculer
- *    sur une agence précise. Ce choix est persistant.
+ * Règle de scoping — chacun ne voit QUE l'agence sous laquelle il s'est
+ * connecté ; il n'existe plus aucune bascule d'agence dans l'interface :
+ *  - Utilisateur rattaché à une agence : figé sur SON `company_id`.
+ *  - Compte racine sans `company_id` : vue combinée (aucun filtre), sinon
+ *    l'application serait vide pour lui.
  *
  * ⚠️ On ne touche JAMAIS au concept `agencies` (agences physiques de
  *    départ/retour) : la dimension métier ici est `company`.
  */
 
-/** Valeur sentinelle : vue combinée « toutes les agences » (super-admin). */
+/**
+ * Valeur sentinelle : aucun filtre d'agence. Réservée aux comptes racine sans
+ * `company_id` — plus aucun utilisateur ne peut y basculer depuis l'interface.
+ */
 export const ALL_COMPANIES = 'all';
 
-const ACTIVE_STORAGE_KEY = 'active_company_id_v1';
+/**
+ * Ancienne clé de persistance du sélecteur d'agence. Le sélecteur a été retiré :
+ * on nettoie la valeur résiduelle pour qu'un choix historique ne continue pas à
+ * restreindre (ou élargir) la vue d'un utilisateur.
+ */
+const LEGACY_ACTIVE_STORAGE_KEY = 'active_company_id_v1';
+
+function clearLegacyActive() {
+  try { localStorage.removeItem(LEGACY_ACTIVE_STORAGE_KEY); } catch { /* noop */ }
+}
 
 interface CompanyState {
   /** Agence de rattachement de l'utilisateur connecté (fixe). */
@@ -33,7 +45,7 @@ interface CompanyState {
   isSuperAdmin: boolean;
   /** Agence principale (is_primary) — héberge les voitures non explicitement liées. */
   primaryCompanyId: string | null;
-  /** Vue courante : ALL_COMPANIES ou l'id d'une agence. */
+  /** Périmètre courant : l'agence de l'utilisateur, ou ALL_COMPANIES. */
   activeCompanyId: string;
   /** true dès que les infos ont été résolues depuis `app_users`. */
   resolved: boolean;
@@ -61,31 +73,19 @@ function emit() {
   listeners.forEach(l => { try { l(); } catch { /* noop */ } });
 }
 
-function readPersistedActive(): string | null {
-  try { return localStorage.getItem(ACTIVE_STORAGE_KEY); } catch { return null; }
-}
-function persistActive(value: string) {
-  try { localStorage.setItem(ACTIVE_STORAGE_KEY, value); } catch { /* noop */ }
-}
-
 export const companyContext = {
   /**
    * Renseigne l'identité de l'utilisateur (après connexion / restauration).
-   * Résout ensuite l'agence active : figée pour un admin scoppé, restaurée
-   * depuis le stockage pour un super-admin (défaut : toutes les agences).
+   * Le périmètre est TOUJOURS l'agence de rattachement du compte connecté :
+   * il n'y a plus de bascule ni de choix persisté. Seul un compte racine sans
+   * `company_id` reste en vue combinée.
    */
   setUserInfo(userCompanyId: string | null, isSuperAdmin: boolean) {
+    clearLegacyActive();
     state.userCompanyId = userCompanyId;
     state.isSuperAdmin = isSuperAdmin;
     state.resolved = true;
-
-    if (!isSuperAdmin) {
-      // Admin d'agence : toujours limité à sa propre agence.
-      state.activeCompanyId = userCompanyId || ALL_COMPANIES;
-    } else {
-      const persisted = readPersistedActive();
-      state.activeCompanyId = persisted || ALL_COMPANIES;
-    }
+    state.activeCompanyId = userCompanyId || ALL_COMPANIES;
     emit();
   },
 
@@ -93,32 +93,21 @@ export const companyContext = {
   setCompanies(companies: Company[]) {
     const primary = companies.find(c => c.isPrimary) || companies[0];
     state.primaryCompanyId = primary?.id || state.primaryCompanyId || null;
-    // Si la vue active pointe une agence disparue → repli « toutes agences ».
+    // Si l'agence de rattachement a disparu → repli sans filtre plutôt que de
+    // laisser l'utilisateur sur un périmètre inexistant (donc vide).
     if (
-      state.isSuperAdmin &&
       state.activeCompanyId !== ALL_COMPANIES &&
       companies.length > 0 &&
       !companies.some(c => c.id === state.activeCompanyId)
     ) {
       state.activeCompanyId = ALL_COMPANIES;
-      persistActive(ALL_COMPANIES);
     }
-    emit();
-  },
-
-  /**
-   * Change l'agence affichée (super-admin uniquement). Persiste le choix.
-   * Le rechargement effectif de la page est déclenché par l'appelant UI
-   * (`CompanyProvider.setActiveCompany`) pour garantir des données fraîches.
-   */
-  setActiveCompanyId(value: string) {
-    state.activeCompanyId = value;
-    persistActive(value);
     emit();
   },
 
   /** Réinitialise à la déconnexion. */
   reset() {
+    clearLegacyActive();
     state.userCompanyId = null;
     state.isSuperAdmin = true;
     state.primaryCompanyId = null;
@@ -135,17 +124,17 @@ export const companyContext = {
   isAllView() { return state.activeCompanyId === ALL_COMPANIES; },
 
   /**
-   * Id d'agence par lequel FILTRER les lectures, ou `null` = aucun filtre.
-   * `null` en vue « toutes agences » (super-admin) — comportement d'origine.
+   * Id d'agence par lequel FILTRER les lectures, ou `null` = aucun filtre
+   * (compte racine sans agence de rattachement).
    */
   getScopeCompanyId(): string | null {
     return state.activeCompanyId === ALL_COMPANIES ? null : state.activeCompanyId;
   },
 
   /**
-   * Id d'agence à ESTAMPILLER sur les insertions. En vue « toutes agences »,
-   * on retombe sur l'agence de l'utilisateur (ou l'agence principale) ; si
-   * rien n'est connu, `null` laisse le trigger DB remplir la valeur.
+   * Id d'agence à ESTAMPILLER sur les insertions. Sans filtre, on retombe sur
+   * l'agence de l'utilisateur (ou l'agence principale) ; si rien n'est connu,
+   * `null` laisse le trigger DB remplir la valeur.
    */
   getWriteCompanyId(): string | null {
     if (state.activeCompanyId !== ALL_COMPANIES) return state.activeCompanyId;
@@ -173,7 +162,7 @@ export function scopeQuery<T>(query: T): T {
 
 /**
  * Une voiture est-elle visible dans le périmètre de l'agence active ?
- *  - vue « toutes agences » (super-admin) : toujours vrai ;
+ *  - aucun filtre (compte racine) : toujours vrai ;
  *  - agence précise : vrai si la voiture est liée à cette agence (table
  *    car_companies). Une voiture SANS aucun lien est rattachée à l'agence
  *    principale (compat. voitures historiques).

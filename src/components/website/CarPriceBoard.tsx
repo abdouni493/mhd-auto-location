@@ -5,6 +5,10 @@ import {
   CurrencyCode, CURRENCIES, ALL_CURRENCIES,
   isCurrencyEnabled, getCarRate, convertFromDzd, formatCurrency,
 } from '../../utils/currency';
+import {
+  WEEK_DAYS, MONTH_DAYS,
+  weekDayRate, monthDayRate, weekTotal, monthTotal,
+} from '../../utils/pricing';
 
 /**
  * Tableau des tarifs d'une voiture sur le site public.
@@ -13,6 +17,10 @@ import {
  * • « Toutes devises »   → une ligne par devise activée sur la voiture, avec
  *   le dinar en tête ; les tarifs restent alignés jour / semaine / mois /
  *   caution pour rester lisibles même avec trois devises.
+ *
+ * Les formules semaine et mois sont annoncées au TARIF JOURNALIER (c'est lui
+ * qui se compare au tarif « à la journée »), le total de la formule étant
+ * rappelé entre parenthèses.
  */
 export const CarPriceBoard: React.FC<{
   lang: Language;
@@ -23,10 +31,39 @@ export const CarPriceBoard: React.FC<{
 }> = ({ lang, car, promo, variant = 'card' }) => {
   const { display, active } = useWebsiteCurrency();
 
-  const rows = [
-    { key: 'day', label: { fr: 'Jour', ar: 'يوم' }[lang], dzd: promo ? promo.newPrice : car.priceDay, old: promo ? car.priceDay : undefined },
-    { key: 'week', label: { fr: 'Semaine', ar: 'أسبوع' }[lang], dzd: car.priceWeek },
-    { key: 'month', label: { fr: 'Mois', ar: 'شهر' }[lang], dzd: car.priceMonth },
+  const rows: {
+    key: string;
+    label: string;
+    /** Montant mis en avant : tarif journalier de la formule. */
+    dzd: number;
+    /** Ancien tarif barré (promotion). */
+    old?: number;
+    /** Total de la formule, affiché entre parenthèses. */
+    totalDzd?: number;
+    /** Suffixe du total entre parenthèses (« / semaine », « / mois »). */
+    totalSuffix?: string;
+    isDeposit?: boolean;
+  }[] = [
+    {
+      key: 'day',
+      label: { fr: 'Jour', ar: 'يوم' }[lang],
+      dzd: promo ? promo.newPrice : car.priceDay,
+      old: promo ? car.priceDay : undefined,
+    },
+    {
+      key: 'week',
+      label: { fr: `Jour (${WEEK_DAYS} j)`, ar: `يوم (${WEEK_DAYS} أيام)` }[lang],
+      dzd: weekDayRate(car),
+      totalDzd: weekTotal(car),
+      totalSuffix: { fr: '/ sem.', ar: '/ أسبوع' }[lang],
+    },
+    {
+      key: 'month',
+      label: { fr: `Jour (${MONTH_DAYS} j)`, ar: `يوم (${MONTH_DAYS} يوماً)` }[lang],
+      dzd: monthDayRate(car),
+      totalDzd: monthTotal(car),
+      totalSuffix: { fr: '/ mois', ar: '/ شهر' }[lang],
+    },
     { key: 'deposit', label: { fr: 'Caution', ar: 'الكفالة' }[lang], dzd: car.deposit, isDeposit: true },
   ];
 
@@ -71,6 +108,11 @@ export const CarPriceBoard: React.FC<{
                 </span>
               )}
               {fmt(r.dzd, code)}
+              {r.totalDzd !== undefined && (
+                <span className="ml-1 font-medium" style={{ color: 'var(--color-vel-slate)' }}>
+                  ({fmt(r.totalDzd, code)} {r.totalSuffix})
+                </span>
+              )}
             </span>
           </div>
         ))}
@@ -127,6 +169,11 @@ export const CarPriceBoard: React.FC<{
                       </span>
                     )}
                     {fmt(r.dzd, code)}
+                    {r.totalDzd !== undefined && (
+                      <span className="block font-medium opacity-70">
+                        ({fmt(r.totalDzd, code)} {r.totalSuffix})
+                      </span>
+                    )}
                   </td>
                 ))}
               </tr>

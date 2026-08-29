@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Language, ReservationDetails, Client, Car, Entreprise } from '../types';
+import { computeRentalBase } from '../utils/pricing';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, Grid3x3, CalendarDays, X, Zap, Gauge, Heart, ChevronDown } from 'lucide-react';
 import { ReservationDetailsView } from './ReservationDetailsView';
@@ -159,8 +160,8 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
             seats: dbCar.seats || 5,
             doors: dbCar.doors || 4,
             priceDay: Math.round(Number(dbCar.price_per_day)),
-            priceWeek: Math.round(Number(dbCar.price_week || dbCar.price_per_day * 2)),
-            priceMonth: Math.round(Number(dbCar.price_month || dbCar.price_per_day * 4)),
+            priceWeek: Math.round(Number(dbCar.price_week || dbCar.price_per_day * 7)),
+            priceMonth: Math.round(Number(dbCar.price_month || dbCar.price_per_day * 30)),
             deposit: Math.round(Number(dbCar.deposit || dbCar.price_per_day * 2)),
             images: dbCar.image_url ? [dbCar.image_url] : ['https://picsum.photos/seed/car/400/300'],
             mileage: dbCar.mileage || 0,
@@ -996,13 +997,9 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           // Financial calculations: compute base vehicle price from rates and days
           const servicesTotal = (reservation.additionalServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
           const days = Number(reservation.totalDays) || 0;
-          const weeks = Math.floor(days / 7);
-          const remainingDays = days % 7;
-          const priceDay = reservation.car?.priceDay || reservation.car?.priceDay || 0;
-          const priceWeek = reservation.car?.priceWeek || (priceDay * 7);
-          const weeklyPrice = priceWeek * weeks;
-          const remainingPrice = priceDay * remainingDays;
-          const basePrice = weeklyPrice + remainingPrice;
+          // Même barème que la création de réservation : mois, puis semaines,
+          // puis jours isolés.
+          const basePrice = computeRentalBase(reservation.car, days).total;
           const subtotal = basePrice + servicesTotal;
           const totalCost = subtotal + (Number(reservation.additionalFees) || 0) + (Number((reservation as any).tvaAmount) || 0);
           

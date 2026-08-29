@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Car, Language } from '../types';
 import { X } from 'lucide-react';
+import { WEEK_DAYS, MONTH_DAYS, weekDayRate, monthDayRate, weekTotal, monthTotal } from '../utils/pricing';
 
 interface CarDetailsModalProps {
   isOpen: boolean;
@@ -104,12 +105,18 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ isOpen, onClos
                     <span className="text-2xl font-black text-saas-text-main tracking-tighter">{car.priceDay.toLocaleString()}</span>
                   </div>
                   <div className="flex flex-col p-5 bg-white rounded-2xl border border-saas-border shadow-sm">
-                    <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Prix/Semaine</span>
-                    <span className="text-2xl font-black text-saas-text-main tracking-tighter">{car.priceWeek?.toLocaleString() || 'N/A'}</span>
+                    <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Prix/Jour (semaine)</span>
+                    <span className="text-2xl font-black text-saas-text-main tracking-tighter">{weekDayRate(car).toLocaleString()}</span>
+                    <span className="text-xs font-bold text-saas-primary-via mt-0.5">
+                      ({weekTotal(car).toLocaleString()} DA / {WEEK_DAYS} j)
+                    </span>
                   </div>
                   <div className="flex flex-col p-5 bg-white rounded-2xl border border-saas-border shadow-sm">
-                    <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Prix/Mois</span>
-                    <span className="text-2xl font-black text-saas-text-main tracking-tighter">{car.priceMonth?.toLocaleString() || 'N/A'}</span>
+                    <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Prix/Jour (mois)</span>
+                    <span className="text-2xl font-black text-saas-text-main tracking-tighter">{monthDayRate(car).toLocaleString()}</span>
+                    <span className="text-xs font-bold text-saas-primary-via mt-0.5">
+                      ({monthTotal(car).toLocaleString()} DA / {MONTH_DAYS} j)
+                    </span>
                   </div>
                   <div className="flex flex-col p-5 bg-white rounded-2xl border border-saas-border shadow-sm">
                     <span className="text-[9px] font-bold text-saas-text-muted uppercase tracking-widest mb-1.5">Caution</span>

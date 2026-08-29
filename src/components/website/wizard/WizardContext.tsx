@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Language, Car, Agency, SpecialOffer, ReservationStep2, AdditionalService, ProtectionAssurance } from '../../../types';
+import { computeRentalBase } from '../../../utils/pricing';
 import { DatabaseService } from '../../../services/DatabaseService';
 import { getCurrentSpecialOfferForCar } from '../../../utils/specialOffers';
 import { fromYmd } from './wizardUi';
@@ -123,6 +124,8 @@ interface WizardContextValue {
   days: number;
   promo: SpecialOffer | undefined;
   basePrice: number;
+  /** Ventilation mois / semaines / jours du prix de base. */
+  rental: ReturnType<typeof computeRentalBase>;
   discount: number;
   servicesTotal: number;
   assuranceTotal: number;
@@ -382,7 +385,11 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
   }, [range.from, range.to]);
 
   const promo = car ? getCurrentSpecialOfferForCar(car.id, specialOffers) : undefined;
-  const basePrice = car ? car.priceDay * days : 0;
+  // Barème identique au back-office : mois entiers, puis semaines entières,
+  // puis jours isolés. Une réservation de 7 ou 30 jours bénéficie donc
+  // automatiquement du total « formule » du véhicule.
+  const rental = computeRentalBase(car, days);
+  const basePrice = car ? rental.total : 0;
   const discount = promo && car ? Math.max(0, (car.priceDay - promo.newPrice) * days) : 0;
   const servicesTotal = selectedServices.reduce((sum, s) => sum + s.price, 0);
   const assuranceTotal = selectedAssurance ? selectedAssurance.pricePerDay * days : 0;
@@ -546,7 +553,7 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     availableServices, loadingServices, selectedServices, toggleService,
     notes, setNotes,
     promoInput, setPromoInput, promoStatus, promoDiscountPct, verifyPromo, clearPromo,
-    days, promo, basePrice, discount, servicesTotal, assuranceTotal, promoDiscount, total,
+    days, promo, basePrice, rental, discount, servicesTotal, assuranceTotal, promoDiscount, total,
     currency, currencyRate, currencySupported, fx, fxValue,
     isSubmitting, submitError, submitted, submit,
   };

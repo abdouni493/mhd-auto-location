@@ -15,7 +15,7 @@ export const StepRecap: React.FC = () => {
     lang, car, range, departureTime, returnTime,
     agencies, departureAgency, returnAgency, differentReturnAgency,
     personal, selectedServices, selectedAssurance, notes, setNotes,
-    days, promo, basePrice, discount, servicesTotal, assuranceTotal, total,
+    days, promo, basePrice, rental, discount, servicesTotal, assuranceTotal, total,
     currency, currencyRate, currencySupported, fx,
     promoInput, setPromoInput, promoStatus, promoDiscountPct, promoDiscount, verifyPromo, clearPromo,
     goToStep, prev, isSubmitting, submitError, submit,
@@ -132,7 +132,17 @@ export const StepRecap: React.FC = () => {
           <div className="flex justify-between items-center px-4 py-3 rounded-xl text-sm"
             style={{ background: 'rgba(15,23,42,0.03)' }}>
             <span className="text-vel-slate">
-              {days} {{ fr: 'j ×', ar: 'يوم ×' }[lang]} {car.priceDay.toLocaleString()} {{ fr: 'DA', ar: 'د.ج' }[lang]}
+              {[
+                rental.months > 0
+                  ? `${rental.months} × ${{ fr: 'mois', ar: 'شهر' }[lang]} (${rental.monthTotal.toLocaleString()})`
+                  : null,
+                rental.weeks > 0
+                  ? `${rental.weeks} × ${{ fr: 'sem.', ar: 'أسبوع' }[lang]} (${rental.weekTotal.toLocaleString()})`
+                  : null,
+                rental.extraDays > 0
+                  ? `${rental.extraDays} × ${{ fr: 'j', ar: 'يوم' }[lang]} (${rental.dayRate.toLocaleString()})`
+                  : null,
+              ].filter(Boolean).join(' + ') || `${days} ${{ fr: 'j', ar: 'يوم' }[lang]}`}
             </span>
             <span className="font-bold text-vel-ink">{fx(basePrice)}</span>
           </div>

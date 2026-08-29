@@ -3,7 +3,7 @@ import { Globe, Menu, Search, Monitor } from 'lucide-react';
 import { Language, User } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { ThemeToggle } from './ThemeToggle';
-import { CompanySwitcher } from './CompanySwitcher';
+import { CompanyBadge } from './CompanyBadge';
 
 interface NavbarProps {
   user: User;
@@ -39,8 +39,8 @@ export const Navbar: React.FC<NavbarProps> = ({ user, lang, setLang, toggleSideb
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-3 lg:gap-4 shrink-0">
-        {/* Sélecteur d'agence active (super-admin uniquement) */}
-        <CompanySwitcher lang={lang} />
+        {/* Agence connectée — affichage seul, aucune bascule possible */}
+        <CompanyBadge lang={lang} />
 
         <button
           onClick={() => setLang(lang === 'fr' ? 'ar' : 'fr')}

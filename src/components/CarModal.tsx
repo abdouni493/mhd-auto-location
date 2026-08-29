@@ -7,6 +7,10 @@ import {
   CurrencyCode, CURRENCIES, SECONDARY_CURRENCIES, DEFAULT_RATES,
   CarCurrencies, convertFromDzd, formatCurrency,
 } from '../utils/currency';
+import {
+  WEEK_DAYS, MONTH_DAYS,
+  weekDayRate, monthDayRate, weekTotalFromDay, monthTotalFromDay,
+} from '../utils/pricing';
 
 interface CarModalProps {
   isOpen: boolean;
@@ -53,9 +57,25 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
 
   useEffect(() => {
     const base = car ? { ...emptyForm(), ...car } : emptyForm();
-    setFormData({ ...base, companyIds: initialCompanyIds ? [...initialCompanyIds] : (car?.companyIds || []) });
+    // Les totaux semaine / mois sont toujours ramenés à « tarif jour × 7/30 »
+    // pour que le champ saisi (tarif journalier) et le total affiché restent
+    // cohérents, y compris sur des véhicules créés avant cette règle.
+    setFormData({
+      ...base,
+      priceWeek: weekTotalFromDay(weekDayRate(base)),
+      priceMonth: monthTotalFromDay(monthDayRate(base)),
+      companyIds: initialCompanyIds ? [...initialCompanyIds] : (car?.companyIds || []),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [car, isOpen]);
+
+  /** Saisie d'un tarif journalier de formule : on stocke le total (× 7 / × 30). */
+  const setFormulaDayRate = (key: 'priceWeek' | 'priceMonth', perDay: number) => {
+    setFormData(prev => ({
+      ...prev,
+      [key]: key === 'priceWeek' ? weekTotalFromDay(perDay) : monthTotalFromDay(perDay),
+    }));
+  };
 
   const toggleCompany = (id: string) => {
     setFormData(prev => {
@@ -138,10 +158,18 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
     });
   };
 
+  // Tarifs journaliers saisis par l'agence : « à la journée », « en semaine »,
+  // « au mois ». Les deux derniers sont dérivés des totaux stockés.
+  const weekPerDay = weekDayRate(formData);
+  const monthPerDay = monthDayRate(formData);
+  const weekTotalDzd = weekTotalFromDay(weekPerDay);
+  const monthTotalDzd = monthTotalFromDay(monthPerDay);
+
+  /** Lignes du tableau de conversion : montants réellement facturés. */
   const priceRows: { key: 'priceDay' | 'priceWeek' | 'priceMonth' | 'deposit'; label: string }[] = [
     { key: 'priceDay', label: lang === 'fr' ? 'Jour' : 'يوم' },
-    { key: 'priceWeek', label: lang === 'fr' ? 'Semaine' : 'أسبوع' },
-    { key: 'priceMonth', label: lang === 'fr' ? 'Mois' : 'شهر' },
+    { key: 'priceWeek', label: lang === 'fr' ? 'Total semaine' : 'إجمالي الأسبوع' },
+    { key: 'priceMonth', label: lang === 'fr' ? 'Total mois' : 'إجمالي الشهر' },
     { key: 'deposit', label: lang === 'fr' ? 'Caution' : 'الضمان' },
   ];
 
@@ -432,23 +460,126 @@ export const CarModal: React.FC<CarModalProps> = ({ isOpen, onClose, onSave, onD
           {/* ── 5. Tarification DZD (base de calcul) ──────────────────────── */}
           <section className="space-y-6">
             {sectionTitle(<Wallet size={14} />, lang === 'fr' ? 'Tarification & Caution (DZD — base)' : 'التسعير والضمان (دج)')}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {priceRows.map(row => (
-                <div key={row.key} className="space-y-2">
-                  <label className="label-saas">{row.label}</label>
-                  <div className="relative">
-                    <input
-                      name={row.key}
-                      type="number"
-                      min={0}
-                      value={formData[row.key] ?? 0}
-                      onChange={handleChange}
-                      className="input-saas pr-12"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
-                  </div>
+
+            <div className="flex items-start gap-2.5 rounded-xl bg-[#DC2626]/6 border border-[#DC2626]/20 px-4 py-3">
+              <Info size={15} className="text-[#DC2626] shrink-0 mt-0.5" />
+              <p className="text-xs text-saas-text-main leading-relaxed">
+                {lang === 'fr'
+                  ? `Saisissez un prix PAR JOUR pour chaque formule. Les totaux semaine (× ${WEEK_DAYS}) et mois (× ${MONTH_DAYS}) sont calculés automatiquement et servent de base aux réservations.`
+                  : `أدخل السعر لليوم الواحد لكل صيغة. يُحسب إجمالي الأسبوع (× ${WEEK_DAYS}) والشهر (× ${MONTH_DAYS}) تلقائياً.`}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              {/* Tarif à la journée */}
+              <div className="space-y-2">
+                <label className="label-saas">
+                  {lang === 'fr' ? 'Prix / jour (à la journée)' : 'السعر / اليوم (يومي)'}
+                </label>
+                <div className="relative">
+                  <input
+                    name="priceDay"
+                    type="number"
+                    min={0}
+                    value={formData.priceDay ?? 0}
+                    onChange={handleChange}
+                    className="input-saas pr-12"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
                 </div>
-              ))}
+                <p className="text-[11px] text-saas-text-muted font-medium min-h-[1.25rem]">
+                  {lang === 'fr' ? 'Locations de moins de 7 jours.' : 'الإيجارات لأقل من 7 أيام.'}
+                </p>
+              </div>
+
+              {/* Tarif journalier en formule semaine → total ×7 */}
+              <div className="space-y-2">
+                <label className="label-saas">
+                  {lang === 'fr' ? 'Prix / jour (formule semaine)' : 'السعر / اليوم (صيغة أسبوع)'}
+                </label>
+                <div className="relative">
+                  <input
+                    name="weekPerDay"
+                    type="number"
+                    min={0}
+                    value={weekPerDay}
+                    onChange={e => setFormulaDayRate('priceWeek', Number(e.target.value))}
+                    className="input-saas pr-12"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
+                </div>
+                <p className="text-[11px] font-bold text-[#DC2626] min-h-[1.25rem]">
+                  {lang === 'fr' ? 'Total semaine' : 'إجمالي الأسبوع'} = {weekPerDay.toLocaleString('fr-FR')} × {WEEK_DAYS} ={' '}
+                  <span className="font-black">{weekTotalDzd.toLocaleString('fr-FR')} DA</span>
+                </p>
+              </div>
+
+              {/* Tarif journalier en formule mois → total ×30 */}
+              <div className="space-y-2">
+                <label className="label-saas">
+                  {lang === 'fr' ? 'Prix / jour (formule mois)' : 'السعر / اليوم (صيغة شهر)'}
+                </label>
+                <div className="relative">
+                  <input
+                    name="monthPerDay"
+                    type="number"
+                    min={0}
+                    value={monthPerDay}
+                    onChange={e => setFormulaDayRate('priceMonth', Number(e.target.value))}
+                    className="input-saas pr-12"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
+                </div>
+                <p className="text-[11px] font-bold text-[#DC2626] min-h-[1.25rem]">
+                  {lang === 'fr' ? 'Total mois' : 'إجمالي الشهر'} = {monthPerDay.toLocaleString('fr-FR')} × {MONTH_DAYS} ={' '}
+                  <span className="font-black">{monthTotalDzd.toLocaleString('fr-FR')} DA</span>
+                </p>
+              </div>
+
+              {/* Caution */}
+              <div className="space-y-2">
+                <label className="label-saas">{lang === 'fr' ? 'Caution' : 'الضمان'}</label>
+                <div className="relative">
+                  <input
+                    name="deposit"
+                    type="number"
+                    min={0}
+                    value={formData.deposit ?? 0}
+                    onChange={handleChange}
+                    className="input-saas pr-12"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-saas-text-muted pointer-events-none">DA</span>
+                </div>
+                <p className="text-[11px] text-saas-text-muted font-medium min-h-[1.25rem]">
+                  {lang === 'fr' ? 'Bloquée à la remise des clés.' : 'محجوزة عند تسليم المفاتيح.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Récapitulatif des totaux réellement facturés */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="rounded-2xl border border-saas-border bg-white px-5 py-4">
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-saas-text-muted">
+                  {lang === 'fr' ? `Formule semaine (${WEEK_DAYS} jours)` : `صيغة أسبوع (${WEEK_DAYS} أيام)`}
+                </p>
+                <p className="text-2xl font-black text-saas-text-main leading-tight mt-1">
+                  {weekPerDay.toLocaleString('fr-FR')} <span className="text-sm font-bold text-saas-text-muted">DA / {lang === 'fr' ? 'jour' : 'يوم'}</span>
+                </p>
+                <p className="text-sm font-bold text-[#DC2626]">
+                  ({weekTotalDzd.toLocaleString('fr-FR')} DA {lang === 'fr' ? 'au total' : 'الإجمالي'})
+                </p>
+              </div>
+              <div className="rounded-2xl border border-saas-border bg-white px-5 py-4">
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-saas-text-muted">
+                  {lang === 'fr' ? `Formule mois (${MONTH_DAYS} jours)` : `صيغة شهر (${MONTH_DAYS} يوماً)`}
+                </p>
+                <p className="text-2xl font-black text-saas-text-main leading-tight mt-1">
+                  {monthPerDay.toLocaleString('fr-FR')} <span className="text-sm font-bold text-saas-text-muted">DA / {lang === 'fr' ? 'jour' : 'يوم'}</span>
+                </p>
+                <p className="text-sm font-bold text-[#DC2626]">
+                  ({monthTotalDzd.toLocaleString('fr-FR')} DA {lang === 'fr' ? 'au total' : 'الإجمالي'})
+                </p>
+              </div>
             </div>
           </section>
 

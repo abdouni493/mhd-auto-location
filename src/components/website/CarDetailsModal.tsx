@@ -1,5 +1,6 @@
 import React from 'react';
 import { Language, Car } from '../../types';
+import { WEEK_DAYS, MONTH_DAYS, weekDayRate, monthDayRate, weekTotal, monthTotal } from '../../utils/pricing';
 import { motion } from 'motion/react';
 import { X, Fuel, Settings, Users, DoorOpen, Palette } from 'lucide-react';
 
@@ -125,18 +126,24 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
               </div>
               <div className="vel-glass rounded-xl p-4 text-center">
                 <p className="font-black text-2xl text-vel-slate" style={{ fontFamily: 'var(--font-display)' }}>
-                  {car.priceWeek.toLocaleString()}
+                  {weekDayRate(car).toLocaleString()}
                 </p>
                 <p className="text-vel-muted text-xs mt-1">
-                  {{ fr: 'DA / semaine', ar: 'د.ج / أسبوع' }[lang]}
+                  {{ fr: 'DA / jour en semaine', ar: 'د.ج / يوم بصيغة أسبوع' }[lang]}
+                </p>
+                <p className="text-xs font-bold mt-0.5" style={{ color: '#DC2626' }}>
+                  ({weekTotal(car).toLocaleString()} {{ fr: `DA / ${WEEK_DAYS} j`, ar: `د.ج / ${WEEK_DAYS} أيام` }[lang]})
                 </p>
               </div>
               <div className="vel-glass rounded-xl p-4 text-center">
                 <p className="font-black text-2xl text-vel-slate" style={{ fontFamily: 'var(--font-display)' }}>
-                  {car.priceMonth.toLocaleString()}
+                  {monthDayRate(car).toLocaleString()}
                 </p>
                 <p className="text-vel-muted text-xs mt-1">
-                  {{ fr: 'DA / mois', ar: 'د.ج / شهر' }[lang]}
+                  {{ fr: 'DA / jour au mois', ar: 'د.ج / يوم بصيغة شهر' }[lang]}
+                </p>
+                <p className="text-xs font-bold mt-0.5" style={{ color: '#DC2626' }}>
+                  ({monthTotal(car).toLocaleString()} {{ fr: `DA / ${MONTH_DAYS} j`, ar: `د.ج / ${MONTH_DAYS} يوماً` }[lang]})
                 </p>
               </div>
             </div>
