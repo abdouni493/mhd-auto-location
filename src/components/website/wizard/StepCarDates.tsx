@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Search, CalendarCheck, Loader2 } from 'lucide-react';
 import { Car } from '../../../types';
 import { useWizard } from './WizardContext';
-import { WEEK_DAYS, MONTH_DAYS, weekDayRate, monthDayRate, weekTotal, monthTotal } from '../../../utils/pricing';
+import { WEEK_DAYS, MONTH_DAYS, weekDayRate, monthDayRate } from '../../../utils/pricing';
 import { CarBookingCalendar } from './CarBookingCalendar';
 import { SectionCard, SectionTitle, FieldLabel, inputClass, inputStyle, focusInput, blurInput, C, fromYmd } from './wizardUi';
 
@@ -158,8 +158,9 @@ export const StepCarDates: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Tarifs dégressifs : tarif journalier de la formule, et
-                      juste en dessous le total réellement facturé. */}
+                  {/* Tarifs dégressifs : uniquement le tarif journalier de
+                      chaque formule. Le montant total apparaît au
+                      récapitulatif, une fois les dates choisies. */}
                   <div className="mt-3 pt-3 grid grid-cols-2 gap-2 text-left"
                     style={{ borderTop: '1px solid rgba(15,23,42,0.07)' }}>
                     {[
@@ -167,13 +168,11 @@ export const StepCarDates: React.FC = () => {
                         key: 'week',
                         label: { fr: `Semaine · ${WEEK_DAYS} j`, ar: `أسبوع · ${WEEK_DAYS} أيام` }[lang],
                         perDay: weekDayRate(c),
-                        total: weekTotal(c),
                       },
                       {
                         key: 'month',
                         label: { fr: `Mois · ${MONTH_DAYS} j`, ar: `شهر · ${MONTH_DAYS} يوماً` }[lang],
                         perDay: monthDayRate(c),
-                        total: monthTotal(c),
                       },
                     ].map(f => (
                       <div key={f.key} className="rounded-lg px-2.5 py-2" style={{ background: 'rgba(15,23,42,0.035)' }}>
@@ -181,9 +180,6 @@ export const StepCarDates: React.FC = () => {
                         <p className="text-[13px] font-black text-vel-ink leading-tight">
                           {f.perDay.toLocaleString()}
                           <span className="text-[10px] font-bold text-vel-muted">{{ fr: ' DA/j', ar: ' د.ج/ي' }[lang]}</span>
-                        </p>
-                        <p className="text-[10px] font-bold text-vel-muted leading-tight">
-                          ({f.total.toLocaleString()})
                         </p>
                       </div>
                     ))}
@@ -229,13 +225,11 @@ export const StepCarDates: React.FC = () => {
                 key: 'week',
                 label: { fr: `${WEEK_DAYS} j`, ar: `${WEEK_DAYS} أيام` }[lang],
                 perDay: weekDayRate(car),
-                total: weekTotal(car),
               },
               {
                 key: 'month',
                 label: { fr: `${MONTH_DAYS} j`, ar: `${MONTH_DAYS} يوماً` }[lang],
                 perDay: monthDayRate(car),
-                total: monthTotal(car),
               },
             ].map(f => (
               <span
@@ -247,7 +241,6 @@ export const StepCarDates: React.FC = () => {
                 <span className="font-black text-vel-slate">
                   {f.perDay.toLocaleString()}{{ fr: ' DA/j', ar: ' د.ج/ي' }[lang]}
                 </span>
-                <span className="font-bold text-vel-muted">({f.total.toLocaleString()})</span>
               </span>
             ))}
           </div>

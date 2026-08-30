@@ -1,6 +1,6 @@
 import React from 'react';
 import { Language, Car } from '../../types';
-import { WEEK_DAYS, MONTH_DAYS, weekDayRate, monthDayRate, weekTotal, monthTotal } from '../../utils/pricing';
+import { WEEK_DAYS, MONTH_DAYS, weekDayRate, monthDayRate } from '../../utils/pricing';
 import { motion } from 'motion/react';
 import { X, Fuel, Settings, Users, DoorOpen, Palette } from 'lucide-react';
 
@@ -131,9 +131,6 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
                 <p className="text-vel-muted text-xs mt-1">
                   {{ fr: `DA / jour · ${WEEK_DAYS} j`, ar: `د.ج / يوم · ${WEEK_DAYS} أيام` }[lang]}
                 </p>
-                <p className="text-xs font-bold mt-0.5" style={{ color: '#DC2626' }}>
-                  ({weekTotal(car).toLocaleString()} {{ fr: 'DA / sem.', ar: 'د.ج / أسبوع' }[lang]})
-                </p>
               </div>
               <div className="vel-glass rounded-xl p-4 text-center">
                 <p className="font-black text-2xl text-vel-slate" style={{ fontFamily: 'var(--font-display)' }}>
@@ -141,9 +138,6 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ lang, car, onC
                 </p>
                 <p className="text-vel-muted text-xs mt-1">
                   {{ fr: `DA / jour · ${MONTH_DAYS} j`, ar: `د.ج / يوم · ${MONTH_DAYS} يوماً` }[lang]}
-                </p>
-                <p className="text-xs font-bold mt-0.5" style={{ color: '#DC2626' }}>
-                  ({monthTotal(car).toLocaleString()} {{ fr: 'DA / mois', ar: 'د.ج / شهر' }[lang]})
                 </p>
               </div>
             </div>
