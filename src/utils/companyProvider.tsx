@@ -18,6 +18,12 @@ interface CompanyContextValue {
   activeCompanyId: string;
   /** true = aucun filtre d'agence (compte racine sans rattachement). */
   allView: boolean;
+  /**
+   * false = l'agence de l'utilisateur n'a PAS pu être déterminée (ligne
+   * `app_users` absente, employé sans agence, ou erreur réseau). Il voit alors
+   * TOUTES les agences : l'interface doit le signaler.
+   */
+  scopeKnown: boolean;
   companies: Company[];
 }
 
@@ -26,6 +32,7 @@ const Ctx = createContext<CompanyContextValue>({
   userCompanyId: null,
   activeCompanyId: ALL_COMPANIES,
   allView: true,
+  scopeKnown: false,
   companies: [],
 });
 
@@ -45,6 +52,7 @@ export const CompanyProvider: React.FC<{
     userCompanyId: snapshot.userCompanyId,
     activeCompanyId: snapshot.activeCompanyId,
     allView: snapshot.activeCompanyId === ALL_COMPANIES,
+    scopeKnown: snapshot.scopeKnown,
     companies,
   }), [snapshot, companies]);
 

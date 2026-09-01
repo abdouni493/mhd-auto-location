@@ -577,6 +577,11 @@ export interface ReservationDetails {
   createdByName?: string;
   /** Origine de la réservation : 'website' (site public) ou 'agency' (admin). */
   source?: 'website' | 'agency';
+  /**
+   * Agence métier (`companies`) propriétaire de la réservation. NULL = commande
+   * du site public pas encore acceptée (aucune agence rattachée).
+   */
+  companyId?: string | null;
 
   // ── Timbre fiscal (droit de timbre) ─────────────────────────────────
   timbreEnabled?: boolean;

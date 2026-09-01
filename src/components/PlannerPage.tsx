@@ -478,6 +478,14 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     ? filteredReservations.filter(r => r.status === 'completed' || r.status === 'terminated').length
     : 0;
 
+  // Réservations de l'agence que la liste ne PEUT pas afficher : leur client ou
+  // leur véhicule est introuvable (supprimé, ou masqué par les droits d'accès).
+  // Sans ce compteur elles disparaissaient en silence — d'où des réservations
+  // « créées mais introuvables ». On les signale au lieu de les oublier.
+  const unrenderableReservations = reservations.filter(
+    r => (!r.client || !r.car) && PLANNER_STATUSES.includes(r.status)
+  );
+
 
   if (currentView === 'create' || currentView === 'create-alt') {
     return (
@@ -750,8 +758,18 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
         )}
       </AnimatePresence>
 
+      {/* Réservations rattachées à l'agence mais impossibles à afficher */}
+      {unrenderableReservations.length > 0 && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-amber-800 text-sm font-semibold">
+            {lang === 'fr'
+              ? `${unrenderableReservations.length} réservation${unrenderableReservations.length > 1 ? 's' : ''} de votre agence ne peu${unrenderableReservations.length > 1 ? 'vent' : 't'} pas être affichée${unrenderableReservations.length > 1 ? 's' : ''} : client ou véhicule introuvable.`
+              : `${unrenderableReservations.length} حجز في وكالتك لا يمكن عرضه: العميل أو المركبة غير موجود.`}
+          </p>
+        </div>
+      )}
 
-      
       {/* Car Availability Filter */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}

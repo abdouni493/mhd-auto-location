@@ -142,11 +142,13 @@ export default function App() {
         const stored = await sessionService.getCurrentSession();
         const info = await DatabaseService.getMyCompanyInfo({ userId: stored?.userId, email: user.email, role: user.role });
         if (cancelled) return;
-        companyContext.setUserInfo(info.companyId, info.isSuperAdmin);
+        companyContext.setUserInfo(info.companyId, info.isSuperAdmin, info.scopeKnown);
         setIsSuperAdmin(info.isSuperAdmin);
       } catch (err) {
         console.warn('[Auth] Failed to resolve company info (defaulting to super-admin):', err);
-        companyContext.setUserInfo(null, true);
+        // Périmètre NON fiable : lecture non filtrée (comme avant), mais aucune
+        // agence ne sera devinée à l'écriture (voir companyContext).
+        companyContext.setUserInfo(null, true, false);
         if (!cancelled) setIsSuperAdmin(true);
       }
       try {

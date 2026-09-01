@@ -49,6 +49,14 @@ interface CompanyState {
   activeCompanyId: string;
   /** true dès que les infos ont été résolues depuis `app_users`. */
   resolved: boolean;
+  /**
+   * true = le périmètre vient RÉELLEMENT de la base (`app_users` ou `workers`).
+   * false = la résolution a échoué / n'a rien trouvé : on est en vue « toutes
+   * agences » par défaut de sécurité, mais on ne SAIT PAS à quelle agence
+   * appartient l'utilisateur — il ne faut alors JAMAIS deviner une agence à
+   * l'écriture (voir `getWriteCompanyId`).
+   */
+  scopeKnown: boolean;
 }
 
 // Défaut SÛR : super-admin + vue « toutes agences » ⇒ aucun filtre appliqué
@@ -59,6 +67,7 @@ const state: CompanyState = {
   primaryCompanyId: null,
   activeCompanyId: ALL_COMPANIES,
   resolved: false,
+  scopeKnown: false,
 };
 
 // Snapshot immuable exposé à React (`useSyncExternalStore`). Il DOIT garder la
@@ -80,11 +89,12 @@ export const companyContext = {
    * il n'y a plus de bascule ni de choix persisté. Seul un compte racine sans
    * `company_id` reste en vue combinée.
    */
-  setUserInfo(userCompanyId: string | null, isSuperAdmin: boolean) {
+  setUserInfo(userCompanyId: string | null, isSuperAdmin: boolean, scopeKnown: boolean = true) {
     clearLegacyActive();
     state.userCompanyId = userCompanyId;
     state.isSuperAdmin = isSuperAdmin;
     state.resolved = true;
+    state.scopeKnown = scopeKnown;
     state.activeCompanyId = userCompanyId || ALL_COMPANIES;
     emit();
   },
@@ -113,11 +123,14 @@ export const companyContext = {
     state.primaryCompanyId = null;
     state.activeCompanyId = ALL_COMPANIES;
     state.resolved = false;
+    state.scopeKnown = false;
     emit();
   },
 
   getSnapshot(): Readonly<CompanyState> { return snapshot; },
   getUserCompanyId() { return state.userCompanyId; },
+  isResolved() { return state.resolved; },
+  isScopeKnown() { return state.scopeKnown; },
   getIsSuperAdmin() { return state.isSuperAdmin; },
   getPrimaryCompanyId() { return state.primaryCompanyId; },
   getActiveCompanyId() { return state.activeCompanyId; },
@@ -138,7 +151,51 @@ export const companyContext = {
    */
   getWriteCompanyId(): string | null {
     if (state.activeCompanyId !== ALL_COMPANIES) return state.activeCompanyId;
+    // Périmètre INCONNU (résolution échouée, ou pas encore faite) : on
+    // n'estampille RIEN. Deviner l'agence principale ici enverrait la ligne
+    // dans une AUTRE agence que celle de l'utilisateur — elle deviendrait
+    // alors invisible pour lui (bug « je crée une réservation, je ne la
+    // retrouve nulle part »). `null` laisse le trigger DB
+    // (`set_company_id_from_auth`) trancher avec `auth_company_id()`, qui est
+    // la source de vérité côté base.
+    if (!state.resolved || !state.scopeKnown) return null;
     return state.userCompanyId || state.primaryCompanyId || null;
+  },
+
+  /**
+   * Attend que le périmètre d'agence soit résolu (connexion en cours de
+   * restauration). À `await` AVANT toute écriture estampillée, pour ne jamais
+   * insérer une ligne avec un périmètre encore vide. Renvoie la main au bout de
+   * `timeoutMs` même si rien n'a été résolu (on n'empêche jamais l'écriture).
+   */
+  whenResolved(timeoutMs = 8000): Promise<void> {
+    if (state.resolved) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        unsubscribe();
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(finish, timeoutMs);
+      const unsubscribe = companyContext.subscribe(() => {
+        if (state.resolved) finish();
+      });
+      if (state.resolved) finish();
+    });
+  },
+
+  /**
+   * Une ligne métier (portant `company_id`) appartient-elle au périmètre
+   * courant ? Garde-fou d'affichage : même si une requête oubliait
+   * `scopeQuery`, l'agence ne verra jamais les lignes d'une autre agence.
+   */
+  belongsToActiveCompany(rowCompanyId: string | null | undefined): boolean {
+    const scope = state.activeCompanyId === ALL_COMPANIES ? null : state.activeCompanyId;
+    if (!scope) return true;
+    return rowCompanyId === scope;
   },
 
   subscribe(listener: Listener): () => void {

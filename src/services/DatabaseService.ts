@@ -168,7 +168,7 @@ export class DatabaseService {
    * l'agence existante. Les employés (session non-Supabase) sont résolus par
    * email sur la table `workers`.
    */
-  static async getMyCompanyInfo(opts: { userId?: string | null; email?: string | null; role?: string | null }): Promise<{ companyId: string | null; isSuperAdmin: boolean }> {
+  static async getMyCompanyInfo(opts: { userId?: string | null; email?: string | null; role?: string | null }): Promise<{ companyId: string | null; isSuperAdmin: boolean; scopeKnown: boolean }> {
     // 1) Chemin Supabase Auth (admins / super-admins) : app_users par auth.uid()
     try {
       // Après la connexion, l'app purge la session SDK Supabase pour éviter
@@ -187,6 +187,9 @@ export class DatabaseService {
           return {
             companyId: data.company_id || null,
             isSuperAdmin: data.is_super_admin === true,
+            // Périmètre lu dans la base : fiable (même si company_id est NULL,
+            // c'est alors un compte racine assumé « toutes agences »).
+            scopeKnown: true,
           };
         }
       }
@@ -203,15 +206,21 @@ export class DatabaseService {
           .eq('email', opts.email)
           .maybeSingle();
         if (!error && data && data.company_id) {
-          return { companyId: data.company_id, isSuperAdmin: false };
+          return { companyId: data.company_id, isSuperAdmin: false, scopeKnown: true };
         }
       } catch (err) {
         console.warn('[DatabaseService] getMyCompanyInfo workers lookup failed:', err);
       }
     }
 
-    // 3) Repli sûr : aucun périmètre → super-admin, voit tout (zéro régression).
-    return { companyId: null, isSuperAdmin: true };
+    // 3) Repli sûr : aucun périmètre trouvé → l'utilisateur voit tout (zéro
+    //    régression en LECTURE), mais on signale `scopeKnown: false` : à
+    //    l'ÉCRITURE, l'application n'estampillera aucune agence et laissera le
+    //    trigger DB (`auth_company_id()`) décider, plutôt que de rattacher la
+    //    ligne à l'agence principale — ce qui la rendrait invisible pour son
+    //    auteur dès que son périmètre redevient résoluble.
+    console.warn('[DatabaseService] getMyCompanyInfo: agence introuvable pour cet utilisateur (app_users / workers) — périmètre non fiable.');
+    return { companyId: null, isSuperAdmin: true, scopeKnown: false };
   }
 
   /**

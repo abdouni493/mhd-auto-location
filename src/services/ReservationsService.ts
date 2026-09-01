@@ -11,6 +11,9 @@ import { companyContext, scopeQuery } from '../utils/companyContext';
  */
 function mapReservationExtras(res: any) {
   return {
+    // Agence métier propriétaire de la réservation (multi-agences). Exposée
+    // pour que l'interface puisse VÉRIFIER le périmètre, pas seulement s'y fier.
+    companyId: res.company_id ?? null,
     // Timbre fiscal
     timbreEnabled: res.timbre_enabled === true,
     timbreRate: res.timbre_rate != null ? Number(res.timbre_rate) : undefined,
@@ -133,6 +136,13 @@ export class ReservationsService {
     promoDiscountPercentage?: number | null;
     promoDiscountAmount?: number | null;
   }): Promise<{ id: string }> {
+    // Le périmètre d'agence est lu de façon SYNCHRONE juste en dessous : on
+    // attend qu'il soit résolu, sinon une réservation créée juste après la
+    // connexion partirait sans agence (ou dans la mauvaise) et deviendrait
+    // introuvable pour son auteur.
+    await companyContext.whenResolved();
+    const writeCompanyId = data.source === 'website' ? null : companyContext.getWriteCompanyId();
+
     const { data: reservation, error } = await supabase
       .from('reservations')
       .insert([{
@@ -173,7 +183,7 @@ export class ReservationsService {
         // estampillées sur l'agence active. Les commandes du site (source
         // 'website') restent NON rattachées (company_id NULL) jusqu'à leur
         // acceptation par le super-admin. `null` laisse le trigger DB remplir.
-        company_id: data.source === 'website' ? null : companyContext.getWriteCompanyId(),
+        company_id: writeCompanyId,
         // Timbre fiscal
         timbre_enabled: data.timbreEnabled || false,
         timbre_rate: data.timbreEnabled ? (data.timbreRate ?? null) : null,
@@ -193,6 +203,24 @@ export class ReservationsService {
       .single();
 
     if (error) throw error;
+
+    // Garde-fou : la réservation DOIT porter l'agence sous laquelle elle vient
+    // d'être créée. Si le trigger DB (ou une valeur nulle) l'a rattachée
+    // ailleurs, on corrige immédiatement — sans quoi l'agence qui vient de la
+    // saisir ne la reverrait jamais dans son planificateur.
+    if (writeCompanyId && reservation?.company_id !== writeCompanyId) {
+      console.warn(
+        `[ReservationsService] company_id inattendu (${reservation?.company_id ?? 'null'}) — rattachement forcé à ${writeCompanyId}`
+      );
+      const { error: fixError } = await supabase
+        .from('reservations')
+        .update({ company_id: writeCompanyId })
+        .eq('id', reservation.id);
+      if (fixError) {
+        console.error("[ReservationsService] Rattachement à l'agence impossible :", fixError.message);
+      }
+    }
+
     return { id: reservation.id };
   }
 
@@ -305,6 +333,18 @@ export class ReservationsService {
     if (error) {
       console.error('Error fetching reservations:', error);
       throw error;
+    }
+
+    // Filet de sécurité (cloisonnement des agences) : même si une requête
+    // oubliait `scopeQuery`, une agence ne doit JAMAIS voir les réservations
+    // d'une autre. En vue « toutes agences » (compte racine), rien n'est retiré.
+    const scopeCompanyId = companyContext.getScopeCompanyId();
+    if (scopeCompanyId) {
+      const before = (data || []).length;
+      data = (data || []).filter((res: any) => companyContext.belongsToActiveCompany(res.company_id));
+      if (before !== data.length) {
+        console.warn(`[ReservationsService] ${before - data.length} réservation(s) hors périmètre écartée(s).`);
+      }
     }
 
     // Debug: Log raw data to check if creator fields exist
