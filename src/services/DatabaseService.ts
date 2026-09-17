@@ -355,7 +355,7 @@ export class DatabaseService {
       supabase
         .from('reservations')
         .select('car_id, departure_date, return_date, status')
-        .in('status', ['active', 'confirmed', 'pending']),
+        .in('status', ['active', 'continued', 'confirmed', 'pending']),
     ]);
 
     const allReservations = reservationsResult.data || [];
@@ -372,7 +372,7 @@ export class DatabaseService {
         return dep <= today && today <= ret;
       };
 
-      const activeRes    = carRes.find(r => r.status === 'active'    && coversToday(r));
+      const activeRes    = carRes.find(r => (r.status === 'active' || r.status === 'continued') && coversToday(r));
       const reservedRes  = carRes.find(r => (r.status === 'confirmed' || r.status === 'pending') && coversToday(r));
 
       let realStatus: Car['status'] = 'disponible';
@@ -403,7 +403,7 @@ export class DatabaseService {
     const { data: allReservations, error } = await supabase
       .from('reservations')
       .select('car_id, departure_date, return_date')
-      .in('status', ['pending', 'confirmed', 'active']);
+      .in('status', ['pending', 'confirmed', 'active', 'continued']);
 
     if (error) {
       console.error('Error fetching reservations:', error);
@@ -444,7 +444,7 @@ export class DatabaseService {
         client:clients(first_name, last_name),
         car:cars(brand, model, image_url)
       `)
-      .in('status', ['pending', 'confirmed', 'active']);
+      .in('status', ['pending', 'confirmed', 'active', 'continued']);
 
     if (error) {
       console.error('Error fetching reservations:', error);
@@ -542,7 +542,7 @@ export class DatabaseService {
       .from('reservations')
       .select('departure_date, return_date')
       .eq('car_id', carId)
-      .in('status', ['pending', 'confirmed', 'active']);
+      .in('status', ['pending', 'confirmed', 'active', 'continued']);
 
     if (error) {
       console.warn('getReservedDateRangesForCar failed:', error.message);
@@ -1740,9 +1740,9 @@ export class DatabaseService {
           scopeQuery(supabase.from('vehicle_expenses').select('cost')),
           scopeQuery(supabase.from('clients').select('id', { count: 'exact' })),
           supabase.from('cars').select('id', { count: 'exact' }),
-          scopeQuery(notTrashed(supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active']))),
+          scopeQuery(notTrashed(supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active', 'continued']))),
           scopeQuery(notTrashed(supabase.from('reservations').select('id', { count: 'exact' }))),
-          scopeQuery(notTrashed(supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active']))),
+          scopeQuery(notTrashed(supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active', 'continued']))),
           scopeQuery(supabase.from('payments').select('id', { count: 'exact' }).eq('status', 'pending')),
           scopeQuery(notTrashed(supabase.from('reservations').select('*, client:clients(*), car:cars(*)').order('created_at', { ascending: false }).limit(5))),
           scopeQuery(supabase.from('maintenance_alerts').select('id', { count: 'exact' }))

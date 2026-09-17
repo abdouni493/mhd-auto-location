@@ -201,7 +201,7 @@ export const ReservationTimelineView: React.FC<ReservationTimelineViewProps> = (
       departureDate.setHours(0, 0, 0, 0);
 
       // Overdue return
-      if (res.status === 'active' && returnDate < today) {
+      if ((res.status === 'active' || res.status === 'continued') && returnDate < today) {
         alerts.push({
           type: 'overdue',
           reservation: res,
@@ -210,7 +210,7 @@ export const ReservationTimelineView: React.FC<ReservationTimelineViewProps> = (
       }
 
       // Returning soon
-      if (res.status === 'active' && returnDate >= today &&
+      if ((res.status === 'active' || res.status === 'continued') && returnDate >= today &&
           (returnDate.getTime() - today.getTime()) <= 2 * 24 * 60 * 60 * 1000) {
         alerts.push({
           type: 'returning-soon',
@@ -1100,7 +1100,7 @@ export const ReservationTimelineView: React.FC<ReservationTimelineViewProps> = (
                 />
               </div>
               <div className="flex gap-2 flex-wrap">
-                {['all', 'confirmed', 'active', 'pending', 'completed'].map(status => (
+                {['all', 'confirmed', 'active', 'continued', 'pending', 'completed'].map(status => (
                   <motion.button
                     key={status}
                     whileHover={{ scale: 1.05 }}
@@ -1114,6 +1114,7 @@ export const ReservationTimelineView: React.FC<ReservationTimelineViewProps> = (
                     {status === 'all' ? (lang === 'fr' ? 'Tous' : 'الكل') :
                      status === 'confirmed' ? '✅' :
                      status === 'active' ? '🔄' :
+                     status === 'continued' ? '🔁' :
                      status === 'pending' ? '⏳' : '🏁'}
                   </motion.button>
                 ))}
@@ -1265,8 +1266,8 @@ export const ReservationTimelineView: React.FC<ReservationTimelineViewProps> = (
                                   today.setHours(0, 0, 0, 0);
                                   const returnDate = new Date(res.step1.returnDate);
                                   returnDate.setHours(0, 0, 0, 0);
-                                  const isOverdue = res.status === 'active' && returnDate < today;
-                                  const isReturningSoon = res.status === 'active' && returnDate >= today &&
+                                  const isOverdue = (res.status === 'active' || res.status === 'continued') && returnDate < today;
+                                  const isReturningSoon = (res.status === 'active' || res.status === 'continued') && returnDate >= today &&
                                     (returnDate.getTime() - today.getTime()) <= 2 * 24 * 60 * 60 * 1000;
 
                                   return (
@@ -1358,13 +1359,15 @@ export const ReservationTimelineView: React.FC<ReservationTimelineViewProps> = (
 
                                               <div className={`text-xs font-bold px-2 py-1 rounded-lg inline-block ${
                                                 res.status === 'active' ? 'bg-blue-100 text-blue-700' :
+                                                res.status === 'continued' ? 'bg-cyan-100 text-cyan-700' :
                                                 res.status === 'confirmed' ? 'bg-green-100 text-green-700' :
                                                 res.status === 'completed' ? 'bg-purple-100 text-purple-700' :
                                                 res.status === 'pending' ? 'bg-amber-100 text-amber-700' :
                                                 res.status === 'accepted' ? 'bg-teal-100 text-teal-700' :
                                                 'bg-slate-100 text-slate-600'
                                               }`}>
-                                                {res.status === 'active' ? '🔄 Actif' :
+                                                {res.status === 'continued' ? (lang === 'fr' ? '🔁 Continuée' : '🔁 ممددة') :
+                                                 res.status === 'active' ? '🔄 Actif' :
                                                  res.status === 'confirmed' ? '✅ Confirmé' :
                                                  res.status === 'completed' ? '🏁 Terminé' :
                                                  res.status === 'pending' ? '⏳ En attente' :
@@ -1441,6 +1444,7 @@ export const ReservationTimelineView: React.FC<ReservationTimelineViewProps> = (
                                       <div className="font-black text-blue-600 text-sm">{res.totalPrice.toLocaleString()} DA</div>
                                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                         res.status === 'active' ? 'bg-blue-100 text-blue-700' :
+                                        res.status === 'continued' ? 'bg-cyan-100 text-cyan-700' :
                                         res.status === 'confirmed' ? 'bg-green-100 text-green-700' :
                                         res.status === 'completed' ? 'bg-purple-100 text-purple-700' :
                                         res.status === 'pending' ? 'bg-amber-100 text-amber-700' :

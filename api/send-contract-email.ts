@@ -45,6 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Build document type label
     const documentTypeLabels: Record<string, Record<string, string>> = {
       contract: { fr: 'Contrat de Location', ar: 'عقد التأجير' },
+      continuation: { fr: 'Contrat de Continuité de Location', ar: 'عقد التمديد' },
       inspection: { fr: "Rapport d'Inspection", ar: 'تقرير فحص المركبة' },
       engagement: { fr: "Lettre d'Engagement", ar: 'رسالة الالتزام' },
       recu: { fr: 'Reçu de Paiement', ar: 'إيصال الدفع' },
@@ -69,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         sender: {
           name: 'AUTO LOCATION',
-          email: payload.sender || 'noreply@autolocation.com',
+          email: payload.sender || 'mhdauto16@gmail.com',
         },
         to: [
           {
@@ -119,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('📧 Message ID:', emailData.messageId);
 
     // Always send a copy to the fixed internal address
-    const COPY_EMAIL = 'icarmhd@gmail.com';
+    const COPY_EMAIL = 'mhdauto16@gmail.com';
     console.log(`📤 Sending copy to ${COPY_EMAIL}`);
     const copyResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -130,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         sender: {
           name: 'AUTO LOCATION',
-          email: payload.sender || 'noreply@autolocation.com',
+          email: payload.sender || 'mhdauto16@gmail.com',
         },
         to: [{ email: COPY_EMAIL }],
         subject:
@@ -175,7 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       message: `${docLabel} PDF sent successfully`,
       details: {
         to: payload.email,
-        from: payload.sender || 'noreply@autolocation.com',
+        from: payload.sender || 'mhdauto16@gmail.com',
         subject:
           payload.language === 'fr'
             ? `${docLabel} - AUTO LOCATION`

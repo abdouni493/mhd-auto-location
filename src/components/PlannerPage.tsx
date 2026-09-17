@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Language, ReservationDetails, Client, Car, Entreprise } from '../types';
+import { Language, ReservationDetails, ReservationContinuation, Client, Car, Entreprise } from '../types';
 import { computeRentalBase } from '../utils/pricing';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, Users, Car as CarIcon, Plus, Search, Filter, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, Grid3x3, CalendarDays, X, Zap, Gauge, Heart, ChevronDown } from 'lucide-react';
@@ -11,6 +11,7 @@ import { ActivationModal, CompletionModal } from './ReservationDetailsView';
 import { ReservationTimelineView } from './ReservationTimelineView';
 import { ConditionsPersonalizer } from './ConditionsPersonalizer';
 import { SendContractModal } from './SendContractModal';
+import { ContinuationModal, ContinuationPrintPrompt, ContinuationPayload } from './ContinuationModal';
 import { WebsiteOrders } from './WebsiteOrders';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
@@ -69,6 +70,10 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   const [conditionsLanguage, setConditionsLanguage] = useState<'ar' | 'fr'>('ar');
   const [showConditionsPersonalizer, setShowConditionsPersonalizer] = useState<ReservationDetails | null>(null);
   const [showDebtModal, setShowDebtModal] = useState<{ reservation: ReservationDetails } | null>(null);
+  // ── Continuité de location (prolongation)
+  const [showContinuationModal, setShowContinuationModal] = useState<ReservationDetails | null>(null);
+  const [continuationPrompt, setContinuationPrompt] = useState<{ reservation: ReservationDetails; addedDays: number; totalPrice: number } | null>(null);
+  const [openContinuityMenu, setOpenContinuityMenu] = useState<string | null>(null);
   const [filterDebtOnly, setFilterDebtOnly] = useState(false);
   const [agencies, setAgencies] = useState<any[]>([]);
   const [isLoadingAgencies, setIsLoadingAgencies] = useState(true);
@@ -309,7 +314,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     }
   };
 
-  const handlePrint = (reservation: ReservationDetails, type: 'quote' | 'contract' | 'invoice' | 'payment' | 'engagement' | 'versement' | 'inspection') => {
+  const handlePrint = (reservation: ReservationDetails, type: 'quote' | 'contract' | 'continuation' | 'invoice' | 'payment' | 'engagement' | 'versement' | 'inspection') => {
     setOpenPrintMenu(null);
     // Go straight to the print preview (no personalisation choice step)
     setShowPersonalization({ reservation, type });
@@ -413,10 +418,42 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
     setShowCompletionModal(true);
   };
 
-  // A car is NOT disponible only if it has an active or confirmed reservation
+  /** Ouvre la saisie de continuité (prolongation) d'une location en cours. */
+  const handleContinuity = (reservation: ReservationDetails) => {
+    setOpenPrintMenu(null);
+    setOpenContinuityMenu(null);
+    setShowContinuationModal(reservation);
+  };
+
+  /**
+   * Enregistre une prolongation : jours ajoutés facturés SÉPARÉMENT, statut
+   * « location continuée », et coût ajouté à la dette du client.
+   */
+  const handleSaveContinuation = async (reservation: ReservationDetails, payload: ContinuationPayload) => {
+    await ReservationsService.createContinuation({
+      reservation,
+      addedDays: payload.addedDays,
+      pricePerDay: payload.pricePerDay,
+      totalPrice: payload.totalPrice,
+      newReturnDate: payload.newReturnDate,
+      paidAmount: payload.paidAmount,
+      paymentMethod: payload.paymentMethod,
+      notes: payload.notes,
+      createdBy: user?.id || null,
+      createdByName: user?.user_metadata?.full_name || user?.email || null,
+    });
+
+    const fresh = await ReservationsService.getReservationById(reservation.id);
+    setReservations(prev => prev.map(r => (r.id === fresh.id ? fresh : r)));
+    setShowContinuationModal(null);
+    // On propose systématiquement l'impression du contrat de continuité.
+    setContinuationPrompt({ reservation: fresh, addedDays: payload.addedDays, totalPrice: payload.totalPrice });
+  };
+
+  // A car is NOT disponible only if it has an active, continued or confirmed reservation
     const rentedCarIds = new Set(
     reservations
-      .filter(r => r.status === 'active' || r.status === 'confirmed')
+      .filter(r => r.status === 'active' || r.status === 'continued' || r.status === 'confirmed')
       .map(r => r.car?.id)
       .filter((id): id is string => Boolean(id))
   );
@@ -428,7 +465,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
   // ACCEPTÉE (elle passe alors 'pending'). En sont donc exclues : les commandes
   // du site en attente ('website_reservation'), les annulées ('cancelled') et les
   // terminées ('completed'/'terminated') — ces dernières restent révélées par la recherche.
-  const PLANNER_STATUSES = ['pending', 'accepted', 'confirmed', 'active'];
+  const PLANNER_STATUSES = ['pending', 'accepted', 'confirmed', 'active', 'continued'];
 
   const filteredReservations = reservations.filter(reservation => {
     if (!reservation.client || !reservation.car) return false;
@@ -683,6 +720,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                 <option value="accepted">{lang === 'fr' ? 'Accepté' : 'مقبول'}</option>
                 <option value="confirmed">{lang === 'fr' ? 'Confirmé' : 'مؤكد'}</option>
                 <option value="active">{lang === 'fr' ? 'Actif' : 'نشط'}</option>
+                <option value="continued">{lang === 'fr' ? 'Location continuée' : 'كراء ممدد'}</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-saas-text-muted pointer-events-none" />
             </div>
@@ -935,7 +973,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                       } else {
                         // Find the current active/confirmed reservation for this car
                         const currentReservation = reservations.find(
-                          res => res.car?.id === car.id && ['active', 'confirmed'].includes(res.status)
+                          res => res.car?.id === car.id && ['active', 'continued', 'confirmed'].includes(res.status)
                         );
                         if (currentReservation) {
                           setSelectedReservation(currentReservation);
@@ -1063,6 +1101,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   reservation.status === 'confirmed' ? 'bg-green-100 text-green-800' :
                   reservation.status === 'accepted' ? 'bg-teal-100 text-teal-800' :
                   reservation.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                  reservation.status === 'continued' ? 'bg-cyan-100 text-cyan-800' :
                   reservation.status === 'completed' ? 'bg-purple-100 text-purple-800' :
                   reservation.status === 'terminated' ? 'bg-red-100 text-red-800' :
                   'bg-yellow-100 text-yellow-800'
@@ -1070,10 +1109,17 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   {reservation.status === 'confirmed' ? '✅ Confirmé' :
                    reservation.status === 'accepted' ? '✅ Accepté' :
                    reservation.status === 'active' ? '🔄 Actif' :
+                   reservation.status === 'continued' ? (lang === 'fr' ? '🔁 Location continuée' : '🔁 كراء ممدد') :
                    reservation.status === 'completed' ? '🏁 Terminé' :
                    reservation.status === 'terminated' ? '🛑 Terminée' :
                    '⏳ En attente'}
                 </span>
+                {/* Jours ajoutés par la (les) continuité(s) de location */}
+                {(Number(reservation.continuationDays) || 0) > 0 && (
+                  <span className="px-3 py-1 rounded-full text-xs font-black shadow-sm bg-cyan-600 text-white">
+                    +{reservation.continuationDays} {lang === 'fr' ? 'jours ajoutés' : 'أيام مضافة'}
+                  </span>
+                )}
                 {/* Origine : site web vs agence */}
                 <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${
                   reservation.source === 'website'
@@ -1115,6 +1161,22 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   <Clock className="w-4 h-4" />
                   <span>{reservation.totalDays} {lang === 'fr' ? 'jours' : 'أيام'}</span>
                 </div>
+                {/* Continuité de location : jours ajoutés et leur coût (indépendant) */}
+                {(Number(reservation.continuationDays) || 0) > 0 && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-cyan-50 border border-cyan-200">
+                    <span className="flex items-center gap-1.5 text-xs font-black text-cyan-800">
+                      🔁 {lang === 'fr' ? 'Jours ajoutés' : 'أيام مضافة'} : +{reservation.continuationDays}
+                      {(Number(reservation.continuationCount) || 0) > 1 && (
+                        <span className="font-bold text-cyan-600">
+                          ({reservation.continuationCount} {lang === 'fr' ? 'prolongations' : 'تمديدات'})
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs font-black text-cyan-700">
+                      +{(Number(reservation.continuationAmount) || 0).toLocaleString('fr-DZ')} {lang === 'fr' ? 'DA' : 'د.ج'}
+                    </span>
+                  </div>
+                )}
                 <div className="mt-3 p-4 bg-gradient-to-r from-white to-slate-50 rounded-xl border border-slate-200">
                   <div className="flex items-center justify-between mb-3">
                     <div>
@@ -1226,13 +1288,70 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   </button>
                 )}
 
-                {reservation.status === 'active' && (
+                {(reservation.status === 'active' || reservation.status === 'continued') && (
                   <button
                     onClick={() => handleComplete(reservation)}
                     className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
                   >
                     🏁 {lang === 'fr' ? 'Terminer' : 'إنهاء'}
                   </button>
+                )}
+
+                {/* Continuité de location : prolonger une location en cours */}
+                {(reservation.status === 'active' || reservation.status === 'continued') && (
+                  <button
+                    onClick={() => handleContinuity(reservation)}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-700 hover:to-sky-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
+                  >
+                    🔁 {lang === 'fr' ? 'Continuité de location' : 'تمديد الكراء'}
+                  </button>
+                )}
+
+                {/* Contrat de continuité : impression + envoi par email */}
+                {reservation.status === 'continued' && (
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setOpenPrintMenu(null);
+                        setOpenContinuityMenu(openContinuityMenu === reservation.id ? null : reservation.id);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 bg-white border-2 border-cyan-500 text-cyan-700 hover:bg-cyan-50 font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
+                    >
+                      📄 {lang === 'fr' ? 'Contrat de continuité' : 'عقد التمديد'}
+                      <ChevronDown className={`w-4 h-4 transition-transform ${openContinuityMenu === reservation.id ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    <AnimatePresence>
+                      {openContinuityMenu === reservation.id && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: 5 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-2xl border border-cyan-200 z-50 overflow-hidden"
+                        >
+                          <button
+                            onClick={() => {
+                              setOpenContinuityMenu(null);
+                              handlePrint(reservation, 'continuation');
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-cyan-50 text-saas-text-main font-bold flex items-center gap-2 border-b border-cyan-100 transition-colors"
+                          >
+                            🖨️ {lang === 'fr' ? 'Imprimer le contrat' : 'طباعة العقد'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenContinuityMenu(null);
+                              setShowSendContractModal(reservation);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-green-50 text-saas-text-main font-bold flex items-center gap-2 transition-colors"
+                          >
+                            📧 {lang === 'fr' ? 'Envoyer par email' : 'إرسال بالبريد الإلكتروني'}
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 )}
 
                 {(reservation.status === 'completed' || reservation.status === 'terminated') && (
@@ -1324,6 +1443,14 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                           >
                             📄 {lang === 'fr' ? 'Contrat' : 'عقد'}
                           </button>
+                          {reservation.status === 'continued' && (
+                            <button
+                              onClick={() => handlePrint(reservation, 'continuation')}
+                              className="w-full text-left px-4 py-3 hover:bg-cyan-50 text-cyan-700 font-bold flex items-center gap-2 border-b border-saas-border transition-colors"
+                            >
+                              🔁 {lang === 'fr' ? 'Contrat de continuité' : 'عقد التمديد'}
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               setOpenPrintMenu(null);
@@ -1467,6 +1594,37 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           } catch (err) {
             console.error('Failed to save payment', err);
           }
+        }}
+      />
+    )}
+  </AnimatePresence>
+
+  {/* Continuité de location : saisie des jours ajoutés */}
+  <AnimatePresence>
+    {showContinuationModal && (
+      <ContinuationModal
+        lang={lang}
+        reservation={showContinuationModal}
+        onClose={() => setShowContinuationModal(null)}
+        onConfirm={async (payload) => {
+          await handleSaveContinuation(showContinuationModal, payload);
+        }}
+      />
+    )}
+  </AnimatePresence>
+
+  {/* Proposition d'impression du contrat de continuité */}
+  <AnimatePresence>
+    {continuationPrompt && (
+      <ContinuationPrintPrompt
+        lang={lang}
+        addedDays={continuationPrompt.addedDays}
+        totalPrice={continuationPrompt.totalPrice}
+        onSkip={() => setContinuationPrompt(null)}
+        onPrint={() => {
+          const target = continuationPrompt.reservation;
+          setContinuationPrompt(null);
+          setShowPersonalization({ reservation: target, type: 'continuation' });
         }}
       />
     )}
@@ -1704,6 +1862,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           <SendContractModal
             lang={lang}
             reservation={showSendContractModal}
+            defaultDocumentType={showSendContractModal.status === 'continued' ? 'continuation' : 'contract'}
             onClose={() => setShowSendContractModal(null)}
           />
         )}
@@ -2493,6 +2652,20 @@ export const PersonalizationModal: React.FC<{
   // Affichage des prix sur le contrat imprimé (activé par défaut)
   const [showPricesOnContract, setShowPricesOnContract] = useState(true);
 
+  // Prolongation la plus récente — alimente le CONTRAT DE CONTINUITÉ.
+  const [continuation, setContinuation] = useState<ReservationContinuation | null>(
+    reservation?.continuations?.[0] || null
+  );
+
+  useEffect(() => {
+    if (type !== 'continuation' || continuation) return;
+    let cancelled = false;
+    ReservationsService.getContinuations(reservation.id)
+      .then(list => { if (!cancelled && list.length > 0) setContinuation(list[0]); })
+      .catch(err => console.error('Prolongation introuvable :', err));
+    return () => { cancelled = true; };
+  }, [type, reservation?.id, continuation]);
+
   // Charge les entreprises dès que l'option société est activée
   useEffect(() => {
     if (!isSociete) return;
@@ -2653,12 +2826,38 @@ export const PersonalizationModal: React.FC<{
     }
   };
 
-  const generateContractHTML = (templateLang: 'fr' | 'ar', societe?: { entreprise: string; conducteur: string; rc: string; art: string; nis: string; nif: string; email: string } | null): string => {
+  /**
+   * Contrat de location. Passer `continuation` produit le CONTRAT DE
+   * CONTINUITÉ : même mise en page, même charte, mais la période et la
+   * tarification portent UNIQUEMENT sur les jours ajoutés — les jours déjà
+   * facturés au contrat initial n'y figurent jamais.
+   */
+  const generateContractHTML = (
+    templateLang: 'fr' | 'ar',
+    societe?: { entreprise: string; conducteur: string; rc: string; art: string; nis: string; nif: string; email: string } | null,
+    continuation?: ReservationContinuation | null
+  ): string => {
     const isFrench = templateLang === 'fr';
     const textDir = isFrench ? 'ltr' : 'rtl';
-    
+    const isContinuation = !!continuation;
+
+    // Jours ajoutés et leur coût — facturation INDÉPENDANTE du contrat initial.
+    const contDays    = Number(continuation?.addedDays) || 0;
+    const contPerDay  = Number(continuation?.pricePerDay) || 0;
+    const contTotal   = Number(continuation?.totalPrice) || 0;
+    const contFrom    = continuation?.previousReturnDate || reservation?.step1?.returnDate;
+    const contTo      = continuation?.newReturnDate || reservation?.step1?.returnDate;
+    const contSeq     = Number(continuation?.sequenceNumber) || 1;
+    const safeDate    = (d?: string) => {
+      if (!d) return '—';
+      const parsed = new Date(d);
+      return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString('fr-FR');
+    };
+
     const labels = {
-      contractTitle: isFrench ? 'Contrat de Location' : 'عقد كراء السيارة',
+      contractTitle: isContinuation
+        ? (isFrench ? 'Contrat de Continuité de Location' : 'عقد تمديد كراء السيارة')
+        : (isFrench ? 'Contrat de Location' : 'عقد كراء السيارة'),
       contractDate: isFrench ? 'Date du Contrat' : 'تاريخ العقد',
       contractNumber: isFrench ? 'N° de Contrat' : 'رقم العقد',
       client: isFrench ? 'Client' : 'العميل',
@@ -2723,7 +2922,7 @@ export const PersonalizationModal: React.FC<{
     const protectionAssuranceTotal = Math.round(protectionAssurancePerDay * (reservation?.totalDays || 0));
     // Compact the layout whenever there is an extra block to fit (second
     // conductor and/or the société card) so everything stays on one page.
-    const compact = hasSecondConductor || hasSociete;
+    const compact = hasSecondConductor || hasSociete || isContinuation;
     const baseFontSize = compact ? 17 : 18;
     const scaleFactor = 1;
 
@@ -2975,6 +3174,35 @@ export const PersonalizationModal: React.FC<{
           color: #666;
           margin-top: 1px;
         }
+        /* Bandeau « contrat de continuité » */
+        .continuity-banner {
+          margin-bottom: ${compact ? '3px' : '4px'};
+          padding: ${compact ? '4px 6px' : '5px 7px'};
+          border-radius: 4px;
+          border: 1px solid #a5f3fc;
+          border-left: 5px solid #0e7490;
+          background-color: #ecfeff;
+          page-break-inside: avoid;
+        }
+        .continuity-banner-title {
+          font-size: ${compact ? '12px' : '13px'};
+          font-weight: 800;
+          color: #0e7490;
+          margin-bottom: 2px;
+          letter-spacing: 0.3px;
+        }
+        .continuity-banner-text {
+          font-size: ${compact ? '11px' : '12px'};
+          color: #155e75;
+          line-height: 1.35;
+        }
+        .pricing-note {
+          margin-top: 3px;
+          font-size: ${compact ? '10px' : '11px'};
+          color: #0e7490;
+          font-weight: 600;
+          line-height: 1.3;
+        }
         /* Société / Entreprise card (shown above vehicle info) */
         .societe-card {
           margin-bottom: ${compact ? '3px' : '4px'};
@@ -3110,21 +3338,36 @@ export const PersonalizationModal: React.FC<{
           </div>
         </div>
 
+        ${isContinuation ? `
+        <!-- Bandeau : ce document est un CONTRAT DE CONTINUITÉ -->
+        <div class="continuity-banner">
+          <div class="continuity-banner-title">
+            🔁 ${isFrench ? 'CONTRAT DE CONTINUITÉ DE LOCATION' : 'عقد تمديد كراء السيارة'}
+            &nbsp;·&nbsp; ${isFrench ? 'Prolongation N°' : 'التمديد رقم'} ${contSeq}
+          </div>
+          <div class="continuity-banner-text">
+            ${isFrench
+              ? `Le présent document PROLONGE le contrat de location N° #${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'} de <strong>${contDays} jour(s) supplémentaire(s)</strong>. Sa tarification est <strong>INDÉPENDANTE</strong> : elle ne couvre QUE ces jours ajoutés et ne reprend aucun montant du contrat initial.`
+              : `هذه الوثيقة تُمدّد عقد الكراء رقم #${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'} بـ <strong>${contDays} يوم/أيام إضافية</strong>. التسعيرة <strong>مستقلة تماماً</strong>: تشمل الأيام المضافة فقط ولا تتضمن أي مبلغ من العقد الأصلي.`}
+          </div>
+        </div>
+        ` : ''}
+
         <!-- Rental Period -->
         <div class="section">
-          <div class="section-title">📅 ${labels.rentalPeriod}</div>
+          <div class="section-title">📅 ${isContinuation ? (isFrench ? 'Période prolongée' : 'الفترة الممددة') : labels.rentalPeriod}</div>
           <div class="section-content full">
             <div class="field">
-              <div class="field-label">${labels.departure}</div>
-              <div class="field-value">${new Date(reservation?.step1?.departureDate).toLocaleDateString('fr-FR')}</div>
+              <div class="field-label">${isContinuation ? (isFrench ? 'Reprise (fin du contrat initial)' : 'البداية (نهاية العقد الأصلي)') : labels.departure}</div>
+              <div class="field-value">${isContinuation ? safeDate(contFrom) : safeDate(reservation?.step1?.departureDate)}</div>
             </div>
             <div class="field">
-              <div class="field-label">${labels.return}</div>
-              <div class="field-value">${new Date(reservation?.step1?.returnDate).toLocaleDateString('fr-FR')}</div>
+              <div class="field-label">${isContinuation ? (isFrench ? 'Nouveau retour' : 'العودة الجديدة') : labels.return}</div>
+              <div class="field-value">${isContinuation ? safeDate(contTo) : safeDate(reservation?.step1?.returnDate)}</div>
             </div>
             <div class="field">
-              <div class="field-label">${labels.duration}</div>
-              <div class="field-value">${reservation?.totalDays || 0} ${labels.days}</div>
+              <div class="field-label">${isContinuation ? (isFrench ? 'Jours ajoutés' : 'الأيام المضافة') : labels.duration}</div>
+              <div class="field-value">${isContinuation ? `+${contDays}` : (reservation?.totalDays || 0)} ${labels.days}</div>
             </div>
           </div>
         </div>
@@ -3246,7 +3489,28 @@ export const PersonalizationModal: React.FC<{
           ${showPricesOnContract ? `
           <!-- Pricing -->
           <div class="section pricing-section">
-            <div class="section-title">💰 ${labels.pricing}</div>
+            <div class="section-title">💰 ${isContinuation ? (isFrench ? 'Tarification de la prolongation' : 'تسعيرة التمديد') : labels.pricing}</div>
+            ${isContinuation ? `
+            <div class="pricing-table">
+              <div class="pricing-row">
+                <span>${labels.pricePerDay}:</span>
+                <span>${contPerDay.toLocaleString('fr-DZ')} DA</span>
+              </div>
+              <div class="pricing-row">
+                <span>${isFrench ? 'Jours ajoutés' : 'الأيام المضافة'}:</span>
+                <span>${contDays}</span>
+              </div>
+              <div class="pricing-row grand-total">
+                <span>${isFrench ? 'TOTAL PROLONGATION' : 'إجمالي التمديد'}:</span>
+                <span>${contTotal.toLocaleString('fr-DZ')} DA</span>
+              </div>
+              <div class="pricing-note">
+                ${isFrench
+                  ? 'Montant dû au titre des seuls jours ajoutés — indépendant du contrat initial.'
+                  : 'المبلغ المستحق عن الأيام المضافة فقط — مستقل عن العقد الأصلي.'}
+              </div>
+            </div>
+            ` : `
             <div class="pricing-table">
               <div class="pricing-row">
                 <span>${labels.pricePerDay}:</span>
@@ -3283,6 +3547,7 @@ export const PersonalizationModal: React.FC<{
                 <span>${((reservation?.tvaApplied ? ((reservation?.totalPrice || 0) * 1.19) : (reservation?.totalPrice || 0)) + contractTimbreAmount).toFixed(2)} DA</span>
               </div>
             </div>
+            `}
           </div>
           ` : ''}
 
@@ -5177,6 +5442,8 @@ export const PersonalizationModal: React.FC<{
       content = generateRecuHTML(selectedTemplate);
     } else if (type === 'inspection') {
       content = generateInspectionHTML(selectedTemplate);
+    } else if (type === 'continuation') {
+      content = generateContractHTML(selectedTemplate, isSociete ? societeData : null, continuation);
     } else {
       content = generateContractHTML(selectedTemplate, isSociete ? societeData : null);
     }
@@ -5196,6 +5463,7 @@ export const PersonalizationModal: React.FC<{
   const getDocumentTitle = (): string => {
     const titleMap: { [key: string]: { fr: string; ar: string } } = {
       contract: { fr: 'Contrat de Location', ar: 'عقد التأجير' },
+      continuation: { fr: 'Contrat de Continuité', ar: 'عقد التمديد' },
       engagement: { fr: 'Lettre d\'Engagement', ar: 'رسالة التزام' },
       invoice: { fr: 'Facture', ar: 'الفاتورة' },
       facture: { fr: 'Facture', ar: 'الفاتورة' },
@@ -5218,6 +5486,7 @@ export const PersonalizationModal: React.FC<{
     if (typeKey === 'invoice' || typeKey === 'facture') return 'from-blue-600 to-blue-700';
     if (typeKey === 'quote' || typeKey === 'devis') return 'from-green-600 to-green-700';
     if (typeKey === 'payment' || typeKey === 'versement' || typeKey === 'receipt' || typeKey === 'recu') return 'from-purple-600 to-purple-700';
+    if (typeKey === 'continuation') return 'from-cyan-600 to-sky-700';
     return 'from-blue-600 to-blue-700';
   };
 
@@ -5233,6 +5502,8 @@ export const PersonalizationModal: React.FC<{
       return generateRecuHTML(selectedTemplate);
     } else if (typeKey === 'inspection') {
       return generateInspectionHTML(selectedTemplate);
+    } else if (typeKey === 'continuation') {
+      return generateContractHTML(selectedTemplate, isSociete ? societeData : null, continuation);
     } else {
       return generateContractHTML(selectedTemplate, isSociete ? societeData : null);
     }
@@ -5312,7 +5583,7 @@ export const PersonalizationModal: React.FC<{
           <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-50 to-white p-8">
 
             {/* Société Option - for invoice/facture and contract */}
-            {(type === 'invoice' || type === 'facture' || type === 'contract') && (
+            {(type === 'invoice' || type === 'facture' || type === 'contract' || type === 'continuation') && (
               <div className="mb-5 border-2 border-amber-300 rounded-xl overflow-hidden">
                 {/* Checkbox header */}
                 <label className="flex items-center gap-3 px-4 py-3 bg-amber-50 cursor-pointer select-none hover:bg-amber-100 transition-colors">
@@ -5474,7 +5745,7 @@ export const PersonalizationModal: React.FC<{
               </div>
             )}
             {/* Affichage des prix sur le contrat imprimé */}
-            {type === 'contract' && (
+            {(type === 'contract' || type === 'continuation') && (
               <div className="mb-5 border-2 border-slate-300 rounded-xl overflow-hidden">
                 <label className="flex items-center gap-3 px-4 py-3 bg-slate-50 cursor-pointer select-none hover:bg-slate-100 transition-colors">
                   <input
@@ -5505,8 +5776,8 @@ export const PersonalizationModal: React.FC<{
               </div>
             )}
 
-            {/* Second Conductor Search (only for contract) */}
-            {type === 'contract' && (
+            {/* Second Conductor Search (contrat et contrat de continuité) */}
+            {(type === 'contract' || type === 'continuation') && (
               <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-5">
                 <h3 className="font-bold text-lg text-blue-900 mb-4 flex items-center gap-2">
                   👥 {lang === 'fr' ? 'Ajouter un Conducteur Secondaire' : 'إضافة سائق ثانوي'}

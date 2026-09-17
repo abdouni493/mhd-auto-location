@@ -4,22 +4,37 @@ import { X, Send, Mail, Loader } from 'lucide-react';
 import { Language, ReservationDetails } from '../types';
 import { EmailService } from '../services/emailService';
 import { DatabaseService } from '../services/DatabaseService';
+import { DEFAULT_SENDER_EMAIL } from '../constants/email';
+
+/** Types de documents envoyables par email. */
+export type SendableDocumentType =
+  | 'contract'
+  | 'continuation'
+  | 'devis'
+  | 'recu'
+  | 'engagement'
+  | 'facture'
+  | 'inspection'
+  | 'reservation';
 
 interface SendContractModalProps {
   lang: Language;
   reservation: ReservationDetails;
+  /** Document présélectionné à l'ouverture (défaut : le contrat). */
+  defaultDocumentType?: SendableDocumentType;
   onClose: () => void;
 }
 
 export const SendContractModal: React.FC<SendContractModalProps> = ({
   lang,
   reservation,
+  defaultDocumentType = 'contract',
   onClose,
 }) => {
   const [clientEmail, setClientEmail] = useState(reservation.client.email || '');
   const [senderEmail, setSenderEmail] = useState('');
   const [templateLang, setTemplateLang] = useState<'fr' | 'ar'>('ar');
-  const [documentType, setDocumentType] = useState<'contract' | 'devis' | 'recu' | 'engagement' | 'facture' | 'inspection' | 'reservation'>('contract');
+  const [documentType, setDocumentType] = useState<SendableDocumentType>(defaultDocumentType);
   const [loading, setLoading] = useState(false);
   const [loadingSender, setLoadingSender] = useState(true);
   const [notification, setNotification] = useState<{
@@ -34,24 +49,12 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
       try {
         setLoadingSender(true);
         const contacts = await DatabaseService.getWebsiteContacts();
-        if (contacts.email) {
-          setSenderEmail(contacts.email);
-        } else {
-          setNotification({
-            type: 'error',
-            message: lang === 'fr' 
-              ? 'Email de contact non configuré. Veuillez le configurer dans les paramètres.'
-              : 'لم يتم تكوين بريد الاتصال. يرجى تكوينه في الإعدادات.',
-          });
-        }
+        // Repli sur l'expéditeur par défaut de l'agence si aucun email de
+        // contact n'est configuré — l'envoi reste toujours possible.
+        setSenderEmail(contacts.email || DEFAULT_SENDER_EMAIL);
       } catch (error) {
         console.error('Error loading sender email:', error);
-        setNotification({
-          type: 'error',
-          message: lang === 'fr' 
-            ? 'Erreur lors du chargement de l\'email de contact'
-            : 'خطأ في تحميل بريد الاتصال',
-        });
+        setSenderEmail(DEFAULT_SENDER_EMAIL);
       } finally {
         setLoadingSender(false);
       }
@@ -95,6 +98,7 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
       setLoading(true);
       const documentNames = {
         contract: lang === 'fr' ? 'Contrat' : 'العقد',
+        continuation: lang === 'fr' ? 'Contrat de continuité' : 'عقد التمديد',
         devis: lang === 'fr' ? 'Devis' : 'عرض أسعار',
         recu: lang === 'fr' ? 'Reçu' : 'إيصال',
         engagement: lang === 'fr' ? 'Engagement' : 'التزام',
@@ -278,6 +282,7 @@ export const SendContractModal: React.FC<SendContractModalProps> = ({
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { id: 'contract', label: lang === 'fr' ? 'Contrat' : 'عقد', icon: '📄' },
+                  { id: 'continuation', label: lang === 'fr' ? 'Contrat continuité' : 'عقد التمديد', icon: '🔁' },
                   { id: 'devis', label: lang === 'fr' ? 'Devis' : 'عرض أسعار', icon: '📋' },
                   { id: 'recu', label: lang === 'fr' ? 'Reçu' : 'إيصال', icon: '💳' },
                   { id: 'engagement', label: lang === 'fr' ? 'Engagement' : 'التزام', icon: '🤝' },

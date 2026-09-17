@@ -555,7 +555,9 @@ export interface ReservationDetails {
   remainingPayment: number;
   // 'website_reservation' : commande brute reçue du site public, en attente
   // d'acceptation par l'agence (n'apparaît PAS dans le planificateur).
-  status: 'website_reservation' | 'pending' | 'accepted' | 'confirmed' | 'active' | 'completed' | 'cancelled';
+  // 'continued' : location ACTIVE prolongée (continuité de location) — le
+  // client garde le véhicule des jours supplémentaires facturés à part.
+  status: 'website_reservation' | 'pending' | 'accepted' | 'confirmed' | 'active' | 'continued' | 'completed' | 'cancelled';
   // Forfait d'assurance de protection sélectionné (snapshot + référence).
   protectionAssuranceId?: string;
   protectionAssuranceName?: string;
@@ -613,6 +615,55 @@ export interface ReservationDetails {
   flightTime?: string;
   /** URL de l'image du billet fournie par le client. */
   flightTicketImage?: string;
+
+  // ── Continuité de location (prolongation) ───────────────────────────
+  /** Total des jours ajoutés par les prolongations successives. */
+  continuationDays?: number;
+  /** Total facturé au titre des prolongations (DZD). */
+  continuationAmount?: number;
+  /** Nombre de prolongations enregistrées. */
+  continuationCount?: number;
+  /** Date de retour AVANT la toute première prolongation. */
+  originalReturnDate?: string;
+  /** Durée (jours) du contrat initial, avant prolongation. */
+  originalTotalDays?: number;
+  /** Montant du contrat initial, avant prolongation. */
+  originalTotalPrice?: number;
+  /** Horodatage de la dernière prolongation. */
+  lastContinuedAt?: string;
+  /** Prolongations enregistrées (la plus récente en premier). */
+  continuations?: ReservationContinuation[];
+}
+
+/**
+ * Une prolongation (« continuité de location ») : des jours ajoutés à une
+ * location en cours, facturés de façon TOTALEMENT INDÉPENDANTE du contrat
+ * initial. Le contrat de continuité n'imprime que ces jours-là.
+ */
+export interface ReservationContinuation {
+  id: string;
+  reservationId: string;
+  companyId?: string | null;
+  /** Numéro d'ordre (1 = première prolongation). */
+  sequenceNumber: number;
+  /** Jours ajoutés à la location. */
+  addedDays: number;
+  /** Tarif journalier appliqué à CES jours uniquement. */
+  pricePerDay: number;
+  /** Coût total de la prolongation (jours ajoutés × tarif). */
+  totalPrice: number;
+  /** Date de retour avant cette prolongation. */
+  previousReturnDate?: string;
+  /** Nouvelle date de retour après cette prolongation. */
+  newReturnDate?: string;
+  returnTime?: string;
+  /** Montant encaissé immédiatement (le reste part en dette). */
+  paidAmount: number;
+  paymentMethod?: string;
+  notes?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt: string;
 }
 
 /** Paramètres globaux de l'agence appliqués à toutes les fins de location. */

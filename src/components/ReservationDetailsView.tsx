@@ -123,12 +123,14 @@ export const ReservationDetailsView: React.FC<ReservationDetailsViewProps> = ({ 
               reservation.status === 'confirmed' ? 'bg-green-100 text-green-800' :
               reservation.status === 'accepted' ? 'bg-teal-100 text-teal-800' :
               reservation.status === 'active' ? 'bg-blue-100 text-blue-800' :
+              reservation.status === 'continued' ? 'bg-cyan-100 text-cyan-800' :
               reservation.status === 'completed' ? 'bg-purple-100 text-purple-800' :
               'bg-yellow-100 text-yellow-800'
             }`}>
               {reservation.status === 'confirmed' ? '✅ Confirmé' :
                reservation.status === 'accepted' ? '✅ Accepté' :
                reservation.status === 'active' ? '🔄 Actif' :
+               reservation.status === 'continued' ? (lang === 'fr' ? '🔁 Location continuée' : '🔁 كراء ممدد') :
                reservation.status === 'completed' ? '🏁 Terminé' :
                '⏳ En attente'}
             </span>
@@ -148,7 +150,7 @@ export const ReservationDetailsView: React.FC<ReservationDetailsViewProps> = ({ 
                 ✅ {lang === 'fr' ? 'Activer' : 'تفعيل'}
               </button>
             )}
-            {reservation.status === 'active' && (
+            {(reservation.status === 'active' || reservation.status === 'continued') && (
               <button
                 onClick={handleComplete}
                 className="btn-saas-secondary"

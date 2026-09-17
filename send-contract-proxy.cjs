@@ -83,6 +83,7 @@ app.all('/functions/v1/send-contract-email', async (req, res) => {
     // Build document type label for email
     const documentTypeLabels = {
       contract: { fr: 'Contrat de Location', ar: 'عقد التأجير' },
+      continuation: { fr: 'Contrat de Continuité de Location', ar: 'عقد التمديد' },
       inspection: { fr: 'Rapport d\'Inspection', ar: 'تقرير فحص المركبة' },
       engagement: { fr: 'Lettre d\'Engagement', ar: 'رسالة الالتزام' },
       recu: { fr: 'Reçu de Paiement', ar: 'إيصال الدفع' },
@@ -103,7 +104,7 @@ app.all('/functions/v1/send-contract-email', async (req, res) => {
       body: JSON.stringify({
         sender: {
           name: 'AUTO LOCATION',
-          email: payload.sender || 'noreply@autolocation.com',
+          email: payload.sender || 'mhdauto16@gmail.com',
         },
         to: [
           {
@@ -156,7 +157,7 @@ app.all('/functions/v1/send-contract-email', async (req, res) => {
       message: `${docLabel} PDF sent successfully`,
       details: {
         to: payload.email,
-        from: payload.sender || 'noreply@autolocation.com',
+        from: payload.sender || 'mhdauto16@gmail.com',
         subject:
           payload.language === 'fr'
             ? `${docLabel} - AUTO LOCATION`

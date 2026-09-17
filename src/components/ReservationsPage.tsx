@@ -41,6 +41,7 @@ const calcPaid = (r: ReservationDetails): number => {
 const STATUS_CLS: Record<string, string> = {
   completed: 'bg-violet-100 text-violet-700 border-violet-200',
   active:    'bg-blue-100  text-blue-700  border-blue-200',
+  continued: 'bg-cyan-100  text-cyan-700  border-cyan-200',
   confirmed: 'bg-teal-100  text-teal-700  border-teal-200',
   accepted:  'bg-indigo-100 text-indigo-700 border-indigo-200',
   pending:   'bg-amber-100 text-amber-700 border-amber-200',
@@ -49,6 +50,7 @@ const STATUS_CLS: Record<string, string> = {
 const STATUS_LABEL: Record<string, { fr: string; ar: string }> = {
   completed: { fr: 'Terminée',  ar: 'منتهية'  },
   active:    { fr: 'Active',    ar: 'نشطة'    },
+  continued: { fr: 'Continuée',  ar: 'ممددة'  },
   confirmed: { fr: 'Confirmée', ar: 'مؤكدة'   },
   accepted:  { fr: 'Acceptée',  ar: 'مقبولة'  },
   pending:   { fr: 'En attente',ar: 'معلقة'   },

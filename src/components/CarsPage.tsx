@@ -86,7 +86,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         return dep <= today && today <= ret;
       };
 
-      const active   = carRes.find(r => r.status === 'active'    && coversToday(r));
+      const active   = carRes.find(r => (r.status === 'active' || r.status === 'continued') && coversToday(r));
       const reserved = carRes.find(r => (r.status === 'confirmed' || r.status === 'pending') && coversToday(r));
 
       let realStatus: Car['status'] = 'disponible';
@@ -103,7 +103,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
     const res = reservations.find(r => {
       const id = r.carId || r.car?.id;
       if (id !== carId) return false;
-      if (!['active', 'confirmed', 'pending'].includes(r.status)) return false;
+      if (!['active', 'continued', 'confirmed', 'pending'].includes(r.status)) return false;
       const dep = (r.step1?.departureDate || '').substring(0, 10);
       const ret = (r.step1?.returnDate    || '').substring(0, 10);
       return dep <= today && today <= ret;

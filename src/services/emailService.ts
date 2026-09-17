@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { ReservationDetails } from '../types';
+import { ReservationDetails, ReservationContinuation } from '../types';
 import html2pdf from 'html2pdf.js';
 
 /**
@@ -470,8 +470,15 @@ export class EmailService {
   static async generateDocumentHTML(
     reservation: ReservationDetails,
     templateLang: 'fr' | 'ar',
-    documentType: 'contract' | 'devis' | 'recu' | 'engagement' | 'facture' | 'inspection' | 'reservation'
+    documentType: 'contract' | 'continuation' | 'devis' | 'recu' | 'engagement' | 'facture' | 'inspection' | 'reservation'
   ): Promise<string> {
+    // Contrat de continuité : on récupère la prolongation la plus récente pour
+    // n'imprimer QUE les jours ajoutés et leur coût (indépendants du contrat).
+    if (documentType === 'continuation') {
+      const continuation = await this.loadLatestContinuation(reservation);
+      return this.generateContractEmailHTMLForEmail(reservation, templateLang, continuation);
+    }
+
     // Get the base contract HTML
     let htmlContent = await this.generateContractHTML(reservation, templateLang);
     
@@ -480,6 +487,10 @@ export class EmailService {
       contract: {
         fr: 'CONTRAT DE LOCATION DE VÉHICULE',
         ar: 'عقد تأجير السيارة'
+      },
+      continuation: {
+        fr: 'CONTRAT DE CONTINUITÉ DE LOCATION',
+        ar: 'عقد تمديد كراء السيارة'
       },
       devis: {
         fr: 'DEVIS DE LOCATION',
@@ -881,6 +892,51 @@ export class EmailService {
     } catch (error) {
       console.error('Error generating inspection HTML:', error);
       return this.generateContractHTML(reservation, templateLang);
+    }
+  }
+
+  /**
+   * Prolongation la plus récente d'une réservation (contrat de continuité).
+   * Utilise la valeur déjà chargée si elle est présente, sinon interroge la
+   * table `reservation_continuations`.
+   */
+  private static async loadLatestContinuation(
+    reservation: ReservationDetails
+  ): Promise<ReservationContinuation | null> {
+    if (reservation.continuations && reservation.continuations.length > 0) {
+      return reservation.continuations[0];
+    }
+    try {
+      const { data, error } = await supabase
+        .from('reservation_continuations')
+        .select('*')
+        .eq('reservation_id', reservation.id)
+        .order('sequence_number', { ascending: false })
+        .limit(1);
+
+      if (error || !data || data.length === 0) return null;
+      const row = data[0];
+      return {
+        id: row.id,
+        reservationId: row.reservation_id,
+        companyId: row.company_id ?? null,
+        sequenceNumber: Number(row.sequence_number) || 1,
+        addedDays: Number(row.added_days) || 0,
+        pricePerDay: Number(row.price_per_day) || 0,
+        totalPrice: Number(row.total_price) || 0,
+        previousReturnDate: row.previous_return_date || undefined,
+        newReturnDate: row.new_return_date || undefined,
+        returnTime: row.return_time || undefined,
+        paidAmount: Number(row.paid_amount) || 0,
+        paymentMethod: row.payment_method || undefined,
+        notes: row.notes || undefined,
+        createdBy: row.created_by || undefined,
+        createdByName: row.created_by_name || undefined,
+        createdAt: row.created_at,
+      };
+    } catch (e) {
+      console.warn('Prolongation illisible (migration 20260918 ?) :', e);
+      return null;
     }
   }
 
@@ -1553,7 +1609,11 @@ export class EmailService {
   /**
    * Generate contract email template — same professional design as the printed contract
    */
-  private static async generateContractEmailHTMLForEmail(reservation: ReservationDetails, templateLang: string = 'ar'): Promise<string> {
+  private static async generateContractEmailHTMLForEmail(
+    reservation: ReservationDetails,
+    templateLang: string = 'ar',
+    continuation?: ReservationContinuation | null
+  ): Promise<string> {
     // Load agency settings for logo, name, contact info
     const { data: settingsData } = await supabase
       .from('website_settings')
@@ -1582,8 +1642,26 @@ export class EmailService {
       / (1000 * 60 * 60 * 24)
     );
 
+    // ── Contrat de CONTINUITÉ : mêmes blocs, mais période et tarification
+    //    limitées aux jours ajoutés — le contrat initial n'est jamais repris.
+    const isContinuation = !!continuation;
+    const contDays   = Number(continuation?.addedDays) || 0;
+    const contPerDay = Number(continuation?.pricePerDay) || 0;
+    const contTotal  = Number(continuation?.totalPrice) || 0;
+    const contSeq    = Number(continuation?.sequenceNumber) || 1;
+    const safeDate   = (d?: string) => {
+      if (!d) return '—';
+      const parsed = new Date(d);
+      return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString(locale);
+    };
+    const contFrom = safeDate(continuation?.previousReturnDate || reservation.step1.returnDate);
+    const contTo   = safeDate(continuation?.newReturnDate || reservation.step1.returnDate);
+    const shortId  = reservation.id?.substring(0, 8).toUpperCase() || 'N/A';
+
     const labels = {
-      contractTitle:       isFrench ? 'Contrat de Location' : 'عقد كراء السيارة',
+      contractTitle:       isContinuation
+        ? (isFrench ? 'Contrat de Continuité de Location' : 'عقد تمديد كراء السيارة')
+        : (isFrench ? 'Contrat de Location' : 'عقد كراء السيارة'),
       contractDate:        isFrench ? 'Date du Contrat'     : 'تاريخ العقد',
       contractNumber:      isFrench ? 'N° de Contrat'       : 'رقم العقد',
       clientLabel:         isFrench ? 'Client'              : 'العميل',
@@ -1714,6 +1792,14 @@ export class EmailService {
     .conditions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; }
     .condition-item { display: flex; align-items: center; gap: 4px; }
     .checkbox { width: 12px; height: 12px; border: 1px solid #999; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; flex-shrink: 0; }
+    /* Bandeau « contrat de continuité » */
+    .continuity-banner {
+      background: #ecfeff; padding: 8px 10px; border: 1px solid #a5f3fc;
+      border-left: 5px solid #0e7490; border-radius: 5px; margin-bottom: 10px;
+    }
+    .continuity-banner-title { color: #0e7490; font-weight: 800; font-size: 13px; margin-bottom: 3px; }
+    .continuity-banner-text  { color: #155e75; font-size: 11px; line-height: 1.45; }
+    .pricing-note { margin-top: 4px; font-size: 10px; color: #0e7490; font-weight: 600; line-height: 1.35; }
     /* Special conditions */
     .special-conditions {
       background: #fef2f2; padding: 8px; border: 1px solid #fecaca; border-radius: 4px;
@@ -1763,21 +1849,36 @@ export class EmailService {
       </div>
     </div>
 
+    ${isContinuation ? `
+    <!-- Bandeau : ce document est un CONTRAT DE CONTINUITE -->
+    <div class="continuity-banner">
+      <div class="continuity-banner-title">
+        🔁 ${isFrench ? 'CONTRAT DE CONTINUITÉ DE LOCATION' : 'عقد تمديد كراء السيارة'}
+        &nbsp;·&nbsp; ${isFrench ? 'Prolongation N°' : 'التمديد رقم'} ${contSeq}
+      </div>
+      <div class="continuity-banner-text">
+        ${isFrench
+          ? `Le présent document PROLONGE le contrat de location N° #${shortId} de <strong>${contDays} jour(s) supplémentaire(s)</strong>. Sa tarification est <strong>INDÉPENDANTE</strong> : elle ne couvre QUE ces jours ajoutés et ne reprend aucun montant du contrat initial.`
+          : `هذه الوثيقة تُمدّد عقد الكراء رقم #${shortId} بـ <strong>${contDays} يوم/أيام إضافية</strong>. التسعيرة <strong>مستقلة تماماً</strong>: تشمل الأيام المضافة فقط ولا تتضمن أي مبلغ من العقد الأصلي.`}
+      </div>
+    </div>
+    ` : ''}
+
     <!-- Rental Period -->
     <div class="section">
-      <div class="section-title">📅 ${labels.rentalPeriod}</div>
+      <div class="section-title">📅 ${isContinuation ? (isFrench ? 'Période prolongée' : 'الفترة الممددة') : labels.rentalPeriod}</div>
       <div class="section-content" style="grid-template-columns: 1fr 1fr 1fr;">
         <div class="field">
-          <div class="field-label">${labels.departure}</div>
-          <div class="field-value">${depDate}</div>
+          <div class="field-label">${isContinuation ? (isFrench ? 'Reprise (fin du contrat initial)' : 'البداية (نهاية العقد الأصلي)') : labels.departure}</div>
+          <div class="field-value">${isContinuation ? contFrom : depDate}</div>
         </div>
         <div class="field">
-          <div class="field-label">${labels.returnLabel}</div>
-          <div class="field-value">${retDate}</div>
+          <div class="field-label">${isContinuation ? (isFrench ? 'Nouveau retour' : 'العودة الجديدة') : labels.returnLabel}</div>
+          <div class="field-value">${isContinuation ? contTo : retDate}</div>
         </div>
         <div class="field">
-          <div class="field-label">${labels.duration}</div>
-          <div class="field-value">${totalDays} ${labels.days}</div>
+          <div class="field-label">${isContinuation ? (isFrench ? 'Jours ajoutés' : 'الأيام المضافة') : labels.duration}</div>
+          <div class="field-value">${isContinuation ? `+${contDays}` : totalDays} ${labels.days}</div>
         </div>
       </div>
     </div>
@@ -1859,19 +1960,26 @@ export class EmailService {
     <div class="two-col">
       <!-- Pricing -->
       <div class="section pricing-section">
-        <div class="section-title">💰 ${labels.pricing}</div>
+        <div class="section-title">💰 ${isContinuation ? (isFrench ? 'Tarification de la prolongation' : 'تسعيرة التمديد') : labels.pricing}</div>
         <div class="pricing-row">
           <span>${labels.pricePerDay}:</span>
-          <span>${(car.priceDay || 0).toLocaleString()} DA</span>
+          <span>${(isContinuation ? contPerDay : (car.priceDay || 0)).toLocaleString()} DA</span>
         </div>
         <div class="pricing-row">
-          <span>${labels.numberOfDays}:</span>
-          <span>${totalDays}</span>
+          <span>${isContinuation ? (isFrench ? 'Jours ajoutés' : 'الأيام المضافة') : labels.numberOfDays}:</span>
+          <span>${isContinuation ? contDays : totalDays}</span>
         </div>
         <div class="pricing-row grand-total">
-          <span>${labels.total}:</span>
-          <span>${(reservation.totalPrice || 0).toLocaleString()} DA</span>
+          <span>${isContinuation ? (isFrench ? 'TOTAL PROLONGATION' : 'إجمالي التمديد') : labels.total}:</span>
+          <span>${(isContinuation ? contTotal : (reservation.totalPrice || 0)).toLocaleString()} DA</span>
         </div>
+        ${isContinuation ? `
+        <div class="pricing-note">
+          ${isFrench
+            ? 'Montant dû au titre des seuls jours ajoutés — indépendant du contrat initial.'
+            : 'المبلغ المستحق عن الأيام المضافة فقط — مستقل عن العقد الأصلي.'}
+        </div>
+        ` : ''}
       </div>
 
       <!-- Conditions -->

@@ -50,7 +50,7 @@ export const getReservationAlert = (
   // 0. NEW ALERT: Reservation expires today (date_fin = today)
   if (
     returnDate.getTime() === today.getTime() && 
-    (reservation.status === 'active' || reservation.status === 'confirmed')
+    (reservation.status === 'active' || reservation.status === 'continued' || reservation.status === 'confirmed')
   ) {
     const clientName = `${reservation.client.firstName} ${reservation.client.lastName}`;
     const vehicleName = `${reservation.car.brand} ${reservation.car.model}`;
@@ -73,7 +73,7 @@ export const getReservationAlert = (
   // 0.5 NEW ALERT: Reservation expires tomorrow (date_fin = tomorrow)
   if (
     returnDate.getTime() === tomorrow.getTime() && 
-    (reservation.status === 'active' || reservation.status === 'confirmed')
+    (reservation.status === 'active' || reservation.status === 'continued' || reservation.status === 'confirmed')
   ) {
     const clientName = `${reservation.client.firstName} ${reservation.client.lastName}`;
     const vehicleName = `${reservation.car.brand} ${reservation.car.model}`;
@@ -112,7 +112,7 @@ export const getReservationAlert = (
   }
 
   // 2. Alert: One day before return
-  if (daysUntilReturn === 1 && (reservation.status === 'active' || reservation.status === 'confirmed')) {
+  if (daysUntilReturn === 1 && (reservation.status === 'active' || reservation.status === 'continued' || reservation.status === 'confirmed')) {
     return {
       id: `${reservation.id}-pre-end`,
       reservationId: reservation.id,

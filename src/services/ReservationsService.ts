@@ -1,7 +1,51 @@
 import { supabase } from '../supabase';
-import { ReservationDetails, VehicleInspection, Payment, ProtectionAssurance, Entreprise } from '../types';
+import { ReservationDetails, VehicleInspection, Payment, ProtectionAssurance, Entreprise, ReservationContinuation } from '../types';
 import { parseCarCurrencies } from '../utils/currency';
 import { companyContext, scopeQuery } from '../utils/companyContext';
+
+/** Mappe une ligne `reservation_continuations` vers le modèle applicatif. */
+function mapContinuation(row: any): ReservationContinuation {
+  return {
+    id: row.id,
+    reservationId: row.reservation_id,
+    companyId: row.company_id ?? null,
+    sequenceNumber: Number(row.sequence_number) || 1,
+    addedDays: Number(row.added_days) || 0,
+    pricePerDay: Number(row.price_per_day) || 0,
+    totalPrice: Number(row.total_price) || 0,
+    previousReturnDate: row.previous_return_date || undefined,
+    newReturnDate: row.new_return_date || undefined,
+    returnTime: row.return_time || undefined,
+    paidAmount: Number(row.paid_amount) || 0,
+    paymentMethod: row.payment_method || undefined,
+    notes: row.notes || undefined,
+    createdBy: row.created_by || undefined,
+    createdByName: row.created_by_name || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * Champs de « continuité de location » d'une réservation. Tolérants aux
+ * colonnes pas encore migrées (migration 20260918) : tout vaut 0 / undefined
+ * tant que le SQL n'a pas été joué, l'application continue de fonctionner.
+ */
+function mapContinuationExtras(res: any) {
+  return {
+    continuationDays: res.continuation_days != null ? Number(res.continuation_days) : 0,
+    continuationAmount: res.continuation_amount != null ? Number(res.continuation_amount) : 0,
+    continuationCount: res.continuation_count != null ? Number(res.continuation_count) : 0,
+    originalReturnDate: res.original_return_date || undefined,
+    originalTotalDays: res.original_total_days != null ? Number(res.original_total_days) : undefined,
+    originalTotalPrice: res.original_total_price != null ? Number(res.original_total_price) : undefined,
+    lastContinuedAt: res.last_continued_at || undefined,
+    continuations: Array.isArray(res.reservation_continuations)
+      ? [...res.reservation_continuations]
+          .map(mapContinuation)
+          .sort((a, b) => b.sequenceNumber - a.sequenceNumber)
+      : undefined,
+  };
+}
 
 /**
  * Champs « extras » d'une réservation ajoutés par la mise à jour 2026-07-25 :
@@ -357,7 +401,7 @@ export class ReservationsService {
       });
     }
 
-    return (data || []).map(res => ({
+    const mappedReservations = (data || []).map(res => ({
       id: res.id,
       clientId: res.client_id,
       departure_agency_id: res.departure_agency_id,
@@ -540,6 +584,7 @@ export class ReservationsService {
       // absente = ancienne base → traitée comme 'agency'.
       source: (res.source === 'website' ? 'website' : 'agency') as 'website' | 'agency',
       ...mapReservationExtras(res),
+      ...mapContinuationExtras(res),
     })).map(mapped => {
       console.log('✅ Mapped reservation:', {
         id: mapped.id,
@@ -548,6 +593,50 @@ export class ReservationsService {
       });
       return mapped;
     });
+
+    // Prolongations : chargées à part pour ne PAS faire échouer la requête
+    // principale tant que la migration 20260918 n'a pas été jouée.
+    return this.attachContinuations(mappedReservations);
+  }
+
+  /**
+   * Rattache les prolongations (`reservation_continuations`) aux réservations
+   * déjà mappées. Requête séparée, volontairement tolérante : si la table
+   * n'existe pas encore, les réservations sont renvoyées telles quelles.
+   */
+  private static async attachContinuations<T extends { id: string; status: string; continuationCount?: number }>(
+    list: T[]
+  ): Promise<T[]> {
+    const ids = list.filter(r => (r.continuationCount || 0) > 0 || r.status === 'continued').map(r => r.id);
+    if (ids.length === 0) return list;
+
+    try {
+      const { data, error } = await supabase
+        .from('reservation_continuations')
+        .select('*')
+        .in('reservation_id', ids)
+        .order('sequence_number', { ascending: false });
+
+      if (error) {
+        console.warn('⚠️ reservation_continuations indisponible — run migration 20260918.', error.message);
+        return list;
+      }
+
+      const byReservation = new Map<string, ReservationContinuation[]>();
+      (data || []).forEach(row => {
+        const mapped = mapContinuation(row);
+        const bucket = byReservation.get(mapped.reservationId) || [];
+        bucket.push(mapped);
+        byReservation.set(mapped.reservationId, bucket);
+      });
+
+      return list.map(r =>
+        byReservation.has(r.id) ? { ...r, continuations: byReservation.get(r.id) } : r
+      );
+    } catch (e: any) {
+      console.warn('⚠️ Chargement des prolongations impossible :', e?.message || e);
+      return list;
+    }
   }
 
   static async getReservationById(id: string): Promise<ReservationDetails> {
@@ -580,7 +669,7 @@ export class ReservationsService {
 
     if (error) throw error;
 
-    return {
+    const mapped = {
       id: data.id,
       clientId: data.client_id,
       client: data.client ? {
@@ -755,7 +844,143 @@ export class ReservationsService {
       createdByName: data.created_by_name,
       source: (data.source === 'website' ? 'website' : 'agency') as 'website' | 'agency',
       ...mapReservationExtras(data),
+      ...mapContinuationExtras(data),
     };
+
+    const [withContinuations] = await this.attachContinuations([mapped]);
+    return withContinuations;
+  }
+
+  // ========== CONTINUITÉ DE LOCATION (prolongation) ==========
+
+  /**
+   * Prolonge une location en cours.
+   *
+   * Effets :
+   *  1. une ligne AUTONOME est ajoutée dans `reservation_continuations`
+   *     (jours ajoutés × tarif journalier) — elle ne rejuge JAMAIS les jours
+   *     déjà facturés du contrat initial ;
+   *  2. la réservation passe au statut 'continued', sa date de retour et sa
+   *     durée sont repoussées, et son total augmente du coût de ces jours ;
+   *  3. le coût des jours ajoutés part en DETTE (`remaining_payment`), sauf la
+   *     part éventuellement encaissée tout de suite (`paidAmount`).
+   */
+  static async createContinuation(data: {
+    reservation: ReservationDetails;
+    addedDays: number;
+    pricePerDay: number;
+    totalPrice: number;
+    newReturnDate: string;
+    returnTime?: string;
+    paidAmount?: number;
+    paymentMethod?: 'cash' | 'card' | 'transfer' | 'check';
+    notes?: string;
+    createdBy?: string | null;
+    createdByName?: string | null;
+  }): Promise<{ id: string; continuation: ReservationContinuation }> {
+    const r = data.reservation;
+    const addedDays = Math.max(1, Math.floor(Number(data.addedDays) || 0));
+    const continuationTotal = Math.max(0, Math.round(Number(data.totalPrice) || 0));
+    const paidNow = Math.min(continuationTotal, Math.max(0, Math.round(Number(data.paidAmount) || 0)));
+    const previousReturnDate = (r.step1?.returnDate || '').substring(0, 10) || null;
+    const sequenceNumber = (Number(r.continuationCount) || 0) + 1;
+
+    await companyContext.whenResolved();
+    const writeCompanyId = companyContext.getWriteCompanyId();
+
+    // 1) La prolongation elle-même (facturation indépendante).
+    const { data: row, error } = await supabase
+      .from('reservation_continuations')
+      .insert([{
+        reservation_id: r.id,
+        company_id: writeCompanyId,
+        sequence_number: sequenceNumber,
+        added_days: addedDays,
+        price_per_day: Math.round(Number(data.pricePerDay) || 0),
+        total_price: continuationTotal,
+        previous_return_date: previousReturnDate,
+        new_return_date: data.newReturnDate,
+        return_time: data.returnTime || r.step1?.returnTime || null,
+        paid_amount: paidNow,
+        payment_method: data.paymentMethod || null,
+        notes: data.notes || null,
+        created_by: data.createdBy || null,
+        created_by_name: data.createdByName || null,
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // 2) La réservation : nouveau statut, période et montants cumulés.
+    const currentTotalDays = Number(r.totalDays) || 0;
+    const currentTotalPrice = Number(r.totalPrice) || 0;
+    const currentRemaining = Math.max(0, Number(r.remainingPayment) || 0);
+
+    const updatePayload: any = {
+      status: 'continued',
+      return_date: data.newReturnDate,
+      total_days: currentTotalDays + addedDays,
+      total_price: currentTotalPrice + continuationTotal,
+      // La prolongation grossit la dette : seul ce qui est encaissé tout de
+      // suite en est retiré.
+      remaining_payment: currentRemaining + continuationTotal - paidNow,
+      continuation_days: (Number(r.continuationDays) || 0) + addedDays,
+      continuation_amount: (Number(r.continuationAmount) || 0) + continuationTotal,
+      continuation_count: sequenceNumber,
+      last_continued_at: new Date().toISOString(),
+    };
+    if (data.returnTime) updatePayload.return_time = data.returnTime;
+    // Mémorise le contrat initial à la PREMIÈRE prolongation uniquement.
+    if (sequenceNumber === 1) {
+      updatePayload.original_return_date = previousReturnDate;
+      updatePayload.original_total_days = currentTotalDays;
+      updatePayload.original_total_price = currentTotalPrice;
+    }
+
+    const { error: updateError } = await supabase
+      .from('reservations')
+      .update(updatePayload)
+      .eq('id', r.id);
+
+    if (updateError) {
+      // La prolongation ne doit pas rester orpheline si la réservation n'a pas
+      // pu être mise à jour (sinon la dette serait comptée deux fois au retry).
+      await supabase.from('reservation_continuations').delete().eq('id', row.id);
+      throw updateError;
+    }
+
+    // 3) Encaissement immédiat éventuel : tracé comme un paiement normal.
+    if (paidNow > 0) {
+      try {
+        await this.addPayment({
+          reservationId: r.id,
+          amount: paidNow,
+          paymentMethod: data.paymentMethod || 'cash',
+          date: new Date().toISOString().split('T')[0],
+          note: `Continuité de location — ${addedDays} jour(s) ajouté(s)`,
+        });
+      } catch (payErr) {
+        console.error('Paiement de la prolongation non enregistré :', payErr);
+      }
+    }
+
+    return { id: row.id, continuation: mapContinuation(row) };
+  }
+
+  /** Prolongations d'une réservation, la plus récente en premier. */
+  static async getContinuations(reservationId: string): Promise<ReservationContinuation[]> {
+    const { data, error } = await supabase
+      .from('reservation_continuations')
+      .select('*')
+      .eq('reservation_id', reservationId)
+      .order('sequence_number', { ascending: false });
+
+    if (error) {
+      console.warn('⚠️ Prolongations illisibles — run migration 20260918.', error.message);
+      return [];
+    }
+    return (data || []).map(mapContinuation);
   }
 
   static async updateReservation(id: string, updates: Partial<{

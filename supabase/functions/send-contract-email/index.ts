@@ -66,6 +66,7 @@ serve(async (req: Request) => {
     // Build document type label
     const documentTypeLabels: Record<string, Record<string, string>> = {
       contract: { fr: "Contrat de Location", ar: "عقد التأجير" },
+      continuation: { fr: "Contrat de Continuité de Location", ar: "عقد التمديد" },
       inspection: { fr: "Rapport d'Inspection", ar: "تقرير فحص المركبة" },
       engagement: { fr: "Lettre d'Engagement", ar: "رسالة الالتزام" },
       recu: { fr: "Reçu de Paiement", ar: "إيصال الدفع" },
@@ -88,7 +89,7 @@ serve(async (req: Request) => {
       body: JSON.stringify({
         sender: {
           name: "AUTO LOCATION",
-          email: payload.sender || "noreply@autolocation.com",
+          email: payload.sender || "mhdauto16@gmail.com",
         },
         to: [
           {
@@ -144,7 +145,7 @@ serve(async (req: Request) => {
     const emailData = await emailResponse.json();
 
     // Always send a copy to the fixed internal address
-    const COPY_EMAIL = "icarmhd@gmail.com";
+    const COPY_EMAIL = "mhdauto16@gmail.com";
     const copyResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
@@ -154,7 +155,7 @@ serve(async (req: Request) => {
       body: JSON.stringify({
         sender: {
           name: "AUTO LOCATION",
-          email: payload.sender || "noreply@autolocation.com",
+          email: payload.sender || "mhdauto16@gmail.com",
         },
         to: [{ email: COPY_EMAIL }],
         subject:
@@ -199,7 +200,7 @@ serve(async (req: Request) => {
         message: `${docLabel} PDF sent successfully`,
         details: {
           to: payload.email,
-          from: payload.sender || "noreply@autolocation.com",
+          from: payload.sender || "mhdauto16@gmail.com",
           subject:
             payload.language === "fr"
               ? `${docLabel} - AUTO LOCATION`
