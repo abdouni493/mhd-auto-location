@@ -10,6 +10,7 @@ import { DatabaseService } from '../services/DatabaseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { supabase } from '../supabase';
 import { useCompany } from '../utils/companyProvider';
+import { sessionService } from '../utils/sessionService';
 import { CompaniesManager } from './CompaniesManager';
 
 interface ConfigPageProps {
@@ -48,9 +49,15 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
   const [securityData, setSecurityData] = useState({
     username: '',
     email: user.email,
+    currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+  // E-mail réellement enregistré : sert de clé pour retrouver le compte même
+  // après que l'utilisateur a modifié le champ « E-mail » à l'écran.
+  const [accountEmail, setAccountEmail] = useState(user.email);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingSecurity, setSavingSecurity] = useState(false);
 
   // Database
   const [lastBackup] = useState('Aujourd\'hui à 10:45');
@@ -155,9 +162,10 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
 
               setSecurityData(prev => ({
                 ...prev,
-                username: workerData.username,
-                email: workerData.email,
+                username: workerData.username || '',
+                email: workerData.email || user.email,
               }));
+              if (workerData.email) setAccountEmail(workerData.email);
             }
           } catch (workerError) {
             console.warn('Could not load worker data:', workerError);
@@ -187,6 +195,113 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
   const handleSecurityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setSecurityData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const notify = (type: 'success' | 'error', message: string, ms = 5000) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), ms);
+  };
+
+  /** Enregistre le nom complet du compte connecté. */
+  const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const name = profileData.name.trim();
+    if (!name) {
+      notify('error', T('Le nom complet est obligatoire.', 'الاسم الكامل مطلوب.'));
+      return;
+    }
+    try {
+      setSavingProfile(true);
+      await DatabaseService.updateOwnProfileName(accountEmail, name);
+      notify('success', T('Profil mis à jour avec succès !', 'تم تحديث الملف الشخصي بنجاح!'));
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      notify('error', error?.message || T('Erreur lors de la mise à jour du profil', 'خطأ في تحديث الملف الشخصي'));
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  /**
+   * Enregistre les identifiants de connexion (identifiant, e-mail, mot de
+   * passe). Un changement d'e-mail ou de mot de passe invalide la session en
+   * cours : on déconnecte donc l'utilisateur pour qu'il se reconnecte avec ses
+   * nouveaux identifiants.
+   */
+  const handleSaveSecurity = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const newEmail = securityData.email.trim();
+    const username = securityData.username.trim();
+    const { currentPassword, newPassword, confirmPassword } = securityData;
+
+    const emailChanged = newEmail.toLowerCase() !== accountEmail.trim().toLowerCase();
+    const wantsPassword = newPassword.length > 0 || confirmPassword.length > 0;
+
+    if (!newEmail) {
+      notify('error', T("L'e-mail est obligatoire.", 'البريد الإلكتروني مطلوب.'));
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      notify('error', T("Format d'e-mail invalide.", 'صيغة البريد الإلكتروني غير صحيحة.'));
+      return;
+    }
+    if (wantsPassword && newPassword !== confirmPassword) {
+      notify('error', T('Les mots de passe ne correspondent pas.', 'كلمتا المرور غير متطابقتين.'));
+      return;
+    }
+    if (wantsPassword && newPassword.length < 6) {
+      notify('error', T('Le mot de passe doit contenir au moins 6 caractères.', 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.'));
+      return;
+    }
+    if (!currentPassword) {
+      notify('error', T('Saisissez votre mot de passe actuel pour confirmer.', 'أدخل كلمة المرور الحالية للتأكيد.'));
+      return;
+    }
+
+    try {
+      setSavingSecurity(true);
+      const result = await DatabaseService.updateOwnCredentials({
+        currentEmail: accountEmail,
+        currentPassword,
+        newEmail: emailChanged ? newEmail : undefined,
+        newUsername: username || undefined,
+        newPassword: wantsPassword ? newPassword : undefined,
+      });
+
+      setAccountEmail(result.email);
+      setSecurityData(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
+
+      if (result.emailChanged || result.passwordChanged) {
+        notify('success', T(
+          'Identifiants mis à jour. Reconnectez-vous avec vos nouveaux identifiants…',
+          'تم تحديث بيانات الدخول. يرجى إعادة تسجيل الدخول…'
+        ), 3000);
+        setTimeout(async () => {
+          try {
+            await sessionService.invalidateSession();
+            await supabase.auth.signOut();
+          } catch (signOutError) {
+            console.warn('Sign out after credentials change failed:', signOutError);
+          }
+          window.location.href = '/login';
+        }, 2500);
+      } else {
+        notify('success', T('Identifiants mis à jour avec succès !', 'تم تحديث بيانات الدخول بنجاح!'));
+      }
+    } catch (error: any) {
+      console.error('Error updating credentials:', error);
+      const code = error?.message || '';
+      const message =
+        code === 'INVALID_CURRENT_PASSWORD' ? T('Mot de passe actuel incorrect.', 'كلمة المرور الحالية غير صحيحة.')
+        : code === 'EMAIL_ALREADY_USED' ? T('Cet e-mail est déjà utilisé par un autre compte.', 'هذا البريد الإلكتروني مستخدم بالفعل.')
+        : code === 'USERNAME_ALREADY_USED' ? T("Ce nom d'utilisateur est déjà pris.", 'اسم المستخدم هذا مستخدم بالفعل.')
+        : code === 'PASSWORD_TOO_SHORT' ? T('Le mot de passe doit contenir au moins 6 caractères.', 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.')
+        : code || T('Erreur lors de la mise à jour des identifiants', 'خطأ في تحديث بيانات الدخول');
+      notify('error', message);
+    } finally {
+      setSavingSecurity(false);
+    }
   };
 
   const handleSaveAgencyInfo = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -681,7 +796,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                 <motion.div key="profile" {...panelAnim} className="space-y-6">
                   <div className="bg-white rounded-[2rem] border border-saas-border shadow-sm overflow-hidden">
                     <CardHead icon={<UserRound size={20} />} title={T('Mon profil', 'ملفي الشخصي')} accent="#0284C7" />
-                    <form className="p-6 sm:p-8 space-y-6">
+                    <form onSubmit={handleSaveProfile} className="p-6 sm:p-8 space-y-6">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-5 p-5 rounded-2xl bg-saas-bg border border-saas-border">
                         <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-saas-primary-via shadow-md flex items-center justify-center shrink-0 bg-white">
                           {profileData.profilePhoto
@@ -702,12 +817,18 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                         <label className="label-saas flex items-center gap-1.5"><UserRound size={12} />{T('Nom complet', 'الاسم الكامل')}</label>
                         <input type="text" name="name" value={profileData.name} onChange={handleProfileChange} className="input-saas" />
                       </div>
+                      <div className="flex justify-end pt-2 border-t border-saas-border">
+                        <button type="submit" disabled={savingProfile} className="btn-saas-primary px-8 py-3 flex items-center gap-2 mt-6 disabled:opacity-60">
+                          {savingProfile ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
+                          {T('Enregistrer le profil', 'حفظ الملف الشخصي')}
+                        </button>
+                      </div>
                     </form>
                   </div>
 
                   <div className="bg-white rounded-[2rem] border border-saas-border shadow-sm overflow-hidden">
                     <CardHead icon={<ShieldCheck size={20} />} title={T('Informations de connexion', 'معلومات تسجيل الدخول')} accent="#DC2626" />
-                    <form className="p-6 sm:p-8 space-y-6">
+                    <form onSubmit={handleSaveSecurity} className="p-6 sm:p-8 space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <label className="label-saas flex items-center gap-1.5"><UserRound size={12} />{T("Nom d'utilisateur", 'اسم المستخدم')}</label>
@@ -717,18 +838,26 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                           <label className="label-saas flex items-center gap-1.5"><Mail size={12} />{T('E-mail de récupération', 'بريد الاستعادة')}</label>
                           <input type="email" name="email" value={securityData.email} onChange={handleSecurityChange} className="input-saas" />
                         </div>
+                        <div className="md:col-span-2 space-y-2">
+                          <label className="label-saas flex items-center gap-1.5"><KeyRound size={12} />{T('Mot de passe actuel', 'كلمة المرور الحالية')} *</label>
+                          <input type="password" name="currentPassword" value={securityData.currentPassword} onChange={handleSecurityChange} placeholder="••••••••" autoComplete="current-password" className="input-saas" />
+                          <p className="text-[11px] font-semibold text-saas-text-muted">
+                            {T('Obligatoire pour confirmer toute modification de vos identifiants.', 'مطلوبة لتأكيد أي تعديل على بيانات الدخول.')}
+                          </p>
+                        </div>
                         <div className="space-y-2">
                           <label className="label-saas flex items-center gap-1.5"><KeyRound size={12} />{T('Nouveau mot de passe', 'كلمة المرور الجديدة')}</label>
-                          <input type="password" name="newPassword" value={securityData.newPassword} onChange={handleSecurityChange} placeholder="••••••••" className="input-saas" />
+                          <input type="password" name="newPassword" value={securityData.newPassword} onChange={handleSecurityChange} placeholder={T('Laisser vide pour ne pas changer', 'اتركها فارغة لعدم التغيير')} autoComplete="new-password" className="input-saas" />
                         </div>
                         <div className="space-y-2">
                           <label className="label-saas flex items-center gap-1.5"><KeyRound size={12} />{T('Confirmer le mot de passe', 'تأكيد كلمة المرور')}</label>
-                          <input type="password" name="confirmPassword" value={securityData.confirmPassword} onChange={handleSecurityChange} placeholder="••••••••" className="input-saas" />
+                          <input type="password" name="confirmPassword" value={securityData.confirmPassword} onChange={handleSecurityChange} placeholder="••••••••" autoComplete="new-password" className="input-saas" />
                         </div>
                       </div>
                       <div className="flex justify-end pt-2 border-t border-saas-border">
-                        <button type="submit" className="btn-saas-primary px-8 py-3 flex items-center gap-2 mt-6">
-                          <Save size={17} /> {T('Mettre à jour', 'تحديث')}
+                        <button type="submit" disabled={savingSecurity} className="btn-saas-primary px-8 py-3 flex items-center gap-2 mt-6 disabled:opacity-60">
+                          {savingSecurity ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
+                          {T('Mettre à jour', 'تحديث')}
                         </button>
                       </div>
                     </form>

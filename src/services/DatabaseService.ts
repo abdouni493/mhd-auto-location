@@ -1097,6 +1097,68 @@ export class DatabaseService {
     return (data as any)?.user_id || null;
   }
 
+  /**
+   * Met à jour SES PROPRES identifiants depuis Paramètres ▸ Profil & sécurité.
+   *
+   * Passe par la RPC `update_own_credentials`, qui vérifie le mot de passe
+   * actuel puis applique le changement à la fois sur `auth.users` et sur la
+   * fiche `workers`. On n'utilise pas `supabase.auth.updateUser()` : les
+   * employés n'ont pas de session Auth (connexion via `login_worker`), et un
+   * changement d'e-mail y resterait en attente de confirmation par lien.
+   */
+  static async updateOwnCredentials(payload: {
+    currentEmail: string;
+    currentPassword: string;
+    newEmail?: string;
+    newUsername?: string;
+    newPassword?: string;
+  }): Promise<{ email: string; emailChanged: boolean; passwordChanged: boolean }> {
+    const { data, error } = await supabase.rpc('update_own_credentials', {
+      p_current_email: payload.currentEmail.trim().toLowerCase(),
+      p_current_password: payload.currentPassword,
+      p_new_email: payload.newEmail?.trim().toLowerCase() || null,
+      p_new_username: payload.newUsername?.trim() || null,
+      p_new_password: payload.newPassword || null,
+    });
+
+    if (error) {
+      const msg = error.message || '';
+      if (msg.includes('INVALID_CURRENT_PASSWORD')) throw new Error('INVALID_CURRENT_PASSWORD');
+      if (msg.includes('EMAIL_ALREADY_USED')) throw new Error('EMAIL_ALREADY_USED');
+      if (msg.includes('USERNAME_ALREADY_USED')) throw new Error('USERNAME_ALREADY_USED');
+      if (msg.includes('PASSWORD_TOO_SHORT')) throw new Error('PASSWORD_TOO_SHORT');
+      if (msg.includes('update_own_credentials')) {
+        throw new Error(
+          "La fonction update_own_credentials n'existe pas encore. Exécutez la migration supabase/migrations/20260922_update_own_credentials.sql dans le SQL Editor de Supabase."
+        );
+      }
+      throw error;
+    }
+
+    const res = (data as any) || {};
+    return {
+      email: res.email || payload.currentEmail,
+      emailChanged: !!res.email_changed,
+      passwordChanged: !!res.password_changed,
+    };
+  }
+
+  /** Met à jour son propre nom complet (fiche employé + métadonnées Auth). */
+  static async updateOwnProfileName(email: string, fullName: string): Promise<void> {
+    const { error } = await supabase.rpc('update_own_profile', {
+      p_email: email.trim().toLowerCase(),
+      p_full_name: fullName,
+    });
+    if (error) {
+      if ((error.message || '').includes('update_own_profile')) {
+        throw new Error(
+          "La fonction update_own_profile n'existe pas encore. Exécutez la migration supabase/migrations/20260922_update_own_credentials.sql dans le SQL Editor de Supabase."
+        );
+      }
+      throw error;
+    }
+  }
+
   /** Supprime le compte de connexion d'un employé (le salarié reste en base). */
   static async deleteWorkerAuthUser(email: string): Promise<void> {
     const { error } = await supabase.rpc('delete_worker_auth_user', { p_email: email.trim().toLowerCase() });
