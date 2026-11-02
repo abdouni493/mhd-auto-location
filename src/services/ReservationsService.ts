@@ -58,6 +58,9 @@ function mapReservationExtras(res: any) {
     // Agence métier propriétaire de la réservation (multi-agences). Exposée
     // pour que l'interface puisse VÉRIFIER le périmètre, pas seulement s'y fier.
     companyId: res.company_id ?? null,
+    // Caution activée/désactivée + prix saisi manuellement (persistés)
+    cautionEnabled: res.caution_enabled !== false,
+    isManualPrice: res.is_manual_price === true,
     // Timbre fiscal
     timbreEnabled: res.timbre_enabled === true,
     timbreRate: res.timbre_rate != null ? Number(res.timbre_rate) : undefined,
@@ -155,6 +158,8 @@ export class ReservationsService {
     status?: string;
     cautionAmountDzd?: number;
     cautionCurrency?: 'DZD' | 'EUR';
+    cautionEnabled?: boolean;
+    isManualPrice?: boolean;
     euroRate?: number;
     assuranceEnabled?: boolean;
     assurancePercentage?: number;
@@ -212,6 +217,8 @@ export class ReservationsService {
         notes: data.notes,
         caution_amount_dzd: data.cautionAmountDzd || data.deposit,
         caution_currency: data.cautionCurrency || 'DZD',
+        caution_enabled: data.cautionEnabled !== false,
+        is_manual_price: !!data.isManualPrice,
         euro_rate: data.euroRate || 145,
         assurance_enabled: data.assuranceEnabled || false,
         assurance_percentage: data.assurancePercentage || null,
@@ -1007,6 +1014,8 @@ export class ReservationsService {
     completedAt?: string;
     cautionAmountDzd: number;
     cautionCurrency: 'DZD' | 'EUR';
+    cautionEnabled: boolean;
+    isManualPrice: boolean;
     euroRate: number;
     assuranceEnabled: boolean;
     assurancePercentage: number;
@@ -1055,6 +1064,8 @@ export class ReservationsService {
     if (updates.cautionAmountDzd !== undefined) updateData.caution_amount_dzd = updates.cautionAmountDzd;
     if (updates.cautionCurrency !== undefined) updateData.caution_currency = updates.cautionCurrency;
     if (updates.euroRate !== undefined) updateData.euro_rate = updates.euroRate;
+    if (updates.cautionEnabled !== undefined) updateData.caution_enabled = updates.cautionEnabled;
+    if (updates.isManualPrice !== undefined) updateData.is_manual_price = updates.isManualPrice;
     if (updates.assuranceEnabled !== undefined) updateData.assurance_enabled = updates.assuranceEnabled;
     if (updates.assurancePercentage !== undefined) updateData.assurance_percentage = updates.assurancePercentage;
     if (updates.protectionAssuranceId !== undefined) updateData.protection_assurance_id = updates.protectionAssuranceId;

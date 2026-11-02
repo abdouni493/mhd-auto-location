@@ -219,6 +219,37 @@ export interface WorkerAbsence {
   settled?: boolean;
 }
 
+/** Commission versée à un employé pour sa contribution à une réservation. */
+export interface WorkerCommission {
+  id: string;
+  reservationId: string;
+  workerId: string;
+  workerName?: string;
+  commissionType: 'fixed' | 'percentage';
+  commissionValue: number;
+  baseAmount: number;
+  amount: number;
+  /** 'immediate' = payée à la création (caisse agence) ; 'deferred' = sur son compte. */
+  payoutMode: 'immediate' | 'deferred';
+  status: 'pending' | 'paid';
+  paidVia?: 'creation' | 'advance' | 'payment';
+  paidAt?: string;
+  workerPaymentId?: string;
+  workerAdvanceId?: string;
+  storeExpenseId?: string;
+  note?: string;
+  createdByName?: string;
+  createdAt: string;
+  reservation?: {
+    departureDate?: string;
+    returnDate?: string;
+    totalPrice?: number;
+    clientName?: string;
+    carName?: string;
+    carPlate?: string;
+  };
+}
+
 export interface WorkerPayment {
   id: string;
   amount: number;
@@ -292,6 +323,8 @@ export interface Worker {
   advances: WorkerAdvance[];
   absences: WorkerAbsence[];
   payments: WorkerPayment[];
+  /** Commissions sur réservations (chargées à part, tolérant si table absente). */
+  commissions?: WorkerCommission[];
 
   createdAt: string;
 }
@@ -563,6 +596,12 @@ export interface ReservationDetails {
   protectionAssuranceName?: string;
   protectionAssurancePrice?: number; // prix/jour au moment de la réservation
   protectionAssurance?: ProtectionAssurance; // détail (items) chargé pour l'affichage
+  /** Caution activée / désactivée (défaut : activée). */
+  cautionEnabled?: boolean;
+  /** true si le total a été saisi manuellement à la création (ne pas recalculer). */
+  isManualPrice?: boolean;
+  /** Commissions employés liées à cette réservation. */
+  workerCommissions?: WorkerCommission[];
   departureInspection?: VehicleInspection;
   returnInspection?: VehicleInspection;
   payments: Payment[];

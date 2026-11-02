@@ -3,6 +3,7 @@ import { Language, ReservationDetails, Payment, VehicleInspection, InspectionIte
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Calendar, Clock, MapPin, Fuel, Camera, FileText, CreditCard, DollarSign, Printer, AlertTriangle, CheckCircle, XCircle, Plus, Trash2, Edit, Eye, Car as CarIcon, User, Phone, Mail, CreditCard as CardIcon, Shield, Wrench, Sofa, Sparkles, Droplets } from 'lucide-react';
 import { ReservationsService } from '../services/ReservationsService';
+import { ReservationCommissionsPanel } from './ReservationCommissionsPanel';
 import { DatabaseService } from '../services/DatabaseService';
 import { supabase } from '../supabase';
 import { uploadInspectionImage } from '../services/uploadInspectionImage';
@@ -196,6 +197,9 @@ export const ReservationDetailsView: React.FC<ReservationDetailsViewProps> = ({ 
           {activeTab === 'inspections' && <InspectionsTab lang={lang} reservation={reservation} />}
           {activeTab === 'payments' && <PaymentsTab lang={lang} reservation={reservation} onAddPayment={handleAddPayment} onDeletePayment={handleDeletePayment} onPrintPayment={handlePrintPayment} />}
           {activeTab === 'financial' && <FinancialTab lang={lang} reservation={reservation} />}
+          {(activeTab === 'overview' || activeTab === 'financial') && (
+            <ReservationCommissionsPanel lang={lang} reservationId={reservation.id} totalPrice={reservation.totalPrice} />
+          )}
         </div>
       </div>
 

@@ -69,8 +69,9 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
     },
     step6: {
       totalPrice: reservation.totalPrice,
-      isManualTotal: false,
-      manualTotal: '',
+      // Prix saisi manuellement à la création : persistant (is_manual_price)
+      isManualTotal: reservation.isManualPrice === true,
+      manualTotal: reservation.isManualPrice === true ? String(reservation.totalPrice ?? '') : '',
       tvaApplied: reservation.tvaApplied,
       tvaAmount: 0, // Will be calculated
       additionalFees: reservation.additionalFees,
@@ -175,6 +176,9 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
 
   // Detect if price was manually edited by comparing stored price with calculated price
   useEffect(() => {
+    // Le flag est désormais enregistré en base : l'heuristique ne sert plus
+    // que pour les anciennes réservations (colonne absente).
+    if (typeof reservation.isManualPrice === 'boolean') return;
     const calculateExpectedPrice = () => {
       const pricePerDay = reservation.car?.priceDay || 0;
       const servicesTotal = (reservation.additionalServices || []).reduce((sum, s) => sum + (s.price || 0), 0);
@@ -378,7 +382,8 @@ export const EditReservationForm: React.FC<EditReservationFormProps> = ({ lang, 
         
         // Deposit & Status
         deposit: (formData.step6 as any)?.caution_amount_dzd || (formData.step6 as any)?.editedDeposit || newDeposit,
-        cautionEnabled: formData.step6?.cautionEnabled,
+        cautionEnabled: formData.step6?.cautionEnabled !== false,
+        isManualPrice: !!formData.step6?.isManualTotal,
         // Caution and Assurance fields
         cautionAmountDzd: (formData.step6 as any)?.caution_amount_dzd || newDeposit,
         cautionCurrency: (formData.step6 as any)?.cautionCurrency || 'DZD',

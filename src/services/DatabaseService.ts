@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { WorkerCommissionService } from './workerCommissionService';
 import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, WorkerRole, WorkerPermissions, Entreprise, RentalSettings, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode, Company } from '../types';
 import { parseCarCurrencies } from '../utils/currency';
 import { companyContext, scopeQuery } from '../utils/companyContext';
@@ -891,7 +892,15 @@ export class DatabaseService {
     if (error) throw error;
 
     // Map snake_case to camelCase
-    return (data || []).map(worker => this.mapWorkerRow(worker));
+    const workers = (data || []).map(worker => this.mapWorkerRow(worker));
+    // Commissions sur réservations (table optionnelle : ignorée si absente)
+    try {
+      const byWorker = await WorkerCommissionService.getAllGroupedByWorker();
+      workers.forEach(w => { w.commissions = byWorker[w.id] || []; });
+    } catch (e) {
+      console.warn('[getWorkers] commissions non chargées :', e);
+    }
+    return workers;
   }
 
   /** Ligne DB → Worker (camelCase), tolérant aux colonnes pas encore migrées. */

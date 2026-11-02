@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { DatabaseService } from '../services/DatabaseService';
+import { WorkerCommissionService } from '../services/workerCommissionService';
 import { Worker, Language, WorkerAdvance } from '../types';
 import { motion } from 'motion/react';
 import { X } from 'lucide-react';
@@ -7,7 +9,8 @@ interface WorkerAdvanceModalProps {
   isOpen: boolean;
   onClose: () => void;
   worker: Worker;
-  onAddAdvance: (advance: WorkerAdvance) => Promise<void>;
+  /** Enregistre l'acompte et renvoie la ligne créée (avec son id réel). */
+  onAddAdvance: (advance: WorkerAdvance) => Promise<WorkerAdvance | void>;
   lang: Language;
 }
 
@@ -17,6 +20,11 @@ export const WorkerAdvanceModal: React.FC<WorkerAdvanceModalProps> = ({ isOpen, 
     date: new Date().toISOString().split('T')[0],
     note: '',
   });
+
+  // Commissions de réservations en attente : payables via cet acompte.
+  const pendingCommissions = useMemo(() => (worker.commissions || []).filter(c => c.status === 'pending'), [worker.commissions]);
+  const [selectedCommissions, setSelectedCommissions] = useState<string[]>([]);
+  const commissionsTotal = pendingCommissions.filter(c => selectedCommissions.includes(c.id)).reduce((s, c) => s + c.amount, 0);
 
   if (!isOpen) return null;
 
@@ -31,10 +39,26 @@ export const WorkerAdvanceModal: React.FC<WorkerAdvanceModalProps> = ({ isOpen, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await onAddAdvance({
+      // Acompte versé sur les commissions : marqué « soldé » pour ne PAS être
+      // déduit du salaire (c'est de l'argent dû à l'employé, pas une avance).
+      const note = commissionsTotal > 0
+        ? [formData.note, `${lang === 'fr' ? 'Paiement commissions réservations' : 'دفع عمولات الحجوزات'} (${commissionsTotal.toLocaleString('fr-FR')} DZ)`].filter(Boolean).join(' · ')
+        : formData.note;
+      const saved = await onAddAdvance({
         id: Date.now().toString(),
-        ...formData
+        ...formData,
+        note,
       });
+      if (selectedCommissions.length > 0 && saved && (saved as WorkerAdvance).id) {
+        const advId = (saved as WorkerAdvance).id;
+        // Seule la part couverte par les commissions est soldée ; si l'acompte
+        // dépasse les commissions, le surplus reste un acompte normal.
+        if (formData.amount <= commissionsTotal) {
+          await DatabaseService.settleWorkerItems([advId], []);
+        }
+        await WorkerCommissionService.markPaid(selectedCommissions, 'advance', { workerAdvanceId: advId, date: formData.date });
+      }
+      setSelectedCommissions([]);
       setFormData({
         amount: 0,
         date: new Date().toISOString().split('T')[0],
@@ -109,6 +133,36 @@ export const WorkerAdvanceModal: React.FC<WorkerAdvanceModalProps> = ({ isOpen, 
               className="input-saas min-h-[80px] resize-none"
             />
           </div>
+
+          {/* Commissions en attente payables via cet acompte */}
+          {pendingCommissions.length > 0 && (
+            <div className="space-y-2">
+              <label className="label-saas">🤝 {{fr: 'Payer des commissions de réservations', ar: 'دفع عمولات الحجوزات'}[lang]}</label>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {pendingCommissions.map(c => {
+                  const on = selectedCommissions.includes(c.id);
+                  return (
+                    <button
+                      type="button"
+                      key={c.id}
+                      onClick={() => {
+                        const next = on ? selectedCommissions.filter(x => x !== c.id) : [...selectedCommissions, c.id];
+                        setSelectedCommissions(next);
+                        const sum = pendingCommissions.filter(x => next.includes(x.id)).reduce((s, x) => s + x.amount, 0);
+                        setFormData(prev => ({ ...prev, amount: sum }));
+                      }}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border-2 text-left text-xs ${on ? 'border-emerald-400 bg-emerald-50' : 'border-saas-border bg-saas-bg'}`}
+                    >
+                      <span className="font-bold truncate">
+                        {on ? '☑' : '☐'} {[c.reservation?.clientName, c.reservation?.carName].filter(Boolean).join(' · ') || 'Réservation'} — {c.createdAt?.split('T')[0]}
+                      </span>
+                      <span className="font-black text-emerald-700">{c.amount.toLocaleString('fr-FR')} DZ</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Summary */}
           <div className="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">

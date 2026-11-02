@@ -3,6 +3,7 @@ import { Worker, Language, WorkerPayment } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Loader2, Check, Wallet, CalendarDays, TrendingDown, AlertTriangle } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
+import { WorkerCommissionService } from '../services/workerCommissionService';
 
 interface WorkerPaymentModalProps {
   isOpen: boolean;
@@ -65,10 +66,13 @@ export const WorkerPaymentModal: React.FC<WorkerPaymentModalProps> = ({ isOpen, 
   );
   const pendingAdvances = useMemo(() => (worker.advances || []).filter(a => !a.settled), [worker.advances]);
   const pendingAbsences = useMemo(() => (worker.absences || []).filter(a => !a.settled), [worker.absences]);
+  // Commissions sur réservations mises sur le compte (payées en supplément)
+  const pendingCommissions = useMemo(() => (worker.commissions || []).filter(c => c.status === 'pending'), [worker.commissions]);
 
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>(unpaidPeriods.slice(0, 1));
   const [selectedAdvances, setSelectedAdvances] = useState<string[]>(pendingAdvances.map(a => a.id));
   const [selectedAbsences, setSelectedAbsences] = useState<string[]>(pendingAbsences.map(a => a.id));
+  const [selectedCommissions, setSelectedCommissions] = useState<string[]>(pendingCommissions.map(c => c.id));
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState('');
   const [manualAmount, setManualAmount] = useState<number | ''>('');
@@ -80,7 +84,8 @@ export const WorkerPaymentModal: React.FC<WorkerPaymentModalProps> = ({ isOpen, 
   const baseSalary = (Number(worker.baseSalary) || 0) * selectedPeriods.length;
   const advancesTotal = pendingAdvances.filter(a => selectedAdvances.includes(a.id)).reduce((s, a) => s + a.amount, 0);
   const absencesTotal = pendingAbsences.filter(a => selectedAbsences.includes(a.id)).reduce((s, a) => s + a.cost, 0);
-  const computedNet = Math.max(0, baseSalary - advancesTotal - absencesTotal);
+  const commissionsTotal = pendingCommissions.filter(c => selectedCommissions.includes(c.id)).reduce((s, c) => s + c.amount, 0);
+  const computedNet = Math.max(0, baseSalary + commissionsTotal - advancesTotal - absencesTotal);
   const netSalary = manualAmount === '' ? computedNet : Math.max(0, Number(manualAmount));
 
   const toggle = (list: string[], setList: (v: string[]) => void, id: string) =>
@@ -96,7 +101,7 @@ export const WorkerPaymentModal: React.FC<WorkerPaymentModalProps> = ({ isOpen, 
   };
 
   const handleCreatePayment = async () => {
-    if (selectedPeriods.length === 0) {
+    if (selectedPeriods.length === 0 && selectedCommissions.length === 0) {
       setError(T('Sélectionnez au moins une période à payer.', 'اختر فترة واحدة على الأقل للدفع.'));
       return;
     }
@@ -105,14 +110,19 @@ export const WorkerPaymentModal: React.FC<WorkerPaymentModalProps> = ({ isOpen, 
     try {
       // Une ligne de paiement par période couverte : l'historique reste lisible
       // et ces périodes disparaissent des prochains calculs.
-      const perPeriod = Math.round(netSalary / selectedPeriods.length);
+      // Paiement des seules commissions (aucune période) : une ligne sans période.
+      const periods: (string | undefined)[] = selectedPeriods.length > 0 ? selectedPeriods : [undefined];
+      const perPeriod = Math.round(netSalary / periods.length);
       let created: WorkerPayment | null = null;
+      const commissionNote = commissionsTotal > 0
+        ? `${T('Commissions réservations', 'عمولات الحجوزات')} +${money(commissionsTotal)}`
+        : '';
 
-      for (let i = 0; i < selectedPeriods.length; i++) {
-        const key = selectedPeriods[i];
+      for (let i = 0; i < periods.length; i++) {
+        const key = periods[i];
         // La dernière ligne absorbe l'arrondi pour retomber sur le net exact.
-        const amount = i === selectedPeriods.length - 1
-          ? netSalary - perPeriod * (selectedPeriods.length - 1)
+        const amount = i === periods.length - 1
+          ? netSalary - perPeriod * (periods.length - 1)
           : perPeriod;
 
         created = await DatabaseService.createWorkerPayment(worker.id, {
@@ -122,13 +132,15 @@ export const WorkerPaymentModal: React.FC<WorkerPaymentModalProps> = ({ isOpen, 
           advances: i === 0 ? advancesTotal : 0,
           absences: i === 0 ? absencesTotal : 0,
           netSalary: amount,
-          note: note.trim() || undefined,
+          note: [note.trim(), i === 0 ? commissionNote : ''].filter(Boolean).join(' · ') || undefined,
           periodKey: key,
         } as any);
       }
 
       // Marque les acomptes / absences comme déduits : plus jamais recomptés.
       await DatabaseService.settleWorkerItems(selectedAdvances, selectedAbsences);
+      // Commissions réglées avec ce paiement normal.
+      await WorkerCommissionService.markPaid(selectedCommissions, 'payment', { workerPaymentId: created?.id, date: paymentDate });
 
       if (created) await onCreatePayment?.(created);
       onClose();
@@ -307,6 +319,47 @@ export const WorkerPaymentModal: React.FC<WorkerPaymentModalProps> = ({ isOpen, 
             </section>
           </div>
 
+          {/* Commissions en attente (ajoutées au paiement) */}
+          {pendingCommissions.length > 0 && (
+            <section className="rounded-2xl border border-saas-border bg-white overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
+                <h3 className="font-black text-sm uppercase tracking-tight text-saas-text-main flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center">🤝</span>
+                  {T('Commissions réservations à ajouter', 'عمولات الحجوزات المراد إضافتها')}
+                </h3>
+              </div>
+              <div className="p-4 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                {pendingCommissions.map(c => {
+                  const on = selectedCommissions.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => toggle(selectedCommissions, setSelectedCommissions, c.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                        on ? 'border-emerald-400 bg-emerald-50' : 'border-saas-border bg-saas-bg'
+                      }`}
+                    >
+                      <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
+                        on ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 bg-white'
+                      }`}>
+                        {on && <Check className="w-3 h-3 text-white" strokeWidth={3.5} />}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-xs font-bold text-saas-text-main truncate">
+                          {[c.reservation?.clientName, c.reservation?.carName].filter(Boolean).join(' · ') || T('Réservation', 'حجز')}
+                        </span>
+                        <span className="block text-[11px] text-saas-text-muted truncate">
+                          {c.commissionType === 'percentage' ? `${c.commissionValue}% · ` : ''}{c.createdAt?.split('T')[0]}
+                        </span>
+                      </span>
+                      <span className="text-sm font-black text-emerald-600">+{money(c.amount)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {/* Calcul + saisie */}
           <section className="rounded-2xl border border-saas-border bg-white overflow-hidden">
             <div className="px-5 py-3.5 border-b border-saas-border bg-saas-bg">
@@ -315,9 +368,10 @@ export const WorkerPaymentModal: React.FC<WorkerPaymentModalProps> = ({ isOpen, 
               </h3>
             </div>
             <div className="p-5 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className={`grid gap-3 ${commissionsTotal > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                 {[
                   { l: T('Salaire', 'الراتب'), v: money(baseSalary), c: 'text-[#0284C7]' },
+                  ...(commissionsTotal > 0 ? [{ l: T('Commissions', 'العمولات'), v: `+${money(commissionsTotal)}`, c: 'text-emerald-600' }] : []),
                   { l: T('Acomptes', 'السلف'), v: `−${money(advancesTotal)}`, c: 'text-orange-600' },
                   { l: T('Absences', 'الغيابات'), v: `−${money(absencesTotal)}`, c: 'text-[#DC2626]' },
                 ].map(cell => (

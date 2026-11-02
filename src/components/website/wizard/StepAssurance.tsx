@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Check, X, Shield, Loader2 } from 'lucide-react';
 import { useWizard } from './WizardContext';
+import { Language, ProtectionAssurance } from '../../../types';
 import { SectionCard, SectionTitle, C } from './wizardUi';
 
 /**
@@ -12,7 +13,31 @@ import { SectionCard, SectionTitle, C } from './wizardUi';
  */
 export const StepAssurance: React.FC = () => {
   const { lang, availableAssurances, loadingAssurances, selectedAssurance, setSelectedAssurance, days } = useWizard();
+  return (
+    <ProtectionAssuranceCards
+      lang={lang}
+      assurances={availableAssurances}
+      loading={loadingAssurances}
+      selected={selectedAssurance}
+      onSelect={setSelectedAssurance}
+      days={days}
+    />
+  );
+};
 
+/**
+ * Grille de cartes d'assurance de protection — partagée entre le site web
+ * et le formulaire « Nouvelle réservation » de l'administration, pour que les
+ * deux interfaces affichent exactement les mêmes détails.
+ */
+export const ProtectionAssuranceCards: React.FC<{
+  lang: Language;
+  assurances: ProtectionAssurance[];
+  loading: boolean;
+  selected: ProtectionAssurance | null;
+  onSelect: (a: ProtectionAssurance | null) => void;
+  days: number;
+}> = ({ lang, assurances: availableAssurances, loading: loadingAssurances, selected: selectedAssurance, onSelect: setSelectedAssurance, days }) => {
   const DA = { fr: 'DA', ar: 'د.ج' }[lang];
 
   return (

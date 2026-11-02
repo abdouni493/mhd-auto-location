@@ -359,14 +359,16 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
             isOpen={activeModal === 'advance'}
             onClose={() => setActiveModal(null)}
             worker={selectedWorker}
-            onAddAdvance={(advance) => {
-              setWorkers(workers.map(w =>
-                w.id === selectedWorker.id
-                  ? { ...w, advances: [...w.advances, advance] }
-                  : w
-              ));
-              setSelectedWorker(prev => prev ? { ...prev, advances: [...prev.advances, advance] } : prev);
+            onAddAdvance={async (advance) => {
+              // Enregistre l'acompte en base (auparavant seulement en mémoire).
+              const saved = await DatabaseService.createWorkerAdvance(selectedWorker.id, {
+                amount: advance.amount, date: advance.date, note: advance.note,
+              } as any);
+              const refreshed = await DatabaseService.getWorkers();
+              setWorkers(refreshed);
+              setSelectedWorker(refreshed.find(w => w.id === selectedWorker.id) || null);
               setActiveModal(null);
+              return saved;
             }}
             lang={lang}
           />
@@ -375,13 +377,13 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
             isOpen={activeModal === 'absence'}
             onClose={() => setActiveModal(null)}
             worker={selectedWorker}
-            onAddAbsence={(absence) => {
-              setWorkers(workers.map(w =>
-                w.id === selectedWorker.id
-                  ? { ...w, absences: [...w.absences, absence] }
-                  : w
-              ));
-              setSelectedWorker(prev => prev ? { ...prev, absences: [...prev.absences, absence] } : prev);
+            onAddAbsence={async (absence) => {
+              await DatabaseService.createWorkerAbsence(selectedWorker.id, {
+                cost: absence.cost, date: absence.date, note: absence.note,
+              } as any);
+              const refreshed = await DatabaseService.getWorkers();
+              setWorkers(refreshed);
+              setSelectedWorker(refreshed.find(w => w.id === selectedWorker.id) || null);
               setActiveModal(null);
             }}
             lang={lang}

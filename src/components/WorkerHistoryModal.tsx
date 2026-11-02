@@ -2,6 +2,7 @@ import React from 'react';
 import { Worker, Language } from '../types';
 import { motion } from 'motion/react';
 import { X } from 'lucide-react';
+import { commissionStatusLabel } from './ReservationCommissionsPanel';
 
 interface WorkerHistoryModalProps {
   isOpen: boolean;
@@ -16,6 +17,10 @@ export const WorkerHistoryModal: React.FC<WorkerHistoryModalProps> = ({ isOpen, 
   const totalAdvances = worker.advances.reduce((sum, a) => sum + a.amount, 0);
   const totalAbsences = worker.absences.reduce((sum, a) => sum + a.cost, 0);
   const totalPayments = worker.payments.reduce((sum, p) => sum + p.amount, 0);
+  const commissions = worker.commissions || [];
+  const commissionsPaid = commissions.filter(c => c.status === 'paid').reduce((s, c) => s + c.amount, 0);
+  const commissionsPending = commissions.filter(c => c.status === 'pending').reduce((s, c) => s + c.amount, 0);
+  const fmt = (d?: string) => (d ? new Date(d).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'ar-DZ') : '—');
 
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto sm:py-8">
@@ -44,10 +49,53 @@ export const WorkerHistoryModal: React.FC<WorkerHistoryModalProps> = ({ isOpen, 
               <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest mb-1">⚠️ {{fr: 'Total Absences', ar: 'إجمالي الغيابات'}[lang]}</p>
               <p className="text-lg font-black text-red-700">{totalAbsences.toLocaleString('fr-FR')} DZ</p>
             </div>
+            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+              <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-widest mb-1">🤝 {{fr: 'Commissions payées', ar: 'العمولات المدفوعة'}[lang]}</p>
+              <p className="text-lg font-black text-emerald-700">{commissionsPaid.toLocaleString('fr-FR')} DZ</p>
+            </div>
+            <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+              <p className="text-[9px] text-amber-600 font-bold uppercase tracking-widest mb-1">🗂️ {{fr: 'Commissions à payer', ar: 'العمولات المستحقة'}[lang]}</p>
+              <p className="text-lg font-black text-amber-700">{commissionsPending.toLocaleString('fr-FR')} DZ</p>
+            </div>
             <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 col-span-2">
               <p className="text-[9px] text-blue-600 font-bold uppercase tracking-widest mb-1">💸 {{fr: 'Total Paiements', ar: 'إجمالي الدفعات'}[lang]}</p>
               <p className="text-lg font-black text-blue-700">{totalPayments.toLocaleString('fr-FR')} DZ</p>
             </div>
+          </div>
+
+          {/* Commissions Section */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-black text-saas-primary-via uppercase tracking-[0.2em]">
+              🤝 {{fr: 'Commissions réservations', ar: 'عمولات الحجوزات'}[lang]} ({commissions.length})
+            </h3>
+            {commissions.length > 0 ? (
+              <div className="space-y-2">
+                {commissions.map((c, idx) => (
+                  <div key={c.id} className={`p-3 rounded-lg border ${c.status === 'paid' ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-bold text-slate-700">#{idx + 1}</span>
+                      <span className="text-xs font-bold text-slate-700">{fmt(c.createdAt)}</span>
+                    </div>
+                    <p className="text-sm font-black text-emerald-700 mb-1">+ {c.amount.toLocaleString('fr-FR')} DZ</p>
+                    <div className="space-y-0.5 text-xs text-slate-600">
+                      {(c.reservation?.clientName || c.reservation?.carName) && (
+                        <p>🚗 {[c.reservation?.clientName, c.reservation?.carName, c.reservation?.carPlate].filter(Boolean).join(' · ')}</p>
+                      )}
+                      {c.reservation?.departureDate && (
+                        <p>📅 {fmt(c.reservation.departureDate)} → {fmt(c.reservation.returnDate)}</p>
+                      )}
+                      <p>📐 {c.commissionType === 'percentage'
+                        ? `${c.commissionValue}% ${lang === 'fr' ? 'de' : 'من'} ${Math.round(c.baseAmount).toLocaleString('fr-FR')} DZ`
+                        : (lang === 'fr' ? 'Montant fixe' : 'مبلغ ثابت')}</p>
+                      <p className="font-bold">{c.status === 'paid' ? '✅' : '⏳'} {commissionStatusLabel(c, lang)}{c.paidAt ? ` — ${fmt(c.paidAt)}` : ''}</p>
+                      {c.note && <p>📝 {c.note}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-saas-text-muted">{{fr: 'Aucune commission enregistrée', ar: 'لا توجد عمولات مسجلة'}[lang]}</p>
+            )}
           </div>
 
           {/* Advances Section */}
