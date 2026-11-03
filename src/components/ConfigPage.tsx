@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Language, User } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Settings, Building2, UserRound, ShieldCheck, Database, Layers,
+  Settings, Link2, Building2, UserRound, ShieldCheck, Database, Layers,
   Camera, Save, Download, Upload, KeyRound, Mail, Phone, MapPin, Landmark,
   ChevronRight, RotateCcw, Trash2, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Type,
 } from 'lucide-react';
@@ -12,13 +12,14 @@ import { supabase } from '../supabase';
 import { useCompany } from '../utils/companyProvider';
 import { sessionService } from '../utils/sessionService';
 import { CompaniesManager } from './CompaniesManager';
+import { PartnerAgenciesManager } from './PartnerAgenciesManager';
 
 interface ConfigPageProps {
   lang: Language;
   user: User;
 }
 
-type TabId = 'general' | 'profile' | 'database' | 'agencies';
+type TabId = 'general' | 'profile' | 'database' | 'agencies' | 'partners';
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
   const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
@@ -608,6 +609,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
     { id: 'general', icon: Building2, label: T('Agence', 'الوكالة'), desc: T('Nom, logo, coordonnées', 'الاسم، الشعار، التواصل'), accent: '#0284C7' },
     { id: 'profile', icon: UserRound, label: T('Profil & Sécurité', 'الملف والأمان'), desc: T('Compte et connexion', 'الحساب والدخول'), accent: '#DC2626' },
     { id: 'database', icon: Database, label: T('Données', 'البيانات'), desc: T('Sauvegarde & corbeille', 'النسخ والسلة'), accent: '#16A34A' },
+    { id: 'partners', icon: Link2, label: T('Agences partenaires', 'الوكالات الشريكة'), desc: T('Applications connectées', 'تطبيقات متصلة'), accent: '#7C3AED' },
     ...(isSuperAdmin ? [{ id: 'agencies' as TabId, icon: Layers, label: T('Agences', 'الوكالات'), desc: T('Multi-agences', 'تعدد الوكالات'), accent: '#0F172A' }] : []),
   ];
 
@@ -949,6 +951,11 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
               )}
 
               {/* ═══════════════ AGENCES (super-admin) ═══════════════ */}
+              {activeTab === 'partners' && (
+                <motion.div key="partners" {...panelAnim}>
+                  <PartnerAgenciesManager lang={lang} />
+                </motion.div>
+              )}
               {activeTab === 'agencies' && isSuperAdmin && (
                 <motion.div key="agencies" {...panelAnim}>
                   <CompaniesManager lang={lang} />

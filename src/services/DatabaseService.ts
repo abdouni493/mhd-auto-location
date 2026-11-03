@@ -10,7 +10,7 @@ export class DatabaseService {
   // Cars
   // ─── Helpers ─────────────────────────────────────────────────────────────
   /** Shared DB-row → Car mapper (ne fixe PAS le statut de disponibilité). */
-  private static mapDbCar(dbCar: any): Car {
+  static mapDbCar(dbCar: any): Car {
     return {
       id: dbCar.id || '',
       brand: dbCar.brand,

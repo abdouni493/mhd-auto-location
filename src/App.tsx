@@ -16,6 +16,7 @@ import { WebsiteOrders } from './components/WebsiteOrders';
 import { ProtectionServicesPage } from './components/ProtectionServicesPage';
 import { PlannerPage } from './components/PlannerPage';
 import { Website } from './components/Website';
+import { PartnerService } from './services/PartnerService';
 import { DashboardPage } from './components/DashboardPage';
 import ReportsPage from './components/ReportsPage';
 import { CarGainsPage } from './components/CarGainsPage';
@@ -53,6 +54,8 @@ export default function App() {
   const [isSidebarVisible, setIsSidebarVisible] = useState(window.innerWidth >= 1024);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [cars, setCars] = useState<Car[]>([]);
+  // Voitures des agences partenaires (site public uniquement)
+  const [partnerCars, setPartnerCars] = useState<Car[]>([]);
   const [specialOffers, setSpecialOffers] = useState<any[]>([]);
   const [contactInfo, setContactInfo] = useState<any>(null);
   const [websiteSettings, setWebsiteSettings] = useState<any>(null);
@@ -273,7 +276,15 @@ export default function App() {
     };
 
     loadCars();
-  }, [user]); // Recharge après connexion/déconnexion
+  }, [user]);
+
+  // Agences partenaires connectées : leurs voitures s'ajoutent au site public.
+  useEffect(() => {
+    if (!isWebsiteMode) return;
+    PartnerService.getAllPartnerCars()
+      .then(setPartnerCars)
+      .catch(err => console.warn('Failed to load partner cars:', err));
+  }, [isWebsiteMode]);
 
   // Load website data from database
   useEffect(() => {
@@ -793,7 +804,7 @@ export default function App() {
           lang={lang}
           onLangChange={setLang}
           // Le site public exclut les voitures masquées (isHiddenFromSite)
-          cars={(cars.length > 0 ? cars : mockCars).filter(car => car.isHiddenFromSite !== true)}
+          cars={[...(cars.length > 0 ? cars : mockCars), ...partnerCars].filter(car => car.isHiddenFromSite !== true)}
           agencies={agencies.length > 0 ? agencies : mockAgencies}
           isLoadingAgencies={isLoadingAgenciesForWebsite}
           specialOffers={specialOffers}
