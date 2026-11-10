@@ -400,7 +400,7 @@ const ReportsPage: React.FC<{ lang: Language }> = ({ lang }) => {
           .then(d => clients = d)
           .catch(() => {}),
 
-        DatabaseService.getCars()
+        DatabaseService.getCarsForAdmin()
           .then(d => cars = d)
           .catch(() => {}),
 
@@ -456,7 +456,7 @@ const ReportsPage: React.FC<{ lang: Language }> = ({ lang }) => {
     if (!data) return;
     
     try {
-      const agencySettings = await DatabaseService.getWebsiteSettings();
+      const agencySettings = await DatabaseService.getAgencyInfo();
       
       const html = generateReportHTML(
         null, // No specific car for general report

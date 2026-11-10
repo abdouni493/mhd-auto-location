@@ -60,13 +60,6 @@ export interface Car {
   // Masquée du site public (visible par défaut). Les vues admin l'affichent quand même.
   isHiddenFromSite?: boolean;
 
-  // ── Agence partenaire (voiture provenant d'une autre application connectée) ──
-  /** Renseigné uniquement pour les voitures d'une agence partenaire (site public). */
-  partnerId?: string;
-  partnerName?: string;
-  /** Identifiant de la voiture dans la base du partenaire. */
-  sourceCarId?: string;
-
   // ── Propriété du véhicule ────────────────────────────────────────────
   /** 'personal' (défaut) = voiture de l'agence · 'third_party' = voiture d'un tiers. */
   ownerType?: CarOwnerType;
@@ -777,6 +770,8 @@ export interface DashboardStats {
 
 export interface WebsiteOrder {
   id: string;
+  /** Agence propriétaire de la voiture (routage automatique des commandes du site). */
+  companyId?: string | null;
   carId: string;
   car: Car;
   step1: ReservationStep1;
@@ -856,16 +851,4 @@ export interface AgencySettings {
   documentTemplates?: DocumentTemplates;
   createdAt: string;
   updatedAt: string;
-}
-/** Autre application de location connectée (projet Supabase distinct). */
-export interface PartnerAgency {
-  id: string;
-  name: string;
-  city?: string;
-  phone?: string;
-  email?: string;
-  supabaseUrl: string;
-  anonKey: string;
-  isActive: boolean;
-  createdAt?: string;
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Language, User } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Settings, Link2, Building2, UserRound, ShieldCheck, Database, Layers,
+  Settings, Building2, UserRound, ShieldCheck, Database, Layers,
   Camera, Save, Download, Upload, KeyRound, Mail, Phone, MapPin, Landmark,
   ChevronRight, RotateCcw, Trash2, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Type,
 } from 'lucide-react';
@@ -12,14 +12,13 @@ import { supabase } from '../supabase';
 import { useCompany } from '../utils/companyProvider';
 import { sessionService } from '../utils/sessionService';
 import { CompaniesManager } from './CompaniesManager';
-import { PartnerAgenciesManager } from './PartnerAgenciesManager';
 
 interface ConfigPageProps {
   lang: Language;
   user: User;
 }
 
-type TabId = 'general' | 'profile' | 'database' | 'agencies' | 'partners';
+type TabId = 'general' | 'profile' | 'database' | 'agencies';
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
   const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
@@ -135,7 +134,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
         setLoading(true);
 
         // Load website settings for general tab
-        const websiteSettings = await DatabaseService.getWebsiteSettings();
+        const websiteSettings = await DatabaseService.getAgencyInfo();
         setGeneralData({
           agencyName: websiteSettings.name || 'Luxdrive Premium',
           slogan: websiteSettings.description || 'Votre partenaire de confiance en location de véhicules',
@@ -167,6 +166,12 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                 email: workerData.email || user.email,
               }));
               if (workerData.email) setAccountEmail(workerData.email);
+            } else {
+              // Admin d'agence (compte Auth sans fiche employé) : nom d'utilisateur
+              // stocké dans les métadonnées du compte.
+              const { data: authData } = await supabase.auth.getUser();
+              const meta: any = authData?.user?.user_metadata || {};
+              setSecurityData(prev => ({ ...prev, username: meta.username || prev.username || '' }));
             }
           } catch (workerError) {
             console.warn('Could not load worker data:', workerError);
@@ -308,8 +313,8 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
   const handleSaveAgencyInfo = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
-      // Save to website settings
-      await DatabaseService.updateWebsiteSettings({
+      // Agence principale → site web ; autre agence → sa propre fiche
+      await DatabaseService.updateAgencyInfo({
         name: generalData.agencyName,
         description: generalData.slogan,
         logo: generalData.logo,
@@ -356,8 +361,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
             logo: imageData,
           }));
 
-          // Save to website settings
-          await DatabaseService.updateWebsiteSettings({
+          await DatabaseService.updateAgencyInfo({
             name: generalData.agencyName,
             description: generalData.slogan,
             logo: imageData,
@@ -452,7 +456,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
         websiteContacts,
         websiteSettings
       ] = await Promise.all([
-        DatabaseService.getCars(),
+        DatabaseService.getCarsForAdmin(),
         DatabaseService.getClients(),
         DatabaseService.getAgencies(),
         DatabaseService.getWorkers(),
@@ -609,7 +613,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
     { id: 'general', icon: Building2, label: T('Agence', 'الوكالة'), desc: T('Nom, logo, coordonnées', 'الاسم، الشعار، التواصل'), accent: '#0284C7' },
     { id: 'profile', icon: UserRound, label: T('Profil & Sécurité', 'الملف والأمان'), desc: T('Compte et connexion', 'الحساب والدخول'), accent: '#DC2626' },
     { id: 'database', icon: Database, label: T('Données', 'البيانات'), desc: T('Sauvegarde & corbeille', 'النسخ والسلة'), accent: '#16A34A' },
-    { id: 'partners', icon: Link2, label: T('Agences partenaires', 'الوكالات الشريكة'), desc: T('Applications connectées', 'تطبيقات متصلة'), accent: '#7C3AED' },
     ...(isSuperAdmin ? [{ id: 'agencies' as TabId, icon: Layers, label: T('Agences', 'الوكالات'), desc: T('Multi-agences', 'تعدد الوكالات'), accent: '#0F172A' }] : []),
   ];
 
@@ -951,11 +954,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
               )}
 
               {/* ═══════════════ AGENCES (super-admin) ═══════════════ */}
-              {activeTab === 'partners' && (
-                <motion.div key="partners" {...panelAnim}>
-                  <PartnerAgenciesManager lang={lang} />
-                </motion.div>
-              )}
               {activeTab === 'agencies' && isSuperAdmin && (
                 <motion.div key="agencies" {...panelAnim}>
                   <CompaniesManager lang={lang} />

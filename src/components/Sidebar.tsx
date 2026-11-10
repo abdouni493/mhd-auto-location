@@ -5,7 +5,6 @@ import { SIDEBAR_ITEMS } from '../constants';
 import { Language } from '../types';
 import { DatabaseService } from '../services/DatabaseService';
 import { usePermissions } from '../utils/permissions';
-import { useCompany } from '../utils/companyProvider';
 
 interface SidebarProps {
   lang: Language;
@@ -24,12 +23,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isRtl = lang === 'ar';
   // Un employé ne voit que les interfaces autorisées par l'admin.
   const { canSeeInterface } = usePermissions();
-  // Multi-agences : « Website commandes » (triage des commandes non attribuées)
-  // est réservé au super-admin.
-  const { isSuperAdmin } = useCompany();
-  const visibleItems = SIDEBAR_ITEMS.filter(item =>
-    canSeeInterface(item.id) && !(item.id === 'web-orders' && !isSuperAdmin)
-  );
+  // Multi-agences : chaque agence voit ses PROPRES commandes du site (routées
+  // automatiquement vers le propriétaire de la voiture réservée).
+  const visibleItems = SIDEBAR_ITEMS.filter(item => canSeeInterface(item.id));
   const [agencyData, setAgencyData] = useState({
     name: 'MHD AUTO',
     logo: '',
@@ -39,7 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     const loadAgencyData = async () => {
       try {
-        const websiteSettings = await DatabaseService.getWebsiteSettings();
+        const websiteSettings = await DatabaseService.getAgencyInfo();
         setAgencyData({
           name: websiteSettings.name || 'MHD AUTO',
           logo: websiteSettings.logo || '',

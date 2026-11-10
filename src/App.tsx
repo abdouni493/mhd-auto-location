@@ -16,7 +16,6 @@ import { WebsiteOrders } from './components/WebsiteOrders';
 import { ProtectionServicesPage } from './components/ProtectionServicesPage';
 import { PlannerPage } from './components/PlannerPage';
 import { Website } from './components/Website';
-import { PartnerService } from './services/PartnerService';
 import { DashboardPage } from './components/DashboardPage';
 import ReportsPage from './components/ReportsPage';
 import { CarGainsPage } from './components/CarGainsPage';
@@ -54,8 +53,6 @@ export default function App() {
   const [isSidebarVisible, setIsSidebarVisible] = useState(window.innerWidth >= 1024);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [cars, setCars] = useState<Car[]>([]);
-  // Voitures des agences partenaires (site public uniquement)
-  const [partnerCars, setPartnerCars] = useState<Car[]>([]);
   const [specialOffers, setSpecialOffers] = useState<any[]>([]);
   const [contactInfo, setContactInfo] = useState<any>(null);
   const [websiteSettings, setWebsiteSettings] = useState<any>(null);
@@ -276,15 +273,7 @@ export default function App() {
     };
 
     loadCars();
-  }, [user]);
-
-  // Agences partenaires connectées : leurs voitures s'ajoutent au site public.
-  useEffect(() => {
-    if (!isWebsiteMode) return;
-    PartnerService.getAllPartnerCars()
-      .then(setPartnerCars)
-      .catch(err => console.warn('Failed to load partner cars:', err));
-  }, [isWebsiteMode]);
+  }, [user]); // Recharge après connexion/déconnexion
 
   // Load website data from database
   useEffect(() => {
@@ -621,25 +610,11 @@ export default function App() {
         case 'web-mgmt':
           return <GuardedContent tabId="web-mgmt"><WebsiteManagementPage lang={lang} /></GuardedContent>;
         case 'web-orders':
-          // Commandes du site = triage centralisé réservé au super-admin :
-          // lui seul voit les commandes non encore rattachées à une agence.
+          // Chaque agence voit les commandes du site portant sur SES voitures
+          // (routées automatiquement vers le propriétaire de la voiture).
           return (
             <GuardedContent tabId="web-orders">
-              {isSuperAdmin ? (
-                <WebsiteOrders lang={lang} companies={companies} onOrdersChanged={refreshWebOrdersCount} />
-              ) : (
-                <div className="glass-card p-16 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-[#DC2626]/10 border border-[#DC2626]/25 flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
-                  <p className="text-lg font-black text-saas-text-main">
-                    {lang === 'fr' ? 'Réservé au super-administrateur' : 'مخصص للمشرف العام'}
-                  </p>
-                  <p className="text-sm text-saas-text-muted mt-2 max-w-md mx-auto">
-                    {lang === 'fr'
-                      ? "Les commandes du site sont attribuées aux agences par le super-administrateur."
-                      : 'يتم توزيع طلبات الموقع على الوكالات من طرف المشرف العام.'}
-                  </p>
-                </div>
-              )}
+              <WebsiteOrders lang={lang} companies={companies} onOrdersChanged={refreshWebOrdersCount} />
             </GuardedContent>
           );
         case 'protection-services':
@@ -804,7 +779,7 @@ export default function App() {
           lang={lang}
           onLangChange={setLang}
           // Le site public exclut les voitures masquées (isHiddenFromSite)
-          cars={[...(cars.length > 0 ? cars : mockCars), ...partnerCars].filter(car => car.isHiddenFromSite !== true)}
+          cars={(cars.length > 0 ? cars : mockCars).filter(car => car.isHiddenFromSite !== true)}
           agencies={agencies.length > 0 ? agencies : mockAgencies}
           isLoadingAgencies={isLoadingAgenciesForWebsite}
           specialOffers={specialOffers}

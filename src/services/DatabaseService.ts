@@ -10,7 +10,7 @@ export class DatabaseService {
   // Cars
   // ─── Helpers ─────────────────────────────────────────────────────────────
   /** Shared DB-row → Car mapper (ne fixe PAS le statut de disponibilité). */
-  static mapDbCar(dbCar: any): Car {
+  private static mapDbCar(dbCar: any): Car {
     return {
       id: dbCar.id || '',
       brand: dbCar.brand,
@@ -1456,10 +1456,11 @@ export class DatabaseService {
   static async getWebsiteOrders(): Promise<WebsiteOrder[]> {
     try {
       // Query pending reservations from reservations table (website orders)
-      const { data, error } = await supabase
+      const { data, error } = await scopeQuery(supabase
         .from('reservations')
         .select(`
           id,
+          company_id,
           client_id,
           car_id,
           departure_date,
@@ -1507,7 +1508,7 @@ export class DatabaseService {
         .eq('source', 'website')
         // Masque les commandes mises à la corbeille (suppression réversible).
         .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }));
 
       if (error) {
         console.warn('Error fetching website orders:', error);
@@ -1515,10 +1516,10 @@ export class DatabaseService {
         // (migration non appliquée) : on retente sans ces filtres pour ne pas
         // casser l'affichage des commandes.
         if (error.code === '42703' || /column .*(source|deleted_at).* does not exist/i.test(error.message || '') || /deleted_at/i.test(error.message || '')) {
-          const retry = await supabase
+          const retry = await scopeQuery(supabase
             .from('reservations')
             .select(`
-              id, client_id, car_id,
+              id, company_id, client_id, car_id,
               departure_date, departure_time, departure_agency_id,
               return_date, return_time, return_agency_id,
               total_days, total_price, additional_fees, status, created_at,
@@ -1534,7 +1535,7 @@ export class DatabaseService {
             // Sans colonne source, seul 'website_reservation' identifie de façon
             // fiable une commande du site (statut jamais utilisé par l'agence).
             .eq('status', 'website_reservation')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false }));
           if (retry.error) { console.warn('Website orders retry failed:', retry.error); return []; }
           return this.mapWebsiteOrders(retry.data || []);
         }
@@ -1590,6 +1591,7 @@ export class DatabaseService {
 
       return {
         id: reservation.id,
+        companyId: reservation.company_id || null,
         carId: reservation.car_id,
         car: reservation.car || {},
         step1: {
@@ -2144,6 +2146,56 @@ export class DatabaseService {
       phone: '',
       landing_background: '',
     };
+  }
+
+  /**
+   * Agence de l'utilisateur connecté si ce n'est PAS l'agence principale
+   * (sinon null). Les informations de l'agence principale restent celles du
+   * site web ; chaque autre agence a ses propres nom/logo/coordonnées.
+   */
+  private static async ownSecondaryCompany(): Promise<any | null> {
+    const cid = companyContext.getScopeCompanyId();
+    if (!cid) return null;
+    const { data, error } = await supabase.from('companies').select('*').eq('id', cid).maybeSingle();
+    if (error || !data || data.is_primary) return null;
+    return data;
+  }
+
+  /**
+   * Informations de l'agence CONNECTÉE (en-têtes de contrats, rapports,
+   * e-mails, barre latérale). Agence principale → paramètres du site ;
+   * autre agence → sa propre fiche (repli champ par champ sur le site).
+   */
+  static async getAgencyInfo(): Promise<WebsiteSettings> {
+    const site = await this.getWebsiteSettings();
+    let company: any = null;
+    try { company = await this.ownSecondaryCompany(); } catch { /* repli site */ }
+    if (!company) return site;
+    return {
+      ...site,
+      name: company.name || site.name,
+      description: company.description ?? '',
+      logo: company.logo || site.logo,
+      address: company.address ?? '',
+      phone: company.phone ?? '',
+      phone_number_2: company.phone_number_2 ?? '',
+      bank_number: company.bank_number ?? '',
+    };
+  }
+
+  /** Enregistre les informations de l'agence connectée (voir getAgencyInfo). */
+  static async updateAgencyInfo(settings: WebsiteSettings): Promise<void> {
+    const company = await this.ownSecondaryCompany();
+    if (!company) {
+      await this.updateWebsiteSettings(settings);
+      return;
+    }
+    const payload: Record<string, any> = {};
+    for (const k of ['name', 'description', 'logo', 'address', 'phone', 'phone_number_2', 'bank_number'] as const) {
+      if ((settings as any)[k] !== undefined) payload[k] = (settings as any)[k];
+    }
+    const { error } = await supabase.from('companies').update(payload).eq('id', company.id);
+    if (error) throw error;
   }
 
   static async updateWebsiteSettings(settings: WebsiteSettings): Promise<WebsiteSettings> {

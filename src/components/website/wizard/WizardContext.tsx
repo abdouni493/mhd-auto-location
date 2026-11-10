@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { Language, Car, Agency, SpecialOffer, ReservationStep2, AdditionalService, ProtectionAssurance } from '../../../types';
 import { computeRentalBase } from '../../../utils/pricing';
 import { DatabaseService } from '../../../services/DatabaseService';
-import { PartnerService } from '../../../services/PartnerService';
 import { getCurrentSpecialOfferForCar } from '../../../utils/specialOffers';
 import { fromYmd } from './wizardUi';
 import { useWebsiteCurrency } from '../CurrencyContext';
@@ -173,7 +172,7 @@ interface ProviderProps {
 }
 
 export const ReservationWizardProvider: React.FC<ProviderProps> = ({
-  lang, cars, agencies: mainAgencies, isLoadingAgencies: isLoadingMainAgencies, specialOffers, initialCar, initialSearch, children,
+  lang, cars, agencies, isLoadingAgencies, specialOffers, initialCar, initialSearch, children,
 }) => {
   const search = initialSearch || null;
 
@@ -196,37 +195,12 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
 
   // Étape 2
   const [departureAgency, setDepartureAgency] = useState(search?.departureAgencyId || '');
-
-  // Agence partenaire : les lieux de départ/retour sont ceux du PROPRIÉTAIRE de la voiture.
-  const [partnerAgencies, setPartnerAgencies] = useState<Agency[]>([]);
-  const [loadingPartnerAgencies, setLoadingPartnerAgencies] = useState(false);
-  const partnerId = car?.partnerId;
-  useEffect(() => {
-    if (!partnerId) { setPartnerAgencies([]); return; }
-    let cancelled = false;
-    setLoadingPartnerAgencies(true);
-    PartnerService.getPartnerAgencies(partnerId)
-      .then(list => { if (!cancelled) setPartnerAgencies(list); })
-      .catch(() => { if (!cancelled) setPartnerAgencies([]); })
-      .finally(() => { if (!cancelled) setLoadingPartnerAgencies(false); });
-    return () => { cancelled = true; };
-  }, [partnerId]);
-  const agencies = partnerId ? partnerAgencies : mainAgencies;
-  const isLoadingAgencies = partnerId ? loadingPartnerAgencies : isLoadingMainAgencies;
   const [differentReturnAgency, setDifferentReturnAgency] = useState(
     !!(search?.returnAgencyId && search.returnAgencyId !== search.departureAgencyId)
   );
   const [returnAgency, setReturnAgency] = useState(
     search?.returnAgencyId && search.returnAgencyId !== search.departureAgencyId ? search.returnAgencyId : ''
   );
-
-  // Changement de propriétaire (principal ↔ partenaire) : on vide les agences invalides.
-  useEffect(() => {
-    if (isLoadingAgencies) return;
-    const ids = new Set(agencies.map(a => a.id));
-    if (departureAgency && !ids.has(departureAgency)) setDepartureAgency('');
-    if (returnAgency && !ids.has(returnAgency)) setReturnAgency('');
-  }, [agencies, isLoadingAgencies]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Étape 5
   const [personal, setPersonal] = useState<ReservationStep2>(emptyPersonal);
@@ -264,9 +238,7 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     const load = async () => {
       setLoadingBlocked(true);
       try {
-        const ranges = car.partnerId
-          ? await PartnerService.getReservedDateRanges(car)
-          : await DatabaseService.getReservedDateRangesForCar(car.id);
+        const ranges = await DatabaseService.getReservedDateRangesForCar(car.id);
         if (!cancelled) setBlockedRanges(ranges);
       } catch (err) {
         console.warn('Failed to load blocked dates:', err);
@@ -286,12 +258,7 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
     const load = async () => {
       setLoadingAvailability(true);
       try {
-        const partnerIds = Array.from(new Set(cars.map(c => c.partnerId).filter(Boolean))) as string[];
-        const [mainIds, partnerUnavailable] = await Promise.all([
-          DatabaseService.getUnavailableCarIds(search.from, search.to),
-          PartnerService.getUnavailableCarIds(search.from, search.to, partnerIds).catch(() => [] as string[]),
-        ]);
-        const ids = mainIds === null && partnerUnavailable.length === 0 ? null : [...(mainIds || []), ...partnerUnavailable];
+        const ids = await DatabaseService.getUnavailableCarIds(search.from, search.to);
         if (!cancelled) setUnavailableIds(ids); // null = RPC absente → toutes affichées
       } catch {
         if (!cancelled) setUnavailableIds(null);
@@ -564,21 +531,6 @@ export const ReservationWizardProvider: React.FC<ProviderProps> = ({
         description: (s as any).description || '',
         price: s.price,
       }));
-
-      if (car.partnerId) {
-        // Voiture d'une agence partenaire → réservation créée chez son propriétaire.
-        await PartnerService.createReservation(car, {
-          client: clientPayload,
-          reservation: {
-            ...reservationPayload,
-            protection_assurance_id: '',
-            notes: [reservationPayload.notes, `Réservation reçue via le site partenaire (${window.location.host}).`].filter(Boolean).join('\n'),
-          },
-          services: servicesPayload,
-        });
-        setSubmitted(true);
-        return;
-      }
 
       await DatabaseService.createWebsiteReservation({
         client: clientPayload,

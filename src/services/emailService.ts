@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { DatabaseService } from './DatabaseService';
 import { ReservationDetails, ReservationContinuation } from '../types';
 import html2pdf from 'html2pdf.js';
 
@@ -61,11 +62,7 @@ export class EmailService {
   ): Promise<string> {
     try {
       // Fetch agency settings for logo and name
-      const { data: settingsData } = await supabase
-        .from('website_settings')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(1);
+      const settingsData: any[] = [await DatabaseService.getAgencyInfo()];
 
       const agencyName = settingsData?.[0]?.name || 'AUTO LOCATION';
       const logoUrl = settingsData?.[0]?.logo || '';
@@ -570,11 +567,7 @@ export class EmailService {
     templateLang: 'fr' | 'ar'
   ): Promise<string> {
     try {
-      const { data: settingsData } = await supabase
-        .from('website_settings')
-        .select('logo, name, address, phone, phone_number_2')
-        .limit(1)
-        .single();
+      const settingsData: any = await DatabaseService.getAgencyInfo();
 
       const agencyName    = settingsData?.name  || 'AUTO LOCATION';
       const logoUrl       = settingsData?.logo  || '';
@@ -942,11 +935,7 @@ export class EmailService {
 
   // ─── SHARED AGENCY LOADER ────────────────────────────────────────────────────
   private static async loadAgency() {
-    const { data } = await supabase
-      .from('website_settings')
-      .select('logo, name, address, phone, phone_number_2, bank_number')
-      .limit(1)
-      .single();
+    const data: any = await DatabaseService.getAgencyInfo();
     return {
       name:    data?.name         || 'AUTO LOCATION',
       logo:    data?.logo         || '',
@@ -1615,11 +1604,7 @@ export class EmailService {
     continuation?: ReservationContinuation | null
   ): Promise<string> {
     // Load agency settings for logo, name, contact info
-    const { data: settingsData } = await supabase
-      .from('website_settings')
-      .select('logo, name, address, phone, phone_number_2, bank_number')
-      .limit(1)
-      .single();
+    const settingsData: any = await DatabaseService.getAgencyInfo();
 
     const agencyName    = settingsData?.name         || 'AUTO LOCATION';
     const logoUrl       = settingsData?.logo          || '';
@@ -2035,11 +2020,7 @@ export class EmailService {
    */
   private static async generateReservationEmailHTML(reservation: ReservationDetails, templateLang: string = 'ar'): Promise<string> {
     // Load agency settings for logo, name, contact info
-    const { data: settingsData } = await supabase
-      .from('website_settings')
-      .select('logo, name, address, phone, phone_number_2, bank_number')
-      .limit(1)
-      .single();
+    const settingsData: any = await DatabaseService.getAgencyInfo();
 
     const agencyName    = settingsData?.name          || 'AUTO LOCATION';
     const logoUrl       = settingsData?.logo           || '';

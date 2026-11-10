@@ -93,7 +93,7 @@ export const CarGainsPage: React.FC<CarGainsPageProps> = ({ lang }) => {
       try {
         // Multi-agences : un admin scoppé ne voit que les voitures de son agence.
         const [carsData, links] = await Promise.all([
-          DatabaseService.getCars(),
+          DatabaseService.getCarsForAdmin(),
           DatabaseService.getCarCompanyLinks(),
         ]);
         const scoped = carsData.filter(c => isCarInActiveCompany(c.id, links));
@@ -171,7 +171,7 @@ export const CarGainsPage: React.FC<CarGainsPageProps> = ({ lang }) => {
   const handlePrintFull = async () => {
     if (!selectedCar) return;
     try {
-      const agencySettings = await DatabaseService.getWebsiteSettings();
+      const agencySettings = await DatabaseService.getAgencyInfo();
       printHtml(generateReportHTML(selectedCar, reservations, expenses, startDate, endDate, agencySettings, lang));
     } catch (err) {
       console.error('Error printing report:', err);
@@ -183,7 +183,7 @@ export const CarGainsPage: React.FC<CarGainsPageProps> = ({ lang }) => {
   const handlePrintOwner = async () => {
     if (!selectedCar) return;
     try {
-      const agencySettings = await DatabaseService.getWebsiteSettings();
+      const agencySettings = await DatabaseService.getAgencyInfo();
       printHtml(generateOwnerReportHTML({
         car: selectedCar,
         reservations,

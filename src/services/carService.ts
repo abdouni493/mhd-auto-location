@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { uploadCarImage } from './uploadCarImage'
+import { companyContext, isCarInActiveCompany } from '../utils/companyContext'
 
 export interface Car {
   id?: string
@@ -152,9 +153,18 @@ export async function getCars(): Promise<{ success: boolean; cars?: Car[]; error
       }
     }
 
+    // Multi-agences : une agence ne voit QUE ses propres voitures dans l'admin.
+    let cars = data || []
+    if (companyContext.getScopeCompanyId()) {
+      const { data: links } = await supabase.from('car_companies').select('car_id, company_id')
+      const map: Record<string, string[]> = {}
+      for (const l of links || []) (map[l.car_id] ||= []).push(l.company_id)
+      cars = cars.filter((c: any) => isCarInActiveCompany(c.id, map))
+    }
+
     return {
       success: true,
-      cars: data
+      cars
     }
   } catch (error) {
     console.error('Unexpected error:', error)

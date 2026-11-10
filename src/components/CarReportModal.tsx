@@ -139,7 +139,7 @@ export const CarReportModal: React.FC<CarReportModalProps> = ({
       });
 
       // Fetch agency settings for logo and info
-      const agencySettings = await DatabaseService.getWebsiteSettings();
+      const agencySettings = await DatabaseService.getAgencyInfo();
 
       const html = await generateReportHTML(car, filteredRes, filteredExp, startDate, endDate, agencySettings, lang);
       

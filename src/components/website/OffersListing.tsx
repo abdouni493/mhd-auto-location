@@ -145,11 +145,6 @@ export const OffersListing: React.FC<OffersListingProps> = ({ lang, cars, specia
                       {car.brand} <span style={{ color: '#DC2626' }}>{car.model}</span>
                     </h3>
                     <p className="text-vel-muted text-[10px] truncate">{car.registration} · {car.color}</p>
-                    {car.partnerName && (
-                      <p className="text-[10px] font-bold truncate" style={{ color: '#7C3AED' }}>
-                        🤝 {lang === 'fr' ? 'Agence' : 'وكالة'} : {car.partnerName}
-                      </p>
-                    )}
                   </div>
 
                   {/* Specs : tous les détails en micro-puces */}

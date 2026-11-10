@@ -1,3 +1,4 @@
+import { companyContext } from '../utils/companyContext';
 import React, { useState, useEffect } from 'react';
 import { Language, WebsiteOrder, Car, Agency, Company } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -72,6 +73,13 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, companies = 
    * agence (ou aucune), on accepte directement sans étape intermédiaire.
    */
   const openAccept = (order: WebsiteOrder) => {
+    // Commande déjà routée vers l'agence propriétaire de la voiture : on
+    // l'accepte directement pour cette agence (aucun choix à faire).
+    const ownCompany = order.companyId || companyContext.getScopeCompanyId();
+    if (ownCompany) {
+      void doAccept(order.id, ownCompany);
+      return;
+    }
     if (companies.length >= 2) {
       setAcceptTarget(order);
       setAcceptCompanyId(companies[0]?.id || '');
