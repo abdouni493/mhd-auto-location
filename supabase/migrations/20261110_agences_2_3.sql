@@ -106,11 +106,8 @@ BEGIN
     ON CONFLICT (user_id) DO UPDATE
       SET company_id = EXCLUDED.company_id, is_super_admin = false;
 
-    -- Profil (nom d'utilisateur) si la table existe
-    IF to_regclass('public.profiles') IS NOT NULL THEN
-      EXECUTE 'INSERT INTO public.profiles (id, username, role) VALUES ($1, $2, ''admin'') ON CONFLICT (id) DO NOTHING'
-        USING v_uid, acc.username;
-    END IF;
+    -- Le nom d'utilisateur est stocké dans les métadonnées du compte
+    -- (profiles.username est unique et « admin » y est déjà pris).
   END LOOP;
 END $$;
 
@@ -265,7 +262,11 @@ BEGIN
 
     -- Nom d'utilisateur des admins d'agence (table profiles, si présente)
     IF v_username IS NOT NULL AND to_regclass('public.profiles') IS NOT NULL THEN
-      EXECUTE 'UPDATE public.profiles SET username = $1 WHERE id = $2' USING v_username, v_user_id;
+      BEGIN
+        EXECUTE 'UPDATE public.profiles SET username = $1 WHERE id = $2' USING v_username, v_user_id;
+      EXCEPTION WHEN unique_violation THEN
+        NULL; -- nom déjà pris dans profiles : les métadonnées du compte font foi
+      END;
     END IF;
 
     IF v_new_email IS NOT NULL THEN
