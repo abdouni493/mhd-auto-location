@@ -294,6 +294,7 @@ export class ReservationsService {
     startDate?: string;
     endDate?: string;
   }): Promise<ReservationDetails[]> {
+    await companyContext.whenResolved();
     let query = supabase
       .from('reservations')
       .select(`

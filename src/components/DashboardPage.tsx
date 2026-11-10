@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, TrendingUp, Users, Car as CarIcon, Calendar, CalendarCheck, Clock, BarChart3, PieChart, DollarSign, Wrench, Shield, FileCheck, Loader2, AlertCircle } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
 import { getCars } from '../services/carService';
+import { companyContext } from '../utils/companyContext';
 import { getVehicleExpenses } from '../services/expenseService';
 import { getVidangeAlert, getAssuranceAlert, getControleAlert, getChaineAlert } from '../utils/vidangeAlerts';
 import { ReservationsService } from '../services/ReservationsService';
@@ -325,6 +326,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ lang, isAuthLoadin
       try {
         setLoading(true);
         setError(null);
+
+        // Multi-agences : attendre l'agence connectée avant toute lecture,
+        // sinon le tableau de bord mélange les données de toutes les agences.
+        await companyContext.whenResolved();
 
         // Fetch real data from database in parallel
         const [dbStats, dbAlerts, carsResult, expensesResult, reservationsResult] = await Promise.all([

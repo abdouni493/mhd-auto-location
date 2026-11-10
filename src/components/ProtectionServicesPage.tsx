@@ -5,6 +5,23 @@ import {
 } from 'lucide-react';
 import { Language, ProtectionAssurance, ProtectionAssuranceItem } from '../types';
 import { DatabaseService } from '../services/DatabaseService';
+import { companyContext } from '../utils/companyContext';
+
+/**
+ * Services et assurances : catalogue COMMUN à toutes les agences, géré par
+ * l'agence principale. Les autres agences le consultent (lecture seule).
+ */
+const useCanManageCatalog = (): boolean => {
+  const snap = React.useSyncExternalStore(companyContext.subscribe, companyContext.getSnapshot);
+  const scope = snap.activeCompanyId === 'all' ? null : snap.activeCompanyId;
+  return !scope || !snap.primaryCompanyId || scope === snap.primaryCompanyId;
+};
+
+const ReadOnlyNote: React.FC<{ lang: Language }> = ({ lang }) => (
+  <p className="text-xs font-bold text-saas-text-muted">
+    {t(lang, "🔒 Catalogue commun géré par l'agence principale", '🔒 قائمة مشتركة تديرها الوكالة الرئيسية')}
+  </p>
+);
 
 interface ProtectionServicesPageProps {
   lang: Language;
@@ -81,6 +98,7 @@ export const ProtectionServicesPage: React.FC<ProtectionServicesPageProps> = ({ 
 // ════════════════════════════════════════════════════════════════════════════
 
 const AssurancesManager: React.FC<{ lang: Language }> = ({ lang }) => {
+  const canManage = useCanManageCatalog();
   const [assurances, setAssurances] = useState<ProtectionAssurance[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -120,9 +138,11 @@ const AssurancesManager: React.FC<{ lang: Language }> = ({ lang }) => {
         <p className="text-saas-text-muted text-sm font-bold">
           {assurances.length} {t(lang, 'forfait(s)', 'باقة')}
         </p>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-saas-primary">
-          <Plus size={18} /> {t(lang, 'Nouvelle assurance', 'تأمين جديد')}
-        </button>
+        {canManage ? (
+          <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-saas-primary">
+            <Plus size={18} /> {t(lang, 'Nouvelle assurance', 'تأمين جديد')}
+          </button>
+        ) : <ReadOnlyNote lang={lang} />}
       </div>
 
       {loading ? (
@@ -146,6 +166,7 @@ const AssurancesManager: React.FC<{ lang: Language }> = ({ lang }) => {
               key={a.id}
               lang={lang}
               assurance={a}
+              canManage={canManage}
               onEdit={() => { setEditing(a); setShowForm(true); }}
               onDelete={() => setDeleteId(a.id)}
             />
@@ -181,9 +202,10 @@ const AssurancesManager: React.FC<{ lang: Language }> = ({ lang }) => {
 const AssuranceCard: React.FC<{
   lang: Language;
   assurance: ProtectionAssurance;
+  canManage?: boolean;
   onEdit: () => void;
   onDelete: () => void;
-}> = ({ lang, assurance, onEdit, onDelete }) => (
+}> = ({ lang, assurance, canManage = true, onEdit, onDelete }) => (
   <motion.div
     initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
@@ -233,7 +255,7 @@ const AssuranceCard: React.FC<{
       )}
     </div>
 
-    <div className="flex gap-2 pt-4 border-t border-saas-border">
+    {canManage && <div className="flex gap-2 pt-4 border-t border-saas-border">
       <button onClick={onEdit} className="btn-saas-outline flex-1 py-2 text-sm">
         <Pencil size={15} /> {t(lang, 'Modifier', 'تعديل')}
       </button>
@@ -244,7 +266,7 @@ const AssuranceCard: React.FC<{
       >
         <Trash2 size={16} />
       </button>
-    </div>
+    </div>}
   </motion.div>
 );
 
@@ -471,6 +493,7 @@ const AssuranceFormModal: React.FC<{
 // ════════════════════════════════════════════════════════════════════════════
 
 const ServicesManager: React.FC<{ lang: Language }> = ({ lang }) => {
+  const canManage = useCanManageCatalog();
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -511,9 +534,11 @@ const ServicesManager: React.FC<{ lang: Language }> = ({ lang }) => {
         <p className="text-saas-text-muted text-sm font-bold">
           {services.length} {t(lang, 'service(s)', 'خدمة')}
         </p>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-saas-primary">
-          <Plus size={18} /> {t(lang, 'Nouveau service', 'خدمة جديدة')}
-        </button>
+        {canManage ? (
+          <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-saas-primary">
+            <Plus size={18} /> {t(lang, 'Nouveau service', 'خدمة جديدة')}
+          </button>
+        ) : <ReadOnlyNote lang={lang} />}
       </div>
 
       {loading ? (
@@ -558,7 +583,7 @@ const ServicesManager: React.FC<{ lang: Language }> = ({ lang }) => {
                 {s.description && (
                   <p className="text-saas-text-muted text-xs leading-relaxed flex-1 mb-3">{s.description}</p>
                 )}
-                <div className="flex gap-2 pt-3 border-t border-saas-border mt-auto">
+                {canManage && <div className="flex gap-2 pt-3 border-t border-saas-border mt-auto">
                   <button onClick={() => { setEditing(s); setShowForm(true); }} className="btn-saas-outline flex-1 py-2 text-sm">
                     <Pencil size={15} /> {t(lang, 'Modifier', 'تعديل')}
                   </button>
@@ -569,7 +594,7 @@ const ServicesManager: React.FC<{ lang: Language }> = ({ lang }) => {
                   >
                     <Trash2 size={16} />
                   </button>
-                </div>
+                </div>}
               </motion.div>
             );
           })}

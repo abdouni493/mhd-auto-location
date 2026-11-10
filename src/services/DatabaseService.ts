@@ -307,6 +307,7 @@ export class DatabaseService {
    * NB : la table `cars` reste PARTAGÉE — le site public n'utilise pas ceci.
    */
   static async getCarsForAdmin(): Promise<Car[]> {
+    await companyContext.whenResolved();
     const [cars, links] = await Promise.all([this.getCars(), this.getCarCompanyLinks()]);
     const scopeId = companyContext.getScopeCompanyId();
     const primaryId = companyContext.getPrimaryCompanyId();
@@ -1778,6 +1779,8 @@ export class DatabaseService {
 
   // Dashboard Statistics
   static async getDashboardStats() {
+    // Attend l'agence connectée : sinon le tableau de bord afficherait toutes les agences.
+    await companyContext.whenResolved();
     // Add retry logic for rate limiting
     const maxRetries = 2;
     let lastError;
@@ -1812,7 +1815,8 @@ export class DatabaseService {
           scopeQuery(supabase.from('store_expenses').select('cost')),
           scopeQuery(supabase.from('vehicle_expenses').select('cost')),
           scopeQuery(supabase.from('clients').select('id', { count: 'exact' })),
-          supabase.from('cars').select('id', { count: 'exact' }),
+          // Voitures de l'agence connectée uniquement
+          this.getCarsForAdmin().then(data => ({ data, error: null as any })).catch(error => ({ data: null as any, error })),
           scopeQuery(notTrashed(supabase.from('reservations').select('car_id').in('status', ['pending', 'confirmed', 'active', 'continued']))),
           scopeQuery(notTrashed(supabase.from('reservations').select('id', { count: 'exact' }))),
           scopeQuery(notTrashed(supabase.from('reservations').select('id', { count: 'exact' }).in('status', ['confirmed', 'active', 'continued']))),
@@ -1842,7 +1846,7 @@ export class DatabaseService {
 
         // Calculate available cars: total cars minus those with active/pending reservations
         const rentedCarIds = new Set(activeReservationsForCars?.map((r: any) => r.car_id) || []);
-        const availableCarsCount = (cars?.length || 0) - rentedCarIds.size;
+        const availableCarsCount = (cars || []).filter((c: any) => !rentedCarIds.has(c.id) && c.status !== 'maintenance').length;
 
         // Calculate totals
         const totalRevenue = revenueData?.reduce((sum, r) => sum + r.total_price, 0) || 0;
@@ -2167,6 +2171,8 @@ export class DatabaseService {
    * autre agence → sa propre fiche (repli champ par champ sur le site).
    */
   static async getAgencyInfo(): Promise<WebsiteSettings> {
+    // Attend l'agence connectée (sinon on renverrait l'agence principale).
+    await companyContext.whenResolved();
     const site = await this.getWebsiteSettings();
     let company: any = null;
     try { company = await this.ownSecondaryCompany(); } catch { /* repli site */ }
@@ -2185,17 +2191,23 @@ export class DatabaseService {
 
   /** Enregistre les informations de l'agence connectée (voir getAgencyInfo). */
   static async updateAgencyInfo(settings: WebsiteSettings): Promise<void> {
+    await companyContext.whenResolved();
     const company = await this.ownSecondaryCompany();
     if (!company) {
       await this.updateWebsiteSettings(settings);
+      window.dispatchEvent(new Event('agency-info-updated'));
       return;
     }
     const payload: Record<string, any> = {};
     for (const k of ['name', 'description', 'logo', 'address', 'phone', 'phone_number_2', 'bank_number'] as const) {
       if ((settings as any)[k] !== undefined) payload[k] = (settings as any)[k];
     }
-    const { error } = await supabase.from('companies').update(payload).eq('id', company.id);
+    const { data: updated, error } = await supabase.from('companies').update(payload).eq('id', company.id).select('id');
     if (error) throw error;
+    if (!updated || updated.length === 0) {
+      throw new Error("Modification refusée : exécutez la migration 20261110_agences_2_3.sql (droit de modifier sa propre agence).");
+    }
+    window.dispatchEvent(new Event('agency-info-updated'));
   }
 
   static async updateWebsiteSettings(settings: WebsiteSettings): Promise<WebsiteSettings> {

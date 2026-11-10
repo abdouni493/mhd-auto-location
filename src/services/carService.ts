@@ -154,6 +154,7 @@ export async function getCars(): Promise<{ success: boolean; cars?: Car[]; error
     }
 
     // Multi-agences : une agence ne voit QUE ses propres voitures dans l'admin.
+    await companyContext.whenResolved()
     let cars = data || []
     if (companyContext.getScopeCompanyId()) {
       const { data: links } = await supabase.from('car_companies').select('car_id, company_id')

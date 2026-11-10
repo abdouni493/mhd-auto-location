@@ -4,6 +4,7 @@ import { LogOut, X } from 'lucide-react';
 import { SIDEBAR_ITEMS } from '../constants';
 import { Language } from '../types';
 import { DatabaseService } from '../services/DatabaseService';
+import { companyContext } from '../utils/companyContext';
 import { usePermissions } from '../utils/permissions';
 
 interface SidebarProps {
@@ -51,6 +52,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
 
     loadAgencyData();
+    // Nom / logo modifiés dans Paramètres → mise à jour immédiate ; et
+    // rechargement quand l'agence de l'utilisateur est résolue.
+    window.addEventListener('agency-info-updated', loadAgencyData);
+    const unsubscribe = companyContext.subscribe(loadAgencyData);
+    return () => {
+      window.removeEventListener('agency-info-updated', loadAgencyData);
+      unsubscribe();
+    };
   }, []);
 
   return (
