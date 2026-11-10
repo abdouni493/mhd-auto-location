@@ -367,6 +367,14 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
 
   const handleSaveCar = async (carData: Partial<Car>) => {
     try {
+      // Multi-agences : une agence crée ses voitures UNIQUEMENT pour elle-même.
+      // On attend l'agence connectée pour ne jamais rattacher la voiture à
+      // toutes les agences par défaut.
+      await companyContext.whenResolved();
+      const ownCompany = companyContext.getScopeCompanyId();
+      if (ownCompany) {
+        carData = { ...carData, companyIds: selectedCar ? undefined : [ownCompany] };
+      }
       if (selectedCar) {
         const updateData = {
           brand: carData.brand || selectedCar.brand,
@@ -912,7 +920,8 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         onDelete={handleDeleteCar}
         car={selectedCar || undefined}
         lang={lang}
-        companies={companies}
+        // Agence connectée : pas de choix d'agence (la voiture est la sienne).
+        companies={companyContext.getScopeCompanyId() ? [] : companies}
         initialCompanyIds={selectedCar ? carCompanyIds(selectedCar.id) : defaultNewCarCompanyIds()}
       />
 
