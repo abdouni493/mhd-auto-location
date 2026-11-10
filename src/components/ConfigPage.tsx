@@ -2,28 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { Language, User } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Settings, Building2, UserRound, ShieldCheck, Database, Layers,
+  Settings, Building2, UserRound, ShieldCheck, Database,
   Camera, Save, Download, Upload, KeyRound, Mail, Phone, MapPin, Landmark,
   ChevronRight, RotateCcw, Trash2, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Type,
 } from 'lucide-react';
 import { DatabaseService } from '../services/DatabaseService';
 import { ReservationsService } from '../services/ReservationsService';
 import { supabase } from '../supabase';
-import { useCompany } from '../utils/companyProvider';
 import { sessionService } from '../utils/sessionService';
-import { CompaniesManager } from './CompaniesManager';
 
 interface ConfigPageProps {
   lang: Language;
   user: User;
 }
 
-type TabId = 'general' | 'profile' | 'database' | 'agencies';
+type TabId = 'general' | 'profile' | 'database';
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
   const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
-  // Multi-agences : la gestion des agences est réservée au super-admin.
-  const { isSuperAdmin } = useCompany();
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -613,7 +609,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
     { id: 'general', icon: Building2, label: T('Agence', 'الوكالة'), desc: T('Nom, logo, coordonnées', 'الاسم، الشعار، التواصل'), accent: '#0284C7' },
     { id: 'profile', icon: UserRound, label: T('Profil & Sécurité', 'الملف والأمان'), desc: T('Compte et connexion', 'الحساب والدخول'), accent: '#DC2626' },
     { id: 'database', icon: Database, label: T('Données', 'البيانات'), desc: T('Sauvegarde & corbeille', 'النسخ والسلة'), accent: '#16A34A' },
-    ...(isSuperAdmin ? [{ id: 'agencies' as TabId, icon: Layers, label: T('Agences', 'الوكالات'), desc: T('Multi-agences', 'تعدد الوكالات'), accent: '#0F172A' }] : []),
   ];
 
   // Petit entête de carte réutilisable
@@ -953,12 +948,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                 </motion.div>
               )}
 
-              {/* ═══════════════ AGENCES (super-admin) ═══════════════ */}
-              {activeTab === 'agencies' && isSuperAdmin && (
-                <motion.div key="agencies" {...panelAnim}>
-                  <CompaniesManager lang={lang} />
-                </motion.div>
-              )}
             </AnimatePresence>
           </div>
         </div>
