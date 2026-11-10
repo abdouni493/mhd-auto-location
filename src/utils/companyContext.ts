@@ -39,6 +39,22 @@ function clearLegacyActive() {
   try { localStorage.removeItem(LEGACY_ACTIVE_STORAGE_KEY); } catch { /* noop */ }
 }
 
+/**
+ * Bascule d'agence RÉSERVÉE à l'admin de l'agence principale (super-admin) :
+ * il peut travailler « comme » Agence 2 / Agence 3 sans se reconnecter.
+ * Le choix est mémorisé jusqu'à la déconnexion.
+ */
+const MAIN_ADMIN_VIEW_KEY = 'main_admin_view_company_v1';
+function readMainAdminView(): string | null {
+  try { return localStorage.getItem(MAIN_ADMIN_VIEW_KEY); } catch { return null; }
+}
+function writeMainAdminView(id: string | null) {
+  try {
+    if (id) localStorage.setItem(MAIN_ADMIN_VIEW_KEY, id);
+    else localStorage.removeItem(MAIN_ADMIN_VIEW_KEY);
+  } catch { /* noop */ }
+}
+
 interface CompanyState {
   /** Agence de rattachement de l'utilisateur connecté (fixe). */
   userCompanyId: string | null;
@@ -96,7 +112,26 @@ export const companyContext = {
     state.resolved = true;
     state.scopeKnown = scopeKnown;
     state.activeCompanyId = userCompanyId || ALL_COMPANIES;
+    // Admin de l'agence principale : reprend l'agence qu'il consultait.
+    const view = readMainAdminView();
+    if (isSuperAdmin && userCompanyId && view) state.activeCompanyId = view;
+    if (!isSuperAdmin) writeMainAdminView(null);
     emit();
+  },
+
+  /** true = l'utilisateur peut basculer d'agence (admin de l'agence principale). */
+  canSwitchCompany(): boolean {
+    return state.isSuperAdmin && !!state.userCompanyId && state.scopeKnown;
+  },
+
+  /**
+   * Bascule vers une autre agence (admin principal uniquement), puis recharge
+   * l'application pour que tous les écrans relisent les données de l'agence.
+   */
+  switchCompany(companyId: string) {
+    if (!this.canSwitchCompany()) return;
+    writeMainAdminView(companyId === state.userCompanyId ? null : companyId);
+    window.location.reload();
   },
 
   /** Enregistre la liste des agences et en déduit l'agence principale. */
@@ -110,7 +145,9 @@ export const companyContext = {
       companies.length > 0 &&
       !companies.some(c => c.id === state.activeCompanyId)
     ) {
-      state.activeCompanyId = ALL_COMPANIES;
+      // Agence consultée disparue → retour à l'agence du compte.
+      writeMainAdminView(null);
+      state.activeCompanyId = state.userCompanyId || ALL_COMPANIES;
     }
     emit();
   },
@@ -118,6 +155,7 @@ export const companyContext = {
   /** Réinitialise à la déconnexion. */
   reset() {
     clearLegacyActive();
+    writeMainAdminView(null);
     state.userCompanyId = null;
     state.isSuperAdmin = true;
     state.primaryCompanyId = null;

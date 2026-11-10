@@ -13,7 +13,9 @@ import { companyContext } from '../utils/companyContext';
  */
 const useCanManageCatalog = (): boolean => {
   const snap = React.useSyncExternalStore(companyContext.subscribe, companyContext.getSnapshot);
-  const scope = snap.activeCompanyId === 'all' ? null : snap.activeCompanyId;
+  // Basé sur l'agence du COMPTE : l'admin principal garde la main même
+  // lorsqu'il consulte Agence 2 / Agence 3.
+  const scope = snap.userCompanyId || (snap.activeCompanyId === 'all' ? null : snap.activeCompanyId);
   return !scope || !snap.primaryCompanyId || scope === snap.primaryCompanyId;
 };
 
