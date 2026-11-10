@@ -679,39 +679,6 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         </div>
       </div>
 
-      {/* ── Filtre d'agence (parc commun à toutes les agences) ─────────────── */}
-      {companies.length > 1 && (
-        <div className="bg-white rounded-2xl border border-saas-border shadow-sm p-5 space-y-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-saas-text-muted">
-            {lang === 'fr'
-              ? `Parc commun — ${cars.length} véhicule${cars.length > 1 ? 's' : ''} visibles pour toutes les agences`
-              : `أسطول مشترك — ${cars.length} مركبة مرئية لكل الوكالات`}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {[{ id: 'all', name: lang === 'fr' ? 'Toutes les agences' : 'كل الوكالات', count: cars.length },
-              ...companies.map(c => ({
-                id: c.id,
-                name: c.name,
-                count: cars.filter(car => carCompanyIds(car.id).includes(c.id)).length,
-              }))].map(chip => (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => setCompanyFilter(chip.id)}
-                className={`px-4 py-2 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all ${
-                  companyFilter === chip.id
-                    ? 'bg-saas-primary-via text-white border-saas-primary-via shadow-sm'
-                    : 'bg-saas-bg text-saas-text-muted border-saas-border hover:border-saas-primary-via/40'
-                }`}
-              >
-                {chip.id === 'all' ? '🚘' : '🏢'} {chip.name}
-                <span className="ml-2 opacity-70">{chip.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ── Taux de change global (appliqué à toutes les voitures) ─────────── */}
       <div className="bg-white rounded-2xl border border-saas-border shadow-sm overflow-hidden">
         <button
