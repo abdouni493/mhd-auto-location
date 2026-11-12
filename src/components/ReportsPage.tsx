@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -364,6 +365,8 @@ interface ReportData {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 const ReportsPage: React.FC<{ lang: Language }> = ({ lang }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const [startDate,    setStartDate]    = useState('');
   const [endDate,      setEndDate]      = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -650,13 +653,13 @@ const ReportsPage: React.FC<{ lang: Language }> = ({ lang }) => {
 
             {/* ── Print Button ── */}
             <motion.div initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.3 }}>
-              <button
+              {can('reports', 'export') && (<button
                 onClick={printReport}
                 className="w-full bg-gradient-to-r from-purple-600 via-purple-500 to-indigo-600 hover:from-purple-700 hover:via-purple-600 hover:to-indigo-700 text-white font-black py-3 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-3 text-base"
               >
                 <Printer size={20} />
                 {T('Imprimer le Rapport Complet', 'طباعة التقرير الكامل', lang)}
-              </button>
+              </button>)}
             </motion.div>
 
             {/* ── SECTION: Vehicles ── */}

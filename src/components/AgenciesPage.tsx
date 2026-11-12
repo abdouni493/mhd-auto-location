@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect } from 'react';
 import { Agency, Language } from '../types';
 import { AgencyCard } from './AgencyCard';
@@ -12,6 +13,8 @@ interface AgenciesPageProps {
 }
 
 export const AgenciesPage: React.FC<AgenciesPageProps> = ({ lang }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -123,13 +126,13 @@ export const AgenciesPage: React.FC<AgenciesPageProps> = ({ lang }) => {
             className="input-saas pl-10"
           />
         </div>
-        <button
+        {can('agencies', 'create') && (<button
           onClick={handleAddAgency}
           className="btn-saas-primary whitespace-nowrap"
         >
           <Plus size={18} />
           {lang === 'fr' ? 'Nouvelle Agence' : 'وكالة جديدة'}
-        </button>
+        </button>)}
       </div>
 
       {/* Agencies Grid */}
@@ -141,8 +144,8 @@ export const AgenciesPage: React.FC<AgenciesPageProps> = ({ lang }) => {
                 key={agency.id}
                 agency={agency}
                 lang={lang}
-                onEdit={() => handleEditAgency(agency)}
-                onDelete={() => handleDeleteClick(agency.id)}
+                onEdit={can('agencies', 'edit') ? () => handleEditAgency(agency) : undefined}
+                onDelete={can('agencies', 'delete') ? () => handleDeleteClick(agency.id) : undefined}
               />
             ))
           ) : (

@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import { companyContext } from '../utils/companyContext';
 import React, { useState, useEffect } from 'react';
 import { Language, WebsiteOrder, Car, Agency, Company } from '../types';
@@ -17,6 +18,8 @@ interface WebsiteOrdersProps {
 }
 
 export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, companies = [], onOrdersChanged }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const [orders, setOrders] = useState<WebsiteOrder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -415,7 +418,7 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, companies = 
                   <span className="text-[8px] uppercase font-bold">{lang === 'fr' ? 'Détails' : 'تفاصيل'}</span>
                 </button>
 
-                <button
+                {can('web-orders', 'accept') && (<button
                   onClick={() => openAccept(order)}
                   disabled={order.status !== 'website_reservation' || isProcessing === order.id}
                   className={`p-2.5 rounded-xl transition-all flex flex-col items-center gap-1 border ${
@@ -433,9 +436,9 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, companies = 
                       <span className="text-[8px] uppercase font-bold">{lang === 'fr' ? 'Accepter' : 'قبول'}</span>
                     </>
                   )}
-                </button>
+                </button>)}
 
-                <button
+                {can('web-orders', 'cancel') && (<button
                   onClick={() => handleCancelOrder(order.id)}
                   disabled={order.status === 'cancelled' || isProcessing === order.id}
                   className={`p-2.5 rounded-xl transition-all flex flex-col items-center gap-1 border ${
@@ -453,16 +456,16 @@ export const WebsiteOrders: React.FC<WebsiteOrdersProps> = ({ lang, companies = 
                       <span className="text-[8px] uppercase font-bold">{lang === 'fr' ? 'Annuler' : 'إلغاء'}</span>
                     </>
                   )}
-                </button>
+                </button>)}
 
-                <button
+                {can('web-orders', 'delete') && (<button
                   onClick={() => handleDeleteOrder(order.id)}
                   disabled={isProcessing === order.id}
                   className="p-2.5 rounded-xl bg-saas-danger-start/5 hover:bg-saas-danger-start hover:text-white text-saas-danger-start transition-all hover:scale-105 flex flex-col items-center gap-1 border border-saas-danger-start/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   title={lang === 'fr' ? 'Supprimer' : 'حذف'}
                 >
                   <span className="text-lg">🗑️</span>
-                </button>
+                </button>)}
               </div>
             </div>
           </motion.div>

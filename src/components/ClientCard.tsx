@@ -5,10 +5,10 @@ import { motion } from 'motion/react';
 interface ClientCardProps {
   client: Client;
   lang: Language;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   onViewDetails: () => void;
-  onHistory: () => void;
+  onHistory?: () => void;
 }
 
 export const ClientCard: React.FC<ClientCardProps> = ({
@@ -96,30 +96,30 @@ export const ClientCard: React.FC<ClientCardProps> = ({
           <span className="text-xl">👁️</span>
           <span className="text-[7px] uppercase font-bold">{lang === 'fr' ? 'Détails' : 'تفاصيل'}</span>
         </button>
-        <button
+        {onEdit && (<button
           onClick={onEdit}
           className="p-3 rounded-lg bg-white hover:bg-saas-secondary-start/10 text-saas-text-muted transition-all hover:scale-105 flex flex-col items-center gap-1 border border-saas-border hover:border-saas-secondary-start/20"
           title={lang === 'fr' ? 'Modifier' : 'تعديل'}
         >
           <span className="text-xl">✏️</span>
           <span className="text-[7px] uppercase font-bold">{lang === 'fr' ? 'Edit' : 'تعديل'}</span>
-        </button>
-        <button
+        </button>)}
+        {onHistory && (<button
           onClick={onHistory}
           className="p-3 rounded-lg bg-white hover:bg-saas-warning-start/10 text-saas-text-muted transition-all hover:scale-105 flex flex-col items-center gap-1 border border-saas-border hover:border-saas-warning-start/20"
           title={lang === 'fr' ? 'Historique' : 'السجل'}
         >
           <span className="text-xl">📜</span>
           <span className="text-[7px] uppercase font-bold text-saas-warning-start">{lang === 'fr' ? 'Hist' : 'السجل'}</span>
-        </button>
-        <button
+        </button>)}
+        {onDelete && (<button
           onClick={onDelete}
           className="p-3 rounded-lg bg-white hover:bg-saas-danger-start hover:text-white text-saas-danger-start transition-all hover:scale-105 flex flex-col items-center gap-1 border border-saas-danger-start/10"
           title={lang === 'fr' ? 'Supprimer' : 'حذف'}
         >
           <span className="text-xl">🗑️</span>
           <span className="text-[7px] uppercase font-bold">{lang === 'fr' ? 'Delete' : 'حذف'}</span>
-        </button>
+        </button>)}
       </div>
     </motion.div>
   );

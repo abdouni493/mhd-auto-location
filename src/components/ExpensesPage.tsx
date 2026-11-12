@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect, useMemo } from 'react';
 import { StoreExpense, VehicleExpense, Language, Car, MaintenanceAlert, MaintenanceType } from '../types';
 import { StoreExpenseCard } from './StoreExpenseCard';
@@ -31,6 +32,8 @@ const ALERT_TYPES = ['vidange', 'assurance', 'controle', 'chaine'] as const;
 type AlertType = typeof ALERT_TYPES[number];
 
 export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
 
   const [scope, setScope] = useState<'store' | 'vehicle'>('vehicle');
@@ -396,12 +399,12 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
                 className="pl-11 pr-4 py-3 bg-white/15 backdrop-blur-sm border border-white/25 rounded-xl outline-none focus:border-white/60 w-full sm:w-72 transition-all font-medium text-sm text-white placeholder:text-white/60"
               />
             </div>
-            <button
+            {can('expenses', 'create') && (<button
               onClick={() => { setEditingExpense(null); setPendingTypeKey(null); setIsModalOpen(true); }}
               className="px-4 py-3 rounded-xl bg-white text-saas-primary-via hover:bg-white/90 transition-colors flex items-center justify-center gap-2 font-bold uppercase tracking-widest text-xs cursor-pointer"
             >
               <Plus size={17} /> {T('Ajouter', 'إضافة')}
-            </button>
+            </button>)}
           </div>
         </div>
 
@@ -503,12 +506,12 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
                 </button>
               );
             })}
-            <button
+            {can('expenses', 'create') && (<button
               onClick={() => { setTypeError(null); setIsTypeModalOpen(true); }}
               className="px-3.5 py-2 rounded-xl font-bold text-[11px] uppercase tracking-widest border border-dashed border-saas-border text-saas-secondary-start hover:border-saas-secondary-start transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Settings2 size={13} /> {T('Nouveau type', 'نوع جديد')}
-            </button>
+            </button>)}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-saas-border">
@@ -591,8 +594,8 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
                   expense={expense}
                   index={index}
                   lang={lang}
-                  onEdit={() => { setEditingExpense(expense); setIsModalOpen(true); }}
-                  onDelete={() => setDeleteConfirm({ isOpen: true, id: expense.id })}
+                  onEdit={can('expenses', 'edit') ? () => { setEditingExpense(expense); setIsModalOpen(true); } : undefined}
+                  onDelete={can('expenses', 'delete') ? () => setDeleteConfirm({ isOpen: true, id: expense.id }) : undefined}
                 />
               ))}
             </AnimatePresence>
@@ -612,8 +615,8 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
                   type={findType(types, expense.type)}
                   index={index}
                   lang={lang}
-                  onEdit={() => { setEditingExpense(expense); setIsModalOpen(true); }}
-                  onDelete={() => setDeleteConfirm({ isOpen: true, id: expense.id })}
+                  onEdit={can('expenses', 'edit') ? () => { setEditingExpense(expense); setIsModalOpen(true); } : undefined}
+                  onDelete={can('expenses', 'delete') ? () => setDeleteConfirm({ isOpen: true, id: expense.id }) : undefined}
                 />
               ))}
             </AnimatePresence>
@@ -691,20 +694,20 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, cars }) => {
                                 {(Number(expense.cost) || 0).toLocaleString('fr-FR')} DZD
                               </p>
                               <div className="flex items-center gap-1 shrink-0">
-                                <button
+                                {can('expenses', 'edit') && (<button
                                   onClick={() => { setEditingExpense(expense); setIsModalOpen(true); }}
                                   className="p-1.5 rounded-lg bg-saas-bg border border-saas-border text-saas-text-muted hover:text-saas-secondary-start transition-colors cursor-pointer"
                                   title={T('Modifier', 'تعديل')}
                                 >
                                   ✏️
-                                </button>
-                                <button
+                                </button>)}
+                                {can('expenses', 'delete') && (<button
                                   onClick={() => setDeleteConfirm({ isOpen: true, id: expense.id })}
                                   className="p-1.5 rounded-lg bg-saas-bg border border-saas-border text-saas-text-muted hover:text-red-600 transition-colors cursor-pointer"
                                   title={T('Supprimer', 'حذف')}
                                 >
                                   🗑️
-                                </button>
+                                </button>)}
                               </div>
                             </div>
                           );

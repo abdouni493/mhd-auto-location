@@ -6,8 +6,8 @@ import { MapPin, Phone, Mail } from 'lucide-react';
 interface AgencyCardProps {
   agency: Agency;
   lang: Language;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export const AgencyCard: React.FC<AgencyCardProps> = ({
@@ -81,22 +81,22 @@ export const AgencyCard: React.FC<AgencyCardProps> = ({
 
       {/* Actions */}
       <div className="grid grid-cols-2 gap-2 p-4 bg-saas-bg border-t border-saas-border">
-        <button
+        {onEdit && (<button
           onClick={onEdit}
           className="p-2.5 rounded-xl bg-white hover:bg-saas-secondary-start/10 text-saas-text-muted transition-all hover:scale-105 flex flex-col items-center gap-1 border border-saas-border hover:border-saas-secondary-start/20"
           title={lang === 'fr' ? 'Modifier' : 'تعديل'}
         >
           <span className="text-lg">✏️</span>
           <span className="text-[8px] uppercase font-bold">{lang === 'fr' ? 'Edit' : 'تعديل'}</span>
-        </button>
-        <button
+        </button>)}
+        {onDelete && (<button
           onClick={onDelete}
           className="p-2.5 rounded-xl bg-white hover:bg-saas-danger-start hover:text-white text-saas-danger-start transition-all hover:scale-105 flex flex-col items-center gap-1 border border-saas-danger-start/10"
           title={lang === 'fr' ? 'Supprimer' : 'حذف'}
         >
           <span className="text-lg">🗑️</span>
           <span className="text-[8px] uppercase font-bold">{lang === 'fr' ? 'Delete' : 'حذف'}</span>
-        </button>
+        </button>)}
       </div>
     </motion.div>
   );

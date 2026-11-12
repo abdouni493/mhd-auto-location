@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -11,8 +12,10 @@ import { companyContext } from '../utils/companyContext';
  * Services et assurances : catalogue COMMUN à toutes les agences, géré par
  * l'agence principale. Les autres agences le consultent (lecture seule).
  */
-const useCanManageCatalog = (): boolean => {
+const useCanManageCatalog = (action: 'create' | 'edit' | 'delete' = 'edit'): boolean => {
+  const { can } = usePermissions();
   const snap = React.useSyncExternalStore(companyContext.subscribe, companyContext.getSnapshot);
+  if (!can('protection-services', action)) return false;
   // Basé sur l'agence du COMPTE : l'admin principal garde la main même
   // lorsqu'il consulte Agence 2 / Agence 3.
   const scope = snap.userCompanyId || (snap.activeCompanyId === 'all' ? null : snap.activeCompanyId);
@@ -100,7 +103,9 @@ export const ProtectionServicesPage: React.FC<ProtectionServicesPageProps> = ({ 
 // ════════════════════════════════════════════════════════════════════════════
 
 const AssurancesManager: React.FC<{ lang: Language }> = ({ lang }) => {
-  const canManage = useCanManageCatalog();
+  const canManage = useCanManageCatalog('edit');
+  const canCreate = useCanManageCatalog('create');
+  const canDelete = useCanManageCatalog('delete');
   const [assurances, setAssurances] = useState<ProtectionAssurance[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -140,7 +145,7 @@ const AssurancesManager: React.FC<{ lang: Language }> = ({ lang }) => {
         <p className="text-saas-text-muted text-sm font-bold">
           {assurances.length} {t(lang, 'forfait(s)', 'باقة')}
         </p>
-        {canManage ? (
+        {canCreate ? (
           <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-saas-primary">
             <Plus size={18} /> {t(lang, 'Nouvelle assurance', 'تأمين جديد')}
           </button>
@@ -168,7 +173,9 @@ const AssurancesManager: React.FC<{ lang: Language }> = ({ lang }) => {
               key={a.id}
               lang={lang}
               assurance={a}
-              canManage={canManage}
+              canManage={canManage || canDelete}
+              canEdit={canManage}
+              canDelete={canDelete}
               onEdit={() => { setEditing(a); setShowForm(true); }}
               onDelete={() => setDeleteId(a.id)}
             />
@@ -205,9 +212,11 @@ const AssuranceCard: React.FC<{
   lang: Language;
   assurance: ProtectionAssurance;
   canManage?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
   onEdit: () => void;
   onDelete: () => void;
-}> = ({ lang, assurance, canManage = true, onEdit, onDelete }) => (
+}> = ({ lang, assurance, canManage = true, canEdit = true, canDelete = true, onEdit, onDelete }) => (
   <motion.div
     initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
@@ -258,16 +267,16 @@ const AssuranceCard: React.FC<{
     </div>
 
     {canManage && <div className="flex gap-2 pt-4 border-t border-saas-border">
-      <button onClick={onEdit} className="btn-saas-outline flex-1 py-2 text-sm">
+      {canEdit && (<button onClick={onEdit} className="btn-saas-outline flex-1 py-2 text-sm">
         <Pencil size={15} /> {t(lang, 'Modifier', 'تعديل')}
-      </button>
-      <button
+      </button>)}
+      {canDelete && (<button
         onClick={onDelete}
         className="px-3 py-2 rounded-xl bg-saas-danger-start/5 hover:bg-saas-danger-start hover:text-white text-saas-danger-start transition-all border border-saas-danger-start/10"
         title={t(lang, 'Supprimer', 'حذف')}
       >
         <Trash2 size={16} />
-      </button>
+      </button>)}
     </div>}
   </motion.div>
 );
@@ -495,7 +504,9 @@ const AssuranceFormModal: React.FC<{
 // ════════════════════════════════════════════════════════════════════════════
 
 const ServicesManager: React.FC<{ lang: Language }> = ({ lang }) => {
-  const canManage = useCanManageCatalog();
+  const canManage = useCanManageCatalog('edit');
+  const canCreate = useCanManageCatalog('create');
+  const canDelete = useCanManageCatalog('delete');
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -536,7 +547,7 @@ const ServicesManager: React.FC<{ lang: Language }> = ({ lang }) => {
         <p className="text-saas-text-muted text-sm font-bold">
           {services.length} {t(lang, 'service(s)', 'خدمة')}
         </p>
-        {canManage ? (
+        {canCreate ? (
           <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-saas-primary">
             <Plus size={18} /> {t(lang, 'Nouveau service', 'خدمة جديدة')}
           </button>
@@ -585,17 +596,17 @@ const ServicesManager: React.FC<{ lang: Language }> = ({ lang }) => {
                 {s.description && (
                   <p className="text-saas-text-muted text-xs leading-relaxed flex-1 mb-3">{s.description}</p>
                 )}
-                {canManage && <div className="flex gap-2 pt-3 border-t border-saas-border mt-auto">
-                  <button onClick={() => { setEditing(s); setShowForm(true); }} className="btn-saas-outline flex-1 py-2 text-sm">
+                {(canManage || canDelete) && <div className="flex gap-2 pt-3 border-t border-saas-border mt-auto">
+                  {canManage && (<button onClick={() => { setEditing(s); setShowForm(true); }} className="btn-saas-outline flex-1 py-2 text-sm">
                     <Pencil size={15} /> {t(lang, 'Modifier', 'تعديل')}
-                  </button>
-                  <button
+                  </button>)}
+                  {canDelete && (<button
                     onClick={() => setDeleteId(s.id)}
                     className="px-3 py-2 rounded-xl bg-saas-danger-start/5 hover:bg-saas-danger-start hover:text-white text-saas-danger-start transition-all border border-saas-danger-start/10"
                     title={t(lang, 'Supprimer', 'حذف')}
                   >
                     <Trash2 size={16} />
-                  </button>
+                  </button>)}
                 </div>}
               </motion.div>
             );

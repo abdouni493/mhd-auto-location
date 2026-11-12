@@ -28,6 +28,8 @@ interface CarsPageProps {
 }
 
 export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const [cars, setCars] = useState<Car[]>([]);
   const [reservations, setReservations] = useState<ReservationDetails[]>([]);
   // Multi-agences : liste des agences + liens voiture↔agence (car_companies).
@@ -667,6 +669,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
               {lang === 'fr' ? 'Actualiser' : 'تحديث'}
             </span>
           </button>
+          {can('vehicles', 'create') && (
           <button
             onClick={handleAddCar}
             className="btn-saas-primary px-8 py-3.5 group w-full sm:w-auto justify-center"
@@ -676,6 +679,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
               {lang === 'fr' ? 'Nouveau Véhicule' : 'مركبة جديدة'}
             </span>
           </button>
+          )}
         </div>
       </div>
 
@@ -855,8 +859,9 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
                 key={car.id}
                 car={car}
                 lang={lang}
-                onDelete={handleDeleteCar}
-                onEdit={handleEditCar}
+                onDelete={can('vehicles', 'delete') ? handleDeleteCar : undefined}
+                onEdit={can('vehicles', 'edit') ? handleEditCar : undefined}
+                hidePrice={!can('vehicles', 'view_prices')}
                 onViewDetails={handleViewDetails}
                 onHistory={handleHistory}
                 onExpenses={handleExpenses}
@@ -884,7 +889,7 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
         isOpen={isCarModalOpen}
         onClose={() => setIsCarModalOpen(false)}
         onSave={handleSaveCar}
-        onDelete={handleDeleteCar}
+        onDelete={can('vehicles', 'delete') ? handleDeleteCar : undefined as any}
         car={selectedCar || undefined}
         lang={lang}
         // Agence connectée : pas de choix d'agence (la voiture est la sienne).

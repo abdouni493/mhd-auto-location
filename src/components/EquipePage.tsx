@@ -236,7 +236,7 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
               className="w-full pl-10 pr-4 py-3 bg-white rounded-xl border border-saas-border focus:outline-none focus:border-saas-primary-via focus:ring-2 focus:ring-saas-primary-via/20 transition-all"
             />
           </div>
-          <button
+          {can('team', 'create') && (<button
             onClick={() => {
               setEditingWorker(null);
               setIsModalOpen(true);
@@ -245,7 +245,7 @@ export const EquipePage: React.FC<EquipePageProps> = ({ lang }) => {
           >
             <Plus size={20} />
             {lang === 'fr' ? 'Ajouter' : 'إضافة'}
-          </button>
+          </button>)}
         </motion.div>
 
         {/* Workers Grid */}

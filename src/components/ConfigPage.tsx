@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect } from 'react';
 import { Language, User } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -19,8 +20,12 @@ interface ConfigPageProps {
 type TabId = 'general' | 'profile' | 'database';
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
-  const [activeTab, setActiveTab] = useState<TabId>('general');
+  // Un employé sans le droit « Modifier la configuration » ne voit que son profil.
+  const canEditConfig = can('config', 'edit');
+  const [activeTab, setActiveTab] = useState<TabId>(canEditConfig ? 'general' : 'profile');
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -610,6 +615,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
     { id: 'profile', icon: UserRound, label: T('Profil & Sécurité', 'الملف والأمان'), desc: T('Compte et connexion', 'الحساب والدخول'), accent: '#DC2626' },
     { id: 'database', icon: Database, label: T('Données', 'البيانات'), desc: T('Sauvegarde & corbeille', 'النسخ والسلة'), accent: '#16A34A' },
   ];
+  const visibleTabs = canEditConfig ? tabs : tabs.filter(tab => tab.id === 'profile');
 
   // Petit entête de carte réutilisable
   const CardHead = ({ icon, title, subtitle, accent }: { icon: React.ReactNode; title: string; subtitle?: string; accent: string }) => (
@@ -685,7 +691,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
           {/* ── Menu latéral ──────────────────────────────────────────────── */}
           <nav className="bg-white rounded-2xl border border-saas-border shadow-sm p-2 lg:sticky lg:top-24">
             <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible">
-              {tabs.map(tab => {
+              {visibleTabs.map(tab => {
                 const active = activeTab === tab.id;
                 const Icon = tab.icon;
                 return (

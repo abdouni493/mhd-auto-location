@@ -6,8 +6,8 @@ interface StoreExpenseCardProps {
   expense: StoreExpense;
   index: number;
   lang: Language;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export const StoreExpenseCard: React.FC<StoreExpenseCardProps> = ({
@@ -57,18 +57,18 @@ export const StoreExpenseCard: React.FC<StoreExpenseCardProps> = ({
 
       {/* Actions */}
       <div className="p-4 border-t border-saas-border bg-saas-bg flex gap-2">
-        <button
+        {onEdit && (<button
           onClick={onEdit}
           className="flex-1 text-xs font-bold px-3 py-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
         >
           ✏️ {{fr: 'Modifier', ar: 'تعديل'}[lang]}
-        </button>
-        <button
+        </button>)}
+        {onDelete && (<button
           onClick={onDelete}
           className="flex-1 text-xs font-bold px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
         >
           🗑️ {{fr: 'Supprimer', ar: 'حذف'}[lang]}
-        </button>
+        </button>)}
       </div>
     </motion.div>
   );

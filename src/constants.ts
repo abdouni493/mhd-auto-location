@@ -54,7 +54,9 @@ export const INTERFACE_ACTIONS: Record<string, InterfaceAction[]> = {
   planner: [
     { id: 'create', label: { fr: 'Créer une réservation', ar: 'إنشاء حجز' } },
     { id: 'edit', label: { fr: 'Modifier une réservation', ar: 'تعديل حجز' } },
+    { id: 'inspection', label: { fr: 'Inspection (départ + livraison)', ar: 'الفحص (المغادرة + التوصيل)' } },
     { id: 'activate', label: { fr: 'Activer la location', ar: 'تفعيل التأجير' } },
+    { id: 'continuity', label: { fr: 'Continuité de location', ar: 'تمديد الكراء' } },
     { id: 'complete', label: { fr: 'Terminer la location', ar: 'إنهاء التأجير' } },
     { id: 'cancel', label: { fr: 'Annuler une réservation', ar: 'إلغاء حجز' }, sensitive: true },
     { id: 'delete', label: { fr: 'Supprimer une réservation', ar: 'حذف حجز' }, sensitive: true },
@@ -71,6 +73,7 @@ export const INTERFACE_ACTIONS: Record<string, InterfaceAction[]> = {
   ],
   reservations: [
     { id: 'view', label: { fr: 'Consulter les contrats', ar: 'عرض العقود' } },
+    { id: 'edit', label: { fr: 'Modifier un contrat', ar: 'تعديل عقد' } },
     { id: 'print', label: { fr: 'Imprimer un contrat', ar: 'طباعة عقد' } },
     { id: 'invoice', label: { fr: 'Générer une facture', ar: 'إنشاء فاتورة' } },
     { id: 'payments', label: { fr: 'Gérer les paiements', ar: 'إدارة المدفوعات' }, sensitive: true },

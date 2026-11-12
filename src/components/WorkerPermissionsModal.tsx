@@ -6,6 +6,7 @@ import {
 import { Language, Worker, WorkerPermissions } from '../types';
 import { SIDEBAR_ITEMS, INTERFACE_ACTIONS } from '../constants';
 import { DatabaseService } from '../services/DatabaseService';
+import { companyContext } from '../utils/companyContext';
 
 /**
  * PERMISSIONS D'UN EMPLOYÉ
@@ -28,6 +29,13 @@ export const WorkerPermissionsModal: React.FC<{
   const [interfaces, setInterfaces] = useState<string[]>(worker.permissions?.interfaces || []);
   const [actions, setActions] = useState<Record<string, string[]>>(worker.permissions?.actions || {});
   const [expanded, setExpanded] = useState<string | null>(worker.permissions?.interfaces?.[0] || null);
+  const [carScope, setCarScope] = useState<'own' | 'all'>(worker.permissions?.carScope === 'all' ? 'all' : 'own');
+  // Option « voitures de toutes les agences » : agence principale uniquement.
+  const isMainAgency = (() => {
+    const scope = companyContext.getScopeCompanyId();
+    const primary = companyContext.getPrimaryCompanyId();
+    return !scope || !primary || scope === primary;
+  })();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +104,11 @@ export const WorkerPermissionsModal: React.FC<{
       for (const id of interfaces) {
         if (actions[id]?.length) cleanedActions[id] = actions[id];
       }
-      const permissions: WorkerPermissions = { interfaces, actions: cleanedActions };
+      const permissions: WorkerPermissions = {
+        interfaces,
+        actions: cleanedActions,
+        carScope: isMainAgency ? carScope : 'own',
+      };
       await DatabaseService.updateWorkerPermissions(worker.id, permissions);
       onSaved(permissions);
       onClose();
@@ -170,6 +182,32 @@ export const WorkerPermissionsModal: React.FC<{
               'حدد الواجهات الظاهرة في الشريط الجانبي لهذا الموظف، ثم في كل واجهة الأزرار المسموح له باستخدامها. كل ما لم يُحدد يبقى مخفياً عنه.'
             )}
           </p>
+
+          {isMainAgency && (
+            <div className="rounded-2xl border border-saas-border bg-white p-4 space-y-3">
+              <p className="text-sm font-black text-saas-text-main">🚗 {T('Voitures visibles par cet employé', 'السيارات التي يراها هذا الموظف')}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {([
+                  ['own', T("Agence principale uniquement", 'الوكالة الرئيسية فقط'), T("Seulement les voitures de l'agence principale", 'سيارات الوكالة الرئيسية فقط')],
+                  ['all', T('Toutes les agences', 'كل الوكالات'), T('Les voitures de toutes les agences', 'سيارات جميع الوكالات')],
+                ] as const).map(([k, title, desc]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setCarScope(k)}
+                    className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      carScope === k ? 'border-[#0284C7] bg-[#0284C7]/8' : 'border-saas-border bg-white hover:border-[#0284C7]/40'
+                    }`}
+                  >
+                    <p className="font-black text-sm text-saas-text-main flex items-center gap-2">
+                      {carScope === k && <Check className="w-4 h-4 text-[#0284C7]" />}{title}
+                    </p>
+                    <p className="text-xs text-saas-text-muted mt-0.5">{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {SIDEBAR_ITEMS.map(item => {
             const enabled = interfaces.includes(item.id);

@@ -17,6 +17,8 @@ interface CarCardProps {
   onStatusChange?: (carId: string, newStatus: string) => void;
   /** Toggle masquer/afficher la voiture sur le site public (interface Offres). */
   onToggleVisibility?: (car: Car) => void;
+  /** Masque le tarif (permission « Voir les tarifs » non accordée). */
+  hidePrice?: boolean;
   /** Réservation en cours pour ce véhicule (si louer/reserve) */
   activeReservationInfo?: { clientName: string; departureDate: string; returnDate: string } | null;
   /** Agences rattachées (multi-agences) — affichées en badge (super-admin). */
@@ -34,6 +36,7 @@ export const CarCard: React.FC<CarCardProps> = ({
   onReports,
   onStatusChange,
   onToggleVisibility,
+  hidePrice = false,
   activeReservationInfo,
   companyBadges,
 }) => {
@@ -168,7 +171,7 @@ export const CarCard: React.FC<CarCardProps> = ({
 
         <div className="pt-3 border-t border-saas-border flex items-center justify-between">
           <div className="text-saas-primary-via font-black text-lg tracking-tighter">
-            {car.priceDay.toLocaleString()} <span className="text-[9px] text-saas-text-muted uppercase">DZD / JOUR</span>
+            {hidePrice ? '—' : car.priceDay.toLocaleString()} <span className="text-[9px] text-saas-text-muted uppercase">DZD / JOUR</span>
           </div>
           <div className="text-[9px] text-saas-text-muted font-bold uppercase tracking-widest">
             {car.mileage.toLocaleString()} KM

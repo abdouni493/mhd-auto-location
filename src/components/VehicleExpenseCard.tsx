@@ -11,8 +11,8 @@ interface VehicleExpenseCardProps {
   type: MaintenanceType;
   index: number;
   lang: Language;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 const FILTER_FLAGS: { key: keyof VehicleExpense; icon: string; fr: string; ar: string }[] = [
@@ -196,18 +196,18 @@ export const VehicleExpenseCard: React.FC<VehicleExpenseCardProps> = ({
 
       {/* ── Actions ─────────────────────────────────────────────────── */}
       <div className="p-3 border-t border-saas-border bg-saas-bg flex gap-2">
-        <button
+        {onEdit && (<button
           onClick={onEdit}
           className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl bg-white border border-saas-border text-saas-text-main hover:border-saas-secondary-start hover:text-saas-secondary-start transition-colors cursor-pointer"
         >
           <Pencil size={13} /> {T('Modifier', 'تعديل')}
-        </button>
-        <button
+        </button>)}
+        {onDelete && (<button
           onClick={onDelete}
           className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl bg-white border border-saas-border text-saas-text-main hover:border-red-400 hover:text-red-600 transition-colors cursor-pointer"
         >
           <Trash2 size={13} /> {T('Supprimer', 'حذف')}
-        </button>
+        </button>)}
       </div>
     </motion.div>
   );

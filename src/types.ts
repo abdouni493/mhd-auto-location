@@ -278,6 +278,12 @@ export interface WorkerRole {
 export interface WorkerPermissions {
   interfaces: string[];
   actions: Record<string, string[]>;
+  /**
+   * Voitures visibles par l'employé (agence principale uniquement) :
+   * 'own' (défaut) = voitures de son agence · 'all' = voitures de toutes les agences.
+   * Les employés des autres agences voient toujours uniquement leurs voitures.
+   */
+  carScope?: 'own' | 'all';
 }
 
 export interface Worker {
@@ -623,6 +629,14 @@ export interface ReservationDetails {
    * du site public pas encore acceptée (aucune agence rattachée).
    */
   companyId?: string | null;
+
+  // ── Livraison du véhicule par un employé ────────────────────────────
+  deliveryEnabled?: boolean;
+  deliveryWorkerId?: string | null;
+  deliveryWorkerName?: string | null;
+  /** Montant payé au livreur (DZD) — déduit du total de la réservation. */
+  deliveryAmount?: number;
+  deliveryPayoutMode?: 'immediate' | 'deferred';
 
   // ── Timbre fiscal (droit de timbre) ─────────────────────────────────
   timbreEnabled?: boolean;

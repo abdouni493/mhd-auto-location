@@ -15,6 +15,7 @@ import { ContinuationModal, ContinuationPrintPrompt, ContinuationPayload } from 
 import { WebsiteOrders } from './WebsiteOrders';
 import { ReservationsService } from '../services/ReservationsService';
 import { DatabaseService } from '../services/DatabaseService';
+import { usePermissions } from '../utils/permissions';
 import { CurrencyCode, convertFromDzd, formatCurrency, computeTimbre } from '../utils/currency';
 import { EntrepriseModal } from './EntreprisesPage';
 import { getCars } from '../services/carService';
@@ -44,6 +45,8 @@ interface PlannerPageProps {
 }
 
 export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const location = useLocation();
   const [currentView, setCurrentView] = useState<'list' | 'calendar' | 'create' | 'create-alt' | 'details' | 'edit' | 'web-orders'>('list');
   const [displayMode, setDisplayMode] = useState<'grid' | 'calendar'>('grid');
@@ -656,7 +659,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
             {lang === 'fr' ? 'Calendrier' : 'التقويم'}
           </motion.button>
 
-          <motion.button
+          {can('planner', 'create') && <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setCurrentView('create')}
@@ -664,9 +667,9 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           >
             <Plus className="w-4 h-4" />
             {lang === 'fr' ? 'Nouvelle Réservation' : 'حجز جديد'}
-          </motion.button>
+          </motion.button>}
 
-          <motion.button
+          {can('planner', 'create') && <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setCurrentView('create-alt')}
@@ -675,7 +678,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
           >
             <DollarSign className="w-4 h-4" />
             {lang === 'fr' ? "Tarif. d'abord" : 'التسعير أولا'}
-          </motion.button>
+          </motion.button>}
         </div>
       </div>
 
@@ -969,6 +972,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       if (!rentedCarIds.has(car.id)) {
+                        if (!can('planner', 'create')) return;
                         setCurrentView('create');
                       } else {
                         // Find the current active/confirmed reservation for this car
@@ -1253,7 +1257,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
               {/* Actions */}
               <div className="space-y-2">
                 {/* Action principale selon le statut */}
-                {reservation.status === 'pending' && (
+                {reservation.status === 'pending' && can('planner', 'inspection') && (
                   <button
                     onClick={() => {
                       setSelectedReservation(reservation);
@@ -1266,7 +1270,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   </button>
                 )}
 
-                {reservation.status === 'accepted' && (
+                {reservation.status === 'accepted' && can('planner', 'inspection') && (
                   <button
                     onClick={() => {
                       setSelectedReservation({ ...reservation });
@@ -1279,7 +1283,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   </button>
                 )}
 
-                {reservation.status === 'confirmed' && (
+                {reservation.status === 'confirmed' && can('planner', 'activate') && (
                   <button
                     onClick={() => handleActivate(reservation)}
                     className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
@@ -1288,7 +1292,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   </button>
                 )}
 
-                {(reservation.status === 'active' || reservation.status === 'continued') && (
+                {(reservation.status === 'active' || reservation.status === 'continued') && can('planner', 'complete') && (
                   <button
                     onClick={() => handleComplete(reservation)}
                     className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
@@ -1298,7 +1302,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                 )}
 
                 {/* Continuité de location : prolonger une location en cours */}
-                {(reservation.status === 'active' || reservation.status === 'continued') && (
+                {(reservation.status === 'active' || reservation.status === 'continued') && can('planner', 'continuity') && (
                   <button
                     onClick={() => handleContinuity(reservation)}
                     className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-700 hover:to-sky-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
@@ -1308,7 +1312,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                 )}
 
                 {/* Contrat de continuité : impression + envoi par email */}
-                {reservation.status === 'continued' && (
+                {reservation.status === 'continued' && can('planner', 'print') && (
                   <div className="relative">
                     <button
                       onClick={() => {
@@ -1354,7 +1358,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                   </div>
                 )}
 
-                {(reservation.status === 'completed' || reservation.status === 'terminated') && (
+                {(reservation.status === 'completed' || reservation.status === 'terminated') && can('planner', 'activate') && (
                   <button
                     onClick={() => handleActivate(reservation)}
                     className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
@@ -1364,7 +1368,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                 )}
 
                 {/* Paiement de la dette (si solde dû) */}
-                {remainingAmount > 0 && (
+                {remainingAmount > 0 && can('planner', 'payments') && (
                   <button
                     onClick={() => setShowDebtModal({ reservation })}
                     className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md transition-all text-sm"
@@ -1384,17 +1388,17 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                     <span className="text-[9px] font-bold uppercase tracking-wide">{lang === 'fr' ? 'Détails' : 'تفاصيل'}</span>
                   </button>
 
-                  <button
+                  {can('planner', 'edit') && <button
                     onClick={() => handleEdit(reservation)}
                     className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-saas-bg border border-saas-border text-saas-text-muted hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-all"
                     title={lang === 'fr' ? 'Modifier' : 'تعديل'}
                   >
                     <Edit className="w-4 h-4" />
                     <span className="text-[9px] font-bold uppercase tracking-wide">{lang === 'fr' ? 'Modifier' : 'تعديل'}</span>
-                  </button>
+                  </button>}
 
                   {/* Documents / impression */}
-                  <div className="relative">
+                  {can('planner', 'print') && <div className="relative">
                     <button
                       ref={el => (buttonRefs.current[reservation.id] = el)}
                       onClick={() => {
@@ -1485,7 +1489,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                           >
                             🔍 {lang === 'fr' ? 'Inspection' : 'فحص المركبة'}
                           </button>
-                          <button
+                          {can('planner', 'send_email') && <button
                             onClick={() => {
                               setShowSendContractModal(reservation);
                               setOpenPrintMenu(null);
@@ -1493,20 +1497,20 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
                             className="w-full text-left px-4 py-3 hover:bg-green-50 text-saas-text-main font-bold flex items-center gap-2 transition-colors"
                           >
                             📧 {lang === 'fr' ? 'Envoyer par Email' : 'إرسال بالبريد الإلكتروني'}
-                          </button>
+                          </button>}
                         </motion.div>
                       )}
                     </AnimatePresence>
-                  </div>
+                  </div>}
 
-                  <button
+                  {can('planner', 'delete') && <button
                     onClick={() => handleDelete(reservation)}
                     className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl bg-saas-bg border border-saas-border text-saas-text-muted hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-all"
                     title={lang === 'fr' ? 'Supprimer' : 'حذف'}
                   >
                     <Trash2 className="w-4 h-4" />
                     <span className="text-[9px] font-bold uppercase tracking-wide">{lang === 'fr' ? 'Suppr.' : 'حذف'}</span>
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>

@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect } from 'react';
 import { Language, Car, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,8 +21,22 @@ const generateRandomPromoCode = (length = 8): string => {
   return code;
 };
 
+/** Onglet du site → permission requise. */
+const WEB_TAB_ACTION: Record<'offers' | 'special' | 'promo' | 'contacts' | 'settings', string> = {
+  offers: 'offers', special: 'offers', promo: 'promo_codes', contacts: 'edit_settings', settings: 'edit_settings',
+};
+
 export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ lang }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const [activeTab, setActiveTab] = useState<'offers' | 'special' | 'promo' | 'contacts' | 'settings'>('offers');
+  // Premier onglet autorisé pour un employé
+  useEffect(() => {
+    if (!can('web-mgmt', WEB_TAB_ACTION[activeTab])) {
+      const first = (['offers', 'special', 'promo', 'contacts', 'settings'] as const).find(t => can('web-mgmt', WEB_TAB_ACTION[t]));
+      if (first) setActiveTab(first);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // OFFERS TAB — les voitures existantes s'affichent automatiquement
   // (même source de données que l'interface Voitures : la table cars).
@@ -557,7 +572,7 @@ export const WebsiteManagementPage: React.FC<WebsiteManagementPageProps> = ({ la
                 { id: 'promo',    label: { fr: '🎟️ Codes Promo', ar: '🎟️ رموز الخصم' } },
                 { id: 'contacts', label: { fr: '📞 Contacts', ar: '📞 جهات الاتصال' } },
                 { id: 'settings', label: { fr: '⚙️ Paramètres', ar: '⚙️ الإعدادات' } },
-              ] as const).map(tab => (
+              ] as const).filter(tab => can('web-mgmt', WEB_TAB_ACTION[tab.id])).map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}

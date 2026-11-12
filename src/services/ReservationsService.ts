@@ -61,6 +61,12 @@ function mapReservationExtras(res: any) {
     // Caution activée/désactivée + prix saisi manuellement (persistés)
     cautionEnabled: res.caution_enabled !== false,
     isManualPrice: res.is_manual_price === true,
+    // Livraison du véhicule par un employé
+    deliveryEnabled: res.delivery_enabled === true,
+    deliveryWorkerId: res.delivery_worker_id ?? null,
+    deliveryWorkerName: res.delivery_worker_name ?? null,
+    deliveryAmount: res.delivery_amount != null ? Number(res.delivery_amount) : 0,
+    deliveryPayoutMode: (res.delivery_payout_mode === 'immediate' ? 'immediate' : 'deferred') as 'immediate' | 'deferred',
     // Timbre fiscal
     timbreEnabled: res.timbre_enabled === true,
     timbreRate: res.timbre_rate != null ? Number(res.timbre_rate) : undefined,

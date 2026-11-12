@@ -169,7 +169,7 @@ export class DatabaseService {
    * l'agence existante. Les employés (session non-Supabase) sont résolus par
    * email sur la table `workers`.
    */
-  static async getMyCompanyInfo(opts: { userId?: string | null; email?: string | null; role?: string | null }): Promise<{ companyId: string | null; isSuperAdmin: boolean; scopeKnown: boolean }> {
+  static async getMyCompanyInfo(opts: { userId?: string | null; email?: string | null; role?: string | null }): Promise<{ companyId: string | null; isSuperAdmin: boolean; scopeKnown: boolean; carScopeAll?: boolean }> {
     // 1) Chemin Supabase Auth (admins / super-admins) : app_users par auth.uid()
     try {
       // Après la connexion, l'app purge la session SDK Supabase pour éviter
@@ -203,11 +203,24 @@ export class DatabaseService {
       try {
         const { data, error } = await supabase
           .from('workers')
-          .select('company_id')
+          .select('company_id, permissions')
           .eq('email', opts.email)
           .maybeSingle();
-        if (!error && data && data.company_id) {
-          return { companyId: data.company_id, isSuperAdmin: false, scopeKnown: true };
+        if (!error && data) {
+          // Employé sans agence (fiche ancienne) → agence principale, jamais « tout ».
+          let companyId: string | null = data.company_id || null;
+          if (!companyId) {
+            const { data: primary } = await supabase
+              .from('companies').select('id').eq('is_primary', true)
+              .order('created_at', { ascending: true }).limit(1).maybeSingle();
+            companyId = primary?.id || null;
+          }
+          if (companyId) {
+            // « Voir les voitures de toutes les agences » (vérifié plus tard :
+            // uniquement effectif pour un employé de l'agence principale).
+            const perms: any = data.permissions || {};
+            return { companyId, isSuperAdmin: false, scopeKnown: true, carScopeAll: perms.carScope === 'all' };
+          }
         }
       } catch (err) {
         console.warn('[DatabaseService] getMyCompanyInfo workers lookup failed:', err);
@@ -321,6 +334,8 @@ export class DatabaseService {
 
     const withCompanies = cars.map(car => ({ ...car, companyIds: effectiveCompanies(car.id) }));
     if (!scopeId) return withCompanies; // vue « toutes agences »
+    // Employé de l'agence principale autorisé à voir toutes les voitures.
+    if (companyContext.seesAllCars()) return withCompanies;
     return withCompanies.filter(car => (car.companyIds || []).includes(scopeId));
   }
 

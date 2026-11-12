@@ -142,7 +142,7 @@ export default function App() {
         const stored = await sessionService.getCurrentSession();
         const info = await DatabaseService.getMyCompanyInfo({ userId: stored?.userId, email: user.email, role: user.role });
         if (cancelled) return;
-        companyContext.setUserInfo(info.companyId, info.isSuperAdmin, info.scopeKnown);
+        companyContext.setUserInfo(info.companyId, info.isSuperAdmin, info.scopeKnown, !!info.carScopeAll);
         setIsSuperAdmin(info.isSuperAdmin);
       } catch (err) {
         console.warn('[Auth] Failed to resolve company info (defaulting to super-admin):', err);

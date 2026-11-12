@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect } from 'react';
 import { Client, Rental, Language } from '../types';
 import { ClientCard } from './ClientCard';
@@ -38,6 +39,8 @@ const MOCK_RENTALS: Rental[] = [
 ];
 
 export const ClientsPage: React.FC<ClientsPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const [clients, setClients] = useState<Client[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -185,13 +188,13 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ lang, isAuthLoading = 
             className="input-saas pl-10"
           />
         </div>
-        <button
+        {can('clients', 'create') && (<button
           onClick={handleAddClient}
           className="btn-saas-primary whitespace-nowrap"
         >
           <Plus size={18} />
           {lang === 'fr' ? 'Nouveau Client' : 'عميل جديد'}
-        </button>
+        </button>)}
       </div>
 
       {/* Clients Grid */}
@@ -203,10 +206,10 @@ export const ClientsPage: React.FC<ClientsPageProps> = ({ lang, isAuthLoading = 
                 key={client.id}
                 client={client}
                 lang={lang}
-                onEdit={() => handleEditClient(client)}
-                onDelete={() => handleDeleteClick(client.id)}
+                onEdit={can('clients', 'edit') ? () => handleEditClient(client) : undefined}
+                onDelete={can('clients', 'delete') ? () => handleDeleteClick(client.id) : undefined}
                 onViewDetails={() => handleViewDetails(client)}
-                onHistory={() => handleViewHistory(client)}
+                onHistory={can('clients', 'history') ? () => handleViewHistory(client) : undefined}
               />
             ))
           ) : (

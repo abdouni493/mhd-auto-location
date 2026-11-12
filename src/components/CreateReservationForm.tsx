@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ProtectionAssuranceCards } from './website/wizard/StepAssurance';
 import { WorkerCommissionSection } from './WorkerCommissionSection';
+import { DeliverySection, deliveryAmountOf } from './DeliverySection';
 import { WorkerCommissionService } from '../services/workerCommissionService';
 import { Language, ReservationDetails, Client, Car, VehicleInspection, Payment, AdditionalService, ProtectionAssurance } from '../types';
 import {
@@ -234,6 +235,17 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
           selectedClient: (initialData as any).client
         };
       }
+      // Livraison déjà enregistrée sur la réservation
+      const ini: any = initialData;
+      if (!(formData as any).delivery && ini.deliveryEnabled) {
+        updates.delivery = {
+          enabled: true,
+          workerId: ini.deliveryWorkerId || '',
+          workerName: ini.deliveryWorkerName || '',
+          amount: Number(ini.deliveryAmount) || 0,
+          payoutMode: ini.deliveryPayoutMode === 'immediate' ? 'immediate' : 'deferred',
+        };
+      }
       if (Object.keys(updates).length > 0) {
         setFormData(prev => ({
           ...prev,
@@ -335,7 +347,10 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
 
       // Calculate total price
       const step6 = formData.step6 || {};
-      const totalPrice = step6.totalPrice || 0;
+      // Livraison : le montant payé au livreur est déduit du total.
+      const delivery: any = (formData as any).delivery;
+      const deliveryAmount = deliveryAmountOf(delivery);
+      const totalPrice = Math.max(0, (step6.totalPrice || 0) - deliveryAmount);
       const advancePayment = step6.advancePayment || 0;
       const remainingPayment = Math.max(0, totalPrice - advancePayment);
 
@@ -521,6 +536,53 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
             ? `Réservation créée, mais la commission employé n'a pas pu être enregistrée : ${commissionError?.message || ''}`
             : `تم إنشاء الحجز، لكن تعذر حفظ عمولة الموظف: ${commissionError?.message || ''}`);
         }
+      }
+
+      // Livraison : enregistrée sur la réservation + paiement du livreur
+      try {
+        const { error: deliveryErr } = await supabase
+          .from('reservations')
+          .update({
+            delivery_enabled: deliveryAmount > 0 || !!(delivery?.enabled && delivery?.workerId),
+            delivery_worker_id: delivery?.enabled && delivery?.workerId ? delivery.workerId : null,
+            delivery_worker_name: delivery?.enabled && delivery?.workerId ? (delivery.workerName || null) : null,
+            delivery_amount: deliveryAmount,
+            delivery_payout_mode: delivery?.payoutMode === 'immediate' ? 'immediate' : 'deferred',
+          })
+          .eq('id', reservationId);
+        if (deliveryErr) throw deliveryErr;
+
+        // Paiement du livreur : uniquement s'il est nouveau (pas déjà payé
+        // pour ce même employé et ce même montant lors d'une saisie précédente).
+        const prev: any = initialData || {};
+        const alreadyPaid = !!prev.deliveryEnabled
+          && prev.deliveryWorkerId === delivery?.workerId
+          && Number(prev.deliveryAmount) === deliveryAmount;
+        if (deliveryAmount > 0 && delivery?.workerId && !alreadyPaid) {
+          const fd: any = formData;
+          const client = fd.step4?.selectedClient || fd.client;
+          const car = fd.step2?.selectedCar || fd.car;
+          await WorkerCommissionService.createCommission({
+            reservationId,
+            workerId: delivery.workerId,
+            workerName: delivery.workerName,
+            commissionType: 'fixed',
+            commissionValue: deliveryAmount,
+            baseAmount: deliveryAmount,
+            payoutMode: delivery.payoutMode === 'immediate' ? 'immediate' : 'deferred',
+            note: lang === 'fr' ? 'Livraison du véhicule' : 'توصيل المركبة',
+            reservationLabel: [
+              client ? `${client.firstName || ''} ${client.lastName || ''}`.trim() : '',
+              car ? `${car.brand || ''} ${car.model || ''}`.trim() : '',
+              `${formData.step1?.departureDate || ''} → ${formData.step1?.returnDate || ''}`,
+            ].filter(Boolean).join(' · '),
+          });
+        }
+      } catch (deliveryError: any) {
+        console.error('❌ Error saving delivery:', deliveryError);
+        alert(lang === 'fr'
+          ? `Réservation enregistrée, mais la livraison n'a pas pu être enregistrée : ${deliveryError?.message || ''}`
+          : `تم حفظ الحجز، لكن تعذر حفظ التوصيل: ${deliveryError?.message || ''}`);
       }
 
       // Save selected services
@@ -721,13 +783,19 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ la
                 {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
                 {currentStep === 5 && <Step5ProtectionAssurance lang={lang} formData={formData} setFormData={setFormData} />}
                 {currentStep === 6 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
-                {currentStep === 7 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 7 && <>
+                  <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />
+                  <DeliverySection lang={lang} value={(formData as any).delivery} onChange={v => setFormData(prev => ({ ...prev, delivery: v } as any))} />
+                </>}
               </>
             ) : (
               <>
                 {currentStep === 1 && <Step1DatesLocations lang={lang} formData={formData} setFormData={setFormData} agencies={agencies} isLoadingAgencies={isLoadingAgencies} inspectionMode={inspectionMode} initialData={initialData} />}
                 {currentStep === 2 && <Step2VehicleSelection lang={lang} formData={formData} setFormData={setFormData} />}
-                {currentStep === 3 && <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />}
+                {currentStep === 3 && <>
+                  <Step3DepartureInspection lang={lang} formData={formData} setFormData={setFormData} />
+                  <DeliverySection lang={lang} value={(formData as any).delivery} onChange={v => setFormData(prev => ({ ...prev, delivery: v } as any))} />
+                </>}
                 {currentStep === 4 && <Step4ClientSelection lang={lang} formData={formData} setFormData={setFormData} />}
                 {currentStep === 5 && <Step5ProtectionAssurance lang={lang} formData={formData} setFormData={setFormData} />}
                 {currentStep === 6 && <Step5AdditionalServices lang={lang} formData={formData} setFormData={setFormData} />}
@@ -2970,7 +3038,9 @@ export const Step6FinalPricing: React.FC<{
       setPaymentNotes(r.notes || '');
       if (r.isManualPrice) {
         setIsManualTotal(true);
-        setManualTotal(Number(r.totalPrice) || 0);
+        // Le total enregistré a déjà la livraison déduite : on la rajoute ici,
+        // elle est de nouveau soustraite (une seule fois) dans le total final.
+        setManualTotal((Number(r.totalPrice) || 0) + (r.deliveryEnabled ? Number(r.deliveryAmount) || 0 : 0));
       }
       setCautionEnabled(r.cautionEnabled !== false);
       setCautionCurrency(r.cautionCurrency || 'DZD');
@@ -3092,7 +3162,10 @@ export const Step6FinalPricing: React.FC<{
   const timbre = computeTimbre(timbreBase);
   const timbreAmount = timbreEnabled ? timbre.amount : 0;
 
-  const finalTotal = totalPrice + assuranceAmount + timbreAmount;
+  // Livraison (option de l'inspection) : déduite du total final
+  const deliveryAmount = deliveryAmountOf((formData as any).delivery);
+  const deliveryWorkerName = (formData as any).delivery?.workerName || '';
+  const finalTotal = Math.max(0, totalPrice + assuranceAmount + timbreAmount - deliveryAmount);
 
   // Console logging for debugging
   React.useEffect(() => {
@@ -3827,8 +3900,18 @@ export const Step6FinalPricing: React.FC<{
               </AnimatePresence>
             </div>
 
-            {/* Total général incluant assurance + timbre */}
-            {(assuranceAmount > 0 || timbreAmount > 0) && (
+            {/* Livraison déduite du total */}
+            {deliveryAmount > 0 && (
+              <div className="border-t border-indigo-200 pt-3 mt-3 flex justify-between items-center">
+                <span className="font-bold text-sky-800">
+                  🚚 {lang === 'fr' ? 'Livraison' : 'التوصيل'}{deliveryWorkerName ? ` (${deliveryWorkerName})` : ''}
+                </span>
+                <span className="font-black text-sky-700">−{deliveryAmount.toLocaleString('fr-DZ')} DA</span>
+              </div>
+            )}
+
+            {/* Total général incluant assurance + timbre − livraison */}
+            {(assuranceAmount > 0 || timbreAmount > 0 || deliveryAmount > 0) && (
               <div className="border-t border-indigo-200 pt-3 mt-3 flex justify-between items-center">
                 <span className="font-black text-indigo-900">
                   {lang === 'fr' ? 'TOTAL À PAYER' : 'الإجمالي المستحق'}
@@ -3866,7 +3949,7 @@ export const Step6FinalPricing: React.FC<{
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-indigo-700">{lang === 'fr' ? 'Reste à payer:' : 'المتبقي:'}</span>
-                <span className="font-bold text-indigo-900">{(totalPrice - advancePayment).toLocaleString()} DA</span>
+                <span className="font-bold text-indigo-900">{(totalPrice - deliveryAmount - advancePayment).toLocaleString()} DA</span>
               </div>
             </div>
           </div>
@@ -3929,7 +4012,7 @@ export const Step6FinalPricing: React.FC<{
               </label>
               <input
                 type="number"
-                value={Math.max(0, totalPrice - advancePayment)}
+                value={Math.max(0, totalPrice - deliveryAmount - advancePayment)}
                 readOnly
                 className="w-full p-3 bg-purple-100 border border-purple-200 rounded-lg text-purple-900 font-bold"
               />

@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Car, Company, Language, MaintenanceType, VehicleExpense } from '../types';
@@ -38,6 +39,8 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
   isAuthLoading = false,
   user = null,
 }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   const location = useLocation();
   const T = (fr: string, ar: string) => (lang === 'fr' ? fr : ar);
 
@@ -97,6 +100,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
    * « Nouvelle dépense » et l'enregistrement insère une nouvelle ligne.
    */
   const openNewExpense = (car: Car, type?: MaintenanceType) => {
+    if (!can('maintenance', 'create')) return;
     const today = new Date().toISOString().split('T')[0];
     const resolved = type || types[0];
 
@@ -442,13 +446,13 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
                 {T('Actualiser', 'تحديث')}
               </span>
             </button>
-            <button
+            {can('maintenance', 'create') && (<button
               onClick={() => cars[0] && openNewExpense(cars[0])}
               disabled={cars.length === 0}
               className="px-4 py-3 rounded-xl bg-white text-saas-primary-via hover:bg-white/90 transition-colors flex items-center justify-center gap-2 font-bold uppercase tracking-widest text-xs disabled:opacity-50 cursor-pointer"
             >
               <Plus size={17} /> {T('Dépense', 'نفقة')}
-            </button>
+            </button>)}
           </div>
         </div>
 
@@ -595,12 +599,12 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
                       'أنشئ أنواعك الخاصة: تظهر فوراً في الصيانة والنفقات.'
                     )}
                   </p>
-                  <button
+                  {can('maintenance', 'create') && (<button
                     onClick={() => { setEditingType(null); setTypeError(null); setIsTypeModalOpen(true); }}
                     className="btn-saas-secondary px-4 py-2 text-xs shrink-0"
                   >
                     <Plus size={14} /> {T('Nouveau type', 'نوع جديد')}
-                  </button>
+                  </button>)}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -628,14 +632,14 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
                           </p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button
+                          {can('maintenance', 'edit') && (<button
                             onClick={() => { setEditingType(type); setTypeError(null); setIsTypeModalOpen(true); }}
                             title={T('Modifier', 'تعديل')}
                             className="p-1.5 rounded-lg bg-white/80 hover:bg-white text-saas-text-muted hover:text-saas-secondary-start transition-colors cursor-pointer"
                           >
                             <Pencil size={13} />
-                          </button>
-                          {!type.isSystem && (
+                          </button>)}
+                          {!type.isSystem && can('maintenance', 'delete') && (
                             <button
                               onClick={() => setTypeToDelete(type)}
                               title={T('Supprimer', 'حذف')}
@@ -675,7 +679,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
                   maintenance={maintenance}
                   lang={lang}
                   companyBadges={companies.length > 1 ? carCompanyBadges(maintenance.car.id) : undefined}
-                  onEditCar={handleEditCar}
+                  onEditCar={can('maintenance', 'edit') ? handleEditCar : (() => {}) as any}
                   onAddExpense={(car, type) => openNewExpense(car, type)}
                   onQuickAdd={car => openNewExpense(car)}
                 />

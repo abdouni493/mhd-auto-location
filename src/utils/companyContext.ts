@@ -73,6 +73,8 @@ interface CompanyState {
    * l'écriture (voir `getWriteCompanyId`).
    */
   scopeKnown: boolean;
+  /** Employé de l'agence principale autorisé à voir les voitures de toutes les agences. */
+  carScopeAll: boolean;
 }
 
 // Défaut SÛR : super-admin + vue « toutes agences » ⇒ aucun filtre appliqué
@@ -84,6 +86,7 @@ const state: CompanyState = {
   activeCompanyId: ALL_COMPANIES,
   resolved: false,
   scopeKnown: false,
+  carScopeAll: false,
 };
 
 // Snapshot immuable exposé à React (`useSyncExternalStore`). Il DOIT garder la
@@ -105,8 +108,9 @@ export const companyContext = {
    * il n'y a plus de bascule ni de choix persisté. Seul un compte racine sans
    * `company_id` reste en vue combinée.
    */
-  setUserInfo(userCompanyId: string | null, isSuperAdmin: boolean, scopeKnown: boolean = true) {
+  setUserInfo(userCompanyId: string | null, isSuperAdmin: boolean, scopeKnown: boolean = true, carScopeAll: boolean = false) {
     clearLegacyActive();
+    state.carScopeAll = carScopeAll;
     state.userCompanyId = userCompanyId;
     state.isSuperAdmin = isSuperAdmin;
     state.resolved = true;
@@ -162,6 +166,7 @@ export const companyContext = {
     state.activeCompanyId = ALL_COMPANIES;
     state.resolved = false;
     state.scopeKnown = false;
+    state.carScopeAll = false;
     emit();
   },
 
@@ -178,6 +183,16 @@ export const companyContext = {
    * Id d'agence par lequel FILTRER les lectures, ou `null` = aucun filtre
    * (compte racine sans agence de rattachement).
    */
+  /**
+   * L'utilisateur voit-il les voitures de TOUTES les agences ? Uniquement un
+   * employé de l'agence principale ayant reçu cette option (jamais Agence 2/3/4).
+   */
+  seesAllCars(): boolean {
+    return state.carScopeAll
+      && !!state.primaryCompanyId
+      && state.activeCompanyId === state.primaryCompanyId;
+  },
+
   getScopeCompanyId(): string | null {
     return state.activeCompanyId === ALL_COMPANIES ? null : state.activeCompanyId;
   },
@@ -266,6 +281,7 @@ export function scopeQuery<T>(query: T): T {
 export function isCarInActiveCompany(carId: string, links: Record<string, string[]>): boolean {
   const scope = companyContext.getScopeCompanyId();
   if (!scope) return true;
+  if (companyContext.seesAllCars()) return true;
   const ids = (links[carId] && links[carId].length)
     ? links[carId]
     : (companyContext.getPrimaryCompanyId() ? [companyContext.getPrimaryCompanyId() as string] : []);

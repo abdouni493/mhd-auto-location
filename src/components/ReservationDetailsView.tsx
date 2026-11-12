@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect } from 'react';
 import { Language, ReservationDetails, Payment, VehicleInspection, InspectionItem, Agency, RentalSettings } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -627,6 +628,10 @@ const InspectionsTab: React.FC<{ lang: Language; reservation: ReservationDetails
 // Payments Tab Component
 const PaymentsTab: React.FC<{ lang: Language; reservation: ReservationDetails; onAddPayment: () => void; onDeletePayment: (id: string) => void; onPrintPayment: (payment: Payment) => void }> = ({ lang, reservation, onAddPayment, onDeletePayment, onPrintPayment }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  // Paiements : boutons selon les permissions (planificateur ou contrats).
+  const { can } = usePermissions();
+  const canPay = can('planner', 'payments') || can('reservations', 'payments');
+  const canDeletePay = can('planner', 'delete_payment') || can('reservations', 'delete_payment');
 
   // Include initial advance payment if not already in payments
   const allPayments = [
@@ -715,6 +720,7 @@ const PaymentsTab: React.FC<{ lang: Language; reservation: ReservationDetails; o
           <h3 className="text-xl font-black text-saas-text-main">
             🧾 {lang === 'fr' ? 'Historique des Paiements' : 'سجل المدفوعات'}
           </h3>
+{canPay && (
           <button
             onClick={onAddPayment}
             className="btn-saas-primary"
@@ -722,6 +728,7 @@ const PaymentsTab: React.FC<{ lang: Language; reservation: ReservationDetails; o
             <Plus className="w-4 h-4 inline mr-2" />
             {lang === 'fr' ? 'Ajouter Paiement' : 'إضافة دفعة'}
           </button>
+          )}
         </div>
       </div>
       <div className="p-6">
@@ -747,7 +754,7 @@ const PaymentsTab: React.FC<{ lang: Language; reservation: ReservationDetails; o
                   >
                     <Printer className="w-4 h-4" />
                   </button>
-                  {payment.id !== 'initial' && (
+                  {payment.id !== 'initial' && canDeletePay && (
                     <button
                       onClick={() => handleDeleteClick(payment.id)}
                       className="p-2 text-red-600 hover:text-red-800 transition-colors"
@@ -905,6 +912,34 @@ const FinancialTab: React.FC<{ lang: Language; reservation: ReservationDetails }
         </div>
       )}
     </div>
+
+    {/* Livraison du véhicule (option de l'inspection départ) */}
+    {reservation.deliveryEnabled && (
+      <div className="bg-sky-50 rounded-2xl shadow-lg p-6 border border-sky-200">
+        <h3 className="text-lg font-black text-sky-900 mb-4">🚚 {lang === 'fr' ? 'Livraison du véhicule' : 'توصيل المركبة'}</h3>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center py-2 border-b border-sky-200">
+            <span className="text-sky-800 font-bold">{lang === 'fr' ? 'Livré par' : 'سلّمها'}</span>
+            <span className="font-black text-sky-900">{reservation.deliveryWorkerName || '—'}</span>
+          </div>
+          <div className="flex justify-between items-center py-2 border-b border-sky-200">
+            <span className="text-sky-800 font-bold">{lang === 'fr' ? 'Montant de la livraison' : 'مبلغ التوصيل'}</span>
+            <span className="font-black text-sky-900">−{(reservation.deliveryAmount || 0).toLocaleString()} DA</span>
+          </div>
+          <div className="flex justify-between items-center py-2">
+            <span className="text-sky-800 font-bold">{lang === 'fr' ? 'Paiement du livreur' : 'دفع الموصِّل'}</span>
+            <span className="font-bold text-sky-900">
+              {reservation.deliveryPayoutMode === 'immediate'
+                ? (lang === 'fr' ? 'Payé (caisse)' : 'مدفوع (الصندوق)')
+                : (lang === 'fr' ? 'Sur le compte de l\'employé' : 'على حساب الموظف')}
+            </span>
+          </div>
+          <p className="text-xs text-sky-700/80 pt-1">
+            {lang === 'fr' ? 'Déjà déduit du total de la réservation.' : 'مخصوم مسبقا من مجموع الحجز.'}
+          </p>
+        </div>
+      </div>
+    )}
 
     {/* Assurance de protection sélectionnée (forfait + éléments) */}
     {(reservation.protectionAssurance || reservation.protectionAssuranceName) && (

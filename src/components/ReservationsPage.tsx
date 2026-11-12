@@ -1,3 +1,4 @@
+import { usePermissions } from '../utils/permissions';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -90,6 +91,8 @@ interface ReservationsPageProps {
 type CurrentView = 'list' | 'details' | 'edit';
 
 export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuthLoading = false, user = null }) => {
+  // Boutons d'action selon les permissions de l'employé (un admin a tout).
+  const { can } = usePermissions();
   // ── Data
   const [reservations, setReservations] = useState<ReservationDetails[]>([]);
   const [isLoading, setIsLoading]       = useState(true);
@@ -381,7 +384,7 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           whileHover={{ scale: 1.01 }}
-          onClick={() => setShowDebtModal(true)}
+          onClick={() => { if (can('reservations', 'payments')) setShowDebtModal(true); }}
           className="glass-card border border-amber-100 bg-amber-50 p-6 flex items-start gap-4 cursor-pointer hover:shadow-md transition-shadow"
         >
           <div className="p-3 bg-amber-100 rounded-xl flex-shrink-0">
@@ -509,26 +512,26 @@ export const ReservationsPage: React.FC<ReservationsPageProps> = ({ lang, isAuth
                               onClick={() => handleViewDetails(r)}
                             />
                             {/* Modifier */}
-                            <ActionBtn
+                            {can('reservations', 'edit') && (<ActionBtn
                               icon={<Edit size={14} />}
                               label={T('Modifier', 'تعديل', lang)}
                               color="text-amber-600 hover:bg-amber-50"
                               onClick={() => handleEdit(r)}
-                            />
+                            />)}
                             {/* Contrat */}
-                            <ActionBtn
+                            {can('reservations', 'print') && (<ActionBtn
                               icon={<FileText size={14} />}
                               label={T('Contrat', 'عقد', lang)}
                               color="text-indigo-600 hover:bg-indigo-50"
                               onClick={() => setShowPersonalization({ reservation: r, type: 'contract' })}
-                            />
+                            />)}
                             {/* Facture */}
-                            <ActionBtn
+                            {can('reservations', 'invoice') && (<ActionBtn
                               icon={<Receipt size={14} />}
                               label={T('Facture', 'فاتورة', lang)}
                               color="text-emerald-600 hover:bg-emerald-50"
                               onClick={() => setShowPersonalization({ reservation: r, type: 'invoice' })}
-                            />
+                            />)}
                           </div>
                         </td>
                       </motion.tr>
