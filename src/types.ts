@@ -350,6 +350,14 @@ export interface Entreprise {
   address?: string;
   phone?: string;
   email?: string;
+  /** Champs complémentaires (facture — Décret 05-468). */
+  formeJuridique?: string;
+  activite?: string;
+  capital?: string;
+  city?: string;
+  /** Boîte postale */
+  bp?: string;
+  fax?: string;
   createdAt: string;
 }
 export interface StoreExpense {
@@ -469,6 +477,18 @@ export interface WebsiteSettings {
   phone?: string;
   /** Image de fond du landing du site public (URL storage, affichée floutée). */
   landing_background?: string;
+  // ── Identité fiscale / commerciale de l'agence (mentions de la facture) ──
+  rc?: string;
+  nif?: string;
+  nis?: string;
+  art?: string;
+  forme_juridique?: string;
+  activite?: string;
+  capital?: string;
+  fax?: string;
+  email?: string;
+  city?: string;
+  bank_name?: string;
 }
 
 // Code promo utilisable sur la réservation du site public

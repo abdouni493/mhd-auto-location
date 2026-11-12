@@ -38,6 +38,18 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
     phoneNumber2: '',
     bankNumber: '',
     logo: '',
+    // Identité fiscale / commerciale (mentions obligatoires de la facture)
+    city: '',
+    fax: '',
+    email: '',
+    bankName: '',
+    rc: '',
+    nif: '',
+    nis: '',
+    art: '',
+    formeJuridique: '',
+    activite: '',
+    capital: '',
   });
 
   // Profile Settings - Load from workers table
@@ -144,6 +156,17 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
           phoneNumber2: websiteSettings.phone_number_2 || '',
           bankNumber: websiteSettings.bank_number || '',
           logo: websiteSettings.logo || 'https://picsum.photos/seed/logo/200/200',
+          city: websiteSettings.city || '',
+          fax: websiteSettings.fax || '',
+          email: websiteSettings.email || '',
+          bankName: websiteSettings.bank_name || '',
+          rc: websiteSettings.rc || '',
+          nif: websiteSettings.nif || '',
+          nis: websiteSettings.nis || '',
+          art: websiteSettings.art || '',
+          formeJuridique: websiteSettings.forme_juridique || '',
+          activite: websiteSettings.activite || '',
+          capital: websiteSettings.capital || '',
         });
 
         // Load worker data for profile and security
@@ -323,6 +346,18 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
         bank_number: generalData.bankNumber,
         address: generalData.address,
         phone: generalData.phone,
+        // Identité fiscale de l'agence (facture) — propre à chaque agence
+        city: generalData.city,
+        fax: generalData.fax,
+        email: generalData.email,
+        bank_name: generalData.bankName,
+        rc: generalData.rc,
+        nif: generalData.nif,
+        nis: generalData.nis,
+        art: generalData.art,
+        forme_juridique: generalData.formeJuridique,
+        activite: generalData.activite,
+        capital: generalData.capital,
       });
 
       setNotification({ type: 'success', message: lang === 'fr' ? 'Informations de l\'agence mises à jour avec succès!' : 'تم تحديث معلومات الوكالة بنجاح!' });
@@ -782,11 +817,69 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({ lang, user }) => {
                         <label className="label-saas flex items-center gap-1.5"><Phone size={12} />{T('Téléphone 2', 'الهاتف الثاني')}</label>
                         <input type="tel" name="phoneNumber2" value={generalData.phoneNumber2} onChange={handleGeneralChange} className="input-saas" />
                       </div>
+                      <div className="space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><MapPin size={12} />{T('Ville / Wilaya', 'المدينة / الولاية')}</label>
+                        <input type="text" name="city" value={generalData.city} onChange={handleGeneralChange} className="input-saas" placeholder="Ex: Alger" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><Phone size={12} />Fax</label>
+                        <input type="tel" name="fax" value={generalData.fax} onChange={handleGeneralChange} className="input-saas" />
+                      </div>
                       <div className="md:col-span-2 space-y-2">
-                        <label className="label-saas flex items-center gap-1.5"><Landmark size={12} />{T('Numéro de compte bancaire', 'رقم الحساب البنكي')}</label>
+                        <label className="label-saas flex items-center gap-1.5"><Mail size={12} />Email</label>
+                        <input type="email" name="email" value={generalData.email} onChange={handleGeneralChange} className="input-saas" placeholder="contact@agence.dz" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><Landmark size={12} />{T('Nom de la banque', 'اسم البنك')}</label>
+                        <input type="text" name="bankName" value={generalData.bankName} onChange={handleGeneralChange} className="input-saas" placeholder="Ex: BNA, CPA, BEA…" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="label-saas flex items-center gap-1.5"><Landmark size={12} />{T('Numéro de compte bancaire / RIB', 'رقم الحساب البنكي / RIB')}</label>
                         <input type="text" name="bankNumber" value={generalData.bankNumber} onChange={handleGeneralChange} className="input-saas" />
                       </div>
                     </div>
+
+                    {/* ── Identité fiscale (mentions obligatoires de la facture — Décret 05-468) ── */}
+                    <fieldset className="rounded-2xl border border-saas-border p-5 space-y-5">
+                      <legend className="px-2 text-[11px] font-black uppercase tracking-[0.2em] text-[#B8912E]">
+                        🧾 {T('Identité fiscale (facture)', 'الهوية الجبائية (الفاتورة)')}
+                      </legend>
+                      <p className="text-xs text-saas-text-muted -mt-2">
+                        {T("Ces informations apparaissent sur les factures et factures proforma de CETTE agence.", 'تظهر هذه المعلومات على فواتير هذه الوكالة.')}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div className="space-y-2">
+                          <label className="label-saas">{T('Forme juridique', 'الشكل القانوني')}</label>
+                          <input type="text" name="formeJuridique" value={generalData.formeJuridique} onChange={handleGeneralChange} className="input-saas" placeholder="SARL, SPA, EURL…" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="label-saas">{T('Activité commerciale', 'النشاط التجاري')}</label>
+                          <input type="text" name="activite" value={generalData.activite} onChange={handleGeneralChange} className="input-saas" placeholder={T('Ex: Location de véhicules', 'مثال: تأجير السيارات')} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="label-saas">{T('Capital social', 'رأس المال')}</label>
+                          <input type="text" name="capital" value={generalData.capital} onChange={handleGeneralChange} className="input-saas" placeholder="Ex: 1 000 000 DA" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-2">
+                          <label className="label-saas">RC — {T('Registre de commerce', 'السجل التجاري')}</label>
+                          <input type="text" name="rc" value={generalData.rc} onChange={handleGeneralChange} className="input-saas" placeholder="Ex: 09/00-1050589 B22" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="label-saas">ART / AI — {T("Article d'imposition", 'المادة الضريبية')}</label>
+                          <input type="text" name="art" value={generalData.art} onChange={handleGeneralChange} className="input-saas" placeholder="Ex: 16301234109" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="label-saas">NIF — {T("N° d'identification fiscale", 'الرقم الجبائي')}</label>
+                          <input type="text" name="nif" value={generalData.nif} onChange={handleGeneralChange} className="input-saas" placeholder="Ex: 002216105058956" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="label-saas">NIS — {T("N° d'identification statistique", 'الرقم الإحصائي')}</label>
+                          <input type="text" name="nis" value={generalData.nis} onChange={handleGeneralChange} className="input-saas" placeholder="Ex: 199529010181621" />
+                        </div>
+                      </div>
+                    </fieldset>
 
                     <div className="flex justify-end pt-2 border-t border-saas-border">
                       <button type="submit" className="btn-saas-primary px-8 py-3 flex items-center gap-2 mt-6">

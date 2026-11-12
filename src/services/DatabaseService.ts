@@ -4,6 +4,7 @@ import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPaymen
 import { parseCarCurrencies } from '../utils/currency';
 import { companyContext, scopeQuery } from '../utils/companyContext';
 import { sessionService } from '../utils/sessionService';
+import { unpackHidden, packHidden, AGENCY_FISCAL_KEYS, ENTREPRISE_EXTRA_KEYS } from '../utils/hiddenFields';
 
 // Generic database service functions
 export class DatabaseService {
@@ -2139,9 +2140,12 @@ export class DatabaseService {
       if (error) throw error;
 
       if (data && data.length > 0) {
+        // Identité fiscale de l'agence rangée dans `description` (sans SQL).
+        const { text, extra } = unpackHidden(data[0].description);
         return {
+          ...this.fiscalFrom(data[0], extra),
           name: data[0].name,
-          description: data[0].description,
+          description: text,
           logo: data[0].logo,
           phone_number_2: data[0].phone_number_2,
           bank_number: data[0].bank_number,
@@ -2165,6 +2169,26 @@ export class DatabaseService {
       phone: '',
       landing_background: '',
     };
+  }
+
+  /**
+   * Champs fiscaux de l'agence : colonne réelle si elle existe (migration
+   * appliquée), sinon valeur cachée dans `description` (voir hiddenFields).
+   */
+  private static fiscalFrom(row: any, extra: Record<string, string>): Partial<WebsiteSettings> {
+    const out: Record<string, string> = {};
+    for (const k of AGENCY_FISCAL_KEYS) out[k] = (row?.[k] ?? extra[k] ?? '') as string;
+    return out as Partial<WebsiteSettings>;
+  }
+
+  /** Champs fiscaux à enregistrer : valeur fournie, sinon valeur actuelle. */
+  private static mergeFiscal(settings: Partial<WebsiteSettings>, current: Partial<WebsiteSettings>): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const k of AGENCY_FISCAL_KEYS) {
+      const v = (settings as any)[k] !== undefined ? (settings as any)[k] : (current as any)[k];
+      out[k] = (v ?? '') as string;
+    }
+    return out;
   }
 
   /**
@@ -2192,10 +2216,13 @@ export class DatabaseService {
     let company: any = null;
     try { company = await this.ownSecondaryCompany(); } catch { /* repli site */ }
     if (!company) return site;
+    // Chaque agence a sa propre identité fiscale (cachée dans sa description).
+    const { text, extra } = unpackHidden(company.description);
     return {
       ...site,
+      ...this.fiscalFrom(company, extra),
       name: company.name || site.name,
-      description: company.description ?? '',
+      description: text,
       logo: company.logo || site.logo,
       address: company.address ?? '',
       phone: company.phone ?? '',
@@ -2214,9 +2241,16 @@ export class DatabaseService {
       return;
     }
     const payload: Record<string, any> = {};
-    for (const k of ['name', 'description', 'logo', 'address', 'phone', 'phone_number_2', 'bank_number'] as const) {
+    for (const k of ['name', 'logo', 'address', 'phone', 'phone_number_2', 'bank_number'] as const) {
       if ((settings as any)[k] !== undefined) payload[k] = (settings as any)[k];
     }
+    // Description + identité fiscale (facture) dans la même colonne texte.
+    const currentDesc = unpackHidden(company.description);
+    const currentFiscal = this.fiscalFrom({}, currentDesc.extra);
+    payload.description = packHidden(
+      settings.description !== undefined ? settings.description : currentDesc.text,
+      this.mergeFiscal(settings, currentFiscal),
+    );
     const { data: updated, error } = await supabase.from('companies').update(payload).eq('id', company.id).select('id');
     if (error) throw error;
     if (!updated || updated.length === 0) {
@@ -2231,7 +2265,8 @@ export class DatabaseService {
     const current = await this.getWebsiteSettings();
     const merged = {
       name: settings.name ?? current.name,
-      description: settings.description ?? current.description,
+      // Le texte visible + l'identité fiscale de l'agence (sans migration SQL).
+      description: packHidden(settings.description ?? current.description, this.mergeFiscal(settings, current)),
       logo: settings.logo ?? current.logo,
       phone_number_2: settings.phone_number_2 ?? current.phone_number_2,
       bank_number: settings.bank_number ?? current.bank_number,
@@ -2272,9 +2307,11 @@ export class DatabaseService {
 
     if (error) throw error;
 
+    const unpacked = unpackHidden(data.description);
     return {
+      ...this.fiscalFrom(data, unpacked.extra),
       name: data.name,
-      description: data.description,
+      description: unpacked.text,
       logo: data.logo,
       phone_number_2: data.phone_number_2,
       bank_number: data.bank_number,
@@ -2865,11 +2902,34 @@ export class DatabaseService {
       art: row.art || undefined,
       nis: row.nis || undefined,
       nif: row.nif || undefined,
-      address: row.address || undefined,
+      address: unpackHidden(row.address).text || undefined,
       phone: row.phone || undefined,
       email: row.email || undefined,
+      ...this.entrepriseExtraFrom(row),
       createdAt: row.created_at,
     };
+  }
+
+  /**
+   * Champs complémentaires d'une entreprise (forme juridique, activité,
+   * capital, ville, BP, fax) : colonne réelle si présente, sinon valeur cachée
+   * dans `address` (aucune migration SQL requise).
+   */
+  private static entrepriseExtraFrom(row: any): Partial<Entreprise> {
+    const { extra } = unpackHidden(row?.address);
+    const snake: Record<string, string> = { formeJuridique: 'forme_juridique' };
+    const out: Record<string, string | undefined> = {};
+    for (const k of ENTREPRISE_EXTRA_KEYS) {
+      out[k] = row?.[snake[k] || k] || extra[k] || undefined;
+    }
+    return out as Partial<Entreprise>;
+  }
+
+  /** Valeur de la colonne `address` : adresse visible + champs complémentaires. */
+  private static packEntrepriseAddress(address: string | undefined, e: Partial<Entreprise>): string | null {
+    const extra: Record<string, string> = {};
+    for (const k of ENTREPRISE_EXTRA_KEYS) extra[k] = ((e as any)[k] || '') as string;
+    return packHidden(address || '', extra) || null;
   }
 
   private static entreprisesMissingError(error: any): Error | null {
@@ -2913,7 +2973,7 @@ export class DatabaseService {
         art: entreprise.art || null,
         nis: entreprise.nis || null,
         nif: entreprise.nif || null,
-        address: entreprise.address || null,
+        address: this.packEntrepriseAddress(entreprise.address, entreprise),
         phone: entreprise.phone || null,
         email: entreprise.email || null,
         ...this.companyStamp(),
@@ -2931,9 +2991,21 @@ export class DatabaseService {
     if (updates.art !== undefined) payload.art = updates.art || null;
     if (updates.nis !== undefined) payload.nis = updates.nis || null;
     if (updates.nif !== undefined) payload.nif = updates.nif || null;
-    if (updates.address !== undefined) payload.address = updates.address || null;
     if (updates.phone !== undefined) payload.phone = updates.phone || null;
     if (updates.email !== undefined) payload.email = updates.email || null;
+    // Adresse + champs complémentaires partagent la colonne `address` : on
+    // fusionne avec la fiche actuelle pour ne rien perdre lors d'une mise à jour partielle.
+    const touchesAddress = updates.address !== undefined
+      || ENTREPRISE_EXTRA_KEYS.some(k => (updates as any)[k] !== undefined);
+    if (touchesAddress) {
+      const { data: currentRow } = await supabase.from('entreprises').select('*').eq('id', id).maybeSingle();
+      const current = currentRow ? this.mapEntrepriseRow(currentRow) : ({} as Partial<Entreprise>);
+      const merged: Partial<Entreprise> = { ...current };
+      for (const k of ['address', ...ENTREPRISE_EXTRA_KEYS] as const) {
+        if ((updates as any)[k] !== undefined) (merged as any)[k] = (updates as any)[k];
+      }
+      payload.address = this.packEntrepriseAddress(merged.address, merged);
+    }
 
     const { data, error } = await supabase
       .from('entreprises')
