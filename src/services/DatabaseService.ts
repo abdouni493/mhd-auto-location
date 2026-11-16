@@ -2,7 +2,7 @@ import { supabase } from '../supabase';
 import { WorkerCommissionService } from './workerCommissionService';
 import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, WorkerRole, WorkerPermissions, Entreprise, RentalSettings, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode, Company } from '../types';
 import { parseCarCurrencies } from '../utils/currency';
-import { companyContext, scopeQuery } from '../utils/companyContext';
+import { companyContext, scopeQuery, isCarInActiveCompany } from '../utils/companyContext';
 import { sessionService } from '../utils/sessionService';
 import { unpackHidden, packHidden, AGENCY_FISCAL_KEYS, ENTREPRISE_EXTRA_KEYS } from '../utils/hiddenFields';
 
@@ -407,7 +407,9 @@ export class DatabaseService {
    * Les voitures en maintenance sont exclues.
    */
   static async getAvailableCars(departureDate?: string, returnDate?: string): Promise<Car[]> {
-    const allCars = await this.getCars();
+    // Multi-agences : uniquement les voitures de l'agence connectée (ou toutes
+    // pour un employé de l'agence principale ayant l'option « toutes les voitures »).
+    const allCars = await this.getCarsForAdmin();
 
     // Exclure les voitures en maintenance (seul statut saisi manuellement)
     const nonMaintenance = allCars.filter(car => car.status !== 'maintenance');
@@ -479,7 +481,15 @@ export class DatabaseService {
       return departureTime < resEnd && returnTime > resStart;
     });
 
-    return overlappingReservations.map(res => ({
+    // Multi-agences : ne montrer que les voitures visibles par l'agence connectée.
+    await companyContext.whenResolved();
+    let visible = overlappingReservations;
+    if (companyContext.getScopeCompanyId() && !companyContext.seesAllCars()) {
+      const links = await this.getCarCompanyLinks();
+      visible = overlappingReservations.filter(res => isCarInActiveCompany(res.car_id, links));
+    }
+
+    return visible.map(res => ({
       id: res.id,
       carId: res.car_id,
       brand: res.car?.brand || '',
