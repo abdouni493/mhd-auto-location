@@ -494,6 +494,8 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
           if (selectedCar?.id === carToDelete) {
             setIsCarModalOpen(false);
           }
+        } else {
+          setError(result.error || 'Failed to delete car');
         }
       } catch (err) {
         console.error('Error deleting car:', err);
@@ -906,8 +908,8 @@ export const CarsPage: React.FC<CarsPageProps> = ({ lang, isAuthLoading = false,
           ar: 'تأكيد الحذف'
         }}
         message={{
-          fr: 'Êtes-vous sûr de vouloir supprimer ce véhicule ? Cette action est irréversible.',
-          ar: 'هل أنت متأكد من رغبتك في حذف هذه المركبة؟ هذا الإجراء لا يمكن التراجع عنه.'
+          fr: 'Supprimer ce véhicule ? Il disparaîtra de la liste, mais ses réservations, dépenses et maintenances seront conservées.',
+          ar: 'حذف هذه المركبة؟ ستختفي من القائمة، مع الاحتفاظ بجميع حجوزاتها ومصاريفها وصيانتها.'
         }}
         lang={lang}
       />

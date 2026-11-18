@@ -3,6 +3,7 @@ import { WorkerCommissionService } from './workerCommissionService';
 import { Car, Client, Agency, Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, WorkerRole, WorkerPermissions, Entreprise, RentalSettings, StoreExpense, VehicleExpense, MaintenanceAlert, WebsiteOrder, ReservationDetails, SpecialOffer, ContactInfo, WebsiteSettings, PromoCode, Company } from '../types';
 import { parseCarCurrencies } from '../utils/currency';
 import { companyContext, scopeQuery, isCarInActiveCompany } from '../utils/companyContext';
+import { isCarRowDeleted, markCurrenciesDeleted, withoutDeletedCars } from '../utils/carSoftDelete';
 import { sessionService } from '../utils/sessionService';
 import { unpackHidden, packHidden, AGENCY_FISCAL_KEYS, ENTREPRISE_EXTRA_KEYS } from '../utils/hiddenFields';
 
@@ -351,7 +352,8 @@ export class DatabaseService {
 
     // Le statut retourné ici est soit 'maintenance' (saisi manuellement en DB) soit
     // 'disponible' (placeholder). Utilise getCarsWithRealStatus() pour le statut calculé.
-    return (data || []).map(dbCar => this.mapDbCar(dbCar));
+    // Les voitures supprimées sont masquées (leur historique reste en base).
+    return withoutDeletedCars(data).map(dbCar => this.mapDbCar(dbCar));
   }
 
   /**
@@ -535,13 +537,28 @@ export class DatabaseService {
     return this.mapDbCar(data);
   }
 
+  /**
+   * Supprime une voiture de l'application SANS effacer son historique
+   * (réservations, dépenses, maintenances…) : voir utils/carSoftDelete.
+   */
   static async deleteCar(id: string): Promise<void> {
+    const { data: row, error: readError } = await supabase
+      .from('cars')
+      .select('id, currencies')
+      .eq('id', id)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!row) return;
+
     const { error } = await supabase
       .from('cars')
-      .delete()
+      .update({ currencies: markCurrenciesDeleted(row.currencies) })
       .eq('id', id);
-
     if (error) throw error;
+
+    try {
+      await supabase.from('cars').update({ is_hidden_from_site: true }).eq('id', id);
+    } catch { /* colonne optionnelle */ }
   }
 
   /**
@@ -2000,7 +2017,10 @@ export class DatabaseService {
 
       if (error) throw error;
 
-      return (data || []).map(row => this.mapDbSpecialOffer(row));
+      // Offres d'une voiture supprimée : masquées.
+      return (data || [])
+        .filter(row => !isCarRowDeleted(row.car))
+        .map(row => this.mapDbSpecialOffer(row));
     } catch (e: any) {
       console.warn('getSpecialOffers failed, returning empty array', e.message || e);
       return [];
@@ -2259,7 +2279,8 @@ export class DatabaseService {
     const currentFiscal = this.fiscalFrom({}, currentDesc.extra);
     payload.description = packHidden(
       settings.description !== undefined ? settings.description : currentDesc.text,
-      this.mergeFiscal(settings, currentFiscal),
+      // Conserve les autres champs cachés (ex. conditions de location imprimées).
+      { ...currentDesc.extra, ...this.mergeFiscal(settings, currentFiscal) },
     );
     const { data: updated, error } = await supabase.from('companies').update(payload).eq('id', company.id).select('id');
     if (error) throw error;

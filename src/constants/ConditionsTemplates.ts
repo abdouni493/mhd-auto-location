@@ -16,6 +16,8 @@ export interface ConditionsTemplate {
   conditions: ConditionItem[];
   clientSignatureLabel: string;
   agencySignatureLabel: string;
+  /** Texte d'acceptation imprimé sous les conditions (personnalisable). */
+  acceptanceText?: string;
 }
 
 /**
@@ -187,8 +189,27 @@ export const getConditionsTemplate = (language: 'ar' | 'fr'): ConditionsTemplate
  *   - Side padding          : 56px (matches card padding 44px 56px)
  *   - Page border           : 2px solid #003399
  */
-export const generateConditionsPrintHTML = (language: 'ar' | 'fr'): string => {
-  const template = getConditionsTemplate(language);
+/** Texte d'acceptation par défaut (imprimé sous les conditions). */
+export const getDefaultAcceptanceText = (language: 'ar' | 'fr'): string =>
+  language === 'ar'
+    ? 'يُقرّ المستأجر بأنه اطّلع على شروط الإيجار هذه وقبلها دون أي تحفظ، ويتعهد بتوقيع هذا العقد.'
+    : "Le client déclare avoir pris connaissance et accepter sans réserve les présentes conditions de location et s'engage à signer ce contrat.";
+
+const escapeHtml = (v: string): string =>
+  String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/\n/g, '<br>');
+
+/**
+ * @param language  langue du document
+ * @param custom    modèle personnalisé (conditions ajoutées / modifiées par
+ *                  l'agence) — à défaut, le modèle intégré est utilisé.
+ */
+export const generateConditionsPrintHTML = (language: 'ar' | 'fr', custom?: ConditionsTemplate): string => {
+  const template = custom || getConditionsTemplate(language);
   const isArabic = language === 'ar';
   const dir = isArabic ? 'rtl' : 'ltr';
   const textAlign = isArabic ? 'right' : 'left';
@@ -198,15 +219,13 @@ export const generateConditionsPrintHTML = (language: 'ar' | 'fr'): string => {
       (condition, index) => `
       <div class="condition-item">
         <p class="condition-text">
-          <span class="condition-title">${index + 1}- ${condition.title} </span>${condition.content}
+          <span class="condition-title">${index + 1}- ${escapeHtml(condition.title)} </span>${escapeHtml(condition.content)}
         </p>
       </div>`
     )
     .join('');
 
-  const acceptanceText = isArabic
-    ? 'يُقرّ المستأجر بأنه اطّلع على شروط الإيجار هذه وقبلها دون أي تحفظ، ويتعهد بتوقيع هذا العقد.'
-    : "Le client déclare avoir pris connaissance et accepter sans réserve les présentes conditions de location et s'engage à signer ce contrat.";
+  const acceptanceText = escapeHtml(template.acceptanceText ?? getDefaultAcceptanceText(language));
 
   const printDate = new Date().toLocaleDateString(isArabic ? 'en-US' : 'fr-FR');
 
@@ -214,7 +233,7 @@ export const generateConditionsPrintHTML = (language: 'ar' | 'fr'): string => {
 <html dir="${dir}" lang="${language}">
 <head>
   <meta charset="utf-8">
-  <title>${template.title}</title>
+  <title>${escapeHtml(template.title)}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -358,26 +377,26 @@ export const generateConditionsPrintHTML = (language: 'ar' | 'fr'): string => {
   <div class="page">
 
     <div class="header">
-      <h1>${template.title}</h1>
-      <p>${template.subtitle}</p>
+      <h1>${escapeHtml(template.title)}</h1>
+      <p>${escapeHtml(template.subtitle)}</p>
     </div>
 
     <div class="content">
       ${conditionsHTML}
     </div>
 
-    <div class="acceptance">
+    ${acceptanceText ? `<div class="acceptance">
       ${acceptanceText}
-    </div>
+    </div>` : ''}
 
     <div class="signatures-section">
       <div class="signature-block">
         <div class="signature-line"></div>
-        <div class="signature-label">🏢 ${template.agencySignatureLabel}</div>
+        <div class="signature-label">🏢 ${escapeHtml(template.agencySignatureLabel)}</div>
       </div>
       <div class="signature-block">
         <div class="signature-line"></div>
-        <div class="signature-label">✍️ ${template.clientSignatureLabel}</div>
+        <div class="signature-label">✍️ ${escapeHtml(template.clientSignatureLabel)}</div>
       </div>
     </div>
 
