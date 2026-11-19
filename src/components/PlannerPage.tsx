@@ -2831,11 +2831,8 @@ export const PersonalizationModal: React.FC<{
     const protectionAssurancePerDay = reservation?.protectionAssurancePrice || reservation?.protectionAssurance?.pricePerDay || 0;
     // Déjà inclus dans totalPrice : ligne de détail uniquement, pas de nouveau cumul.
     const protectionAssuranceTotal = Math.round(protectionAssurancePerDay * (reservation?.totalDays || 0));
-    // Compact the layout whenever there is an extra block to fit (second
-    // conductor and/or the société card) so everything stays on one page.
-    const compact = hasSecondConductor || hasSociete || isContinuation;
-    const baseFontSize = compact ? 17 : 18;
-    const scaleFactor = 1;
+    const contractNo = reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A';
+    const clientFullName = `${reservation?.client?.firstName || ''} ${reservation?.client?.lastName || ''}`.trim() || 'N/A';
 
     const html = `
     <!DOCTYPE html>
@@ -2844,380 +2841,288 @@ export const PersonalizationModal: React.FC<{
       <meta charset="UTF-8">
       <title>Contrat de Location</title>
       <style>
+        /* =============================================================
+           CONTRAT — gabarit A4 unique, aligné et sans débordement.
+           La feuille fait exactement 210 × 297 mm à l'écran comme à
+           l'impression (aucun transform: scale qui décalait/coupait le
+           contenu). Un petit script ajuste l'échelle si le contenu
+           dépasse, pour que TOUT tienne sur une seule page.
+           ============================================================= */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { background: #ffffff; }
         body {
-          font-family: 'Segoe UI', Arial, sans-serif;
-          line-height: ${compact ? '1.4' : '1.45'};
-          color: #222;
-          background: white;
+          font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+          line-height: 1.3;
+          color: #1f2937;
           direction: ${textDir};
-          font-size: ${baseFontSize}px;
-          transform: scale(${scaleFactor});
-          transform-origin: top center;
+          font-size: 12px;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
         .page {
           width: 210mm;
           height: 297mm;
-          padding: ${compact ? '2mm' : '2.5mm'};
+          padding: 7mm;
           margin: 0 auto;
-          background: white;
+          background: #ffffff;
+          overflow: hidden;
+        }
+        .sheet {
+          width: 100%;
+          height: 100%;
+          border: 1.5px solid #1a3a8a;
+          border-radius: 3px;
+          overflow: hidden;
+          position: relative;
+        }
+        .sheet-inner {
+          width: 100%;
+          min-height: 100%;
+          padding: 4mm;
           display: flex;
           flex-direction: column;
-          border: 2px solid #d1d5db;
-          border-radius: 4px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          gap: 2.2mm;
         }
+        .sheet-inner > * { flex-shrink: 0; }
+
+        /* ---------- En-tête ---------- */
         .header {
-          border-bottom: 3px solid #1a3a8a;
-          padding-bottom: ${compact ? '2px' : '3px'};
-          margin-bottom: ${compact ? '3px' : '4px'};
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 10px;
+          padding-bottom: 2mm;
+          border-bottom: 2.5px solid #1a3a8a;
         }
-        .logo {
-          width: ${compact ? '30px' : '35px'};
-          height: ${compact ? '30px' : '35px'};
-          object-fit: contain;
-          flex-shrink: 0;
-        }
-        .header-text {
-          flex: 1;
-        }
+        .logo { width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; }
+        .header-text { flex: 1; text-align: center; }
         .agency-name {
-          font-size: ${compact ? '18px' : '20px'};
-          font-weight: bold;
+          font-size: 20px;
+          font-weight: 800;
           color: #1a3a8a;
-          text-align: center;
-          margin: 0 0 2px 0;
+          letter-spacing: 0.3px;
         }
         .agency-contact {
-          font-size: ${compact ? '7px' : '8px'};
-          color: #555;
-          text-align: center;
-          line-height: 1.2;
-          margin-bottom: 1px;
+          margin-top: 2px;
+          font-size: 10px;
+          color: #4b5563;
           display: flex;
           flex-wrap: wrap;
           justify-content: center;
-          gap: 6px;
-          align-items: center;
+          gap: 2px 12px;
         }
-        .agency-contact-item {
-          margin: 0;
-          white-space: nowrap;
-        }
-        .agency-contact-label {
-          font-weight: 600;
-          color: #1a3a8a;
-          display: none;
-        }
+        .agency-contact-item { white-space: nowrap; }
         .contract-title {
-          font-size: ${compact ? '12px' : '14px'};
-          color: #555;
-          text-align: center;
-          margin-top: 1px;
+          display: inline-block;
+          margin-top: 4px;
+          padding: 2px 14px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #ffffff;
+          background: #1a3a8a;
+          border-radius: 3px;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
         }
+
+        /* ---------- Bandeau infos (date / n° / client) ---------- */
         .header-info {
           display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: ${compact ? '2px' : '3px'};
-          margin-bottom: ${compact ? '3px' : '4px'};
-        }
-        .info-box {
-          padding: ${compact ? '3px 4px' : '4px 5px'};
+          grid-template-columns: 1fr 1fr 1.4fr;
+          border: 1px solid #c7d2fe;
           border-radius: 3px;
-          font-size: ${compact ? '11px' : '12px'};
-          line-height: 1.3;
+          background: #eef2ff;
         }
-        .info-box.blue {
-          background-color: #dbeafe;
-          border-left: 4px solid #2563eb;
-        }
-        .info-box.green {
-          background-color: #dcfce7;
-          border-left: 4px solid #16a34a;
-        }
-        .info-box.amber {
-          background-color: #fef3c7;
-          border-left: 4px solid #d97706;
-        }
+        .info-box { padding: 1.5mm 2.5mm; min-width: 0; }
+        .info-box + .info-box { border-inline-start: 1px solid #c7d2fe; }
         .info-label {
+          font-size: 9.5px;
           font-weight: 600;
-          color: #222;
-          margin-bottom: 1px;
-          font-size: ${compact ? '10px' : '11px'};
+          color: #4b5563;
+          text-transform: uppercase;
+          letter-spacing: 0.2px;
         }
         .info-value {
-          color: #333;
-          font-size: ${compact ? '11px' : '12px'};
+          font-size: 13px;
+          font-weight: 700;
+          color: #111827;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
+
+        /* ---------- Sections ---------- */
+        .row-2 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2.2mm;
+          align-items: stretch;
+        }
+        .row-2.single { grid-template-columns: 1fr; }
         .section {
-          margin-bottom: ${compact ? '3px' : '4px'};
+          border: 1px solid #d1d5db;
+          border-radius: 3px;
           page-break-inside: avoid;
-          padding: ${compact ? '3px 4px' : '4px 5px'};
-          border-radius: 4px;
-          border: 1px solid #e5e7eb;
-        }
-        .section.driver-section {
-          background-color: #f0f9ff;
-          border: 1px solid #bfdbfe;
-        }
-        .section.vehicle-section {
-          background-color: #f0fdf4;
-          border: 1px solid #bbf7d0;
-        }
-        .section.pricing-section {
-          background-color: #fffbeb;
-          border: 1px solid #fde68a;
-        }
-        .section.conditions-section {
-          background-color: #faf5ff;
-          border: 1px solid #e9d5ff;
-        }
-        .section.inspection-section {
-          background-color: #faf5ff;
-          border: 1px solid #e9d5ff;
+          break-inside: avoid;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
         }
         .section-title {
-          font-size: ${compact ? '11px' : '12px'};
+          font-size: 11.5px;
           font-weight: 700;
-          background-color: #f0f1f3;
-          padding: ${compact ? '2px 3px' : '3px 4px'};
-          border-radius: 2px;
-          margin-bottom: ${compact ? '2px' : '3px'};
-          border-left: 4px solid #2563eb;
           color: #1a3a8a;
+          background: #f1f5f9;
+          padding: 1.2mm 2.5mm;
+          border-bottom: 1px solid #d1d5db;
+          border-inline-start: 3px solid #1a3a8a;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
         }
+        .section-body { padding: 1.5mm 2.5mm; flex: 1; }
         .section-content {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${compact ? '6px 5px' : '9px 7px'};
-          font-size: ${compact ? '14px' : '15px'};
+          gap: 0 4mm;
+          padding: 1mm 2.5mm 1.5mm;
+          flex: 1;
         }
-        .section-content.full {
-          grid-template-columns: 1fr 1fr 1fr;
-        }
+        .section-content.full { grid-template-columns: 1fr 1fr 1fr; }
         .field {
-          padding: ${compact ? '1px 0' : '2px 0'};
-          border-bottom: 0.5px solid #ddd;
+          padding: 1mm 0;
+          border-bottom: 0.5px dashed #d1d5db;
+          min-width: 0;
         }
         .field-label {
+          font-size: 9.5px;
           font-weight: 600;
-          color: #1a3a8a;
-          font-size: ${compact ? '13px' : '14px'};
+          color: #6b7280;
+          text-transform: uppercase;
+          letter-spacing: 0.2px;
         }
         .field-value {
-          color: #444;
-          margin-top: 0px;
-          font-size: ${compact ? '14px' : '15px'};
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #111827;
+          word-break: break-word;
         }
-        .pricing-table {
-          width: 100%;
-          margin-bottom: 4px;
-          font-size: 15px;
-          border-collapse: collapse;
-        }
+
+        /* ---------- Tarification ---------- */
+        .pricing-table { width: 100%; padding: 1mm 2.5mm 1.5mm; }
         .pricing-row {
           display: flex;
           justify-content: space-between;
-          padding: ${compact ? '1px 0' : '2px 0'};
-          border-bottom: 0.5px solid #ddd;
+          align-items: baseline;
+          gap: 8px;
+          padding: 1mm 0;
+          border-bottom: 0.5px dashed #d1d5db;
+          font-size: 11.5px;
         }
-        .pricing-row.total {
-          border-top: 1px solid #222;
-          font-weight: 600;
-          margin-top: 1px;
-          padding-top: ${compact ? '1px' : '2px'};
-        }
+        .pricing-row > span:last-child { white-space: nowrap; font-weight: 600; }
+        .pricing-row.total { border-top: 1px solid #374151; border-bottom: none; font-weight: 700; }
         .pricing-row.grand-total {
-          font-size: ${compact ? '13px' : '14px'};
-          font-weight: 700;
-          color: #1a3a8a;
-          border-top: 2px solid #1a3a8a;
-          padding-top: ${compact ? '1px' : '2px'};
+          margin-top: 1mm;
+          padding: 1.5mm 2mm;
+          border: none;
+          border-radius: 3px;
+          background: #1a3a8a;
+          color: #ffffff;
+          font-size: 13.5px;
+          font-weight: 800;
         }
+        .pricing-note { margin-top: 1mm; font-size: 10px; color: #0e7490; font-weight: 600; }
+
+        /* ---------- Conditions acceptées ---------- */
         .conditions-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${compact ? '4px 5px' : '5px 6px'};
-          font-size: ${compact ? '13px' : '14px'};
-          margin-bottom: ${compact ? '3px' : '4px'};
+          gap: 1.5mm 3mm;
+          padding: 1.5mm 2.5mm;
+          font-size: 11.5px;
         }
-        .condition-item {
-          display: flex;
-          align-items: center;
-          gap: 3px;
-          line-height: ${compact ? '1.2' : '1.25'};
-        }
+        .row-2.single .conditions-grid { grid-template-columns: 1fr 1fr 1fr; }
+        .condition-item { display: flex; align-items: center; gap: 5px; }
         .checkbox {
-          width: 12px;
-          height: 12px;
-          border: 1px solid #999;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 8px;
+          width: 12px; height: 12px;
+          border: 1px solid #1a3a8a;
+          border-radius: 2px;
+          color: #1a3a8a;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 9px; font-weight: 700;
           flex-shrink: 0;
         }
+
+        /* ---------- Conditions spéciales ---------- */
+        .special {
+          border: 1px solid #fecaca;
+          border-inline-start: 3px solid #dc2626;
+          border-radius: 3px;
+          background: #fef2f2;
+          padding: 1.5mm 2.5mm;
+          color: #b91c1c;
+          font-size: 10.5px;
+          line-height: 1.4;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        .special-title { font-weight: 700; font-size: 11.5px; margin-bottom: 0.5mm; text-transform: uppercase; }
+        .special-item { margin: 0.4mm 0; }
+
+        /* ---------- Signatures (toujours en bas de la feuille) ---------- */
         .signatures {
+          margin-top: auto;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: ${compact ? '13px' : '20px'};
-          margin-top: auto;
-          font-size: ${compact ? '13px' : '14px'};
-          padding-top: ${compact ? '3px' : '4px'};
+          gap: 10mm;
+          padding-top: 2mm;
         }
         .signature-block {
-          text-align: center;
-        }
-        .signature-line {
-          border-top: 1px solid #333;
-          margin-bottom: ${compact ? '1px' : '2px'};
-          height: ${compact ? '20px' : '25px'};
-        }
-        .signature-label {
-          font-weight: 600;
-          font-size: ${compact ? '12px' : '13px'};
-        }
-        .date-sig {
-          font-size: ${compact ? '9px' : '10px'};
-          color: #666;
-          margin-top: 1px;
-        }
-        /* Bandeau « contrat de continuité » */
-        .continuity-banner {
-          margin-bottom: ${compact ? '3px' : '4px'};
-          padding: ${compact ? '4px 6px' : '5px 7px'};
-          border-radius: 4px;
-          border: 1px solid #a5f3fc;
-          border-left: 5px solid #0e7490;
-          background-color: #ecfeff;
-          page-break-inside: avoid;
-        }
-        .continuity-banner-title {
-          font-size: ${compact ? '12px' : '13px'};
-          font-weight: 800;
-          color: #0e7490;
-          margin-bottom: 2px;
-          letter-spacing: 0.3px;
-        }
-        .continuity-banner-text {
-          font-size: ${compact ? '11px' : '12px'};
-          color: #155e75;
-          line-height: 1.35;
-        }
-        .pricing-note {
-          margin-top: 3px;
-          font-size: ${compact ? '10px' : '11px'};
-          color: #0e7490;
-          font-weight: 600;
-          line-height: 1.3;
-        }
-        /* Société / Entreprise card (shown above vehicle info) */
-        .societe-card {
-          margin-bottom: ${compact ? '3px' : '4px'};
-          padding: ${compact ? '3px 5px' : '4px 6px'};
-          border-radius: 4px;
-          border: 1px solid #c7d2fe;
-          border-left: 4px solid #1a3a8a;
-          background-color: #eef2ff;
-          page-break-inside: avoid;
-        }
-        .societe-card-title {
-          font-size: ${compact ? '11px' : '12px'};
-          font-weight: 700;
-          color: #1a3a8a;
-          margin-bottom: ${compact ? '2px' : '3px'};
-        }
-        .societe-card-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: ${compact ? '3px 8px' : '4px 10px'};
-        }
-        .societe-card-field {
+          border: 1px solid #d1d5db;
+          border-radius: 3px;
+          height: 24mm;
+          padding: 1.5mm 2.5mm;
           display: flex;
           flex-direction: column;
-          border-bottom: 0.5px solid #c7d2fe;
-          padding: ${compact ? '1px 0' : '2px 0'};
+          justify-content: space-between;
+          text-align: center;
         }
-        .societe-card-label {
-          font-weight: 600;
-          color: #1a3a8a;
-          font-size: ${compact ? '10px' : '11px'};
+        .signature-line { display: none; }
+        .signature-label { font-weight: 700; font-size: 11.5px; color: #1a3a8a; }
+        .date-sig { font-size: 9.5px; color: #6b7280; }
+
+        /* ---------- Contrat de continuité ---------- */
+        .continuity-banner {
+          padding: 1.5mm 2.5mm;
+          border-radius: 3px;
+          border: 1px solid #a5f3fc;
+          border-inline-start: 4px solid #0e7490;
+          background: #ecfeff;
         }
-        .societe-card-value {
-          color: #333;
-          font-size: ${compact ? '12px' : '13px'};
-          word-break: break-word;
+        .continuity-banner-title { font-size: 12px; font-weight: 800; color: #0e7490; margin-bottom: 0.5mm; }
+        .continuity-banner-text { font-size: 10.5px; color: #155e75; line-height: 1.35; }
+
+        /* ---------- Société ---------- */
+        .societe-card {
+          padding: 1.5mm 2.5mm;
+          border-radius: 3px;
+          border: 1px solid #c7d2fe;
+          border-inline-start: 4px solid #1a3a8a;
+          background: #eef2ff;
         }
-        /* =============================================================
-           PRINT STYLES - FIXES FOR A4 CENTERED LAYOUT
-           Issues fixed:
-           - Contract was shifted to the left
-           - Not properly centered on page
-           - Inconsistent margins
-           - Frame did not align properly
-           ============================================================= */
+        .societe-card-title { font-size: 11.5px; font-weight: 700; color: #1a3a8a; margin-bottom: 1mm; text-transform: uppercase; }
+        .societe-card-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1mm 4mm; }
+        .societe-card-field { display: flex; flex-direction: column; min-width: 0; }
+        .societe-card-label { font-size: 9.5px; font-weight: 600; color: #4b5563; }
+        .societe-card-value { font-size: 12px; font-weight: 600; color: #111827; word-break: break-word; }
+
         @media print {
-          @page {
-            size: A4;
-            margin: 0;
-          }
-          
-          /* Reset for print */
-          html, body {
-            width: 210mm;
-            height: 297mm;
-            margin: 0;
-            padding: 0;
-            background: white;
-            overflow: hidden;
-          }
-          
-          /* Center container on page */
-          body { 
-            margin: 0; 
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            overflow: hidden;
-          }
-          
-          /* Perfect centering with margins */
-          .page { 
-            margin: 0 auto;
-            padding: 10mm;
-            width: 190mm;
-            min-height: 277mm;
-            height: auto;
-            box-sizing: border-box;
-            border: 2px solid black;
-            left: 0;
-            right: 0;
-            transform: scale(${hasSociete ? '1.08' : '1.15'});
-            transform-origin: top center;
-          }
-          
-          /* Ensure proper box sizing */
-          *, *::before, *::after {
-            box-sizing: border-box;
-          }
-          
-          /* Hide non-contract elements */
-          body > * {
-            visibility: hidden;
-          }
-          
-          .page, .page * {
-            visibility: visible;
-          }
+          @page { size: A4 portrait; margin: 0; }
+          html, body { width: 210mm; height: 297mm; margin: 0; padding: 0; background: #ffffff; overflow: hidden; }
+          .page { margin: 0; box-shadow: none; page-break-after: avoid; break-after: avoid; }
         }
       </style>
     </head>
     <body>
-      <div class="page">
+      <div class="page"><div class="sheet"><div class="sheet-inner" id="sheetInner">
         <!-- Header -->
         <div class="header">
           ${agencySettings?.logo ? `<img src="${agencySettings.logo}" alt="Logo" class="logo">` : ''}
@@ -3237,15 +3142,15 @@ export const PersonalizationModal: React.FC<{
         <div class="header-info">
           <div class="info-box blue">
             <div class="info-label">📅 ${labels.contractDate}</div>
-            <div class="info-value">${new Date().toLocaleDateString('en-US')}</div>
+            <div class="info-value">${new Date().toLocaleDateString('fr-FR')}</div>
           </div>
           <div class="info-box green">
             <div class="info-label">🔢 ${labels.contractNumber}</div>
-            <div class="info-value">#${reservation?.id ? reservation.id.toString().substring(0, 8).toUpperCase() : 'N/A'}</div>
+            <div class="info-value">${ltr('#' + contractNo)}</div>
           </div>
           <div class="info-box amber">
             <div class="info-label">👤 ${labels.client}</div>
-            <div class="info-value">${reservation?.client?.lastName || 'N/A'}</div>
+            <div class="info-value">${clientFullName}</div>
           </div>
         </div>
 
@@ -3298,14 +3203,14 @@ export const PersonalizationModal: React.FC<{
         ` : ''}
 
         <!-- Driver & Vehicle Info (2 columns) -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="row-2">
           <!-- Driver Info -->
           <div class="section driver-section">
             <div class="section-title">👤 ${labels.driverInfo}</div>
             <div class="section-content">
               <div class="field">
                 <div class="field-label">${labels.fullName}</div>
-                <div class="field-value">${reservation?.client?.firstName} ${reservation?.client?.lastName}</div>
+                <div class="field-value">${clientFullName}</div>
               </div>
               <div class="field">
                 <div class="field-label">${labels.licenseNumber}</div>
@@ -3313,11 +3218,11 @@ export const PersonalizationModal: React.FC<{
               </div>
               <div class="field">
                 <div class="field-label">📅 ${labels.licenseDeliveryDate}</div>
-                <div class="field-value">${reservation?.client?.licenseDeliveryDate ? new Date(reservation.client.licenseDeliveryDate).toLocaleDateString('fr-FR') : 'dd/mm/yyyy'}</div>
+                <div class="field-value">${reservation?.client?.licenseDeliveryDate ? safeDate(reservation.client.licenseDeliveryDate) : '—'}</div>
               </div>
               <div class="field">
                 <div class="field-label">⏱️ ${labels.licenseExpirationDate}</div>
-                <div class="field-value">${reservation?.client?.licenseExpirationDate ? new Date(reservation.client.licenseExpirationDate).toLocaleDateString('fr-FR') : 'dd/mm/yyyy'}</div>
+                <div class="field-value">${reservation?.client?.licenseExpirationDate ? safeDate(reservation.client.licenseExpirationDate) : '—'}</div>
               </div>
               <div class="field">
                 <div class="field-label">📍 ${labels.licenseDeliveryPlace}</div>
@@ -3325,7 +3230,7 @@ export const PersonalizationModal: React.FC<{
               </div>
               <div class="field">
                 <div class="field-label">${labels.birthDate}</div>
-                <div class="field-value">${new Date(reservation?.client?.dateOfBirth).toLocaleDateString('fr-FR')}</div>
+                <div class="field-value">${safeDate(reservation?.client?.dateOfBirth)}</div>
               </div>
               <div class="field">
                 <div class="field-label">${labels.birthPlace}</div>
@@ -3385,7 +3290,7 @@ export const PersonalizationModal: React.FC<{
             </div>
             <div class="field">
               <div class="field-label">${labels.birthDate}</div>
-              <div class="field-value">${(secondConductor?.date_of_birth || secondConductor?.dateOfBirth) ? new Date(secondConductor?.date_of_birth || secondConductor?.dateOfBirth).toLocaleDateString('en-US') : 'N/A'}</div>
+              <div class="field-value">${(secondConductor?.date_of_birth || secondConductor?.dateOfBirth) ? safeDate(secondConductor?.date_of_birth || secondConductor?.dateOfBirth) : 'N/A'}</div>
             </div>
             <div class="field">
               <div class="field-label">${labels.birthPlace}</div>
@@ -3396,7 +3301,7 @@ export const PersonalizationModal: React.FC<{
         ` : ''}
 
         <!-- Pricing & Conditions -->
-        <div style="display: grid; grid-template-columns: ${showPricesOnContract ? '1fr 1fr' : '1fr'}; gap: 10px;">
+        <div class="row-2${showPricesOnContract ? '' : ' single'}">
           ${showPricesOnContract ? `
           <!-- Pricing -->
           <div class="section pricing-section">
@@ -3425,7 +3330,7 @@ export const PersonalizationModal: React.FC<{
             <div class="pricing-table">
               <div class="pricing-row">
                 <span>${labels.pricePerDay}:</span>
-                <span>${reservation?.car?.priceDay || 0} DA</span>
+                <span>${ltr(Number(reservation?.car?.priceDay || 0).toFixed(2) + ' DA')}</span>
               </div>
               <div class="pricing-row">
                 <span>${labels.numberOfDays}:</span>
@@ -3513,26 +3418,24 @@ export const PersonalizationModal: React.FC<{
           </div>
         </div>
 
-        <!-- Special Conditions (Red Text) -->
-        <div style="background-color: #fef2f2; padding: 6px; border: 1px solid #fecaca; border-radius: 4px; margin-bottom: 0px; font-size: 11px; line-height: 1.45;">
-          <div style="color: #dc2626; font-weight: 600; margin-bottom: 2px;">${isFrench ? 'CONDITIONS SPÉCIALES' : 'الشروط الخاصة'}</div>
-          <div style="color: #dc2626; direction: ${textDir}; text-align: ${isFrench ? 'left' : 'right'};">
-            ${isFrench ? `
-              <div style="margin: 1px 0;">1- Tout renouvellement doit être confirmé par le client 48 heures avant la date d'expiration du contrat de location</div>
-              <div style="margin: 1px 0;">2- Interdiction de conduire le véhicule avec le carburant de réserve</div>
-              <div style="margin: 1px 0;">3- Le renouvellement du contrat de location est la responsabilité du client à partir de la date d'expiration du contrat</div>
-              <div style="margin: 1px 0;">4- La non-restitution du contrat de location à la date convenue entraîne une facturation complète du tarif quotidien</div>
-            ` : `
-              <div style="margin: 1px 0;">1- كل تمديد يجب على الزبون اطمئان قبل 48 ساعة من تاريخ انتهاء صلاحيات عقد الكراء</div>
-              <div style="margin: 1px 0;">2- عدم قيادة السيارة بوقود احتياطي (réserve)</div>
-              <div style="margin: 1px 0;">3- تجديد عقد الكراء يكون من تاريخ انتهاء العقد من مسؤولية الزبون</div>
-              <div style="margin: 1px 0;">4- عدم تسليم عقد الكراء على الزبون ينتج مبلغ اليومي كاملا</div>
-            `}
-          </div>
+        <!-- Special Conditions -->
+        <div class="special">
+          <div class="special-title">${isFrench ? 'Conditions spéciales' : 'الشروط الخاصة'}</div>
+          ${isFrench ? `
+            <div class="special-item">1- Tout renouvellement doit être confirmé par le client 48 heures avant la date d'expiration du contrat de location</div>
+            <div class="special-item">2- Interdiction de conduire le véhicule avec le carburant de réserve</div>
+            <div class="special-item">3- Le renouvellement du contrat de location est la responsabilité du client à partir de la date d'expiration du contrat</div>
+            <div class="special-item">4- La non-restitution du contrat de location à la date convenue entraîne une facturation complète du tarif quotidien</div>
+          ` : `
+            <div class="special-item">1- كل تمديد يجب على الزبون اطمئان قبل 48 ساعة من تاريخ انتهاء صلاحيات عقد الكراء</div>
+            <div class="special-item">2- عدم قيادة السيارة بوقود احتياطي (réserve)</div>
+            <div class="special-item">3- تجديد عقد الكراء يكون من تاريخ انتهاء العقد من مسؤولية الزبون</div>
+            <div class="special-item">4- عدم تسليم عقد الكراء على الزبون ينتج مبلغ اليومي كاملا</div>
+          `}
         </div>
 
         <!-- Signatures -->
-        <div class="signatures" style="margin-top: 0px; padding-top: 4px;">
+        <div class="signatures">
           <div class="signature-block">
             <div class="signature-line"></div>
             <div class="signature-label">${labels.clientSignature}</div>
@@ -3544,7 +3447,35 @@ export const PersonalizationModal: React.FC<{
             <div class="date-sig">${labels.dateAndSignature}</div>
           </div>
         </div>
-      </div>
+      </div></div></div>
+      <script>
+        /* Ajuste l'échelle pour que TOUT le contrat tienne sur une seule feuille A4. */
+        (function () {
+          function fit() {
+            var inner = document.getElementById('sheetInner');
+            if (!inner) return;
+            var sheet = inner.parentNode;
+            inner.style.transform = '';
+            inner.style.width = '';
+            inner.style.height = 'auto';
+            inner.style.minHeight = '0';
+            var available = sheet.clientHeight;
+            var natural = inner.scrollHeight;
+            var r = natural > available ? available / natural : 1;
+            r = Math.max(0.6, Math.floor(r * 1000) / 1000);
+            inner.style.minHeight = '';
+            inner.style.width = (100 / r) + '%';
+            inner.style.height = (available / r) + 'px';
+            if (r < 1) {
+              inner.style.transform = 'scale(' + r + ')';
+              inner.style.transformOrigin = document.documentElement.dir === 'rtl' ? 'top right' : 'top left';
+            }
+          }
+          fit();
+          window.addEventListener('load', fit);
+          window.addEventListener('beforeprint', fit);
+        })();
+      </script>
     </body>
     </html>
     `;
