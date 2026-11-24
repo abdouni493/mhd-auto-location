@@ -723,8 +723,17 @@ export interface ReservationContinuation {
   addedDays: number;
   /** Tarif journalier appliqué à CES jours uniquement. */
   pricePerDay: number;
-  /** Coût total de la prolongation (jours ajoutés × tarif). */
+  /** Coût total de la prolongation (jours ajoutés × tarif, assurance comprise). */
   totalPrice: number;
+  // ── Assurance de protection appliquée à CES jours ajoutés ───────────
+  /** Forfait d'assurance sélectionné pour la prolongation (null = aucun). */
+  assuranceId?: string | null;
+  /** Nom du forfait d'assurance au moment de la prolongation. */
+  assuranceName?: string;
+  /** Tarif/jour de l'assurance appliqué aux jours ajoutés. */
+  assurancePricePerDay?: number;
+  /** Coût total de l'assurance pour les jours ajoutés. */
+  assuranceTotal?: number;
   /** Date de retour avant cette prolongation. */
   previousReturnDate?: string;
   /** Nouvelle date de retour après cette prolongation. */

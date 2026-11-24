@@ -438,6 +438,10 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ lang, isAuthLoading = 
       addedDays: payload.addedDays,
       pricePerDay: payload.pricePerDay,
       totalPrice: payload.totalPrice,
+      protectionAssuranceId: payload.protectionAssuranceId,
+      protectionAssuranceName: payload.protectionAssuranceName,
+      assurancePricePerDay: payload.assurancePricePerDay,
+      assuranceTotal: payload.assuranceTotal,
       newReturnDate: payload.newReturnDate,
       paidAmount: payload.paidAmount,
       paymentMethod: payload.paymentMethod,
@@ -2756,6 +2760,11 @@ export const PersonalizationModal: React.FC<{
     const contDays    = Number(continuation?.addedDays) || 0;
     const contPerDay  = Number(continuation?.pricePerDay) || 0;
     const contTotal   = Number(continuation?.totalPrice) || 0;
+    // Assurance de protection appliquée aux jours ajoutés (le cas échéant).
+    const contAssurName   = continuation?.assuranceName || '';
+    const contAssurPerDay = Number(continuation?.assurancePricePerDay) || 0;
+    const contAssurTotal  = Number(continuation?.assuranceTotal) || 0;
+    const contCarTotal    = Math.max(0, contTotal - contAssurTotal);
     const contFrom    = continuation?.previousReturnDate || reservation?.step1?.returnDate;
     const contTo      = continuation?.newReturnDate || reservation?.step1?.returnDate;
     const contSeq     = Number(continuation?.sequenceNumber) || 1;
@@ -3316,6 +3325,16 @@ export const PersonalizationModal: React.FC<{
                 <span>${isFrench ? 'Jours ajoutés' : 'الأيام المضافة'}:</span>
                 <span>${contDays}</span>
               </div>
+              <div class="pricing-row">
+                <span>${isFrench ? 'Location véhicule' : 'كراء المركبة'} (${contDays} × ${contPerDay.toLocaleString('fr-DZ')}):</span>
+                <span>${contCarTotal.toLocaleString('fr-DZ')} DA</span>
+              </div>
+              ${contAssurTotal > 0 ? `
+              <div class="pricing-row">
+                <span>🛡️ ${labels.protectionAssurance}${contAssurName ? ` (${contAssurName})` : ''}${contAssurPerDay > 0 ? ` — ${contAssurPerDay.toLocaleString('fr-DZ')} DA/${labels.perDayShort} × ${contDays}` : ''}:</span>
+                <span>${contAssurTotal.toLocaleString('fr-DZ')} DA</span>
+              </div>
+              ` : ''}
               <div class="pricing-row grand-total">
                 <span>${isFrench ? 'TOTAL PROLONGATION' : 'إجمالي التمديد'}:</span>
                 <span>${contTotal.toLocaleString('fr-DZ')} DA</span>

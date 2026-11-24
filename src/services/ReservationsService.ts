@@ -3,8 +3,43 @@ import { ReservationDetails, VehicleInspection, Payment, ProtectionAssurance, En
 import { parseCarCurrencies } from '../utils/currency';
 import { companyContext, scopeQuery } from '../utils/companyContext';
 
+/**
+ * Marqueur encodant l'assurance de protection d'une prolongation DANS le champ
+ * `notes` — la table `reservation_continuations` n'a pas de colonne dédiée et
+ * aucune migration SQL n'est requise. Invisible pour l'utilisateur : on le
+ * retire de la note affichée et on l'expose via des champs typés.
+ */
+const ASSUR_MARK = '\u0001ASSUR:';
+
+interface ContinuationAssuranceSnapshot {
+  id: string | null;
+  name: string;
+  perDay: number;
+  total: number;
+}
+
+function encodeAssuranceNote(userNote: string, a: ContinuationAssuranceSnapshot | null): string {
+  const base = (userNote || '').trim();
+  if (!a || !a.name) return base;
+  return `${base}${ASSUR_MARK}${JSON.stringify(a)}`;
+}
+
+function decodeAssuranceNote(raw?: string | null): { note?: string; assurance?: ContinuationAssuranceSnapshot } {
+  if (!raw) return {};
+  const idx = raw.indexOf(ASSUR_MARK);
+  if (idx === -1) return { note: raw || undefined };
+  const note = raw.substring(0, idx).trim();
+  try {
+    const assurance = JSON.parse(raw.substring(idx + ASSUR_MARK.length)) as ContinuationAssuranceSnapshot;
+    return { note: note || undefined, assurance };
+  } catch {
+    return { note: note || undefined };
+  }
+}
+
 /** Mappe une ligne `reservation_continuations` vers le modèle applicatif. */
 function mapContinuation(row: any): ReservationContinuation {
+  const { note, assurance } = decodeAssuranceNote(row.notes);
   return {
     id: row.id,
     reservationId: row.reservation_id,
@@ -13,12 +48,16 @@ function mapContinuation(row: any): ReservationContinuation {
     addedDays: Number(row.added_days) || 0,
     pricePerDay: Number(row.price_per_day) || 0,
     totalPrice: Number(row.total_price) || 0,
+    assuranceId: assurance ? (assurance.id ?? null) : undefined,
+    assuranceName: assurance?.name || undefined,
+    assurancePricePerDay: assurance ? Number(assurance.perDay) || 0 : undefined,
+    assuranceTotal: assurance ? Number(assurance.total) || 0 : undefined,
     previousReturnDate: row.previous_return_date || undefined,
     newReturnDate: row.new_return_date || undefined,
     returnTime: row.return_time || undefined,
     paidAmount: Number(row.paid_amount) || 0,
     paymentMethod: row.payment_method || undefined,
-    notes: row.notes || undefined,
+    notes: note,
     createdBy: row.created_by || undefined,
     createdByName: row.created_by_name || undefined,
     createdAt: row.created_at,
@@ -884,6 +923,11 @@ export class ReservationsService {
     addedDays: number;
     pricePerDay: number;
     totalPrice: number;
+    // Assurance de protection appliquée aux jours ajoutés (optionnelle).
+    protectionAssuranceId?: string | null;
+    protectionAssuranceName?: string;
+    assurancePricePerDay?: number;
+    assuranceTotal?: number;
     newReturnDate: string;
     returnTime?: string;
     paidAmount?: number;
@@ -895,6 +939,16 @@ export class ReservationsService {
     const r = data.reservation;
     const addedDays = Math.max(1, Math.floor(Number(data.addedDays) || 0));
     const continuationTotal = Math.max(0, Math.round(Number(data.totalPrice) || 0));
+
+    // Snapshot de l'assurance choisie, encodé dans `notes` (aucune colonne
+    // dédiée ⇒ pas de migration SQL requise).
+    const assuranceName = (data.protectionAssuranceName || '').trim();
+    const assurancePerDay = Math.max(0, Math.round(Number(data.assurancePricePerDay) || 0));
+    const assuranceTotal = Math.max(0, Math.round(Number(data.assuranceTotal) || 0));
+    const assuranceSnapshot = assuranceName
+      ? { id: data.protectionAssuranceId ?? null, name: assuranceName, perDay: assurancePerDay, total: assuranceTotal }
+      : null;
+    const encodedNotes = encodeAssuranceNote(data.notes || '', assuranceSnapshot);
     const paidNow = Math.min(continuationTotal, Math.max(0, Math.round(Number(data.paidAmount) || 0)));
     const previousReturnDate = (r.step1?.returnDate || '').substring(0, 10) || null;
     const sequenceNumber = (Number(r.continuationCount) || 0) + 1;
@@ -917,7 +971,7 @@ export class ReservationsService {
         return_time: data.returnTime || r.step1?.returnTime || null,
         paid_amount: paidNow,
         payment_method: data.paymentMethod || null,
-        notes: data.notes || null,
+        notes: encodedNotes || null,
         created_by: data.createdBy || null,
         created_by_name: data.createdByName || null,
       }])
